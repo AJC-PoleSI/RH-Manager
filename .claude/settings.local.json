@@ -19,7 +19,41 @@
       "Bash(curl -s http://localhost:4000/)",
       "Bash(xargs kill:*)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/@next/swc-darwin-x64/package.json''\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/@next/env/package.json''\\).version\\)\")",
+      "Bash(npm list:*)",
+      "Bash(node -e \"const p = require\\(''process''\\); const path = require\\(''path''\\); const r = require.resolve\\(''next'', {paths: [''/Users/felixpitz/Desktop/RH Manager Anti /frontend'']}\\); console.log\\(r\\);\")",
+      "Bash(./node_modules/.bin/next build:*)",
+      "Bash(npx eslint:*)",
+      "mcp__Desktop_Commander__read_file",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/layout.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/page.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/candidates/page.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/deliberations/page.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/settings/page.tsx\")",
+      "Bash(ls -la \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/\")",
+      "Bash(curl -s http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(rm -rf node_modules .next package-lock.json)",
+      "Bash(npm install:*)",
+      "Bash(ls node_modules/@next/swc-darwin-*/package.json)",
+      "Bash(kill 21166)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"/Users/felixpitz/Desktop/RH Manager Anti\" && git add -A && git diff --cached --quiet || git commit -m \"auto: save changes\" && git push 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Pushing to GitHub..."
+          }
+        ]
+      }
     ]
   }
 }

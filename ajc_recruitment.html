@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AJC Recrutement</title>
+<style>
+:root{--blue:#2563EB;--bl:#EFF6FF;--pink:#E8446A;--pl:#FFF0F3;
+--g50:#F9FAFB;--g100:#F3F4F6;--g200:#E5E7EB;--g300:#D1D5DB;--g400:#9CA3AF;--g500:#6B7280;--g700:#374151;--g900:#111827;
+--white:#fff;--shm:0 4px 20px rgba(0,0,0,.12)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
+.nav{background:var(--white);border-bottom:1px solid var(--g200);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--pink)}.dot2{background:var(--blue)}
+.app{display:flex;min-height:calc(100vh - 56px)}
+.sidebar{width:220px;background:var(--white);border-right:1px solid var(--g200);padding:14px 10px;flex-shrink:0;overflow-y:auto}
+.sb-label{font-size:11px;font-weight:600;color:var(--g400);text-transform:uppercase;letter-spacing:.06em;padding:0 8px;margin:14px 0 5px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;color:var(--g700);font-size:13.5px;transition:background .15s}
+.sb-item:hover{background:var(--g100)}
+.sb-item.active{background:var(--bl);color:var(--blue);font-weight:600}
+.sb-item.active-pink{background:var(--pl);color:var(--pink);font-weight:600}
+.main{flex:1;padding:26px 30px;overflow-y:auto}
+/* LANDING */
+.landing{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--white);padding:40px}
+.l-logo{text-align:center;margin-bottom:48px}
+.l-logo h1{font-size:28px;font-weight:800}
+.l-logo p{color:var(--g400);margin-top:6px}
+.l-bar{width:48px;height:3px;margin:14px auto 0;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--pink))}
+.l-cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;max-width:640px}
+.l-card{flex:1;min-width:240px;background:var(--white);border:1.5px solid var(--g200);border-radius:14px;padding:30px 26px;cursor:pointer;transition:all .2s;text-align:center}
+.l-card:hover{box-shadow:var(--shm);transform:translateY(-2px)}
+.l-card.blue:hover{border-color:var(--blue)}.l-card.pink:hover{border-color:var(--pink)}
+.l-card .ico{font-size:36px;margin-bottom:14px}
+.l-card h2{font-size:17px;font-weight:700;margin-bottom:6px}
+.l-card p{font-size:13px;color:var(--g500)}
+.l-cta{margin-top:18px;display:inline-block;padding:9px 22px;border-radius:7px;font-size:13px;font-weight:600}
+.cta-b{background:var(--blue);color:#fff}.cta-p{background:var(--pink);color:#fff}
+/* OVERLAY */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:200;display:flex;align-items:center;justify-content:center}
+.ovb{background:var(--white);border-radius:14px;padding:34px 30px;width:440px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shm)}
+.ovb.wide{width:520px}
+/* FORMS */
+.fg{margin-bottom:13px}
+.fg label{display:block;font-size:12px;font-weight:600;color:var(--g700);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.fg input,.fg select,.fg textarea{width:100%;border:1.5px solid var(--g200);border-radius:7px;padding:8px 11px;font-size:14px;outline:none;background:var(--white);transition:border .15s;font-family:inherit}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue)}
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:7px;font-size:13.5px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s;font-family:inherit;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-b{background:var(--blue);color:#fff}.btn-p{background:var(--pink);color:#fff}
+.btn-g{background:none;border:1.5px solid var(--g200);color:var(--g700)}.btn-g:hover{background:var(--g100);opacity:1}
+.btn-gr{background:#16A34A;color:#fff}
+.btn-sm{padding:5px 11px;font-size:12.5px}.btn-full{width:100%}
+.btn-lo{font-size:13px;color:var(--g500);background:none;border:1px solid var(--g200);border-radius:6px;padding:5px 12px;cursor:pointer}
+.btn-lo:hover{background:var(--g100)}
+/* PAGE */
+.ph{margin-bottom:20px}.ph h1{font-size:21px;font-weight:700}.ph p{color:var(--g500);font-size:13.5px;margin-top:3px}
+.back{margin-bottom:14px}
+/* CARDS */
+.sc{background:var(--white);border:1px solid var(--g200);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+.sc h3{font-size:14.5px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.stats-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat{background:var(--white);border:1px solid var(--g200);border-radius:10px;padding:15px 18px;flex:1;min-width:120px}
+.sv{font-size:24px;font-weight:800}.sl{font-size:12px;color:var(--g500);margin-top:1px}
+.sv-b{color:var(--blue)}.sv-p{color:var(--pink)}.sv-g{color:#16A34A}
+/* TABLE */
+.tw{background:var(--white);border:1px solid var(--g200);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.tw-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--g200)}
+table{width:100%;border-collapse:collapse}
+th{font-size:11.5px;font-weight:600;color:var(--g400);text-transform:uppercase;letter-spacing:.05em;padding:9px 14px;text-align:left;background:var(--g50);border-bottom:1px solid var(--g200)}
+td{padding:10px 14px;border-bottom:1px solid var(--g100);font-size:13.5px}
+tr:last-child td{border-bottom:none}tr:hover td{background:var(--g50)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600}
+.bb{background:var(--bl);color:var(--blue)}.bp{background:var(--pl);color:var(--pink)}
+.bg{background:#DCFCE7;color:#16A34A}.by{background:#FEF9C3;color:#CA8A04}.bgr{background:var(--g100);color:var(--g500)}
+.lk{color:var(--blue);cursor:pointer;font-weight:500}.lk:hover{text-decoration:underline}
+.lkp{color:var(--pink);cursor:pointer;font-weight:500}.lkp:hover{text-decoration:underline}
+/* MODAL */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:300;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--white);border-radius:14px;padding:26px;width:560px;max-width:96vw;max-height:88vh;overflow-y:auto;box-shadow:var(--shm)}
+.modal h2{font-size:17px;font-weight:700;margin-bottom:14px}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+/* CALENDAR */
+.cal{background:var(--white);border:1px solid var(--g200);border-radius:10px;overflow:hidden}
+.cal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--g200)}
+.cal-nav button{background:none;border:1px solid var(--g200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;margin-left:4px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-dn{text-align:center;font-size:11.5px;font-weight:600;color:var(--g400);padding:7px 0;border-bottom:1px solid var(--g100)}
+.cal-cell{min-height:70px;padding:5px;border-right:1px solid var(--g100);border-bottom:1px solid var(--g100)}
+.cal-cell:nth-child(7n){border-right:none}
+.cal-num{font-size:12px;color:var(--g400);margin-bottom:3px}
+.cal-ev{font-size:11px;padding:2px 5px;border-radius:4px;margin-bottom:2px;line-height:1.3}
+.ce-b{background:var(--bl);color:var(--blue)}.ce-p{background:var(--pl);color:var(--pink)}.ce-g{background:#DCFCE7;color:#16A34A}
+/* WEEK/DAY */
+.wk-wrap{background:var(--white);border:1px solid var(--g200);border-radius:10px;overflow:hidden}
+.wk-grid{display:grid;grid-template-columns:52px repeat(7,1fr);overflow-x:auto}
+.wk-hdr{background:var(--g50);font-size:11.5px;font-weight:600;color:var(--g500);text-align:center;padding:8px 3px;border-bottom:1px solid var(--g200);border-right:1px solid var(--g100)}
+.wk-time{font-size:11px;color:var(--g400);padding:3px 5px;text-align:right;border-right:1px solid var(--g200);border-bottom:1px solid var(--g100);background:var(--g50);min-height:36px}
+.wk-cell{border-right:1px solid var(--g100);border-bottom:1px solid var(--g100);padding:2px;min-height:36px}
+/* DISPO */
+.dispo-grid{display:grid;grid-template-columns:68px repeat(5,1fr);gap:3px;margin-bottom:10px}
+.dc{padding:6px 3px;border-radius:5px;border:1.5px solid var(--g200);text-align:center;font-size:11px;cursor:pointer;transition:all .1s}
+.dc.hdr{font-weight:600;color:var(--g500);border:none;background:none;cursor:default;font-size:12px}
+.dc.sel{background:var(--bl);border-color:var(--blue);color:var(--blue);font-weight:600}
+/* SOIREE */
+.cc{background:var(--white);border:1.5px solid var(--g200);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.cc-top{display:flex;align-items:center;gap:10px}
+.cc-btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.ab{padding:5px 12px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;border:1.5px solid;font-family:inherit;transition:all .15s}
+.ab.ac{border-color:#16A34A;color:#16A34A;background:#fff}.ab.ac:hover,.ab.ac.sel{background:#16A34A;color:#fff}
+.ab.re{border-color:var(--pink);color:var(--pink);background:#fff}.ab.re:hover,.ab.re.sel{background:var(--pink);color:#fff}
+.ab.rs{border-color:#CA8A04;color:#CA8A04;background:#fff}.ab.rs:hover,.ab.rs.sel{background:#CA8A04;color:#fff}
+.ab.cl{border-color:var(--g300);color:var(--g500);background:#fff}.ab.cl:hover{background:var(--g100)}
+/* EVAL */
+.ev-crit{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--g100)}
+.ev-crit:last-child{border-bottom:none}
+.star{font-size:20px;cursor:pointer;color:var(--g300)}.star.on{color:#FBBF24}
+/* CHAT */
+.chat-wrap{display:flex;height:460px;gap:0}
+.chat-sb{width:165px;flex-shrink:0;border-right:1px solid var(--g200);padding:12px;overflow-y:auto}
+.chat-sb h4{font-size:11px;font-weight:600;color:var(--g400);text-transform:uppercase;margin-bottom:6px}
+.chat-ct{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px;margin-bottom:2px}
+.chat-ct:hover{background:var(--g100)}.chat-ct.on{background:var(--bl);color:var(--blue);font-weight:600}
+.chat-main{flex:1;display:flex;flex-direction:column;padding:12px}
+.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding-bottom:10px}
+.chat-msg{max-width:72%;padding:9px 13px;border-radius:12px;font-size:13.5px;line-height:1.5}
+.cm-admin{background:var(--blue);color:#fff;align-self:flex-end;border-radius:12px 12px 2px 12px}
+.cm-member{background:var(--pl);color:var(--pink);align-self:flex-start;border-radius:12px 12px 12px 2px}
+.cm-candidate{background:var(--g100);color:var(--g700);align-self:flex-start;border-radius:12px 12px 12px 2px}
+.cm-meta{font-size:11px;opacity:.65;margin-top:2px}
+/* STEPS */
+.t-steps{display:flex;margin-bottom:18px}
+.t-step{flex:1;padding:10px 6px;background:var(--g100);text-align:center;font-size:13px;font-weight:500;color:var(--g500);border-right:1px solid var(--g200);cursor:pointer}
+.t-step:first-child{border-radius:8px 0 0 8px}.t-step:last-child{border-radius:0 8px 8px 0;border-right:none}
+.t-step.active{background:var(--blue);color:#fff;font-weight:600}.t-step.done{background:#DCFCE7;color:#16A34A}
+/* INSC */
+.i-steps{display:flex;margin-bottom:22px}
+.i-step{flex:1;text-align:center;padding:8px 3px;font-size:12.5px;font-weight:500;color:var(--g400);border-bottom:2px solid var(--g200)}
+.i-step.active{border-bottom-color:var(--blue);color:var(--blue);font-weight:700}
+.i-step.done{border-bottom-color:#16A34A;color:#16A34A}
+/* UTILS */
+.hidden{display:none!important}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.av-b{background:var(--bl);color:var(--blue)}.av-p{background:var(--pl);color:var(--pink)}.av-g{background:#DCFCE7;color:#16A34A}
+.divider{border:none;border-top:1px solid var(--g200);margin:14px 0}
+.ib{border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:13px}
+.ib-b{background:var(--bl);color:var(--blue)}.ib-y{background:#FEF9C3;color:#CA8A04}
+.chip{display:inline-flex;padding:3px 8px;border-radius:20px;font-size:12px;background:var(--g100);color:var(--g500)}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}
+.ts{font-size:13px}.tg{color:var(--g500)}
+.pb{background:var(--g200);border-radius:99px;height:6px;overflow:hidden}
+.pf{height:100%;border-radius:99px}
+@media(max-width:680px){.two-col{grid-template-columns:1fr}.l-cards{flex-direction:column}.sidebar{display:none}}
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing" class="landing">
+  <div class="l-logo">
+    <h1>Audencia Junior Conseil</h1>
+    <p>Plateforme de recrutement associatif 2025</p>
+    <div class="l-bar"></div>
+  </div>
+  <div class="l-cards">
+    <div class="l-card pink" onclick="showInsc()">
+      <div class="ico">🎓</div><h2>Je suis candidat</h2>
+      <p>M'inscrire et suivre mon parcours de recrutement</p>
+      <div class="l-cta cta-p">Créer mon compte →</div>
+    </div>
+    <div class="l-card blue" onclick="showLogin()">
+      <div class="ico">👥</div><h2>Membre JE / Admin</h2>
+      <p>Accéder à mon espace staff</p>
+      <div class="l-cta cta-b">Se connecter →</div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginOv" class="ov hidden">
+  <div class="ovb">
+    <h2 style="font-size:19px;font-weight:700;margin-bottom:4px">Connexion Staff</h2>
+    <p class="tg ts mb12">Entrez vos identifiants AJC</p>
+    <div id="loginErr" style="background:var(--pl);color:var(--pink);border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:12px;display:none">Email ou mot de passe incorrect.</div>
+    <div class="fg"><label>Email</label><input type="email" id="loginEmail" placeholder="prenom.nom@ajc.fr"/></div>
+    <div class="fg"><label>Mot de passe</label><input type="password" id="loginPwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn btn-b btn-full" onclick="doLogin()">Se connecter</button>
+    <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--g400);cursor:pointer" onclick="hideLogin()">← Retour</div>
+  </div>
+</div>
+
+<!-- INSCRIPTION -->
+<div id="inscOv" class="ov hidden">
+  <div class="ovb wide">
+    <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">Inscription Candidat</h2>
+    <div class="i-steps">
+      <div class="i-step active" id="is1">① Identité</div>
+      <div class="i-step" id="is2">② Formation</div>
+      <div class="i-step" id="is3">③ Documents</div>
+    </div>
+    <div id="ip1">
+      <div class="two-col">
+        <div class="fg"><label>Prénom</label><input type="text" placeholder="Marie"/></div>
+        <div class="fg"><label>Nom</label><input type="text" placeholder="DUPONT"/></div>
+      </div>
+      <div class="fg"><label>Email Audencia</label><input type="email" placeholder="m.dupont@audencia.com"/></div>
+      <div class="fg"><label>Téléphone</label><input type="tel" placeholder="06 12 34 56 78"/></div>
+      <div class="fg"><label>Messenger</label><input type="text" placeholder="@marie.dupont"/></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-g" onclick="hideInsc()">Annuler</button>
+        <button class="btn btn-b" onclick="inscStep(2)">Suivant →</button>
+      </div>
+    </div>
+    <div id="ip2" class="hidden">
+      <div class="fg"><label>Formation / Prépa</label><select><option>CPGE (HEC, ECG…)</option><option>CPGE (MP, PC…)</option><option>Licence universitaire</option><option>BTS / BUT</option><option>Autre</option></select></div>
+      <div class="fg"><label>Établissement</label><input type="text" placeholder="Lycée X"/></div>
+      <div class="fg"><label>Année d'intégration</label><select><option>2024</option><option>2025</option><option>2026</option></select></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-g" onclick="inscStep(1)">← Retour</button>
+        <button class="btn btn-b" onclick="inscStep(3)">Suivant →</button>
+      </div>
+    </div>
+    <div id="ip3" class="hidden">
+      <div class="fg"><label>CV (PDF)</label><input type="file" accept=".pdf"/></div>
+      <div class="fg"><label>Mot de passe</label><input type="password" placeholder="••••••••"/></div>
+      <div class="ib ib-b">📋 Vos données sont traitées uniquement dans le cadre du recrutement AJC.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-g" onclick="inscStep(2)">← Retour</button>
+        <button class="btn btn-p" onclick="finishInsc()">Finaliser ✓</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appShell" class="hidden">
+  <div class="nav">
+    <div class="nav-logo"><div class="dot"></div><div class="dot dot2"></div>AJC Recrutement
+      <span id="roleChip" style="font-size:11px;font-weight:500;color:var(--g400);margin-left:4px"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px;color:var(--g500)" id="navUser"></span>
+      <button class="btn-lo" onclick="logout()">Déconnexion</button>
+    </div>
+  </div>
+  <div class="app">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main" id="main"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modalOv" class="modal-ov hidden"><div class="modal" id="modalBody"></div></div>
+
+<script>
+const POLES=['Conseil','Ressources Humaines','Communication','Systèmes d\'Info','Finance'];
+const S={
+  role:null,user:null,memberId:null,calView:'mois',
+  tours:[
+    {id:1,name:'Tour 1',status:'en cours',nbCandidats:87,nbEpreuves:3},
+    {id:2,name:'Tour 2',status:'à venir',nbCandidats:48,nbEpreuves:4},
+    {id:3,name:'Tour 3',status:'à venir',nbCandidats:0,nbEpreuves:3},
+  ],
+  epreuves:[
+    {id:1,tour:1,nom:'Présentation AJC',type:'commune',date:'2025-03-10',heure:'14h00',salle:'Amphi A',docs:['Guide AJC.pdf','Programme Tour 1.pdf'],visible:true},
+    {id:2,tour:1,nom:'Entretien de motivation',type:'individuelle',dateDebut:'2025-03-11',dateFin:'2025-03-13',salle:'',docs:[],visible:true},
+    {id:3,tour:1,nom:'Case study',type:'groupe',dateDebut:'2025-03-14',dateFin:'2025-03-15',salle:'',docs:['Cas pratique.pdf'],visible:true},
+    {id:4,tour:2,nom:'Présentation Tour 2',type:'commune',date:'2025-03-19',heure:'14h00',salle:'Amphi B',docs:['Guide Tour 2.pdf'],visible:false},
+    {id:5,tour:2,nom:'Entretien technique',type:'individuelle',dateDebut:'2025-03-20',dateFin:'2025-03-21',salle:'',docs:[],visible:false},
+    {id:6,tour:3,nom:'Entretien Conseil',type:'individuelle',dateDebut:'2025-03-27',dateFin:'2025-03-28',salle:'',docs:[],visible:false,pole:'Conseil'},
+    {id:7,tour:3,nom:'Entretien RH',type:'individuelle',dateDebut:'2025-03-27',dateFin:'2025-03-28',salle:'',docs:[],visible:false,pole:'Ressources Humaines'},
+  ],
+  candidats:[
+    {id:1,prenom:'Alice',nom:'MARTIN',email:'a.martin@audencia.com',tel:'06 11 22 33 44',messenger:'@alice.martin',formation:'CPGE HEC',statut:'en cours',tour:1,poleVoeux:null,
+      notes:[{epreuve:'Entretien de motivation',tour:1,note:16,eval:'Sophie LEBLANC',commentaire:'Excellente motivation, très à l\'aise à l\'oral.'},{epreuve:'Case study',tour:1,note:14,eval:'Marc DUPONT',commentaire:'Bonne analyse, structure claire.'}]},
+    {id:2,prenom:'Baptiste',nom:'DURAND',email:'b.durand@audencia.com',tel:'06 22 33 44 55',messenger:'@bap.durand',formation:'CPGE MP',statut:'en cours',tour:1,poleVoeux:null,
+      notes:[{epreuve:'Entretien de motivation',tour:1,note:13,eval:'Léa MOREAU',commentaire:'Motivé mais manque de précision.'},{epreuve:'Case study',tour:1,note:15,eval:'Marc DUPONT',commentaire:'Très bon raisonnement.'}]},
+    {id:3,prenom:'Chloé',nom:'PETIT',email:'c.petit@audencia.com',tel:'06 33 44 55 66',messenger:'@chloe.p',formation:'Licence Eco',statut:'en cours',tour:1,poleVoeux:null,
+      notes:[{epreuve:'Entretien de motivation',tour:1,note:17,eval:'Sophie LEBLANC',commentaire:'Leadership naturel, remarquable.'}]},
+    {id:4,prenom:'Damien',nom:'ROUX',email:'d.roux@audencia.com',tel:'06 44 55 66 77',messenger:'@dam.roux',formation:'BTS Commerce',statut:'éliminé',tour:1,poleVoeux:null,
+      notes:[{epreuve:'Entretien de motivation',tour:1,note:9,eval:'Léa MOREAU',commentaire:'Manque de connaissance de la JE.'}]},
+    {id:5,prenom:'Emma',nom:'BLANC',email:'e.blanc@audencia.com',tel:'06 55 66 77 88',messenger:'@emma.blanc',formation:'CPGE PC',statut:'en cours',tour:1,poleVoeux:null,notes:[]},
+    {id:6,prenom:'Félix',nom:'GARCIA',email:'f.garcia@audencia.com',tel:'06 66 77 88 99',messenger:'@felix.g',formation:'CPGE ECG',statut:'en cours',tour:1,poleVoeux:null,
+      notes:[{epreuve:'Case study',tour:1,note:15,eval:'Marc DUPONT',commentaire:'Créatif et rigoureux.'}]},
+  ],
+  membres:[
+    {id:1,prenom:'Sophie',nom:'LEBLANC',email:'s.leblanc@ajc.fr',pwd:'sophie123',pole:'Conseil',nbEvals:8,moyenneNote:14.2,
+      creneaux:[{date:'2025-03-12',heure:'09h00',salle:'Salle 203',candidat:'Alice MARTIN',epreuve:'Entretien de motivation'},{date:'2025-03-12',heure:'10h00',salle:'Salle 203',candidat:'Chloé PETIT',epreuve:'Entretien de motivation'},{date:'2025-03-14',heure:'10h00',salle:'Salle 205',candidat:'Groupe A',epreuve:'Case study'}]},
+    {id:2,prenom:'Marc',nom:'DUPONT',email:'m.dupont@ajc.fr',pwd:'marc123',pole:'RH',nbEvals:11,moyenneNote:13.8,
+      creneaux:[{date:'2025-03-12',heure:'14h00',salle:'Salle 204',candidat:'Baptiste DURAND',epreuve:'Entretien de motivation'},{date:'2025-03-14',heure:'10h00',salle:'Salle 205',candidat:'Groupe B',epreuve:'Case study'}]},
+    {id:3,prenom:'Léa',nom:'MOREAU',email:'l.moreau@ajc.fr',pwd:'lea123',pole:'Com',nbEvals:7,moyenneNote:15.1,creneaux:[]},
+    {id:4,prenom:'Thomas',nom:'BERNARD',email:'t.bernard@ajc.fr',pwd:'thomas123',pole:'SI',nbEvals:5,moyenneNote:13.5,creneaux:[]},
+  ],
+  chatGeneral:[
+    {name:'Admin AJC',text:'Bienvenue sur la plateforme AJC Recrutement 2025 !',time:'09:58',role:'admin'},
+    {name:'Sophie L.',text:'Merci ! Tout est clair pour commencer.',time:'10:05',role:'member'},
+    {name:'Alice M.',text:'Bonjour à tous, hâte de commencer !',time:'10:12',role:'candidate'},
+    {name:'Marc D.',text:'Bon courage à tous les candidats !',time:'10:18',role:'member'},
+  ],
+  privMessages:{},// key: candidatId or membreId -> [{from,text,time}]
+  soireeDecisions:{},// candidatId -> {dec:'accept'|'reject'|'reserve'|null, plus:'', moins:''}
+};
+const ACCOUNTS={'admin@ajc.fr':{pwd:'admin2025',role:'admin',name:'Administrateur'}};
+
+// ══ AUTH ══
+function showLogin(){document.getElementById('loginOv').classList.remove('hidden')}
+function hideLogin(){document.getElementById('loginOv').classList.add('hidden')}
+function showInsc(){document.getElementById('inscOv').classList.remove('hidden')}
+function hideInsc(){document.getElementById('inscOv').classList.add('hidden');inscStep(1)}
+function logout(){S.role=null;S.user=null;document.getElementById('appShell').classList.add('hidden');document.getElementById('landing').classList.remove('hidden')}
+
+function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim(),pwd=document.getElementById('loginPwd').value;
+  const err=document.getElementById('loginErr');err.style.display='none';
+  if(ACCOUNTS[email]&&ACCOUNTS[email].pwd===pwd){S.role='admin';S.user=ACCOUNTS[email].name;hideLogin();launch();return}
+  const mb=S.membres.find(x=>x.email===email&&x.pwd===pwd);
+  if(mb){S.role='member';S.user=mb.prenom+' '+mb.nom;S.memberId=mb.id;hideLogin();launch();return}
+  err.style.display='block';
+}
+function inscStep(n){
+  [1,2,3].forEach(i=>{document.getElementById('ip'+i).classList.add('hidden');document.getElementById('is'+i).classList.remove('active','done')});
+  document.getElementById('ip'+n).classList.remove('hidden');document.getElementById('is'+n).classList.add('active');
+  for(let i=1;i<n;i++)document.getElementById('is'+i).classList.add('done');
+}
+function finishInsc(){hideInsc();S.role='candidate';S.user='Alice MARTIN';launch()}
+
+function launch(){
+  document.getElementById('landing').classList.add('hidden');document.getElementById('appShell').classList.remove('hidden');
+  document.getElementById('navUser').textContent=S.user;
+  document.getElementById('roleChip').textContent='· '+{admin:'Admin',member:'Membre JE',candidate:'Candidat'}[S.role];
+  buildSidebar();go(defPage());
+}
+function defPage(){return S.role==='admin'?'admin-dash':S.role==='member'?'je-candidats':'cand-cal'}
+
+// ══ SIDEBAR ══
+const MENUS={
+  admin:[{s:'Navigation'},{id:'admin-dash',i:'📊',l:'Dashboard'},{id:'admin-create',i:'⚙️',l:'Création'},{id:'admin-cands',i:'👥',l:'Candidats'},{id:'admin-evals',i:'📝',l:'Évaluateurs'},{id:'admin-soiree',i:'🌙',l:'Soirée débat'},{id:'admin-dispos',i:'📅',l:'Dispos & Inscriptions'},{s:'Communication'},{id:'admin-chat',i:'💬',l:'Chat général'},{id:'admin-msg',i:'✉️',l:'Messagerie privée'}],
+  member:[{s:'Mon espace'},{id:'je-candidats',i:'👥',l:'Candidats'},{id:'je-cal',i:'📅',l:'Mon calendrier'},{id:'je-recap',i:'📊',l:'Mes évaluations'},{id:'je-dispos',i:'✅',l:'Mes disponibilités'},{s:'Communication'},{id:'je-chat',i:'💬',l:'Chat général'},{id:'je-msg',i:'✉️',l:'Messagerie privée'}],
+  candidate:[{s:'Mon parcours'},{id:'cand-cal',i:'📅',l:'Mon calendrier'},{id:'cand-epreuves',i:'📋',l:'Épreuves & Tours'},{id:'cand-pole',i:'🎯',l:'Choix de pôle'},{s:'Communication'},{id:'cand-chat',i:'💬',l:'Chat général'},{id:'cand-msg',i:'✉️',l:'Messagerie privée'}],
+};
+function buildSidebar(){
+  const sb=document.getElementById('sidebar');sb.innerHTML='';
+  MENUS[S.role].forEach(it=>{
+    if(it.s)sb.innerHTML+=`<div class="sb-label">${it.s}</div>`;
+    else sb.innerHTML+=`<div class="sb-item" id="si-${it.id}" onclick="go('${it.id}')"><span style="font-size:15px;width:18px;text-align:center">${it.i}</span>${it.l}</div>`;
+  });
+}
+function go(page){
+  S.page=page;
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active','active-pink'));
+  const el=document.getElementById('si-'+page);
+  if(el)el.classList.add(page.startsWith('cand')?'active-pink':'active');
+  const map={
+    'admin-dash':pgAdminDash,'admin-create':pgAdminCreate,'admin-cands':pgAdminCands,
+    'admin-evals':pgAdminEvals,'admin-soiree':pgAdminSoiree,'admin-dispos':pgAdminDispos,
+    'admin-chat':pgChat,'admin-msg':()=>pgMsg('admin'),
+    'je-candidats':pgJeCands,'je-cal':pgJeCal,'je-recap':pgJeRecap,'je-dispos':pgJeDispos,
+    'je-chat':pgChat,'je-msg':()=>pgMsg('member'),
+    'cand-cal':pgCandCal,'cand-epreuves':pgCandEpreuves,'cand-pole':pgCandPole,
+    'cand-chat':pgChat,'cand-msg':()=>pgMsg('candidate'),
+  };
+  document.getElementById('main').innerHTML='';
+  if(map[page])map[page]();
+}
+function bBtn(){return`<div class="back"><button class="btn btn-g btn-sm" onclick="go('admin-dash')" style="display:inline-flex;align-items:center;gap:5px">← Dashboard</button></div>`}
+
+// ══ FICHE CANDIDAT (modal) ══
+function openFiche(id){
+  const c=S.candidats.find(x=>x.id===id);if(!c)return;
+  const moy=c.notes.length?(c.notes.reduce((s,n)=>s+n.note,0)/c.notes.length).toFixed(1):'—';
+  const canEdit=S.role==='admin'||S.role==='member';
+  document.getElementById('modalBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+      <div class="avatar av-b" style="width:46px;height:46px;font-size:17px">${c.prenom[0]}${c.nom[0]}</div>
+      <div><h2 style="margin:0;font-size:18px">${c.prenom} ${c.nom}</h2>
+        <span class="badge ${c.statut==='en cours'?'bb':c.statut==='éliminé'?'bp':'bg'}">${c.statut}</span>
+        <span class="badge bgr" style="margin-left:4px">Tour ${c.tour}</span>
+        ${c.poleVoeux?`<span class="badge by" style="margin-left:4px">🎯 ${c.poleVoeux}</span>`:''}
+      </div>
+    </div>
+    <div class="two-col mb8">
+      <div><div class="ts tg">Email</div><div style="font-weight:500">${c.email}</div></div>
+      <div><div class="ts tg">Téléphone</div><div style="font-weight:500">${c.tel}</div></div>
+      <div><div class="ts tg">Messenger</div><div style="font-weight:500">${c.messenger}</div></div>
+      <div><div class="ts tg">Formation</div><div style="font-weight:500">${c.formation}</div></div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <strong style="font-size:14.5px">Notes reçues</strong>
+      <span style="font-size:22px;font-weight:800;color:var(--blue)">${moy}<span style="font-size:13px;font-weight:400;color:var(--g400)">/20</span></span>
+    </div>
+    ${c.notes.length?c.notes.map(n=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--g100)">
+        <div class="avatar av-p" style="font-size:11px">${n.eval.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>${n.epreuve}</strong> <span class="badge bgr ts">Tour ${n.tour}</span></div>
+            <span style="font-size:20px;font-weight:800;color:var(--blue)">${n.note}</span>
+          </div>
+          <div style="font-size:12px;color:var(--g400);margin-top:2px">par <strong>${n.eval}</strong></div>
+          <div style="font-size:13px;color:var(--g500);margin-top:4px;font-style:italic">"${n.commentaire}"</div>
+        </div>
+      </div>`).join(''):`<p class="ts tg">Aucune note enregistrée.</p>`}
+    <div class="mfoot">
+      <button class="btn btn-g" onclick="closeModal()">Fermer</button>
+      ${canEdit?`<button class="btn btn-p" onclick="closeModal();openNoter(${id})">+ Ajouter une note</button>`:''}
+    </div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+
+function openNoter(id){
+  const c=S.candidats.find(x=>x.id===id);
+  document.getElementById('modalBody').innerHTML=`
+    <h2>Noter ${c.prenom} ${c.nom}</h2>
+    <div class="two-col">
+      <div class="fg"><label>Tour</label><select><option>Tour 1</option><option>Tour 2</option></select></div>
+      <div class="fg"><label>Épreuve</label><select>${S.epreuves.map(e=>`<option>${e.nom}</option>`).join('')}</select></div>
+    </div>
+    <strong style="font-size:13.5px;display:block;margin-bottom:10px">Grille d'évaluation</strong>
+    ${['Motivation','Communication','Esprit d\'analyse','Esprit d\'équipe'].map((cr,i)=>`
+      <div class="ev-crit">
+        <div style="flex:1;font-size:13.5px">${cr}</div>
+        <div style="display:flex;gap:3px">${[1,2,3,4,5].map(s=>`<span class="star" onclick="setStars(${i},${s},this)">★</span>`).join('')}</div>
+        <div style="width:34px;text-align:center;font-weight:700;font-size:15px" id="sc${i}">—</div>
+      </div>`).join('')}
+    <div class="fg mt12"><label>Commentaire</label><textarea rows="3" style="resize:none" placeholder="Points forts, axes d'amélioration…"></textarea></div>
+    <div class="mfoot">
+      <button class="btn btn-g" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-b" onclick="closeModal();toast('✅ Note enregistrée !')">Enregistrer</button>
+    </div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+function setStars(i,v,el){el.closest('div').querySelectorAll('.star').forEach((s,j)=>s.classList.toggle('on',j<v));document.getElementById('sc'+i).textContent=v*4}
+function closeModal(){document.getElementById('modalOv').classList.add('hidden')}
+
+// ══ ADMIN ══
+function pgAdminDash(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Dashboard</h1><p>Vue d'ensemble du recrutement AJC 2025</p></div>
+  <div class="stats-row">
+    <div class="stat"><div class="sv sv-b">87</div><div class="sl">Candidats actifs</div></div>
+    <div class="stat"><div class="sv sv-p">${S.membres.length}</div><div class="sl">Membres JE</div></div>
+    <div class="stat"><div class="sv sv-g">3</div><div class="sl">Tours créés</div></div>
+    <div class="stat"><div class="sv" style="color:var(--g700)">${S.epreuves.length}</div><div class="sl">Épreuves</div></div>
+  </div>
+  <div class="t-steps">
+    <div class="t-step done">✓ Tour 1 — En cours</div>
+    <div class="t-step active">Tour 2 — À venir</div>
+    <div class="t-step">Tour 3 — À venir</div>
+  </div>
+  <div class="two-col">
+    <div class="sc">
+      <h3>📋 Prochaines épreuves</h3>
+      ${S.epreuves.slice(0,3).map(e=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--g100)">
+          <div class="avatar ${e.type==='commune'?'av-b':e.type==='groupe'?'av-g':'av-p'}" style="font-size:11px">${e.type==='commune'?'C':e.type==='groupe'?'G':'I'}</div>
+          <div style="flex:1"><div style="font-weight:600;font-size:13px">${e.nom}</div>
+            <div style="font-size:12px;color:var(--g500)">${e.type==='commune'?e.date+' '+e.heure:(e.dateDebut+' → '+e.dateFin)}</div>
+          </div><span class="badge ${e.type==='commune'?'bb':e.type==='groupe'?'bg':'bp'}">${e.type}</span>
+        </div>`).join('')}
+    </div>
+    <div class="sc">
+      <h3>📊 Avancement</h3>
+      ${[['En cours',72,'var(--blue)'],['Éliminés',12,'var(--pink)'],['Abandons',3,'var(--g300)']].map(([l,n,c])=>`
+        <div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>${l}</span><strong>${n}</strong></div>
+          <div class="pb"><div class="pf" style="width:${n/87*100}%;background:${c}"></div></div>
+        </div>`).join('')}
+      <div class="ts tg mt8">Objectif : <strong>24 sélectionnés</strong></div>
+    </div>
+  </div>
+  <div class="sc"><h3>⚡ Accès rapides</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${[['admin-create','⚙️ Création'],['admin-cands','👥 Candidats'],['admin-evals','📝 Évaluateurs'],['admin-soiree','🌙 Soirée débat'],['admin-dispos','📅 Dispos']].map(([id,l])=>`<button class="btn btn-g btn-sm" onclick="go('${id}')">${l}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function pgAdminCreate(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Création</h1><p>Tours, épreuves et inscriptions</p></div>${bBtn()}
+  <div class="sc"><h3>🗓️ Fenêtre d'inscription candidats</h3>
+    <div class="two-col">
+      <div class="fg"><label>Ouverture</label><input type="datetime-local" value="2025-03-01T09:00"/></div>
+      <div class="fg"><label>Fermeture</label><input type="datetime-local" value="2025-03-05T23:59"/></div>
+    </div>
+    <button class="btn btn-b btn-sm" onclick="toast('✅ Fenêtre sauvegardée')">Sauvegarder</button>
+  </div>
+  <div class="sc"><h3>🏁 Tours de recrutement</h3>
+    ${S.tours.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--g100)">
+      <div style="flex:1"><strong>${t.name}</strong><span class="badge ${t.status==='en cours'?'bb':'bgr'}" style="margin-left:6px">${t.status}</span></div>
+      <span class="ts tg">${t.nbCandidats} candidats</span></div>`).join('')}
+    <button class="btn btn-g btn-sm mt12" onclick="toast('➕ Tour ajouté')">+ Ajouter un tour</button>
+  </div>
+  <div class="sc"><h3>📝 Épreuves & Formations</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Nom</th><th>Tour</th><th>Type</th><th>Date(s)</th><th>Visible candidats</th><th>Action</th></tr></thead>
+      <tbody>${S.epreuves.map(e=>`<tr>
+        <td><strong>${e.nom}</strong>${e.docs.length?` <span class="chip">📎${e.docs.length}</span>`:''}</td>
+        <td>Tour ${e.tour}</td>
+        <td><span class="badge ${e.type==='commune'?'bb':e.type==='groupe'?'bg':'bp'}">${e.type}</span></td>
+        <td class="ts tg">${e.type==='commune'?e.date+' '+e.heure:(e.dateDebut+' → '+e.dateFin)}</td>
+        <td><span onclick="e.visible=!e.visible;pgAdminCreate()" style="cursor:pointer;font-size:18px">${e.visible?'🟢':'⚪'}</span></td>
+        <td><span class="lk" onclick="toast('✏️ Modifier')">Modifier</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <button class="btn btn-b btn-sm mt8" onclick="openNewEpreuve()">+ Créer une épreuve</button>
+  </div>`;
+}
+
+function openNewEpreuve(){
+  document.getElementById('modalBody').innerHTML=`
+    <h2>Nouvelle épreuve</h2>
+    <div class="fg"><label>Nom</label><input type="text" placeholder="ex: Entretien de motivation"/></div>
+    <div class="two-col">
+      <div class="fg"><label>Tour</label><select><option>Tour 1</option><option>Tour 2</option><option>Tour 3</option></select></div>
+      <div class="fg"><label>Type</label><select id="ne-type" onchange="toggleNeFields(this.value)">
+        <option value="commune">Commune / Formation</option><option value="individuelle">Individuelle</option><option value="groupe">Groupe</option>
+      </select></div>
+    </div>
+    <div id="ne-commune">
+      <div class="ib ib-b">📌 Date et heure fixes pour tous.</div>
+      <div class="two-col"><div class="fg"><label>Date</label><input type="date"/></div><div class="fg"><label>Heure</label><input type="time"/></div></div>
+      <div class="fg"><label>Salle</label><input type="text" placeholder="Amphi A"/></div>
+      <div class="fg"><label>Présenté par</label><input type="text" placeholder="Nom"/></div>
+    </div>
+    <div id="ne-indiv" class="hidden">
+      <div class="ib ib-y">📅 Les candidats/évaluateurs s'inscrivent sur cette plage.</div>
+      <div class="two-col"><div class="fg"><label>Date début</label><input type="date"/></div><div class="fg"><label>Date fin</label><input type="date"/></div></div>
+      <div class="fg"><label>Durée créneau</label><select><option>30 min</option><option>45 min</option><option selected>1 heure</option><option>1h30</option></select></div>
+      <div class="fg"><label>Pôle associé (Tour 3)</label><select><option>— Aucun —</option>${POLES.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    </div>
+    <div class="fg"><label>Documents (PDF)</label><input type="file" multiple accept=".pdf"/></div>
+    <strong class="ts" style="display:block;margin-bottom:8px">Critères d'évaluation</strong>
+    ${['Motivation','Communication','Analyse'].map(c=>`<div style="display:flex;gap:8px;margin-bottom:5px">
+      <input type="text" value="${c}" style="flex:1;border:1.5px solid var(--g200);border-radius:6px;padding:7px 10px;font-size:13px"/>
+      <input type="number" placeholder="coef" style="width:55px;border:1.5px solid var(--g200);border-radius:6px;padding:7px 8px;font-size:13px"/></div>`).join('')}
+    <button class="btn btn-g btn-sm mb8 mt8" onclick="toast('➕ Critère ajouté')">+ Critère</button>
+    <div class="mfoot"><button class="btn btn-g" onclick="closeModal()">Annuler</button><button class="btn btn-b" onclick="closeModal();toast('✅ Épreuve créée !')">Créer</button></div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+function toggleNeFields(v){document.getElementById('ne-commune').classList.toggle('hidden',v!=='commune');document.getElementById('ne-indiv').classList.toggle('hidden',v==='commune')}
+
+function pgAdminCands(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Candidats</h1><p>${S.candidats.length} candidats enregistrés</p></div>${bBtn()}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+    <input type="text" placeholder="🔍 Rechercher…" style="border:1.5px solid var(--g200);border-radius:7px;padding:7px 12px;font-size:13.5px;width:210px;outline:none"/>
+    <div style="display:flex;gap:8px"><button class="btn btn-g btn-sm" onclick="toast('📥 Export Excel')">⬇ Export</button><button class="btn btn-b btn-sm" onclick="toast('➕ Ajouter')">+ Candidat</button></div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Candidat</th><th>Formation</th><th>Statut</th><th>Pôle voeux</th><th>Moy.</th><th>Actions</th></tr></thead>
+    <tbody>${S.candidats.map(c=>{
+      const moy=c.notes.length?(c.notes.reduce((s,n)=>s+n.note,0)/c.notes.length).toFixed(1):'—';
+      return`<tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar av-b">${c.prenom[0]}${c.nom[0]}</div>
+          <div><div style="font-weight:600">${c.prenom} ${c.nom}</div><div class="ts tg">${c.email}</div></div></div></td>
+        <td>${c.formation}</td>
+        <td><span class="badge ${c.statut==='en cours'?'bb':c.statut==='éliminé'?'bp':'bg'}">${c.statut}</span></td>
+        <td>${c.poleVoeux?`<span class="badge by">${c.poleVoeux}</span>`:'<span class="tg ts">—</span>'}</td>
+        <td style="font-weight:700;color:var(--blue)">${moy}</td>
+        <td><span class="lk" onclick="openFiche(${c.id})">Fiche</span> · <span class="lkp" onclick="toast('🗑️ Supprimé')">Suppr.</span></td>
+      </tr>`;}).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function pgAdminEvals(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Évaluateurs</h1><p>Comptes membres JE et notations</p></div>${bBtn()}
+  <div class="stats-row">
+    <div class="stat"><div class="sv sv-b">${S.membres.length}</div><div class="sl">Évaluateurs</div></div>
+    <div class="stat"><div class="sv" style="color:var(--g700)">14.2</div><div class="sl">Note moy.</div></div>
+    <div class="stat"><div class="sv sv-g">31</div><div class="sl">Évals saisies</div></div>
+  </div>
+  <div class="sc"><h3>➕ Créer un compte évaluateur</h3>
+    <div class="two-col">
+      <div class="fg"><label>Prénom</label><input type="text" id="mb-p" placeholder="Sophie"/></div>
+      <div class="fg"><label>Nom</label><input type="text" id="mb-n" placeholder="LEBLANC"/></div>
+    </div>
+    <div class="two-col">
+      <div class="fg"><label>Email</label><input type="email" id="mb-e" placeholder="s.leblanc@ajc.fr"/></div>
+      <div class="fg"><label>Mot de passe</label><input type="password" id="mb-pwd"/></div>
+    </div>
+    <div class="fg" style="max-width:220px"><label>Pôle</label><select id="mb-pole">${POLES.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    <button class="btn btn-b btn-sm" onclick="addMembre()">Créer le compte</button>
+  </div>
+  <div class="tw"><div class="tw-head"><span class="tw-title" style="font-weight:600">Tous les évaluateurs</span><button class="btn btn-g btn-sm" onclick="toast('📥 Export')">⬇ Export</button></div>
+    <table><thead><tr><th>Membre</th><th>Pôle</th><th>Email</th><th>Mot de passe</th><th>Évals</th><th>Moy.</th><th>Actions</th></tr></thead>
+    <tbody id="mbTbody">${mbRows()}</tbody></table>
+  </div>
+  <div class="tw"><div class="tw-head"><span class="tw-title" style="font-weight:600">Récap des évaluations données</span></div>
+    <table><thead><tr><th>Évaluateur</th><th>Candidat</th><th>Épreuve</th><th>Tour</th><th>Note</th><th>Commentaire</th></tr></thead>
+    <tbody>${S.candidats.flatMap(c=>c.notes.map(n=>`<tr>
+      <td>${n.eval}</td><td><span class="lk" onclick="openFiche(${c.id})">${c.prenom} ${c.nom}</span></td>
+      <td>${n.epreuve}</td><td>Tour ${n.tour}</td>
+      <td style="font-weight:700;color:var(--blue)">${n.note}</td>
+      <td class="ts tg" style="font-style:italic">${n.commentaire}</td>
+    </tr>`)).join('')}</tbody>
+  </table></div>`;
+}
+
+function mbRows(){return S.membres.map(mb=>`<tr>
+  <td><div style="display:flex;align-items:center;gap:7px"><div class="avatar av-p">${mb.prenom[0]}${mb.nom[0]}</div><strong>${mb.prenom} ${mb.nom}</strong></div></td>
+  <td>${mb.pole}</td><td class="ts tg">${mb.email}</td>
+  <td style="font-family:monospace;color:var(--g400);font-size:13px">${mb.pwd}</td>
+  <td>${mb.nbEvals}</td><td><strong>${mb.moyenneNote}</strong></td>
+  <td><span class="lk" onclick="openEditMb(${mb.id})">Modifier</span> · <span class="lkp" onclick="delMb(${mb.id})">Suppr.</span></td>
+</tr>`).join('')}
+
+function addMembre(){
+  const p=document.getElementById('mb-p').value.trim(),n=document.getElementById('mb-n').value.trim();
+  const e=document.getElementById('mb-e').value.trim(),pwd=document.getElementById('mb-pwd').value.trim();
+  const pole=document.getElementById('mb-pole').value;
+  if(!p||!n||!e||!pwd){toast('⚠️ Remplissez tous les champs');return}
+  if(S.membres.find(m=>m.email===e)){toast('⚠️ Email déjà utilisé');return}
+  S.membres.push({id:Date.now(),prenom:p,nom:n,email:e,pwd,pole,nbEvals:0,moyenneNote:'—',creneaux:[]});
+  toast('✅ Compte créé : '+p+' '+n);pgAdminEvals();
+}
+function delMb(id){S.membres=S.membres.filter(m=>m.id!==id);const tb=document.getElementById('mbTbody');if(tb)tb.innerHTML=mbRows();toast('🗑️ Supprimé')}
+function openEditMb(id){
+  const mb=S.membres.find(x=>x.id===id);
+  document.getElementById('modalBody').innerHTML=`<h2>Modifier ${mb.prenom} ${mb.nom}</h2>
+    <div class="two-col"><div class="fg"><label>Prénom</label><input id="em-p" type="text" value="${mb.prenom}"/></div><div class="fg"><label>Nom</label><input id="em-n" type="text" value="${mb.nom}"/></div></div>
+    <div class="fg"><label>Email</label><input id="em-e" type="email" value="${mb.email}"/></div>
+    <div class="fg"><label>Mot de passe</label><input id="em-pwd" type="text" value="${mb.pwd}"/></div>
+    <div class="fg"><label>Pôle</label><select id="em-pole">${POLES.map(p=>`<option ${mb.pole===p?'selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="mfoot"><button class="btn btn-g" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-b" onclick="const mb=S.membres.find(x=>x.id===${id});mb.prenom=document.getElementById('em-p').value;mb.nom=document.getElementById('em-n').value;mb.email=document.getElementById('em-e').value;mb.pwd=document.getElementById('em-pwd').value;mb.pole=document.getElementById('em-pole').value;closeModal();pgAdminEvals();toast('✅ Mis à jour')">Sauvegarder</button></div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+
+function pgAdminSoiree(){
+  const m=document.getElementById('main');
+  const actifs=S.candidats.filter(c=>c.statut==='en cours');
+  m.innerHTML=`
+  <div class="ph"><h1>Soirée Débat</h1><p>Délibération de fin de tour</p></div>${bBtn()}
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="btn btn-g btn-sm" style="border-color:var(--blue);color:var(--blue)">Tour 1</button>
+    <button class="btn btn-g btn-sm" onclick="toast('Tour 2 non disponible')">Tour 2</button>
+    <button class="btn btn-g btn-sm" onclick="toast('Tour 3 non disponible')">Tour 3</button>
+  </div>
+  <div class="sc"><h3>👥 Revue des candidats (${actifs.length})</h3>
+  <div class="ib ib-b" style="font-size:12.5px">Cliquez une 2ème fois sur un bouton déjà sélectionné pour le désélectionner.</div>
+  ${actifs.map(c=>{
+    const moy=c.notes.length?(c.notes.reduce((s,n)=>s+n.note,0)/c.notes.length).toFixed(1):'—';
+    const dec=S.soireeDecisions[c.id]||{dec:null,plus:'',moins:''};
+    return`<div class="cc" id="cc-${c.id}">
+      <div class="cc-top">
+        <div class="avatar av-b">${c.prenom[0]}${c.nom[0]}</div>
+        <div style="flex:1"><strong>${c.prenom} ${c.nom}</strong>
+          <div class="ts tg">${c.formation} · Moy. <strong>${moy}</strong> · ${c.notes.length} éval.
+            <span class="lk" style="margin-left:6px;font-size:12px" onclick="openFiche(${c.id})">voir fiche →</span>
+          </div>
+        </div>
+        ${dec.dec?`<span class="badge ${dec.dec==='accept'?'bg':dec.dec==='reject'?'bp':'by'}">${dec.dec==='accept'?'✓ Passe':dec.dec==='reject'?'✗ Éliminé':'? Réserve'}</span>`:''}
+      </div>
+      <div class="cc-btns">
+        <button class="ab ac ${dec.dec==='accept'?'sel':''}" onclick="soireeDecide(${c.id},'accept')">✓ Passe</button>
+        <button class="ab rs ${dec.dec==='reserve'?'sel':''}" onclick="soireeDecide(${c.id},'reserve')">? Réserve</button>
+        <button class="ab re ${dec.dec==='reject'?'sel':''}" onclick="soireeDecide(${c.id},'reject')">✗ Éliminé</button>
+        ${dec.dec?`<button class="ab cl" onclick="soireeDecide(${c.id},null)" title="Désélectionner">✕ Annuler</button>`:''}
+      </div>
+      ${dec.dec==='reserve'?`<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="fg"><label style="font-size:11px;color:#CA8A04">Points + </label>
+          <textarea rows="2" style="resize:none;border-color:#CA8A04" placeholder="Forces…" onchange="S.soireeDecisions[${c.id}].plus=this.value">${dec.plus||''}</textarea></div>
+        <div class="fg"><label style="font-size:11px;color:var(--pink)">Points − </label>
+          <textarea rows="2" style="resize:none;border-color:var(--pink)" placeholder="Axes amélioration…" onchange="S.soireeDecisions[${c.id}].moins=this.value">${dec.moins||''}</textarea></div>
+      </div>`:''}
+    </div>`;}).join('')}
+  <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+    <button class="btn btn-g" onclick="voirReserve()">👀 Voir les réserves</button>
+    <button class="btn btn-b" onclick="validerSoiree()">✅ Valider & Envoyer</button>
+  </div></div>`;
+}
+
+function soireeDecide(id,dec){
+  if(!S.soireeDecisions[id])S.soireeDecisions[id]={dec:null,plus:'',moins:''};
+  // toggle off if same
+  if(S.soireeDecisions[id].dec===dec)S.soireeDecisions[id].dec=null;
+  else S.soireeDecisions[id].dec=dec;
+  pgAdminSoiree();
+}
+
+function voirReserve(){
+  const res=S.candidats.filter(c=>S.soireeDecisions[c.id]?.dec==='reserve');
+  if(!res.length){toast('Aucun candidat en réserve');return}
+  document.getElementById('modalBody').innerHTML=`<h2>Candidats sous réserve (${res.length})</h2>`+
+    res.map(c=>{const d=S.soireeDecisions[c.id]||{};return`
+      <div style="border:1.5px solid var(--g200);border-radius:9px;padding:12px;margin-bottom:10px">
+        <div style="font-weight:700;margin-bottom:2px">${c.prenom} ${c.nom}</div>
+        <div class="ts tg mb8">${c.formation} · Moy. ${c.notes.length?(c.notes.reduce((s,n)=>s+n.note,0)/c.notes.length).toFixed(1):'—'}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="fg"><label style="color:#16A34A">Points +</label><textarea rows="2" style="resize:none;border-color:#16A34A" placeholder="Forces…">${d.plus||''}</textarea></div>
+          <div class="fg"><label style="color:var(--pink)">Points −</label><textarea rows="2" style="resize:none;border-color:var(--pink)" placeholder="Axes amélioration…">${d.moins||''}</textarea></div>
+        </div>
+      </div>`}).join('')+
+    `<div class="mfoot"><button class="btn btn-g" onclick="closeModal()">Fermer</button><button class="btn btn-b" onclick="closeModal();toast('✅ Réserves enregistrées')">Valider</button></div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+
+function validerSoiree(){
+  const actifs=S.candidats.filter(c=>c.statut==='en cours');
+  const decided=actifs.filter(c=>S.soireeDecisions[c.id]?.dec);
+  if(decided.length<actifs.length){toast('⚠️ '+( actifs.length-decided.length)+' candidat(s) sans décision');return}
+  const a=actifs.filter(c=>S.soireeDecisions[c.id]?.dec==='accept').length;
+  const r=actifs.filter(c=>S.soireeDecisions[c.id]?.dec==='reject').length;
+  document.getElementById('modalBody').innerHTML=`<h2>Valider & Envoyer les résultats</h2>
+    <div style="display:flex;gap:10px;margin:12px 0">
+      <div class="stat" style="flex:1"><div class="sv sv-g">${a}</div><div class="sl">Admis</div></div>
+      <div class="stat" style="flex:1"><div class="sv sv-p">${r}</div><div class="sl">Éliminés</div></div>
+    </div>
+    <div class="fg"><label>Message admis</label><textarea rows="3" style="resize:none">Félicitations ! Vous êtes sélectionné(e) pour le tour suivant du recrutement AJC.</textarea></div>
+    <div class="fg"><label>Message refusé</label><textarea rows="3" style="resize:none">Merci de votre participation. Votre aventure AJC s'arrête ici cette année.</textarea></div>
+    <div class="mfoot"><button class="btn btn-g" onclick="closeModal()">Annuler</button><button class="btn btn-b" onclick="closeModal();toast('📧 Emails envoyés !')">Valider & Envoyer</button></div>`;
+  document.getElementById('modalOv').classList.remove('hidden');
+}
+
+function pgAdminDispos(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Dispos & Inscriptions</h1><p>Logistique des créneaux</p></div>${bBtn()}
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <select style="border:1.5px solid var(--g200);border-radius:7px;padding:7px 11px;font-size:13.5px">
+      ${S.epreuves.map(e=>`<option>Tour ${e.tour} — ${e.nom}</option>`).join('')}
+    </select>
+  </div>
+  <div class="sc"><h3>⏰ Dispos évaluateurs</h3>
+    <div class="dispo-grid">
+      <div class="dc hdr"></div>${['Lun','Mar','Mer','Jeu','Ven'].map(d=>`<div class="dc hdr">${d}</div>`).join('')}
+      ${['09h','10h','11h','14h','15h','16h'].map(h=>`<div class="dc hdr">${h}</div>${[3,2,4,1,3].map(n=>`<div class="dc" style="cursor:default;background:${n>=3?'var(--bl)':n>=2?'#FEF9C3':'var(--pl)'}">👤${n}</div>`).join('')}`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-b btn-sm" onclick="toast('✅ Saisie dispos ouverte')">Ouvrir saisie dispos</button>
+      <button class="btn btn-g btn-sm" onclick="toast('🔒 Saisie fermée')">Fermer saisie</button>
+    </div>
+  </div>
+  <div class="sc"><h3>🏫 Salles & Jury</h3>
+    <div class="two-col">
+      <div class="fg"><label>Salles/créneau</label><input type="number" value="3" min="1"/></div>
+      <div class="fg"><label>Évaluateurs/salle</label><input type="number" value="2" min="1"/></div>
+    </div>
+    <p class="ts tg mb8">Capacité : <strong>6 candidats/heure</strong></p>
+    <button class="btn btn-b btn-sm" onclick="toast('🔀 Évaluateurs répartis')">Répartir les évaluateurs</button>
+  </div>
+  <div class="sc"><h3>📋 Inscriptions candidats</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-b btn-sm" onclick="toast('✅ Inscriptions ouvertes')">Ouvrir inscriptions</button>
+      <button class="btn btn-g btn-sm" onclick="toast('🔒 Fermé')">Fermer</button>
+      <button class="btn btn-g btn-sm" onclick="toast('📧 Relances envoyées')">Relancer non-inscrits</button>
+    </div>
+    <div class="tw"><table><thead><tr><th>Créneau</th><th>Inscrits</th><th>Capacité</th><th>Statut</th></tr></thead>
+      <tbody>${[['09h–10h',5,6,'ok'],['10h–11h',6,6,'plein'],['14h–15h',3,6,'ok'],['15h–16h',2,6,'incomplet']].map(([h,i,c,s])=>`
+        <tr><td>${h}</td><td>${i}/${c}</td><td>${c}</td>
+        <td><span class="badge ${s==='plein'?'bg':s==='incomplet'?'bp':'bb'}">${s==='plein'?'Complet':s==='incomplet'?'Incomplet':'Disponible'}</span></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+  </div>`;
+}
+
+// ══ CHAT GÉNÉRAL ══
+function pgChat(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Chat général</h1><p>
+    <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:var(--blue);display:inline-block"></span>Admin</span> &nbsp;
+    <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:var(--pink);display:inline-block"></span>Membres JE</span> &nbsp;
+    <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:var(--g400);display:inline-block"></span>Candidats</span>
+  </p></div>
+  <div class="sc" style="padding:0;overflow:hidden">
+    <div style="display:flex;flex-direction:column;height:460px;padding:14px">
+      <div id="chatMsgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:10px">
+        ${S.chatGeneral.map(msg=>chatBubble(msg)).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="text" placeholder="Votre message pour tout le monde…" id="chatIn" style="flex:1;border:1.5px solid var(--g200);border-radius:7px;padding:8px 12px;font-size:13.5px;outline:none" onkeydown="if(event.key==='Enter')sendChat()"/>
+        <button class="btn btn-b btn-sm" onclick="sendChat()">Envoyer</button>
+      </div>
+    </div>
+  </div>`;
+  scrollChat();
+}
+
+function chatBubble(msg){
+  const mine=(S.role==='admin'&&msg.role==='admin')||(S.role==='member'&&msg.name===S.user)||(S.role==='candidate'&&msg.name===S.user);
+  const bg=msg.role==='admin'?'var(--blue)':msg.role==='member'?'var(--pl)':'var(--g100)';
+  const col=msg.role==='admin'?'#fff':msg.role==='member'?'var(--pink)':'var(--g700)';
+  const br=mine?'12px 12px 2px 12px':'12px 12px 12px 2px';
+  return`<div style="align-self:${mine?'flex-end':'flex-start'}">
+    <div class="chat-msg" style="background:${bg};color:${col};border-radius:${br}">${msg.text}
+      <div class="cm-meta">${msg.name} · ${msg.time}</div>
+    </div>
+  </div>`;
+}
+
+function sendChat(){
+  const inp=document.getElementById('chatIn');if(!inp||!inp.value.trim())return;
+  S.chatGeneral.push({name:S.user,text:inp.value,time:now(),role:S.role});
+  inp.value='';pgChat();
+}
+function scrollChat(){const el=document.getElementById('chatMsgs');if(el)el.scrollTop=el.scrollHeight}
+
+// ══ MESSAGERIE PRIVÉE ══
+function pgMsg(role){
+  const m=document.getElementById('main');
+  let contacts=[];
+  let activeId=S._msgActive||null;
+
+  if(role==='admin'){
+    contacts=[...S.candidats.map(c=>({id:'c'+c.id,name:c.prenom+' '+c.nom,role:'candidate'})),...S.membres.map(mb=>({id:'m'+mb.id,name:mb.prenom+' '+mb.nom,role:'member'}))];
+  } else if(role==='member'){
+    contacts=[{id:'admin',name:'Admin AJC',role:'admin'}];
+  } else {
+    contacts=[{id:'admin',name:'Admin AJC',role:'admin'}];
+  }
+  if(!activeId&&contacts.length)activeId=contacts[0].id;
+  S._msgActive=activeId;
+  const msgs=(S.privMessages[activeId]||[]);
+
+  m.innerHTML=`
+  <div class="ph"><h1>Messagerie privée</h1><p>${role==='admin'?'Conversations privées avec candidats et membres':'Conversation privée avec l\'Admin AJC'}</p></div>
+  ${role==='admin'?bBtn():''}
+  <div class="sc" style="padding:0;overflow:hidden">
+    <div class="chat-wrap">
+      ${role==='admin'?`<div class="chat-sb">
+        <h4>Candidats</h4>
+        ${S.candidats.map(c=>`<div class="chat-ct ${activeId==='c'+c.id?'on':''}" onclick="S._msgActive='c${c.id}';pgMsg('admin')">${c.prenom} ${c.nom[0]}.</div>`).join('')}
+        <h4 style="margin-top:10px">Membres JE</h4>
+        ${S.membres.map(mb=>`<div class="chat-ct ${activeId==='m'+mb.id?'on':''}" onclick="S._msgActive='m${mb.id}';pgMsg('admin')">${mb.prenom} ${mb.nom[0]}.</div>`).join('')}
+      </div>`:''}
+      <div class="chat-main">
+        <div class="chat-msgs" id="privMsgs">
+          ${msgs.length?msgs.map(msg=>`
+            <div style="align-self:${msg.from===S.user?'flex-end':'flex-start'}">
+              <div class="chat-msg ${msg.from===S.user?'cm-admin':'cm-candidate'}">${msg.text}
+                <div class="cm-meta">${msg.from} · ${msg.time}</div>
+              </div>
+            </div>`).join(''):`<div style="text-align:center;color:var(--g400);font-size:13px;margin-top:40px">Commencez la conversation…</div>`}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="privIn" placeholder="Votre message…" style="flex:1;border:1.5px solid var(--g200);border-radius:7px;padding:8px 12px;font-size:13.5px;outline:none" onkeydown="if(event.key==='Enter')sendPriv('${role}')"/>
+          <button class="btn btn-b btn-sm" onclick="sendPriv('${role}')">Envoyer</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  const pe=document.getElementById('privMsgs');if(pe)pe.scrollTop=pe.scrollHeight;
+}
+
+function sendPriv(role){
+  const inp=document.getElementById('privIn');if(!inp||!inp.value.trim())return;
+  const key=S._msgActive||'admin';
+  if(!S.privMessages[key])S.privMessages[key]=[];
+  S.privMessages[key].push({from:S.user,text:inp.value,time:now()});
+  inp.value='';pgMsg(role);
+}
+
+// ══ MEMBRE JE ══
+function pgJeCands(){
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Candidats</h1><p>Accès aux fiches et notation</p></div>
+  <input type="text" placeholder="🔍 Rechercher…" style="border:1.5px solid var(--g200);border-radius:7px;padding:7px 12px;font-size:13.5px;width:210px;outline:none;margin-bottom:12px"/>
+  <div class="tw"><table>
+    <thead><tr><th>Candidat</th><th>Formation</th><th>Statut</th><th>Notes</th><th>Moy.</th><th>Actions</th></tr></thead>
+    <tbody>${S.candidats.filter(c=>c.statut!=='éliminé').map(c=>{
+      const moy=c.notes.length?(c.notes.reduce((s,n)=>s+n.note,0)/c.notes.length).toFixed(1):'—';
+      return`<tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar av-b">${c.prenom[0]}${c.nom[0]}</div>
+          <div><div style="font-weight:600">${c.prenom} ${c.nom}</div><div class="ts tg">${c.email}</div></div></div></td>
+        <td>${c.formation}</td><td><span class="badge bb">${c.statut}</span></td>
+        <td>${c.notes.length}</td><td style="font-weight:700;color:var(--blue)">${moy}</td>
+        <td><span class="lk" onclick="openFiche(${c.id})">Fiche</span> · <span class="lkp" onclick="openNoter(${c.id})">Noter</span></td>
+      </tr>`;}).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function pgJeCal(){
+  const mb=S.membres.find(x=>x.id===S.memberId)||S.membres[0];
+  const m=document.getElementById('main');
+  const evMap={};
+  S.epreuves.filter(e=>e.type==='commune').forEach(e=>{
+    const d=parseInt(e.date.split('-')[2]);
+    if(!evMap[d])evMap[d]=[];evMap[d].push({t:e.nom+' '+e.heure,c:'b'});
+  });
+  mb.creneaux.forEach(cr=>{
+    const d=parseInt(cr.date.split('-')[2]);
+    if(!evMap[d])evMap[d]=[];evMap[d].push({t:cr.heure+' '+cr.candidat,c:'g'});
+  });
+  m.innerHTML=`
+  <div class="ph"><h1>Mon calendrier</h1><p>Épreuves communes + créneaux d'évaluation retenus</p></div>
+  ${calViewToggle('pgJeCal')}
+  ${S.calView==='mois'?renderMonthCal(evMap,'blue'):S.calView==='semaine'?renderWeekCal(evMap):renderDayCal(evMap)}
+  <div class="sc mt12">
+    <h3>📌 Légende</h3>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--bl)"></div>Épreuve commune</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:#DCFCE7"></div>Créneau évaluation retenu</div>
+    </div>
+  </div>`;
+}
+
+function pgJeRecap(){
+  const mb=S.membres.find(x=>x.id===S.memberId)||S.membres[0];
+  const m=document.getElementById('main');
+  const mes=S.candidats.flatMap(c=>c.notes.filter(n=>n.eval===mb.prenom+' '+mb.nom).map(n=>({cand:c,note:n})));
+  m.innerHTML=`
+  <div class="ph"><h1>Mes évaluations</h1><p>Récapitulatif de vos notations</p></div>
+  <div class="stats-row">
+    <div class="stat"><div class="sv sv-b">${mb.nbEvals}</div><div class="sl">Évaluations</div></div>
+    <div class="stat"><div class="sv" style="color:var(--g700)">${mb.moyenneNote}</div><div class="sl">Note moy. donnée</div></div>
+  </div>
+  <div class="sc"><h3>📝 Historique</h3>
+    ${mes.length?mes.map(({cand,note})=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--g100)">
+        <div class="avatar av-b">${cand.prenom[0]}${cand.nom[0]}</div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between">
+            <div><strong>${cand.prenom} ${cand.nom}</strong> <span class="tg ts">— ${note.epreuve}</span></div>
+            <span style="font-size:19px;font-weight:800;color:var(--blue)">${note.note}</span>
+          </div>
+          <div class="ts tg" style="font-style:italic">"${note.commentaire}"</div>
+          <span class="lk ts" onclick="openFiche(${cand.id})">Voir fiche</span>
+        </div>
+      </div>`).join(''):`<p class="ts tg">Aucune évaluation.</p>`}
+  </div>
+  <div class="sc"><h3>🔜 Prochains candidats</h3>
+    ${S.candidats.filter(c=>c.statut==='en cours'&&!c.notes.find(n=>n.eval===mb.prenom+' '+mb.nom)).slice(0,3).map(c=>`
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--g100)">
+        <div class="avatar av-p">${c.prenom[0]}${c.nom[0]}</div>
+        <div style="flex:1"><strong>${c.prenom} ${c.nom}</strong><div class="ts tg">Case study · 14/03 · 10h00</div></div>
+        <span class="lk ts" onclick="openFiche(${c.id})">Voir fiche</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function pgJeDispos(){
+  const m=document.getElementById('main');
+  const epreuves=S.epreuves.filter(e=>e.type!=='commune');
+  m.innerHTML=`
+  <div class="ph"><h1>Mes disponibilités</h1><p>Cochez vos créneaux quand la saisie est ouverte par l'admin</p></div>
+  <div class="ib ib-b">ℹ️ La saisie est activée uniquement pendant la période définie par l'admin.</div>
+  ${epreuves.map(e=>`
+  <div class="sc"><h3>${e.type==='individuelle'?'👤':'👥'} ${e.nom}
+    <span class="badge ${e.type==='individuelle'?'bp':'bg'}" style="font-size:11px">${e.type}</span>
+    <span class="badge bgr" style="font-size:11px">Tour ${e.tour}</span>
+  </h3>
+  <p class="ts tg mb8">Plage : ${e.dateDebut} → ${e.dateFin}</p>
+  <div class="dispo-grid">
+    <div class="dc hdr"></div>${['Lun','Mar','Mer','Jeu','Ven'].map(d=>`<div class="dc hdr">${d}</div>`).join('')}
+    ${['09h','10h','11h','14h','15h','16h'].map(h=>`<div class="dc hdr">${h}</div>${[0,1,2,3,4].map(()=>`<div class="dc" onclick="this.classList.toggle('sel')">✓</div>`).join('')}`).join('')}
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="btn btn-b btn-sm" onclick="toast('✅ Dispos enregistrées — ${e.nom}')">Enregistrer</button>
+    <button class="btn btn-g btn-sm" onclick="this.closest('.sc').querySelectorAll('.dc.sel').forEach(x=>x.classList.remove('sel'))">Réinitialiser</button>
+  </div></div>`).join('')}`;
+}
+
+// ══ CANDIDAT ══
+function pgCandCal(){
+  const m=document.getElementById('main');
+  const evMap={10:[{t:'Présentation AJC 14h',c:'b'}],12:[{t:'Mon entretien 09h',c:'p'}],14:[{t:'Case study 10h',c:'p'}]};
+  m.innerHTML=`
+  <div class="ph"><h1>Mon calendrier</h1><p>Vos épreuves et formations</p></div>
+  ${calViewToggle('pgCandCal')}
+  ${S.calView==='mois'?renderMonthCal(evMap,'pink'):S.calView==='semaine'?renderWeekCal(evMap):renderDayCal(evMap)}`;
+}
+
+function calViewToggle(fn){
+  return`<div style="display:flex;gap:0;background:var(--g100);border-radius:8px;padding:3px;width:fit-content;margin-bottom:14px">
+    ${['mois','semaine','jour'].map(v=>`<button onclick="S.calView='${v}';${fn}()" style="padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:${S.calView===v?'var(--white)':'transparent'};color:${S.calView===v?'var(--blue)':'var(--g500)'};box-shadow:${S.calView===v?'0 1px 3px rgba(0,0,0,.1)':'none'}">${v.charAt(0).toUpperCase()+v.slice(1)}</button>`).join('')}
+  </div>`;
+}
+
+function renderMonthCal(evMap){
+  return`<div class="cal">
+    <div class="cal-head"><strong>Mars 2025</strong><div class="cal-nav"><button>◀</button><button>▶</button></div></div>
+    <div class="cal-grid">
+      ${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=>`<div class="cal-dn">${d}</div>`).join('')}
+      ${Array.from({length:31},(_,i)=>{const d=i+1;const ev=evMap[d]||[];
+        return`<div class="cal-cell"><div class="cal-num">${d}</div>${ev.map(e=>`<div class="cal-ev ce-${e.c}">${e.t}</div>`).join('')}</div>`;}).join('')}
+    </div>
+  </div>`;
+}
+
+function renderWeekCal(evMap){
+  const days=[['Lun',10],['Mar',11],['Mer',12],['Jeu',13],['Ven',14],['Sam',15],['Dim',16]];
+  const hours=['08h','09h','10h','11h','12h','14h','15h','16h'];
+  return`<div class="wk-wrap"><div class="wk-grid" style="display:grid;grid-template-columns:52px repeat(7,1fr)">
+    <div class="wk-hdr"></div>${days.map(([d,n])=>`<div class="wk-hdr">${d} ${n}/03</div>`).join('')}
+    ${hours.map(h=>`<div class="wk-time">${h}</div>${days.map(([,d])=>{
+      const hh=parseInt(h);const ev=(evMap[d]||[]).filter(e=>{const t=e.t;const m=t.match(/(\d+)h/);return m&&parseInt(m[1])===hh});
+      return`<div class="wk-cell">${ev.map(e=>`<div class="cal-ev ce-${e.c}" style="font-size:11px">${e.t.replace(/\d+h\d*\s*/,'').trim()||e.t}</div>`).join('')}</div>`;}).join('')}`).join('')}
+  </div></div>`;
+}
+
+function renderDayCal(evMap){
+  const d=12;const ev=evMap[d]||[];
+  const hours=['08h00','09h00','10h00','11h00','12h00','13h00','14h00','15h00','16h00','17h00'];
+  return`<div class="sc"><h3>📅 Mercredi 12 Mars 2025</h3>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-g btn-sm" onclick="toast('◀ jour précédent')">◀ Préc.</button>
+      <button class="btn btn-g btn-sm" onclick="toast('▶ jour suivant')">Suiv. ▶</button>
+    </div>
+    ${hours.map(h=>{const hh=parseInt(h);const evH=ev.filter(e=>{const m=e.t.match(/(\d+)h/);return m&&parseInt(m[1])===hh});
+      return`<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--g100);min-height:38px;align-items:flex-start">
+        <div style="width:50px;font-size:12px;color:var(--g400);flex-shrink:0;padding-top:2px">${h}</div>
+        <div style="flex:1">${evH.map(e=>`<div class="cal-ev ce-${e.c}" style="display:inline-block;margin-right:5px">${e.t}</div>`).join('')}</div>
+      </div>`;}).join('')}
+  </div>`;
+}
+
+function pgCandEpreuves(){
+  const m=document.getElementById('main');
+  const eprVis=S.epreuves.filter(e=>e.visible);
+  const tourIds=[...new Set(eprVis.map(e=>e.tour))];
+  m.innerHTML=`
+  <div class="ph"><h1>Épreuves & Tours</h1><p>Dévoilées au fur et à mesure de votre avancement</p></div>
+  ${tourIds.map(tid=>{
+    const tour=S.tours.find(t=>t.id===tid);
+    const eprs=eprVis.filter(e=>e.tour===tid);
+    return`<div class="sc"><h3>🏁 ${tour.name} <span class="badge ${tour.status==='en cours'?'bb':'bg'}">${tour.status}</span></h3>
+      ${eprs.map(e=>`
+        <div style="padding:11px 0;border-bottom:1px solid var(--g100)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:${e.docs.length?'9px':'0'}">
+            <div class="avatar ${e.type==='commune'?'av-b':e.type==='groupe'?'av-g':'av-p'}" style="font-size:11px">${e.type==='commune'?'C':e.type==='groupe'?'G':'I'}</div>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:14px">${e.nom}${e.pole?` <span class="badge by">🎯 ${e.pole}</span>`:''}</div>
+              <div class="ts tg">${e.type==='commune'?e.date+' · '+e.heure:'Plage : '+e.dateDebut+' → '+e.dateFin}</div>
+            </div>
+            <span class="badge ${e.type==='commune'?'bb':e.type==='groupe'?'bg':'bp'}">${e.type}</span>
+          </div>
+          ${e.docs.length?`<div style="padding-left:42px;display:flex;gap:7px;flex-wrap:wrap">
+            ${e.docs.map(doc=>`<button class="btn btn-g btn-sm" onclick="toast('📥 ${doc}')">📄 ${doc}</button>`).join('')}
+          </div>`:''}
+        </div>`).join('')}
+    </div>`;}).join('')}
+  ${eprVis.length===0?`<div class="sc"><p class="tg ts">Aucune épreuve disponible pour le moment.</p></div>`:''}`;
+}
+
+function pgCandPole(){
+  const c=S.candidats.find(x=>x.prenom==='Alice')||S.candidats[0];
+  const m=document.getElementById('main');
+  m.innerHTML=`
+  <div class="ph"><h1>Choix de pôle</h1><p>Indiquez vos préférences entre chaque tour</p></div>
+  <div class="sc"><h3>🎯 Tour 1 → Tour 2 : Intérêt (information)</h3>
+    <p class="ts tg mb12">Aucun engagement — indiquez simplement le pôle qui vous intéresse.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="pole1Btns">
+      ${POLES.map(p=>`<button class="btn btn-g btn-sm" style="${c.poleVoeux===p?'background:var(--pink);color:#fff;border-color:var(--pink)':''}" 
+        onclick="S.candidats.find(x=>x.prenom==='Alice').poleVoeux='${p}';pgCandPole();toast('✅ Pôle ${p} sélectionné')">${p}</button>`).join('')}
+    </div>
+    ${c.poleVoeux?`<div class="ib ib-b mt12">✅ Vous avez exprimé un intérêt pour <strong>${c.poleVoeux}</strong></div>`:''}
+  </div>
+  <div class="sc" style="opacity:.5;pointer-events:none"><h3>🏆 Tour 2 → Tour 3 : Classement des 3 vœux <span class="badge bgr">🔒 Disponible après Tour 2</span></h3>
+    <p class="ts tg mb12">Classez vos 3 pôles préférés par ordre de priorité.</p>
+    ${[1,2,3].map(i=>`<div class="fg" style="max-width:280px"><label>Vœu n°${i}</label><select>${POLES.map(p=>`<option>${p}</option>`).join('')}</select></div>`).join('')}
+  </div>`;
+}
+
+// ══ UTILS ══
+function now(){return new Date().toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'})}
+
+function toast(msg){
+  const t=document.createElement('div');t.textContent=msg;
+  Object.assign(t.style,{position:'fixed',bottom:'22px',right:'22px',background:'var(--g900)',color:'#fff',padding:'10px 18px',borderRadius:'9px',fontSize:'13.5px',zIndex:'9999',boxShadow:'0 4px 16px rgba(0,0,0,.2)',transition:'opacity .4s'});
+  document.body.appendChild(t);setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),400)},2200);
+}
+
+document.getElementById('loginEmail').value='admin@ajc.fr';
+document.getElementById('loginPwd').value='admin2025';
+</script>
+</body>
+</html>

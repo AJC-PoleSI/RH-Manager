@@ -1,458 +1,641 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Assuming we have or can emulate
-import { Plus, Trash2, Calendar, UserPlus } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSettings } from '@/context/SettingsContext';
-import api from '@/lib/api';
-import { useToast } from '@/components/ui/toast';
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import api from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
-export default function SettingsPage() {
-    const { user, role } = useAuth();
-    const { settings, updateSettings } = useSettings();
-    const isAdmin = role === 'member' && user?.isAdmin;
-    const { toast } = useToast();
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
-    // Local state for forms
-    const [localSettings, setLocalSettings] = useState(settings);
-    const [saving, setSaving] = useState(false);
+interface Tour {
+  id: string;
+  name: string;
+  status: "en_cours" | "a_venir" | "termine";
+  candidateCount: number;
+}
 
-    // Deadline state
-    const [deadlineCandidats, setDeadlineCandidats] = useState('');
-    const [deadlineMembres, setDeadlineMembres] = useState('');
-    const [savingDeadlines, setSavingDeadlines] = useState(false);
+interface Epreuve {
+  id: string;
+  name: string;
+  tourId: string;
+  tourName: string;
+  type: "commune" | "individuelle" | "groupe";
+  date?: string;
+  dateDebut?: string;
+  dateFin?: string;
+  visibleCandidats: boolean;
+}
 
-    // Load deadlines from settings
-    useEffect(() => {
-        const loadDeadlines = async () => {
-            try {
-                const res = await api.get('/settings');
-                if (res.data.deadline_candidats) setDeadlineCandidats(res.data.deadline_candidats);
-                if (res.data.deadline_membres) setDeadlineMembres(res.data.deadline_membres);
-            } catch (e) { console.error(e); }
-        };
-        loadDeadlines();
-    }, []);
+interface Critere {
+  name: string;
+  coefficient: number;
+}
 
-    const handleSaveDeadlines = async () => {
-        setSavingDeadlines(true);
-        try {
-            await api.put('/settings', {
-                deadline_candidats: deadlineCandidats,
-                deadline_membres: deadlineMembres
-            });
-            toast('Deadlines enregistr\u00e9es', 'success');
-        } catch (e) {
-            toast('Erreur lors de la sauvegarde des deadlines', 'error');
-        } finally {
-            setSavingDeadlines(false);
-        }
-    };
+interface NewEpreuveForm {
+  name: string;
+  tourId: string;
+  type: "commune" | "individuelle" | "groupe";
+  /* commune */
+  date: string;
+  time: string;
+  salle: string;
+  presentedBy: string;
+  /* individuelle / groupe */
+  dateDebut: string;
+  dateFin: string;
+  duree: string;
+  pole: string;
+  /* shared */
+  documents: FileList | null;
+  criteres: Critere[];
+}
 
-    // Sync context to local state when loaded
-    useEffect(() => {
-        setLocalSettings(settings);
-    }, [settings]);
+const EMPTY_FORM: NewEpreuveForm = {
+  name: "",
+  tourId: "",
+  type: "commune",
+  date: "",
+  time: "",
+  salle: "",
+  presentedBy: "",
+  dateDebut: "",
+  dateFin: "",
+  duree: "",
+  pole: "",
+  documents: null,
+  criteres: [{ name: "", coefficient: 1 }],
+};
 
-    const handleSaveSettings = async () => {
-        setSaving(true);
-        try {
-            await updateSettings(localSettings);
-            toast("Paramètres enregistrés", 'success');
-        } catch (e) {
-            toast("Erreur lors de la sauvegarde", 'error');
-        } finally {
-            setSaving(false);
-        }
-    };
+/* ------------------------------------------------------------------ */
+/*  Helper components                                                  */
+/* ------------------------------------------------------------------ */
 
-    // Calendar & Events Logic
-    const [events, setEvents] = useState<any[]>([]);
-    const [editingEvent, setEditingEvent] = useState<any>(null);
-    const [loadingEvents, setLoadingEvents] = useState(false);
-
-    // Member Management State
-    const [members, setMembers] = useState<any[]>([]);
-    const [newMember, setNewMember] = useState({ email: '', password: '', isAdmin: false });
-    const [loadingMembers, setLoadingMembers] = useState(false);
-
-    useEffect(() => {
-        if (isAdmin) fetchMembers();
-    }, [isAdmin]);
-
-    const fetchMembers = async () => {
-        setLoadingMembers(true);
-        try {
-            const res = await api.get('/members');
-            setMembers(res.data);
-        } catch (e) { console.error(e); } finally { setLoadingMembers(false); }
-    };
-
-    const handleCreateMember = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            await api.post('/members', newMember);
-            setNewMember({ email: '', password: '', isAdmin: false });
-            toast('Membre ajouté', 'success');
-            fetchMembers();
-        } catch (e) { toast('Erreur création', 'error'); }
-    };
-
-    const handleDeleteMember = async (id: string) => {
-        if (!confirm('Supprimer ce membre ?')) return;
-        try {
-            await api.delete(`/members/${id}`);
-            fetchMembers();
-        } catch (e) { toast('Erreur suppression', 'error'); }
-    };
-
-    // Initial fetch of events
-    useEffect(() => {
-        fetchEvents();
-    }, []);
-
-    const fetchEvents = async () => {
-        setLoadingEvents(true);
-        try {
-            const res = await api.get('/calendar');
-            setEvents(res.data);
-        } catch (e) { console.error(e); } finally { setLoadingEvents(false); }
-    };
-
-    const handleDeleteEvent = async (id: string) => {
-        if (!confirm('Supprimer cet événement ?')) return;
-        try {
-            await api.delete(`/calendar/${id}`);
-            fetchEvents();
-        } catch (e) { toast('Erreur suppression', 'error'); }
-    };
-
-    // Simple Event Form Component (inline for now)
-    const EventForm = () => {
-        const [formData, setFormData] = useState(editingEvent || {
-            title: '', description: '', day: new Date().toISOString().split('T')[0], startTime: '09:00', endTime: '10:00'
-        });
-
-        const handleSubmit = async (e: React.FormEvent) => {
-            e.preventDefault();
-            try {
-                if (editingEvent) {
-                    await api.put(`/calendar/${editingEvent.id}`, formData);
-                } else {
-                    await api.post('/calendar', formData);
-                }
-                setEditingEvent(null);
-                fetchEvents();
-            } catch (err) { toast('Erreur sauvegarde', 'error'); }
-        };
-
-        return (
-            <form onSubmit={handleSubmit} className="border p-4 rounded-lg space-y-3 bg-gray-50 mb-4">
-                <h3 className="font-bold">{editingEvent ? 'Modifier' : 'Nouvel'} Événement</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><Label>Titre</Label><Input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} required /></div>
-                    <div className="space-y-1"><Label>Date</Label><Input type="date" value={formData.day.split('T')[0]} onChange={e => setFormData({ ...formData, day: e.target.value })} required /></div>
-                    <div className="space-y-1"><Label>Début</Label><Input type="time" value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} required /></div>
-                    <div className="space-y-1"><Label>Fin</Label><Input type="time" value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} required /></div>
-                    <div className="col-span-2 space-y-1"><Label>Description</Label><Input value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} /></div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="ghost" onClick={() => setEditingEvent(null)}>Annuler</Button>
-                    <Button type="submit">Enregistrer</Button>
-                </div>
-            </form>
-        );
-    };
-
+function StatusBadge({ status }: { status: string }) {
+  if (status === "en_cours")
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold">Paramètres</h1>
-
-            <Tabs defaultValue="deadlines" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="deadlines">Deadlines</TabsTrigger>
-                    <TabsTrigger value="members">Membres</TabsTrigger>
-                    {isAdmin && <TabsTrigger value="availabilities">Horaires Disponibilités</TabsTrigger>}
-                    <TabsTrigger value="calendar">Calendrier Global</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="deadlines" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Échéances</CardTitle>
-                            <CardDescription>Gérez les dates limites pour les membres et candidats.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label>Deadline inscription aux épreuves (Candidats)</Label>
-                                <Input
-                                    type="date"
-                                    value={deadlineCandidats}
-                                    onChange={e => setDeadlineCandidats(e.target.value)}
-                                />
-                                {deadlineCandidats && (
-                                    <p className="text-xs text-gray-500">
-                                        {new Date(deadlineCandidats) < new Date()
-                                            ? <span className="text-red-500 font-medium">⚠ Cette deadline est dépassée</span>
-                                            : <span className="text-green-600">✓ Active</span>
-                                        }
-                                    </p>
-                                )}
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Deadline saisie des disponibilités (Membres)</Label>
-                                <Input
-                                    type="date"
-                                    value={deadlineMembres}
-                                    onChange={e => setDeadlineMembres(e.target.value)}
-                                />
-                                {deadlineMembres && (
-                                    <p className="text-xs text-gray-500">
-                                        {new Date(deadlineMembres) < new Date()
-                                            ? <span className="text-red-500 font-medium">⚠ Cette deadline est dépassée</span>
-                                            : <span className="text-green-600">✓ Active</span>
-                                        }
-                                    </p>
-                                )}
-                            </div>
-                            <Button onClick={handleSaveDeadlines} disabled={savingDeadlines}>
-                                {savingDeadlines ? 'Sauvegarde...' : 'Sauvegarder'}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="members" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Gestion des Membres</CardTitle>
-                            <CardDescription>Ajoutez ou supprimez des membres du staff.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-4">
-                                <form onSubmit={handleCreateMember} className="flex gap-4 items-end bg-gray-50 p-4 rounded-lg">
-                                    <div className="flex-1 space-y-2">
-                                        <Label>Email</Label>
-                                        <Input
-                                            type="email"
-                                            required
-                                            value={newMember.email}
-                                            onChange={e => setNewMember({ ...newMember, email: e.target.value })}
-                                            placeholder="email@essec.edu"
-                                        />
-                                    </div>
-                                    <div className="flex-1 space-y-2">
-                                        <Label>Mot de passe</Label>
-                                        <Input
-                                            type="password"
-                                            required
-                                            value={newMember.password}
-                                            onChange={e => setNewMember({ ...newMember, password: e.target.value })}
-                                            placeholder="******"
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-2 pb-3">
-                                        <input
-                                            type="checkbox"
-                                            id="isAdmin"
-                                            checked={newMember.isAdmin}
-                                            onChange={e => setNewMember({ ...newMember, isAdmin: e.target.checked })}
-                                            className="h-4 w-4"
-                                        />
-                                        <Label htmlFor="isAdmin" className="mb-0">Admin</Label>
-                                    </div>
-                                    <Button type="submit"><UserPlus className="mr-2" size={16} /> Ajouter</Button>
-                                </form>
-
-                                <div className="border rounded-md overflow-hidden">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-100 uppercase text-xs">
-                                            <tr>
-                                                <th className="px-4 py-3">Email</th>
-                                                <th className="px-4 py-3">Rôle</th>
-                                                <th className="px-4 py-3 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {members.map((m) => (
-                                                <tr key={m.id} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-3 font-medium">{m.email}</td>
-                                                    <td className="px-4 py-3">
-                                                        {m.isAdmin ? <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">Admin</span> : <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">Membre</span>}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">
-                                                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDeleteMember(m.id)}>
-                                                            <Trash2 size={16} />
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {loadingMembers && <div className="p-4 text-center text-gray-400">Chargement...</div>}
-                                    {!loadingMembers && members.length === 0 && <div className="p-4 text-center text-gray-400">Aucun membre</div>}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {isAdmin && (
-                    <TabsContent value="availabilities" className="space-y-4 mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Configuration des Plages Horaires</CardTitle>
-                                <CardDescription>Définissez les créneaux standards.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-6">
-                                    <div className="space-y-4">
-                                        <Label className="text-lg font-semibold">Horaires d'ouverture par jour</Label>
-                                        <p className="text-sm text-gray-500">Décochez la case pour fermer le jour (aucun créneau possible).</p>
-
-                                        {[
-                                            { key: 'mon', label: 'Lundi' },
-                                            { key: 'tue', label: 'Mardi' },
-                                            { key: 'wed', label: 'Mercredi' },
-                                            { key: 'thu', label: 'Jeudi' },
-                                            { key: 'fri', label: 'Vendredi' },
-                                            { key: 'sat', label: 'Samedi' },
-                                            { key: 'sun', label: 'Dimanche' },
-                                        ].map((day) => {
-                                            const dayConfig = localSettings.weeklySchedule?.[day.key] || { start: 8, end: 19, isOpen: true };
-                                            return (
-                                                <div key={day.key} className="flex items-center gap-4 p-2 rounded hover:bg-gray-50">
-                                                    <div className="flex items-center gap-3 w-32">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={dayConfig.isOpen}
-                                                            onChange={(e) => {
-                                                                const newVal = e.target.checked;
-                                                                setLocalSettings((prev: any) => ({
-                                                                    ...prev,
-                                                                    weeklySchedule: {
-                                                                        ...prev.weeklySchedule,
-                                                                        [day.key]: { ...dayConfig, isOpen: newVal }
-                                                                    }
-                                                                }));
-                                                            }}
-                                                            className="w-4 h-4 rounded border-gray-300"
-                                                        />
-                                                        <span className={dayConfig.isOpen ? "font-medium" : "text-gray-400"}>{day.label}</span>
-                                                    </div>
-
-                                                    {dayConfig.isOpen ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <Input
-                                                                type="number"
-                                                                className="w-20"
-                                                                value={dayConfig.start}
-                                                                onChange={(e) => {
-                                                                    setLocalSettings((prev: any) => ({
-                                                                        ...prev,
-                                                                        weeklySchedule: {
-                                                                            ...prev.weeklySchedule,
-                                                                            [day.key]: { ...dayConfig, start: parseInt(e.target.value) }
-                                                                        }
-                                                                    }));
-                                                                }}
-                                                                min="0"
-                                                                max="23"
-                                                            />
-                                                            <span>à</span>
-                                                            <Input
-                                                                type="number"
-                                                                className="w-20"
-                                                                value={dayConfig.end}
-                                                                onChange={(e) => {
-                                                                    setLocalSettings((prev: any) => ({
-                                                                        ...prev,
-                                                                        weeklySchedule: {
-                                                                            ...prev.weeklySchedule,
-                                                                            [day.key]: { ...dayConfig, end: parseInt(e.target.value) }
-                                                                        }
-                                                                    }));
-                                                                }}
-                                                                min="0"
-                                                                max="23"
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-gray-400 italic">Fermé</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="space-y-2 pt-4 border-t">
-                                        <Label>Durée des créneaux (minutes)</Label>
-                                        <select
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                            value={localSettings.slotDuration}
-                                            onChange={e => setLocalSettings({ ...localSettings, slotDuration: parseInt(e.target.value) })}
-                                        >
-                                            <option value="15">15 minutes</option>
-                                            <option value="30">30 minutes</option>
-                                            <option value="45">45 minutes</option>
-                                            <option value="60">1 heure</option>
-                                        </select>
-                                    </div>
-                                    <Button className="mt-4" onClick={handleSaveSettings} disabled={saving}>{saving ? 'Sauvegarde...' : 'Mettre à jour'}</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
-
-                <TabsContent value="calendar" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle>Événements du Tableau de Bord</CardTitle>
-                                <CardDescription>Ajoutez, modifiez ou supprimez des événements globaux.</CardDescription>
-                            </div>
-                            <Button onClick={() => setEditingEvent({})}>+ Nouvel Événement</Button>
-                        </CardHeader>
-                        <CardContent>
-                            {editingEvent && <EventForm />}
-
-                            <div className="border rounded-md overflow-hidden">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100 uppercase text-xs">
-                                        <tr>
-                                            <th className="px-4 py-3">Titre</th>
-                                            <th className="px-4 py-3">Date</th>
-                                            <th className="px-4 py-3">Heure</th>
-                                            <th className="px-4 py-3 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {events.map((evt) => (
-                                            <tr key={evt.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 font-medium">{evt.title}</td>
-                                                <td className="px-4 py-3">{evt.day.split('T')[0]}</td>
-                                                <td className="px-4 py-3">{evt.startTime} - {evt.endTime}</td>
-                                                <td className="px-4 py-3 text-right space-x-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => setEditingEvent(evt)}>Modifier</Button>
-                                                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDeleteEvent(evt.id)}><Trash2 size={16} /></Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                {loadingEvents && <div className="p-4 text-center text-gray-400">Chargement...</div>}
-                                {!loadingEvents && events.length === 0 && <div className="p-4 text-center text-gray-400">Aucun événement</div>}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-        </div>
+      <span className="inline-block text-xs font-medium px-2 py-[2px] rounded-full bg-blue-100 text-blue-700">
+        En cours
+      </span>
     );
+  if (status === "a_venir")
+    return (
+      <span className="inline-block text-xs font-medium px-2 py-[2px] rounded-full bg-gray-100 text-gray-600">
+        A venir
+      </span>
+    );
+  return (
+    <span className="inline-block text-xs font-medium px-2 py-[2px] rounded-full bg-green-100 text-green-700">
+      Terminé
+    </span>
+  );
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const map: Record<string, string> = {
+    commune: "bg-blue-100 text-blue-700",
+    individuelle: "bg-pink-100 text-pink-700",
+    groupe: "bg-green-100 text-green-700",
+  };
+  const label: Record<string, string> = {
+    commune: "Commune",
+    individuelle: "Individuelle",
+    groupe: "Groupe",
+  };
+  return (
+    <span
+      className={`inline-block text-xs font-medium px-2 py-[2px] rounded-full ${map[type] ?? "bg-gray-100 text-gray-700"}`}
+    >
+      {label[type] ?? type}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
+export default function CreationPage() {
+  const { user, role } = useAuth();
+  const { toast } = useToast();
+
+  /* ---- inscription window ---- */
+  const [deadlineCandidats, setDeadlineCandidats] = useState("");
+  const [deadlineMembres, setDeadlineMembres] = useState("");
+  const [savingDeadlines, setSavingDeadlines] = useState(false);
+
+  /* ---- tours ---- */
+  const [tours, setTours] = useState<Tour[]>([]);
+
+  /* ---- épreuves ---- */
+  const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
+
+  /* ---- modal ---- */
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<NewEpreuveForm>({ ...EMPTY_FORM });
+  const [creatingEpreuve, setCreatingEpreuve] = useState(false);
+
+  /* ================================================================ */
+  /*  Data fetching                                                    */
+  /* ================================================================ */
+
+  useEffect(() => {
+    fetchSettings();
+    fetchTours();
+    fetchEpreuves();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await api.get("/settings");
+      if (res.data.deadline_candidats) setDeadlineCandidats(res.data.deadline_candidats);
+      if (res.data.deadline_membres) setDeadlineMembres(res.data.deadline_membres);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchTours = async () => {
+    try {
+      const res = await api.get("/tours");
+      setTours(res.data);
+    } catch {
+      /* fallback hardcoded data when API does not exist */
+      setTours([
+        { id: "1", name: "Tour 1", status: "en_cours", candidateCount: 42 },
+        { id: "2", name: "Tour 2", status: "a_venir", candidateCount: 0 },
+      ]);
+    }
+  };
+
+  const fetchEpreuves = async () => {
+    try {
+      const res = await api.get("/epreuves");
+      setEpreuves(res.data);
+    } catch {
+      setEpreuves([]);
+    }
+  };
+
+  /* ================================================================ */
+  /*  Handlers                                                         */
+  /* ================================================================ */
+
+  const handleSaveDeadlines = async () => {
+    setSavingDeadlines(true);
+    try {
+      await api.put("/settings", {
+        deadline_candidats: deadlineCandidats,
+        deadline_membres: deadlineMembres,
+      });
+      toast("Fenêtre d\u2019inscription sauvegardée", "success");
+    } catch {
+      toast("Erreur lors de la sauvegarde", "error");
+    } finally {
+      setSavingDeadlines(false);
+    }
+  };
+
+  const openModal = () => {
+    setForm({ ...EMPTY_FORM });
+    setModalOpen(true);
+  };
+
+  const closeModal = () => setModalOpen(false);
+
+  const handleFormChange = (field: keyof NewEpreuveForm, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addCritere = () => {
+    setForm((prev) => ({
+      ...prev,
+      criteres: [...prev.criteres, { name: "", coefficient: 1 }],
+    }));
+  };
+
+  const updateCritere = (idx: number, field: keyof Critere, value: any) => {
+    setForm((prev) => {
+      const updated = [...prev.criteres];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...prev, criteres: updated };
+    });
+  };
+
+  const removeCritere = (idx: number) => {
+    setForm((prev) => ({
+      ...prev,
+      criteres: prev.criteres.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const handleCreateEpreuve = async () => {
+    setCreatingEpreuve(true);
+    try {
+      const payload: any = {
+        name: form.name,
+        tourId: form.tourId,
+        type: form.type,
+        criteres: form.criteres,
+      };
+      if (form.type === "commune") {
+        payload.date = form.date;
+        payload.time = form.time;
+        payload.salle = form.salle;
+        payload.presentedBy = form.presentedBy;
+      } else {
+        payload.dateDebut = form.dateDebut;
+        payload.dateFin = form.dateFin;
+        payload.duree = form.duree;
+        payload.pole = form.pole;
+      }
+      await api.post("/epreuves", payload);
+      toast("Épreuve créée", "success");
+      closeModal();
+      fetchEpreuves();
+    } catch {
+      toast("Erreur lors de la création", "error");
+    } finally {
+      setCreatingEpreuve(false);
+    }
+  };
+
+  /* ================================================================ */
+  /*  Render                                                           */
+  /* ================================================================ */
+
+  return (
+    <div className="max-w-[960px] mx-auto py-8 px-4">
+      {/* ---------- Page header ---------- */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Création</h1>
+        <p className="text-sm text-gray-500 mt-1">Tours, épreuves et inscriptions</p>
+      </div>
+
+      {/* ================================================================ */}
+      {/*  1. Fenêtre d'inscription candidats                              */}
+      {/* ================================================================ */}
+      <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
+        <h2 className="text-base font-semibold text-gray-900 mb-4">
+          🗓️ Fenêtre d&apos;inscription candidats
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ouverture</label>
+            <input
+              type="datetime-local"
+              value={deadlineCandidats}
+              onChange={(e) => setDeadlineCandidats(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fermeture</label>
+            <input
+              type="datetime-local"
+              value={deadlineMembres}
+              onChange={(e) => setDeadlineMembres(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <button
+            onClick={handleSaveDeadlines}
+            disabled={savingDeadlines}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {savingDeadlines ? "Sauvegarde..." : "Sauvegarder"}
+          </button>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
+      {/*  2. Tours de recrutement                                         */}
+      {/* ================================================================ */}
+      <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
+        <h2 className="text-base font-semibold text-gray-900 mb-4">🏁 Tours de recrutement</h2>
+
+        <div className="space-y-2">
+          {tours.map((tour) => (
+            <div
+              key={tour.id}
+              className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-800">{tour.name}</span>
+                <StatusBadge status={tour.status} />
+              </div>
+              <span className="text-xs text-gray-500">{tour.candidateCount} candidat(s)</span>
+            </div>
+          ))}
+
+          {tours.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">Aucun tour configuré</p>
+          )}
+        </div>
+
+        <div className="mt-4">
+          <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors">
+            + Ajouter un tour
+          </button>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
+      {/*  3. Épreuves & Formations                                        */}
+      {/* ================================================================ */}
+      <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">📝 Épreuves &amp; Formations</h2>
+          <button
+            onClick={openModal}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+          >
+            + Créer une épreuve
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white border border-gray-200 rounded-[10px] overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-3 font-medium">Nom</th>
+                <th className="px-4 py-3 font-medium">Tour</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Date(s)</th>
+                <th className="px-4 py-3 font-medium text-center">Visible candidats</th>
+                <th className="px-4 py-3 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {epreuves.map((ep) => (
+                <tr key={ep.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900">{ep.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{ep.tourName}</td>
+                  <td className="px-4 py-3">
+                    <TypeBadge type={ep.type} />
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {ep.date
+                      ? ep.date
+                      : ep.dateDebut && ep.dateFin
+                        ? `${ep.dateDebut} → ${ep.dateFin}`
+                        : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center text-base">
+                    {ep.visibleCandidats ? "🟢" : "⚪"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                      Modifier
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+              {epreuves.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">
+                    Aucune épreuve créée
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
+      {/*  Modal – Nouvelle épreuve                                        */}
+      {/* ================================================================ */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeModal}
+          />
+
+          {/* Panel */}
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[620px] max-h-[90vh] overflow-y-auto mx-4 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-5">Nouvelle épreuve</h2>
+
+            {/* Name */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => handleFormChange("name", e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Nom de l&apos;épreuve"
+              />
+            </div>
+
+            {/* Tour select */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tour</label>
+              <select
+                value={form.tourId}
+                onChange={(e) => handleFormChange("tourId", e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">Sélectionner un tour</option>
+                {tours.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Type select */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <select
+                value={form.type}
+                onChange={(e) =>
+                  handleFormChange("type", e.target.value as "commune" | "individuelle" | "groupe")
+                }
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="commune">Commune</option>
+                <option value="individuelle">Individuelle</option>
+                <option value="groupe">Groupe</option>
+              </select>
+            </div>
+
+            {/* ------- Commune fields ------- */}
+            {form.type === "commune" && (
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => handleFormChange("date", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => handleFormChange("time", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Salle</label>
+                  <input
+                    type="text"
+                    value={form.salle}
+                    onChange={(e) => handleFormChange("salle", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Amphi B102"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Présenté par</label>
+                  <input
+                    type="text"
+                    value={form.presentedBy}
+                    onChange={(e) => handleFormChange("presentedBy", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nom du présentateur"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ------- Individuelle / Groupe fields ------- */}
+            {(form.type === "individuelle" || form.type === "groupe") && (
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date début</label>
+                  <input
+                    type="date"
+                    value={form.dateDebut}
+                    onChange={(e) => handleFormChange("dateDebut", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label>
+                  <input
+                    type="date"
+                    value={form.dateFin}
+                    onChange={(e) => handleFormChange("dateFin", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label>
+                  <input
+                    type="number"
+                    value={form.duree}
+                    onChange={(e) => handleFormChange("duree", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pôle</label>
+                  <input
+                    type="text"
+                    value={form.pole}
+                    onChange={(e) => handleFormChange("pole", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Communication"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Documents */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Documents</label>
+              <input
+                type="file"
+                multiple
+                onChange={(e) => handleFormChange("documents", e.target.files)}
+                className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+              />
+            </div>
+
+            {/* Critères d'évaluation */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Critères d&apos;évaluation
+              </label>
+
+              <div className="space-y-2">
+                {form.criteres.map((c, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={c.name}
+                      onChange={(e) => updateCritere(idx, "name", e.target.value)}
+                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nom du critère"
+                    />
+                    <input
+                      type="number"
+                      value={c.coefficient}
+                      onChange={(e) => updateCritere(idx, "coefficient", parseFloat(e.target.value) || 0)}
+                      className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Coeff."
+                      min={0}
+                      step={0.5}
+                    />
+                    {form.criteres.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeCritere(idx)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none px-1"
+                        title="Supprimer"
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={addCritere}
+                className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                + Critère
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreateEpreuve}
+                disabled={creatingEpreuve || !form.name || !form.tourId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {creatingEpreuve ? "Création..." : "Créer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -134,7 +134,7 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
                                                     {e.comment && (
                                                         <div className="mt-1 text-gray-500 italic flex gap-1">
                                                             <MessageSquare size={10} className="shrink-0 mt-0.5" />
-                                                            <span>"{e.comment}"</span>
+                                                            <span>&ldquo;{e.comment}&rdquo;</span>
                                                         </div>
                                                     )}
                                                 </div>

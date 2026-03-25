@@ -1,67 +1,72 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+
+type View = 'landing' | 'login' | 'inscription';
 
 export default function LoginPage() {
-    const [isMember, setIsMember] = useState(true);
-    const [isRegistering, setIsRegistering] = useState(false);
+    const [view, setView] = useState<View>('landing');
+    const [step, setStep] = useState(1);
     const { loginMember, loginCandidate } = useAuth();
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        first_name: '',
-        last_name: '',
-        phone: '',
-    });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const cvInputRef = useRef<HTMLInputElement>(null);
 
-    const resetForm = () => {
-        setFormData({ email: '', password: '', first_name: '', last_name: '', phone: '' });
+    // Member login form
+    const [memberEmail, setMemberEmail] = useState('');
+    const [memberPassword, setMemberPassword] = useState('');
+
+    // Candidate registration form
+    const [candidateData, setCandidateData] = useState({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        messenger: '',
+        formation: '',
+        etablissement: '',
+        anneeIntegration: '',
+        password: '',
+    });
+    const [cvFile, setCvFile] = useState<File | null>(null);
+
+    const resetForms = () => {
+        setMemberEmail('');
+        setMemberPassword('');
+        setCandidateData({
+            firstName: '',
+            lastName: '',
+            email: '',
+            phone: '',
+            messenger: '',
+            formation: '',
+            etablissement: '',
+            anneeIntegration: '',
+            password: '',
+        });
+        setCvFile(null);
         setError('');
+        setStep(1);
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const goToLanding = () => {
+        resetForms();
+        setView('landing');
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleMemberLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-
         try {
-            if (isMember) {
-                const res = await api.post('/auth/login', {
-                    email: formData.email,
-                    password: formData.password,
-                });
-                loginMember(res.data.token, res.data.member);
-            } else if (isRegistering) {
-                // Use public registration endpoint (no auth required)
-                const res = await api.post('/auth/register-candidate', {
-                    firstName: formData.first_name,
-                    lastName: formData.last_name,
-                    email: formData.email,
-                    phone: formData.phone,
-                });
-                loginCandidate(res.data.token, res.data.candidate);
-            } else {
-                const res = await api.post('/auth/candidate-login', {
-                    email: formData.email,
-                    lastName: formData.last_name,
-                });
-                loginCandidate(res.data.token, res.data.candidate);
-            }
+            const res = await api.post('/auth/login', {
+                email: memberEmail,
+                password: memberPassword,
+            });
+            loginMember(res.data.token, res.data.member);
         } catch (err: any) {
-            console.error("Login error:", err);
             if (!err.response) {
                 setError("Impossible de contacter le serveur. Vérifiez qu'il est lancé sur le port 4000.");
             } else {
@@ -72,100 +77,424 @@ export default function LoginPage() {
         }
     };
 
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <Card className="w-full max-w-md">
-                <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl font-bold text-center text-primary-900">RH Manager</CardTitle>
-                    <CardDescription className="text-center">
-                        Connectez-vous à votre espace
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex gap-1 justify-center mb-6 bg-gray-100 p-1 rounded-lg">
+    const handleCandidateRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/register-candidate', {
+                firstName: candidateData.firstName,
+                lastName: candidateData.lastName,
+                email: candidateData.email,
+                phone: candidateData.phone,
+            });
+            loginCandidate(res.data.token, res.data.candidate);
+        } catch (err: any) {
+            if (!err.response) {
+                setError("Impossible de contacter le serveur. Vérifiez qu'il est lancé sur le port 4000.");
+            } else {
+                setError(err.response?.data?.error || "Échec de l'inscription");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCandidateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setCandidateData({ ...candidateData, [e.target.name]: e.target.value });
+    };
+
+    const stepLabels = ['Identité', 'Formation', 'Documents'];
+
+    // ─── LANDING VIEW ──────────────────────────────────────────────
+    if (view === 'landing') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+                <div className="w-full max-w-2xl text-center">
+                    {/* Title */}
+                    <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+                        Audencia Junior Conseil
+                    </h1>
+                    <p className="mt-2 text-gray-500 text-base">
+                        Plateforme de recrutement associatif 2025
+                    </p>
+
+                    {/* Gradient bar */}
+                    <div className="mx-auto mt-4 mb-10 h-1 w-24 rounded-full bg-gradient-to-r from-blue-600 to-pink-500" />
+
+                    {/* Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {/* Candidate card */}
                         <button
-                            className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200", isMember ? "bg-white text-primary-600 shadow-sm" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50")}
-                            onClick={() => { setIsMember(true); resetForm(); }}
+                            onClick={() => { resetForms(); setView('inscription'); }}
+                            className="group rounded-2xl border-2 border-transparent p-8 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+                            style={{ backgroundColor: '#FFF0F3' }}
                         >
-                            Membre
+                            <div className="text-4xl mb-4">🎓</div>
+                            <h2 className="text-lg font-semibold text-gray-900">Je suis candidat</h2>
+                            <p className="mt-1 text-sm text-gray-500">
+                                M&apos;inscrire et suivre mon parcours de recrutement
+                            </p>
+                            <span
+                                className="mt-4 inline-block text-sm font-medium"
+                                style={{ color: '#E8446A' }}
+                            >
+                                Créer mon compte →
+                            </span>
                         </button>
+
+                        {/* Member card */}
                         <button
-                            className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200", !isMember ? "bg-white text-primary-600 shadow-sm" : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50")}
-                            onClick={() => { setIsMember(false); setIsRegistering(false); resetForm(); }}
+                            onClick={() => { resetForms(); setView('login'); }}
+                            className="group rounded-2xl border-2 border-transparent p-8 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-1 bg-blue-50"
                         >
-                            Candidat
+                            <div className="text-4xl mb-4">👥</div>
+                            <h2 className="text-lg font-semibold text-gray-900">Membre JE / Admin</h2>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Accéder à mon espace staff
+                            </p>
+                            <span className="mt-4 inline-block text-sm font-medium text-blue-600">
+                                Se connecter →
+                            </span>
                         </button>
                     </div>
+                </div>
+            </div>
+        );
+    }
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && <div className="text-red-500 text-sm text-center">{error}</div>}
+    // ─── LOGIN MODAL (Member) ──────────────────────────────────────
+    if (view === 'login') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
+                    <h2 className="text-xl font-bold text-gray-900 text-center">Connexion Staff</h2>
+                    <p className="mt-1 text-sm text-gray-500 text-center">
+                        Entrez vos identifiants AJC
+                    </p>
 
-                        {isMember ? (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input id="email" name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="nom@exemple.com" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="password">Mot de passe</Label>
-                                    <Input id="password" name="password" type="password" required value={formData.password} onChange={handleChange} />
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {isRegistering ? (
-                                    <>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="first_name">Prénom</Label>
-                                                <Input id="first_name" name="first_name" required value={formData.first_name} onChange={handleChange} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="last_name">Nom</Label>
-                                                <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleChange} />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="email">Email</Label>
-                                            <Input id="email" name="email" type="email" required value={formData.email} onChange={handleChange} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="phone">Téléphone</Label>
-                                            <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="email">Email</Label>
-                                            <Input id="email" name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="nom@exemple.com" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="last_name">Nom de famille</Label>
-                                            <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleChange} placeholder="ex: Dupont" />
-                                        </div>
-                                    </>
-                                )}
-                            </>
-                        )}
-
-                        <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Chargement...' : (isMember ? 'Se connecter' : (isRegistering ? "S'inscrire" : 'Se connecter'))}
-                        </Button>
-                    </form>
-                </CardContent>
-                <CardFooter className="justify-center">
-                    {!isMember && (
-                        <button
-                            type="button"
-                            className="text-sm text-primary-600 hover:underline"
-                            onClick={() => { setIsRegistering(!isRegistering); resetForm(); }}
+                    {error && (
+                        <div
+                            className="mt-4 rounded-lg px-4 py-3 text-sm font-medium"
+                            style={{ backgroundColor: '#FFF0F3', color: '#E8446A' }}
                         >
-                            {isRegistering ? "J'ai déjà un compte" : "Je veux m'inscrire"}
-                        </button>
+                            {error}
+                        </div>
                     )}
-                </CardFooter>
-            </Card>
+
+                    <form onSubmit={handleMemberLogin} className="mt-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                required
+                                value={memberEmail}
+                                onChange={(e) => setMemberEmail(e.target.value)}
+                                placeholder="nom@audencia.com"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Mot de passe
+                            </label>
+                            <input
+                                type="password"
+                                required
+                                value={memberPassword}
+                                onChange={(e) => setMemberPassword(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                        >
+                            {loading ? 'Connexion...' : 'Se connecter'}
+                        </button>
+                    </form>
+
+                    <div className="mt-4 text-center">
+                        <button
+                            onClick={goToLanding}
+                            className="text-sm text-gray-500 hover:text-gray-700 transition"
+                        >
+                            ← Retour
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── INSCRIPTION MODAL (Candidate) ─────────────────────────────
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-black/40 px-4 py-8">
+            <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-8">
+                <h2 className="text-xl font-bold text-gray-900 text-center">Inscription Candidat</h2>
+
+                {/* Progress bar */}
+                <div className="mt-6 flex items-center justify-between">
+                    {stepLabels.map((label, i) => {
+                        const num = i + 1;
+                        const isActive = step >= num;
+                        return (
+                            <div key={num} className="flex items-center flex-1">
+                                <div className="flex flex-col items-center flex-1">
+                                    <div
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition ${
+                                            isActive
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-gray-200 text-gray-500'
+                                        }`}
+                                    >
+                                        {num}
+                                    </div>
+                                    <span className="mt-1 text-xs text-gray-500">{label}</span>
+                                </div>
+                                {num < 3 && (
+                                    <div
+                                        className={`h-0.5 flex-1 mx-1 transition ${
+                                            step > num ? 'bg-blue-600' : 'bg-gray-200'
+                                        }`}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {error && (
+                    <div
+                        className="mt-4 rounded-lg px-4 py-3 text-sm font-medium"
+                        style={{ backgroundColor: '#FFF0F3', color: '#E8446A' }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (step < 3) {
+                            setStep(step + 1);
+                        } else {
+                            handleCandidateRegister(e);
+                        }
+                    }}
+                    className="mt-6 space-y-4"
+                >
+                    {/* Step 1: Identity */}
+                    {step === 1 && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Prénom
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="firstName"
+                                        required
+                                        value={candidateData.firstName}
+                                        onChange={handleCandidateChange}
+                                        placeholder="Jean"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Nom
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="lastName"
+                                        required
+                                        value={candidateData.lastName}
+                                        onChange={handleCandidateChange}
+                                        placeholder="Dupont"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email
+                                </label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    required
+                                    value={candidateData.email}
+                                    onChange={handleCandidateChange}
+                                    placeholder="jean.dupont@ecole.fr"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Téléphone
+                                </label>
+                                <input
+                                    type="tel"
+                                    name="phone"
+                                    value={candidateData.phone}
+                                    onChange={handleCandidateChange}
+                                    placeholder="06 12 34 56 78"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Messenger
+                                </label>
+                                <input
+                                    type="text"
+                                    name="messenger"
+                                    value={candidateData.messenger}
+                                    onChange={handleCandidateChange}
+                                    placeholder="Pseudo Messenger"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {/* Step 2: Formation */}
+                    {step === 2 && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Formation / Prépa
+                                </label>
+                                <select
+                                    name="formation"
+                                    value={candidateData.formation}
+                                    onChange={handleCandidateChange}
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                >
+                                    <option value="">Sélectionner...</option>
+                                    <option value="Programme Grande École">Programme Grande École</option>
+                                    <option value="BBA">BBA</option>
+                                    <option value="Master Spécialisé">Master Spécialisé</option>
+                                    <option value="Prépa intégrée">Prépa intégrée</option>
+                                    <option value="Autre">Autre</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Établissement
+                                </label>
+                                <input
+                                    type="text"
+                                    name="etablissement"
+                                    value={candidateData.etablissement}
+                                    onChange={handleCandidateChange}
+                                    placeholder="Audencia Business School"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Année d&apos;intégration
+                                </label>
+                                <input
+                                    type="text"
+                                    name="anneeIntegration"
+                                    value={candidateData.anneeIntegration}
+                                    onChange={handleCandidateChange}
+                                    placeholder="2025"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {/* Step 3: Documents */}
+                    {step === 3 && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    CV (PDF)
+                                </label>
+                                <div
+                                    onClick={() => cvInputRef.current?.click()}
+                                    className="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-6 text-center cursor-pointer hover:border-blue-400 transition"
+                                >
+                                    <input
+                                        ref={cvInputRef}
+                                        type="file"
+                                        accept=".pdf"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            if (e.target.files?.[0]) setCvFile(e.target.files[0]);
+                                        }}
+                                    />
+                                    {cvFile ? (
+                                        <span className="text-sm text-blue-600 font-medium">{cvFile.name}</span>
+                                    ) : (
+                                        <span className="text-sm text-gray-400">
+                                            Cliquer pour sélectionner un fichier PDF
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Mot de passe
+                                </label>
+                                <input
+                                    type="password"
+                                    name="password"
+                                    value={candidateData.password}
+                                    onChange={handleCandidateChange}
+                                    placeholder="Choisir un mot de passe"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                                Votre compte sera créé et vous pourrez accéder à votre espace candidat immédiatement.
+                            </div>
+                        </>
+                    )}
+
+                    {/* Navigation buttons */}
+                    <div className="flex items-center gap-3 pt-2">
+                        {step > 1 && (
+                            <button
+                                type="button"
+                                onClick={() => setStep(step - 1)}
+                                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                            >
+                                Précédent
+                            </button>
+                        )}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                        >
+                            {step < 3
+                                ? 'Suivant'
+                                : loading
+                                ? 'Inscription...'
+                                : "S'inscrire"}
+                        </button>
+                    </div>
+                </form>
+
+                <div className="mt-4 text-center">
+                    <button
+                        onClick={goToLanding}
+                        className="text-sm text-gray-500 hover:text-gray-700 transition"
+                    >
+                        ← Retour
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

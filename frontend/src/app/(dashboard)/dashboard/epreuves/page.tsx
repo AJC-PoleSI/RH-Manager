@@ -141,7 +141,7 @@ export default function EpreuvesPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div>
-                                <h3 className="font-semibold mb-2">Critères d'évaluation</h3>
+                                <h3 className="font-semibold mb-2">Critères d&apos;évaluation</h3>
                                 <div className="space-y-2">
                                     {(() => {
                                         try {
@@ -185,7 +185,7 @@ export default function EpreuvesPage() {
                             {/* Questions Section */}
                             <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
                                 <div className="flex justify-between items-center">
-                                    <Label className="text-lg font-semibold">Critères d'évaluation</Label>
+                                    <Label className="text-lg font-semibold">Critères d&apos;évaluation</Label>
                                     <Button type="button" variant="outline" size="sm" onClick={handleAddQuestion}>+ Ajouter un critère</Button>
                                 </div>
                                 {questions.map((q, index) => (

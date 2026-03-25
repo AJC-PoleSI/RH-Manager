@@ -94,7 +94,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <Label>Choisir l'épreuve</Label>
+                            <Label>Choisir l&apos;épreuve</Label>
                             <select
                                 className="w-full p-2 border rounded-md"
                                 value={selectedEpreuveId}
@@ -111,7 +111,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
                         {selectedEpreuve && (
                             <>
                                 <div className="space-y-4 border-t border-gray-100 pt-4">
-                                    <h3 className="font-semibold text-lg">Critères d'évaluation</h3>
+                                    <h3 className="font-semibold text-lg">Critères d&apos;évaluation</h3>
                                     {questions.length === 0 && <p className="text-sm text-gray-500 italic">Aucun critère défini pour cette épreuve.</p>}
 
                                     {questions.map((q: any, idx: number) => (
@@ -139,7 +139,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full">Enregistrer l'évaluation</Button>
+                                <Button type="submit" className="w-full">Enregistrer l&apos;évaluation</Button>
                             </>
                         )}
                     </form>

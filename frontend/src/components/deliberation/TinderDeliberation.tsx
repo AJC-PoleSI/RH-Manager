@@ -345,7 +345,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                                                 {e.comment && (
                                                     <div className="bg-white border border-gray-200 rounded p-2 text-xs text-gray-600 italic flex gap-1.5">
                                                         <MessageSquare size={12} className="shrink-0 text-gray-400 mt-0.5" />
-                                                        <span>"{e.comment}"</span>
+                                                        <span>&ldquo;{e.comment}&rdquo;</span>
                                                     </div>
                                                 )}
                                             </div>
