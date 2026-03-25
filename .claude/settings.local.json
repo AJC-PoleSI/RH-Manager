@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/page.tsx\")",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Desktop_Commander__list_directory",
+      "Read(//Users/felixpitz/**)",
+      "Bash(find . -maxdepth 3 -name *RH* -o -name *rh*)",
+      "Bash(find frontend/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(dir='/Users/felixpitz/Desktop/RH Manager Anti ')",
+      "Read(//Users/felixpitz/Desktop/RH Manager Anti /**)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npm run:*)",
+      "Bash(find . -type f -name *deadline* -o -name *calendar* -o -name *planning* -o -name *availab*)",
+      "Bash(find ./frontend/src ./src -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(ls \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/\")",
+      "Bash(curl -s http://localhost:4000/)",
+      "Bash(xargs kill:*)"
+    ]
+  }
+}
