@@ -38,7 +38,10 @@
       "Bash(rm -rf node_modules .next package-lock.json)",
       "Bash(npm install:*)",
       "Bash(ls node_modules/@next/swc-darwin-*/package.json)",
-      "Bash(kill 21166)"
+      "Bash(kill 21166)",
+      "mcp__Desktop_Commander__get_file_info",
+      "Bash(head -30 \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(grep -E \"\\\\.$|vercel\")"
     ]
   },
   "hooks": {
