@@ -172,7 +172,7 @@ export default function EpreuvesPage() {
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 pt-4 border-t">
-                                <Button variant="destructive" onClick={() => handleDelete(viewingEpreuve.id)}>Supprimer</Button>
+                                <Button variant="danger" onClick={() => handleDelete(viewingEpreuve.id)}>Supprimer</Button>
                                 <Button onClick={() => { setViewingEpreuve(null); handleEdit(viewingEpreuve); }}>Modifier</Button>
                             </div>
                         </CardContent>
