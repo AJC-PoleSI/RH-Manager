@@ -5,11 +5,12 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 
 const DEFAULT_POLES = [
-  "Conseil",
-  "Ressources Humaines",
-  "Communication",
-  "Systèmes d\u2019Info",
-  "Finance",
+  "Système d'information",
+  "Marketing",
+  "Développement commercial",
+  "Audit Qualité",
+  "Ressource Humaine",
+  "VP",
 ];
 
 export default function CandidateWishesPage() {
