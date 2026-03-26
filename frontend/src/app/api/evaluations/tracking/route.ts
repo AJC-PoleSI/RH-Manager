@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         members(id, email),
-        candidates(id, firstName, lastName),
+        candidates(id, first_name, last_name),
         candidate_evaluations(scores, comment, epreuves(name))
       `);
 

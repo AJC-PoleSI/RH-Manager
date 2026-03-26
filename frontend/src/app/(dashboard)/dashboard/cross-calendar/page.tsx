@@ -150,7 +150,7 @@ export default function CrossCalendarPage() {
     // Update slot status (publish/close)
     const handleBulkStatus = async (slotIds: string[], status: string) => {
         try {
-            await api.put('/slots/status', { slotIds, status });
+            await api.put('/slots/status/bulk', { slotIds, status });
             toast(`${slotIds.length} cr\u00e9neau(x) mis \u00e0 jour`, 'success');
             fetchExistingSlots();
         } catch (e) { toast('Erreur', 'error'); }

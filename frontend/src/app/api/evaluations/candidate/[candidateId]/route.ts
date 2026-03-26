@@ -12,7 +12,7 @@ export async function GET(
     const { data: evaluations, error } = await supabaseAdmin
       .from('candidate_evaluations')
       .select('*, epreuves(*), members(email)')
-      .eq('candidateId', candidateId);
+      .eq('candidate_id', candidateId);
 
     if (error) throw error;
 

@@ -37,9 +37,9 @@ export async function POST(req: NextRequest) {
     const { data: evaluation, error: evalError } = await supabaseAdmin
       .from('candidate_evaluations')
       .insert({
-        candidateId,
-        epreuveId,
-        memberId,
+        candidate_id: candidateId,
+        epreuve_id: epreuveId,
+        member_id: memberId,
         scores: typeof scores === 'string' ? scores : JSON.stringify(scores),
         comment,
       })
@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
     const { error: trackError } = await supabaseAdmin
       .from('evaluator_tracking')
       .insert({
-        memberId,
-        candidateId,
-        evaluationId: evaluation.id,
+        member_id: memberId,
+        candidate_id: candidateId,
+        evaluation_id: evaluation.id,
       });
 
     if (trackError) {

@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
       .from('candidates')
       .select(`
         id,
-        firstName,
-        lastName,
+        first_name,
+        last_name,
         email,
         phone,
         comments,
@@ -22,13 +22,13 @@ export async function GET(req: NextRequest) {
           id,
           scores,
           comment,
-          memberId,
-          createdAt,
+          member_id,
+          created_at,
           members(email),
           epreuves(id, name, tour, type)
         )
       `)
-      .order('lastName', { ascending: true });
+      .order('last_name', { ascending: true });
 
     if (error) throw error;
 
@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
 
       return {
         id: c.id,
-        firstName: c.firstName,
-        lastName: c.lastName,
+        firstName: c.first_name,
+        lastName: c.last_name,
         email: c.email,
         phone: c.phone,
         comments: c.comments,

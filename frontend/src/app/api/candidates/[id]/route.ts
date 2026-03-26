@@ -22,7 +22,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return Response.json({ error: 'Candidate not found' }, { status: 404 });
     }
 
-    return Response.json(data);
+    // Map snake_case to camelCase
+    const mapped = { ...data, firstName: data.first_name, lastName: data.last_name, createdAt: data.created_at };
+    return Response.json(mapped);
   } catch {
     return Response.json({ error: 'Failed to fetch candidate' }, { status: 500 });
   }
@@ -38,9 +40,17 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   try {
     const body = await req.json();
 
+    // Map camelCase to snake_case for Supabase
+    const updateData: Record<string, unknown> = {};
+    if (body.firstName !== undefined) updateData.first_name = body.firstName;
+    if (body.lastName !== undefined) updateData.last_name = body.lastName;
+    if (body.email !== undefined) updateData.email = body.email;
+    if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.comments !== undefined) updateData.comments = body.comments;
+
     const { data, error } = await supabaseAdmin
       .from('candidates')
-      .update(body)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();

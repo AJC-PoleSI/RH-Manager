@@ -17,16 +17,16 @@ export async function PUT(
     const { name, tour, type, durationMinutes, evaluationQuestions, isPoleTest, pole } =
       await req.json();
 
-    // Build update object with only provided fields
+    // Build update object with only provided fields (snake_case for Supabase)
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (tour !== undefined) updateData.tour = tour;
     if (type !== undefined) updateData.type = type;
-    if (durationMinutes !== undefined) updateData.durationMinutes = durationMinutes;
-    if (isPoleTest !== undefined) updateData.isPoleTest = isPoleTest;
+    if (durationMinutes !== undefined) updateData.duration_minutes = durationMinutes;
+    if (isPoleTest !== undefined) updateData.is_pole_test = isPoleTest;
     if (pole !== undefined) updateData.pole = pole;
     if (evaluationQuestions !== undefined) {
-      updateData.evaluationQuestions =
+      updateData.evaluation_questions =
         typeof evaluationQuestions === 'string'
           ? evaluationQuestions
           : JSON.stringify(evaluationQuestions);

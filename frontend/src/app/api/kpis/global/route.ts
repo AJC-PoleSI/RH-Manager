@@ -10,15 +10,15 @@ export async function GET() {
         supabaseAdmin.from('candidate_evaluations').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('epreuves').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('members').select('id', { count: 'exact', head: true }),
-        supabaseAdmin.from('candidate_evaluations').select('memberId'),
+        supabaseAdmin.from('candidate_evaluations').select('member_id'),
       ]);
 
     // Count evaluations per member
     const evaluationsPerMember: Record<string, number> = {};
     if (perMemberRes.data) {
       for (const row of perMemberRes.data) {
-        evaluationsPerMember[row.memberId] =
-          (evaluationsPerMember[row.memberId] || 0) + 1;
+        evaluationsPerMember[row.member_id] =
+          (evaluationsPerMember[row.member_id] || 0) + 1;
       }
     }
 

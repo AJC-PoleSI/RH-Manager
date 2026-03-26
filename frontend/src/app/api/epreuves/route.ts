@@ -11,13 +11,21 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Parse evaluationQuestions from JSON string if stored as string
-    const parsed = (epreuves || []).map((e) => ({
-      ...e,
+    // Map snake_case DB columns to camelCase for frontend
+    const parsed = (epreuves || []).map((e: any) => ({
+      id: e.id,
+      name: e.name,
+      tour: e.tour,
+      type: e.type,
+      durationMinutes: e.duration_minutes,
       evaluationQuestions:
-        typeof e.evaluationQuestions === 'string'
-          ? JSON.parse(e.evaluationQuestions || '[]')
-          : e.evaluationQuestions ?? [],
+        typeof e.evaluation_questions === 'string'
+          ? JSON.parse(e.evaluation_questions || '[]')
+          : e.evaluation_questions ?? [],
+      isPoleTest: e.is_pole_test,
+      pole: e.pole,
+      isGroupEpreuve: e.is_group_epreuve,
+      groupSize: e.group_size,
     }));
 
     return Response.json(parsed);
@@ -42,12 +50,12 @@ export async function POST(req: NextRequest) {
         name,
         tour,
         type,
-        durationMinutes,
-        evaluationQuestions:
+        duration_minutes: durationMinutes,
+        evaluation_questions:
           typeof evaluationQuestions === 'string'
             ? evaluationQuestions
             : JSON.stringify(evaluationQuestions ?? []),
-        isPoleTest,
+        is_pole_test: isPoleTest,
         pole,
       })
       .select()

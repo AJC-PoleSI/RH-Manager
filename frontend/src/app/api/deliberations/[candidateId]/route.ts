@@ -12,7 +12,7 @@ export async function GET(
     const { data: deliberation, error } = await supabaseAdmin
       .from('deliberations')
       .select('*')
-      .eq('candidateId', candidateId)
+      .eq('candidate_id', candidateId)
       .maybeSingle();
 
     if (error) throw error;
@@ -34,20 +34,20 @@ export async function PUT(
     const { tour1Status, tour2Status, tour3Status, globalComments, prosComment, consComment } =
       await req.json();
 
-    // Build update data with only provided fields
+    // Build update data with snake_case for Supabase
     const updateData: Record<string, unknown> = {};
-    if (tour1Status !== undefined) updateData.tour1Status = tour1Status;
-    if (tour2Status !== undefined) updateData.tour2Status = tour2Status;
-    if (tour3Status !== undefined) updateData.tour3Status = tour3Status;
-    if (globalComments !== undefined) updateData.globalComments = globalComments;
-    if (prosComment !== undefined) updateData.prosComment = prosComment;
-    if (consComment !== undefined) updateData.consComment = consComment;
+    if (tour1Status !== undefined) updateData.tour1_status = tour1Status;
+    if (tour2Status !== undefined) updateData.tour2_status = tour2Status;
+    if (tour3Status !== undefined) updateData.tour3_status = tour3Status;
+    if (globalComments !== undefined) updateData.global_comments = globalComments;
+    if (prosComment !== undefined) updateData.pros_comment = prosComment;
+    if (consComment !== undefined) updateData.cons_comment = consComment;
 
     // Check if deliberation exists
     const { data: existing } = await supabaseAdmin
       .from('deliberations')
       .select('id')
-      .eq('candidateId', candidateId)
+      .eq('candidate_id', candidateId)
       .maybeSingle();
 
     let deliberation;
@@ -57,7 +57,7 @@ export async function PUT(
       const { data, error } = await supabaseAdmin
         .from('deliberations')
         .update(updateData)
-        .eq('candidateId', candidateId)
+        .eq('candidate_id', candidateId)
         .select()
         .single();
 
@@ -67,7 +67,7 @@ export async function PUT(
       // Create new
       const { data, error } = await supabaseAdmin
         .from('deliberations')
-        .insert({ candidateId, ...updateData })
+        .insert({ candidate_id: candidateId, ...updateData })
         .select()
         .single();
 

@@ -33,8 +33,16 @@ export async function GET(req: NextRequest) {
 
     const total = count ?? 0;
 
+    // Map snake_case to camelCase for frontend
+    const mapped = (data || []).map((c: any) => ({
+      ...c,
+      firstName: c.first_name,
+      lastName: c.last_name,
+      createdAt: c.created_at,
+    }));
+
     return Response.json({
-      data,
+      data: mapped,
       pagination: {
         page,
         limit,
