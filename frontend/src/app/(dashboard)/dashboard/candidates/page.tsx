@@ -16,7 +16,7 @@ export default function CandidatesPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [isCreating, setIsCreating] = useState(false);
-    const [newCandidate, setNewCandidate] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+    const [newCandidate, setNewCandidate] = useState({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
     const [commentCandidate, setCommentCandidate] = useState<any>(null);
     // State for pagination
     const [page, setPage] = useState(1);
@@ -40,7 +40,7 @@ export default function CandidatesPage() {
 
     const handleExport = () => {
         const csvContent = "data:text/csv;charset=utf-8,"
-            + ["Prénom,Nom,Email,Téléphone", ...candidates.map((c: any) => `${c.firstName},${c.lastName},${c.email},${c.phone}`)].join("\n");
+            + ["Prénom,Nom,Email,Téléphone,Date de naissance", ...candidates.map((c: any) => `${c.firstName},${c.lastName},${c.email},${c.phone},${c.date_of_birth || ''}`)].join("\n");
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -55,7 +55,7 @@ export default function CandidatesPage() {
         try {
             await api.post('/candidates', newCandidate);
             setIsCreating(false);
-            setNewCandidate({ firstName: '', lastName: '', email: '', phone: '' });
+            setNewCandidate({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
             fetchCandidates();
         } catch (error: any) {
             console.error(error);
@@ -139,6 +139,7 @@ export default function CandidatesPage() {
                                 <div><Label>Nom</Label><Input required value={newCandidate.lastName} onChange={e => setNewCandidate({ ...newCandidate, lastName: e.target.value })} /></div>
                                 <div><Label>Email</Label><Input required type="email" value={newCandidate.email} onChange={e => setNewCandidate({ ...newCandidate, email: e.target.value })} /></div>
                                 <div><Label>Téléphone</Label><Input value={newCandidate.phone} onChange={e => setNewCandidate({ ...newCandidate, phone: e.target.value })} /></div>
+                                <div><Label>Date de naissance</Label><Input type="date" value={newCandidate.dateOfBirth} onChange={e => setNewCandidate({ ...newCandidate, dateOfBirth: e.target.value })} /></div>
                                 <div className="flex justify-end gap-2">
                                     <Button variant="ghost" type="button" onClick={() => setIsCreating(false)}>Annuler</Button>
                                     <Button type="submit">Créer</Button>
@@ -159,6 +160,7 @@ export default function CandidatesPage() {
                                 <div><Label>Nom</Label><Input value={editingCandidate.lastName} onChange={e => setEditingCandidate({ ...editingCandidate, lastName: e.target.value })} /></div>
                                 <div><Label>Email</Label><Input value={editingCandidate.email} onChange={e => setEditingCandidate({ ...editingCandidate, email: e.target.value })} /></div>
                                 <div><Label>Téléphone</Label><Input value={editingCandidate.phone} onChange={e => setEditingCandidate({ ...editingCandidate, phone: e.target.value })} /></div>
+                                <div><Label>Date de naissance</Label><Input type="date" value={editingCandidate.date_of_birth || ''} onChange={e => setEditingCandidate({ ...editingCandidate, date_of_birth: e.target.value })} /></div>
                                 <div className="flex justify-end gap-2">
                                     <Button variant="ghost" type="button" onClick={() => setEditingCandidate(null)}>Annuler</Button>
                                     <Button type="submit">Enregistrer</Button>
@@ -221,6 +223,7 @@ export default function CandidatesPage() {
                                                 <span>{candidate.email}</span>
                                                 <span>•</span>
                                                 <span>{candidate.phone}</span>
+                                                {candidate.date_of_birth && (<><span>•</span><span>{candidate.date_of_birth}</span></>)}
                                             </div>
                                         </div>
                                     </div>

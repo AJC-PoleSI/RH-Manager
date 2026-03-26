@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 
 interface Epreuve {
     id: string;
@@ -41,6 +42,7 @@ function getStatusBadge(status: string) {
 
 export default function PlanningPage() {
     const { user } = useAuth();
+    const { toast } = useToast();
     const isAdmin = user?.isAdmin === true;
 
     const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
@@ -52,6 +54,8 @@ export default function PlanningPage() {
     const [sallesParCreneau, setSallesParCreneau] = useState(2);
     const [evalParSalle, setEvalParSalle] = useState(3);
     const [inscriptionData, setInscriptionData] = useState<{ creneau: string; inscrits: number; capacite: number; statut: string }[]>([]);
+    const [saisiOuverte, setSaisiOuverte] = useState(false);
+    const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
 
     // Member state
     const [memberAvailabilities, setMemberAvailabilities] = useState<Record<string, SlotAvailability>>({});
@@ -65,7 +69,7 @@ export default function PlanningPage() {
                 setSelectedEpreuveId(nonCommune[0].id);
             }
         } catch (e) {
-            console.error('Erreur chargement épreuves:', e);
+            console.error('Erreur chargement epreuves:', e);
         } finally {
             setLoading(false);
         }
@@ -75,29 +79,79 @@ export default function PlanningPage() {
         fetchEpreuves();
     }, [fetchEpreuves]);
 
-    // Generate mock availability data for admin view
-    useEffect(() => {
-        if (isAdmin && selectedEpreuveId) {
+    // Fetch real availability data from API
+    const fetchAvailabilityData = useCallback(async () => {
+        if (!isAdmin || !selectedEpreuveId) return;
+        try {
+            const res = await api.get('/availability/all');
+            const data: Record<string, number> = {};
+            // Initialize all cells to 0
+            DAYS.forEach(day => {
+                TIME_SLOTS.forEach(slot => {
+                    data[`${day}-${slot}`] = 0;
+                });
+            });
+            // Count availabilities per day/slot
+            (res.data || []).forEach((a: any) => {
+                const dayMap: Record<string, string> = {
+                    'monday': 'Lun', 'tuesday': 'Mar', 'wednesday': 'Mer',
+                    'thursday': 'Jeu', 'friday': 'Ven',
+                    'mon': 'Lun', 'tue': 'Mar', 'wed': 'Mer', 'thu': 'Jeu', 'fri': 'Ven',
+                };
+                const dayLabel = dayMap[a.weekday?.toLowerCase()] || '';
+                if (!dayLabel) return;
+                const startHour = parseInt(a.start_time || a.startTime || '0');
+                const slotLabel = `${startHour.toString().padStart(2, '0')}h`;
+                const key = `${dayLabel}-${slotLabel}`;
+                if (data[key] !== undefined) {
+                    data[key] = (data[key] || 0) + 1;
+                }
+            });
+            setAvailabilityData(data);
+        } catch (e) {
+            console.error('Erreur chargement dispos:', e);
+            // Fallback to empty data
             const data: Record<string, number> = {};
             DAYS.forEach(day => {
                 TIME_SLOTS.forEach(slot => {
-                    const key = `${day}-${slot}`;
-                    data[key] = Math.floor(Math.random() * 5);
+                    data[`${day}-${slot}`] = 0;
                 });
             });
             setAvailabilityData(data);
-
-            setInscriptionData([
-                { creneau: 'Lundi 09h-10h', inscrits: 8, capacite: 8, statut: 'Complet' },
-                { creneau: 'Lundi 10h-11h', inscrits: 5, capacite: 8, statut: 'Disponible' },
-                { creneau: 'Mardi 09h-10h', inscrits: 3, capacite: 8, statut: 'Incomplet' },
-                { creneau: 'Mardi 14h-15h', inscrits: 8, capacite: 8, statut: 'Complet' },
-                { creneau: 'Mercredi 09h-10h', inscrits: 6, capacite: 8, statut: 'Disponible' },
-            ]);
         }
     }, [isAdmin, selectedEpreuveId]);
 
-    // Initialize member availabilities per épreuve
+    // Fetch slots for inscription data
+    const fetchSlotData = useCallback(async () => {
+        if (!isAdmin || !selectedEpreuveId) return;
+        try {
+            const res = await api.get('/slots/all');
+            const slots = (res.data || []).filter((s: any) => s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId);
+            const mapped = slots.map((s: any) => {
+                const inscrits = s.enrollments?.length || 0;
+                const capacite = s.max_candidates || s.maxCandidates || 1;
+                let statut = 'Disponible';
+                if (inscrits >= capacite) statut = 'Complet';
+                else if (inscrits === 0) statut = 'Incomplet';
+                return {
+                    creneau: `${s.start_time || s.startTime || ''} - ${s.end_time || s.endTime || ''}`,
+                    inscrits,
+                    capacite,
+                    statut,
+                };
+            });
+            setInscriptionData(mapped);
+        } catch {
+            setInscriptionData([]);
+        }
+    }, [isAdmin, selectedEpreuveId]);
+
+    useEffect(() => {
+        fetchAvailabilityData();
+        fetchSlotData();
+    }, [fetchAvailabilityData, fetchSlotData]);
+
+    // Initialize member availabilities per epreuve
     useEffect(() => {
         if (!isAdmin && epreuves.length > 0) {
             const initial: Record<string, SlotAvailability> = {};
@@ -130,13 +184,94 @@ export default function PlanningPage() {
     const handleSaveMemberAvailability = async (epreuveId: string) => {
         try {
             const slots = memberAvailabilities[epreuveId] || {};
-            const selected = Object.entries(slots).filter(([, v]) => v).map(([k]) => k);
-            await api.post('/disponibilites', { epreuveId, slots: selected });
-            alert('Disponibilités enregistrées !');
+            const selected = Object.entries(slots).filter(([, v]) => v).map(([k]) => {
+                const [day, time] = k.split('-');
+                const dayMap: Record<string, string> = {
+                    'Lun': 'mon', 'Mar': 'tue', 'Mer': 'wed', 'Jeu': 'thu', 'Ven': 'fri',
+                };
+                const hour = parseInt(time);
+                return {
+                    weekday: dayMap[day] || day.toLowerCase(),
+                    startTime: `${hour.toString().padStart(2, '0')}:00`,
+                    endTime: `${(hour + 1).toString().padStart(2, '0')}:00`,
+                };
+            });
+            await api.put('/availability', { availabilities: selected });
+            toast('Disponibilites enregistrees !', 'success');
         } catch (e) {
             console.error('Erreur sauvegarde:', e);
-            alert('Erreur lors de la sauvegarde');
+            toast('Erreur lors de la sauvegarde', 'error');
         }
+    };
+
+    // Admin handlers
+    const handleOuvrirSaisieDispos = async () => {
+        try {
+            await api.put('/settings', { saisie_dispos_ouverte: 'true' });
+            setSaisiOuverte(true);
+            toast('Saisie des disponibilites ouverte', 'success');
+        } catch {
+            toast('Erreur', 'error');
+        }
+    };
+
+    const handleFermerSaisieDispos = async () => {
+        try {
+            await api.put('/settings', { saisie_dispos_ouverte: 'false' });
+            setSaisiOuverte(false);
+            toast('Saisie des disponibilites fermee', 'success');
+        } catch {
+            toast('Erreur', 'error');
+        }
+    };
+
+    const handleOuvrirInscriptions = async () => {
+        if (!selectedEpreuveId) return;
+        try {
+            // Publish all draft slots for this epreuve
+            const res = await api.get('/slots/all');
+            const draftSlots = (res.data || [])
+                .filter((s: any) => (s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId) && s.status === 'draft');
+            if (draftSlots.length > 0) {
+                await api.put('/slots/status/bulk', {
+                    slotIds: draftSlots.map((s: any) => s.id),
+                    status: 'published',
+                });
+            }
+            setInscriptionsOuvertes(true);
+            toast(`${draftSlots.length} creneau(x) ouverts aux inscriptions`, 'success');
+            fetchSlotData();
+        } catch {
+            toast('Erreur ouverture inscriptions', 'error');
+        }
+    };
+
+    const handleFermerInscriptions = async () => {
+        if (!selectedEpreuveId) return;
+        try {
+            const res = await api.get('/slots/all');
+            const publishedSlots = (res.data || [])
+                .filter((s: any) => (s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId) && s.status === 'published');
+            if (publishedSlots.length > 0) {
+                await api.put('/slots/status/bulk', {
+                    slotIds: publishedSlots.map((s: any) => s.id),
+                    status: 'closed',
+                });
+            }
+            setInscriptionsOuvertes(false);
+            toast(`${publishedSlots.length} creneau(x) fermes`, 'success');
+            fetchSlotData();
+        } catch {
+            toast('Erreur fermeture inscriptions', 'error');
+        }
+    };
+
+    const handleRelancer = () => {
+        toast('Fonctionnalite de relance par email a configurer (necessite un service email)', 'info');
+    };
+
+    const handleRepartir = () => {
+        toast('Repartition automatique en cours de developpement', 'info');
     };
 
     if (loading) {
@@ -156,12 +291,12 @@ export default function PlanningPage() {
                 {/* Header */}
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Dispos &amp; Inscriptions</h1>
-                    <p className="text-sm text-gray-500 mt-1">Logistique des créneaux</p>
+                    <p className="text-sm text-gray-500 mt-1">Logistique des creneaux</p>
                 </div>
 
-                {/* Épreuve selector */}
+                {/* Epreuve selector */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Épreuve</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Epreuve</label>
                     <select
                         className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={selectedEpreuveId}
@@ -173,10 +308,10 @@ export default function PlanningPage() {
                     </select>
                 </div>
 
-                {/* Card: Dispos évaluateurs */}
+                {/* Card: Dispos evaluateurs */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
                     <div className="px-5 py-4 border-b border-gray-100">
-                        <h2 className="text-base font-semibold text-gray-900">⏰ Dispos évaluateurs</h2>
+                        <h2 className="text-base font-semibold text-gray-900">⏰ Dispos evaluateurs</h2>
                     </div>
                     <div className="p-5">
                         {/* Availability grid */}
@@ -190,8 +325,8 @@ export default function PlanningPage() {
 
                                 {/* Time slot rows */}
                                 {TIME_SLOTS.map(slot => (
-                                    <>
-                                        <div key={`label-${slot}`} className="text-xs text-gray-500 font-medium flex items-center justify-end pr-2">{slot}</div>
+                                    <div key={`row-${slot}`} style={{ display: 'contents' }}>
+                                        <div className="text-xs text-gray-500 font-medium flex items-center justify-end pr-2">{slot}</div>
                                         {DAYS.map(day => {
                                             const key = `${day}-${slot}`;
                                             const count = availabilityData[key] || 0;
@@ -212,7 +347,7 @@ export default function PlanningPage() {
                                                 </div>
                                             );
                                         })}
-                                    </>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -235,10 +370,18 @@ export default function PlanningPage() {
 
                         {/* Buttons */}
                         <div className="flex gap-3 mt-5">
-                            <button className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                                Ouvrir saisie dispos
+                            <button
+                                onClick={handleOuvrirSaisieDispos}
+                                disabled={saisiOuverte}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {saisiOuverte ? 'Saisie ouverte' : 'Ouvrir saisie dispos'}
                             </button>
-                            <button className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200">
+                            <button
+                                onClick={handleFermerSaisieDispos}
+                                disabled={!saisiOuverte}
+                                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200 disabled:opacity-50"
+                            >
                                 Fermer saisie
                             </button>
                         </div>
@@ -253,7 +396,7 @@ export default function PlanningPage() {
                     <div className="p-5">
                         <div className="grid grid-cols-2 gap-4 max-w-md">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Salles / créneau</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Salles / creneau</label>
                                 <input
                                     type="number"
                                     min={1}
@@ -263,7 +406,7 @@ export default function PlanningPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Évaluateurs / salle</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Evaluateurs / salle</label>
                                 <input
                                     type="number"
                                     min={1}
@@ -275,12 +418,15 @@ export default function PlanningPage() {
                         </div>
 
                         <p className="text-sm text-gray-500 mt-3">
-                            Capacité : <span className="font-semibold text-gray-800">{capacite} évaluateurs</span> nécessaires par créneau ({sallesParCreneau} salles × {evalParSalle} éval./salle)
+                            Capacite : <span className="font-semibold text-gray-800">{capacite} evaluateurs</span> necessaires par creneau ({sallesParCreneau} salles x {evalParSalle} eval./salle)
                         </p>
 
                         <div className="mt-4">
-                            <button className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                                Répartir les évaluateurs
+                            <button
+                                onClick={handleRepartir}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                            >
+                                Repartir les evaluateurs
                             </button>
                         </div>
                     </div>
@@ -294,13 +440,24 @@ export default function PlanningPage() {
                     <div className="p-5">
                         {/* Buttons */}
                         <div className="flex gap-3 mb-5">
-                            <button className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                                Ouvrir inscriptions
+                            <button
+                                onClick={handleOuvrirInscriptions}
+                                disabled={inscriptionsOuvertes}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {inscriptionsOuvertes ? 'Inscriptions ouvertes' : 'Ouvrir inscriptions'}
                             </button>
-                            <button className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200">
+                            <button
+                                onClick={handleFermerInscriptions}
+                                disabled={!inscriptionsOuvertes}
+                                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200 disabled:opacity-50"
+                            >
                                 Fermer
                             </button>
-                            <button className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200">
+                            <button
+                                onClick={handleRelancer}
+                                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200"
+                            >
                                 Relancer non-inscrits
                             </button>
                         </div>
@@ -310,9 +467,9 @@ export default function PlanningPage() {
                             <table className="w-full text-sm text-left">
                                 <thead>
                                     <tr className="border-b border-gray-200">
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Créneau</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Creneau</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Inscrits</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Capacité</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Capacite</th>
                                         <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Statut</th>
                                     </tr>
                                 </thead>
@@ -342,6 +499,13 @@ export default function PlanningPage() {
                                             </tr>
                                         );
                                     })}
+                                    {inscriptionData.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="px-3 py-8 text-center text-gray-400 text-sm">
+                                                Aucun creneau pour cette epreuve
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -356,17 +520,17 @@ export default function PlanningPage() {
         <div className="flex flex-col gap-6 p-6">
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Mes disponibilités</h1>
-                <p className="text-sm text-gray-500 mt-1">Cochez vos créneaux quand la saisie est ouverte par l&apos;admin</p>
+                <h1 className="text-2xl font-bold text-gray-900">Mes disponibilites</h1>
+                <p className="text-sm text-gray-500 mt-1">Cochez vos creneaux quand la saisie est ouverte par l&apos;admin</p>
             </div>
 
             {/* Info banner */}
             <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
                 <span className="text-base mt-0.5">ℹ️</span>
-                <p className="text-sm text-blue-800">La saisie est activée uniquement pendant la période définie par l&apos;admin.</p>
+                <p className="text-sm text-blue-800">La saisie est activee uniquement pendant la periode definie par l&apos;admin.</p>
             </div>
 
-            {/* Épreuve cards with availability grids */}
+            {/* Epreuve cards with availability grids */}
             {epreuves.map(ep => {
                 const epAvail = memberAvailabilities[ep.id] || {};
                 const selectedCount = Object.values(epAvail).filter(Boolean).length;
@@ -383,15 +547,6 @@ export default function PlanningPage() {
                                     Tour {ep.tour}
                                 </span>
                             </div>
-                            {(ep.dateDebut || ep.dateFin) && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {ep.dateDebut && ep.dateFin
-                                        ? `Du ${ep.dateDebut} au ${ep.dateFin}`
-                                        : ep.dateDebut
-                                            ? `À partir du ${ep.dateDebut}`
-                                            : `Jusqu&apos;au ${ep.dateFin}`}
-                                </p>
-                            )}
                         </div>
                         <div className="p-5">
                             {/* Availability grid */}
@@ -405,8 +560,8 @@ export default function PlanningPage() {
 
                                     {/* Time slot rows */}
                                     {TIME_SLOTS.map(slot => (
-                                        <>
-                                            <div key={`label-${ep.id}-${slot}`} className="text-xs text-gray-500 font-medium flex items-center justify-end pr-2">{slot}</div>
+                                        <div key={`row-${ep.id}-${slot}`} style={{ display: 'contents' }}>
+                                            <div className="text-xs text-gray-500 font-medium flex items-center justify-end pr-2">{slot}</div>
                                             {DAYS.map(day => {
                                                 const key = `${day}-${slot}`;
                                                 const isSelected = epAvail[key] || false;
@@ -432,14 +587,14 @@ export default function PlanningPage() {
                                                     </div>
                                                 );
                                             })}
-                                        </>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
 
                             {/* Selected count */}
                             <p className="text-xs text-gray-500 mt-3">
-                                {selectedCount} créneau{selectedCount > 1 ? 'x' : ''} sélectionné{selectedCount > 1 ? 's' : ''}
+                                {selectedCount} creneau{selectedCount > 1 ? 'x' : ''} selectionne{selectedCount > 1 ? 's' : ''}
                             </p>
 
                             {/* Buttons */}
@@ -454,7 +609,7 @@ export default function PlanningPage() {
                                     onClick={() => resetMemberSlots(ep.id)}
                                     className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200"
                                 >
-                                    Réinitialiser
+                                    Reinitialiser
                                 </button>
                             </div>
                         </div>
@@ -464,7 +619,7 @@ export default function PlanningPage() {
 
             {epreuves.length === 0 && (
                 <div className="text-center py-12 text-gray-400 text-sm">
-                    Aucune épreuve disponible pour le moment.
+                    Aucune epreuve disponible pour le moment.
                 </div>
             )}
         </div>

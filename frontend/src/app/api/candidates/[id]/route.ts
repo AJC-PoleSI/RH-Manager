@@ -47,6 +47,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone;
     if (body.comments !== undefined) updateData.comments = body.comments;
+    if (body.date_of_birth !== undefined) updateData.date_of_birth = body.date_of_birth;
+    if (body.dateOfBirth !== undefined) updateData.date_of_birth = body.dateOfBirth;
 
     const { data, error } = await supabaseAdmin
       .from('candidates')

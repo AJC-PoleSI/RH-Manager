@@ -1,15 +1,14 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { signToken } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { firstName, lastName, email, phone } = await req.json();
+    const { firstName, lastName, email, phone, dateOfBirth, formation, etablissement, anneeIntegration } = await req.json();
 
-    if (!firstName || !lastName || !email) {
+    if (!firstName || !lastName || !email || !dateOfBirth) {
       return Response.json(
-        { error: 'Les champs Prénom, Nom et Email sont obligatoires.' },
+        { error: 'Les champs Prénom, Nom, Email et Date de naissance sont obligatoires.' },
         { status: 400 }
       );
     }
@@ -39,12 +38,15 @@ export async function POST(req: NextRequest) {
         last_name: lastName,
         email,
         phone: phone || null,
+        date_of_birth: dateOfBirth,
+        formation: formation || null,
+        etablissement: etablissement || null,
+        annee_integration: anneeIntegration || null,
       })
-      .select('id, first_name, last_name, email, phone')
+      .select('id, first_name, last_name, email, phone, date_of_birth')
       .single();
 
     if (error) {
-      // Supabase unique constraint violation
       if (error.code === '23505') {
         return Response.json(
           { error: 'Un candidat avec cet email existe déjà. Utilisez "Se connecter" à la place.' },
@@ -57,7 +59,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate token immediately
     const token = signToken({
       id: candidate.id,
       email: candidate.email,

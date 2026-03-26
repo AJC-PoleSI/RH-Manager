@@ -1,32 +1,33 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { signToken } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, lastName } = await req.json();
+    const { email, dateOfBirth } = await req.json();
 
-    if (!email || !lastName) {
-      return Response.json({ error: 'Email et nom requis.' }, { status: 400 });
+    if (!email || !dateOfBirth) {
+      return Response.json({ error: 'Email et date de naissance requis.' }, { status: 400 });
     }
 
     const { data: candidate, error } = await supabaseAdmin
       .from('candidates')
-      .select('id, first_name, last_name, email, phone')
+      .select('id, first_name, last_name, email, phone, date_of_birth')
       .eq('email', email)
       .single();
 
     if (error || !candidate) {
       return Response.json(
-        { error: 'Candidat introuvable ou nom incorrect.' },
+        { error: 'Candidat introuvable. Vérifiez votre email.' },
         { status: 401 }
       );
     }
 
-    if (candidate.last_name.toLowerCase() !== lastName.toLowerCase()) {
+    // Compare dates (ignore time)
+    const dbDate = candidate.date_of_birth;
+    if (!dbDate || dbDate !== dateOfBirth) {
       return Response.json(
-        { error: 'Candidat introuvable ou nom incorrect.' },
+        { error: 'Date de naissance incorrecte.' },
         { status: 401 }
       );
     }

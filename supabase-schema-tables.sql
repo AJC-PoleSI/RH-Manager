@@ -11,8 +11,11 @@ CREATE TABLE IF NOT EXISTS candidates (
   last_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
+  date_of_birth DATE,
   comments TEXT,
-  password_hash TEXT,
+  formation TEXT,
+  etablissement TEXT,
+  annee_integration TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

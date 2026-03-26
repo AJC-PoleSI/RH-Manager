@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { firstName, lastName, email, phone } = body;
+    const { firstName, lastName, email, phone, dateOfBirth } = body;
 
     if (!firstName || !lastName || !email) {
       return Response.json(
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
         last_name: lastName,
         email,
         phone: phone || null,
+        date_of_birth: dateOfBirth || null,
       })
       .select()
       .single();

@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
-type View = 'landing' | 'login' | 'inscription';
+type View = 'landing' | 'login' | 'candidate-choice' | 'candidate-login' | 'inscription';
 
 export default function LoginPage() {
     const [view, setView] = useState<View>('landing');
@@ -18,33 +18,37 @@ export default function LoginPage() {
     const [memberEmail, setMemberEmail] = useState('');
     const [memberPassword, setMemberPassword] = useState('');
 
+    // Candidate login form
+    const [candidateLoginEmail, setCandidateLoginEmail] = useState('');
+    const [candidateLoginDob, setCandidateLoginDob] = useState('');
+
     // Candidate registration form
     const [candidateData, setCandidateData] = useState({
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
-        messenger: '',
+        dateOfBirth: '',
         formation: '',
         etablissement: '',
         anneeIntegration: '',
-        password: '',
     });
     const [cvFile, setCvFile] = useState<File | null>(null);
 
     const resetForms = () => {
         setMemberEmail('');
         setMemberPassword('');
+        setCandidateLoginEmail('');
+        setCandidateLoginDob('');
         setCandidateData({
             firstName: '',
             lastName: '',
             email: '',
             phone: '',
-            messenger: '',
+            dateOfBirth: '',
             formation: '',
             etablissement: '',
             anneeIntegration: '',
-            password: '',
         });
         setCvFile(null);
         setError('');
@@ -68,9 +72,30 @@ export default function LoginPage() {
             loginMember(res.data.token, res.data.member);
         } catch (err: any) {
             if (!err.response) {
-                setError("Impossible de contacter le serveur. Vérifiez qu'il est lancé sur le port 4000.");
+                setError("Impossible de contacter le serveur.");
             } else {
                 setError(err.response?.data?.error || 'Une erreur est survenue');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCandidateLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/candidate-login', {
+                email: candidateLoginEmail,
+                dateOfBirth: candidateLoginDob,
+            });
+            loginCandidate(res.data.token, res.data.candidate);
+        } catch (err: any) {
+            if (!err.response) {
+                setError("Impossible de contacter le serveur.");
+            } else {
+                setError(err.response?.data?.error || 'Email ou date de naissance incorrect(e)');
             }
         } finally {
             setLoading(false);
@@ -87,11 +112,15 @@ export default function LoginPage() {
                 lastName: candidateData.lastName,
                 email: candidateData.email,
                 phone: candidateData.phone,
+                dateOfBirth: candidateData.dateOfBirth,
+                formation: candidateData.formation,
+                etablissement: candidateData.etablissement,
+                anneeIntegration: candidateData.anneeIntegration,
             });
             loginCandidate(res.data.token, res.data.candidate);
         } catch (err: any) {
             if (!err.response) {
-                setError("Impossible de contacter le serveur. Vérifiez qu'il est lancé sur le port 4000.");
+                setError("Impossible de contacter le serveur.");
             } else {
                 setError(err.response?.data?.error || "Échec de l'inscription");
             }
@@ -111,35 +140,31 @@ export default function LoginPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-2xl text-center">
-                    {/* Title */}
                     <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
                         Audencia Junior Conseil
                     </h1>
                     <p className="mt-2 text-gray-500 text-base">
                         Plateforme de recrutement associatif 2025
                     </p>
-
-                    {/* Gradient bar */}
                     <div className="mx-auto mt-4 mb-10 h-1 w-24 rounded-full bg-gradient-to-r from-blue-600 to-pink-500" />
 
-                    {/* Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         {/* Candidate card */}
                         <button
-                            onClick={() => { resetForms(); setView('inscription'); }}
+                            onClick={() => { resetForms(); setView('candidate-choice'); }}
                             className="group rounded-2xl border-2 border-transparent p-8 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
                             style={{ backgroundColor: '#FFF0F3' }}
                         >
                             <div className="text-4xl mb-4">🎓</div>
                             <h2 className="text-lg font-semibold text-gray-900">Je suis candidat</h2>
                             <p className="mt-1 text-sm text-gray-500">
-                                M&apos;inscrire et suivre mon parcours de recrutement
+                                Créer mon compte ou me connecter
                             </p>
                             <span
                                 className="mt-4 inline-block text-sm font-medium"
                                 style={{ color: '#E8446A' }}
                             >
-                                Créer mon compte →
+                                Accéder →
                             </span>
                         </button>
 
@@ -156,6 +181,142 @@ export default function LoginPage() {
                             <span className="mt-4 inline-block text-sm font-medium text-blue-600">
                                 Se connecter →
                             </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── CANDIDATE CHOICE VIEW ──────────────────────────────────────
+    if (view === 'candidate-choice') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+                <div className="w-full max-w-2xl text-center">
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+                        Espace Candidat
+                    </h1>
+                    <p className="mt-2 text-gray-500 text-base">
+                        Choisissez une option pour continuer
+                    </p>
+                    <div className="mx-auto mt-4 mb-10 h-1 w-24 rounded-full" style={{ backgroundColor: '#E8446A' }} />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {/* Create account */}
+                        <button
+                            onClick={() => { resetForms(); setView('inscription'); }}
+                            className="group rounded-2xl border-2 border-gray-200 p-8 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-1 hover:border-pink-200 bg-white"
+                        >
+                            <div className="text-4xl mb-4">📝</div>
+                            <h2 className="text-lg font-semibold text-gray-900">Créer un compte</h2>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Première fois ? Inscrivez-vous pour commencer votre parcours
+                            </p>
+                            <span className="mt-4 inline-block text-sm font-medium" style={{ color: '#E8446A' }}>
+                                S&apos;inscrire →
+                            </span>
+                        </button>
+
+                        {/* Login */}
+                        <button
+                            onClick={() => { resetForms(); setView('candidate-login'); }}
+                            className="group rounded-2xl border-2 border-gray-200 p-8 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-1 hover:border-blue-200 bg-white"
+                        >
+                            <div className="text-4xl mb-4">🔑</div>
+                            <h2 className="text-lg font-semibold text-gray-900">Se connecter</h2>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Vous avez déjà un compte ? Connectez-vous avec votre email et date de naissance
+                            </p>
+                            <span className="mt-4 inline-block text-sm font-medium text-blue-600">
+                                Connexion →
+                            </span>
+                        </button>
+                    </div>
+
+                    <div className="mt-8">
+                        <button
+                            onClick={goToLanding}
+                            className="text-sm text-gray-500 hover:text-gray-700 transition"
+                        >
+                            ← Retour
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── CANDIDATE LOGIN ─────────────────────────────────────────────
+    if (view === 'candidate-login') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
+                    <h2 className="text-xl font-bold text-gray-900 text-center">Connexion Candidat</h2>
+                    <p className="mt-1 text-sm text-gray-500 text-center">
+                        Entrez votre email et date de naissance
+                    </p>
+
+                    {error && (
+                        <div
+                            className="mt-4 rounded-lg px-4 py-3 text-sm font-medium"
+                            style={{ backgroundColor: '#FFF0F3', color: '#E8446A' }}
+                        >
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleCandidateLogin} className="mt-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                required
+                                value={candidateLoginEmail}
+                                onChange={(e) => setCandidateLoginEmail(e.target.value)}
+                                placeholder="jean.dupont@ecole.fr"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date de naissance
+                            </label>
+                            <input
+                                type="date"
+                                required
+                                value={candidateLoginDob}
+                                onChange={(e) => setCandidateLoginDob(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-50"
+                            style={{ backgroundColor: '#E8446A' }}
+                        >
+                            {loading ? 'Connexion...' : 'Se connecter'}
+                        </button>
+                    </form>
+
+                    <div className="mt-4 text-center space-y-2">
+                        <p className="text-sm text-gray-500">
+                            Pas encore de compte ?{' '}
+                            <button
+                                onClick={() => { resetForms(); setView('inscription'); }}
+                                className="font-medium hover:underline"
+                                style={{ color: '#E8446A' }}
+                            >
+                                Créer un compte
+                            </button>
+                        </p>
+                        <button
+                            onClick={() => setView('candidate-choice')}
+                            className="text-sm text-gray-500 hover:text-gray-700 transition"
+                        >
+                            ← Retour
                         </button>
                     </div>
                 </div>
@@ -336,6 +497,19 @@ export default function LoginPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Date de naissance
+                                </label>
+                                <input
+                                    type="date"
+                                    name="dateOfBirth"
+                                    required
+                                    value={candidateData.dateOfBirth}
+                                    onChange={handleCandidateChange}
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Téléphone
                                 </label>
                                 <input
@@ -344,19 +518,6 @@ export default function LoginPage() {
                                     value={candidateData.phone}
                                     onChange={handleCandidateChange}
                                     placeholder="06 12 34 56 78"
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Messenger
-                                </label>
-                                <input
-                                    type="text"
-                                    name="messenger"
-                                    value={candidateData.messenger}
-                                    onChange={handleCandidateChange}
-                                    placeholder="Pseudo Messenger"
                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                             </div>
@@ -442,21 +603,9 @@ export default function LoginPage() {
                                     )}
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Mot de passe
-                                </label>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    value={candidateData.password}
-                                    onChange={handleCandidateChange}
-                                    placeholder="Choisir un mot de passe"
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
                             <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
                                 Votre compte sera créé et vous pourrez accéder à votre espace candidat immédiatement.
+                                Votre date de naissance servira de mot de passe pour vous reconnecter.
                             </div>
                         </>
                     )}
@@ -486,9 +635,18 @@ export default function LoginPage() {
                     </div>
                 </form>
 
-                <div className="mt-4 text-center">
+                <div className="mt-4 text-center space-y-2">
+                    <p className="text-sm text-gray-500">
+                        Déjà inscrit ?{' '}
+                        <button
+                            onClick={() => { resetForms(); setView('candidate-login'); }}
+                            className="font-medium text-blue-600 hover:underline"
+                        >
+                            Se connecter
+                        </button>
+                    </p>
                     <button
-                        onClick={goToLanding}
+                        onClick={() => setView('candidate-choice')}
                         className="text-sm text-gray-500 hover:text-gray-700 transition"
                     >
                         ← Retour
