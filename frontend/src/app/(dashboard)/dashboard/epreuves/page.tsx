@@ -119,6 +119,19 @@ export default function EpreuvesPage() {
         }
     };
 
+    const handleDelete = async (id: string) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer cette épreuve ?")) {
+            try {
+                await api.delete(`/epreuves/${id}`);
+                setViewingEpreuve(null);
+                fetchEpreuves();
+            } catch (error) {
+                console.error("Erreur lors de la suppression:", error);
+                toast("Erreur lors de la suppression de l'épreuve", 'error');
+            }
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -158,7 +171,8 @@ export default function EpreuvesPage() {
                                     })()}
                                 </div>
                             </div>
-                            <div className="flex justify-end pt-4 border-t">
+                            <div className="flex justify-end gap-2 pt-4 border-t">
+                                <Button variant="destructive" onClick={() => handleDelete(viewingEpreuve.id)}>Supprimer</Button>
                                 <Button onClick={() => { setViewingEpreuve(null); handleEdit(viewingEpreuve); }}>Modifier</Button>
                             </div>
                         </CardContent>
