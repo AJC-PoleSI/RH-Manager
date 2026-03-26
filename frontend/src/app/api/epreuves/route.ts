@@ -41,22 +41,27 @@ export async function POST(req: NextRequest) {
   if (!user.isAdmin) return forbidden();
 
   try {
-    const { name, tour, type, durationMinutes, evaluationQuestions, isPoleTest, pole } =
-      await req.json();
+    const body = await req.json();
+
+    // Support both formats: settings page (tourId, criteres, duree) and epreuves page (tour, durationMinutes, evaluationQuestions)
+    const tourValue = body.tour ?? (body.tourId ? parseInt(body.tourId) : 1);
+    const durationValue = body.durationMinutes ?? (body.duree ? parseInt(body.duree) : 30);
+    const questionsValue = body.evaluationQuestions ?? body.criteres?.map((c: any) => ({ q: c.name, weight: c.coefficient })) ?? [];
+    const isPoleTest = body.isPoleTest ?? (body.pole ? true : false);
 
     const { data: epreuve, error } = await supabaseAdmin
       .from('epreuves')
       .insert({
-        name,
-        tour,
-        type,
-        duration_minutes: durationMinutes,
+        name: body.name,
+        tour: tourValue,
+        type: body.type,
+        duration_minutes: durationValue,
         evaluation_questions:
-          typeof evaluationQuestions === 'string'
-            ? evaluationQuestions
-            : JSON.stringify(evaluationQuestions ?? []),
+          typeof questionsValue === 'string'
+            ? questionsValue
+            : JSON.stringify(questionsValue),
         is_pole_test: isPoleTest,
-        pole,
+        pole: body.pole || null,
       })
       .select()
       .single();
