@@ -203,14 +203,29 @@ export default function DeliberationsPage() {
   const getInitials = (c: Candidate) =>
     `${(c.firstName || "")[0] || ""}${(c.lastName || "")[0] || ""}`.toUpperCase();
 
+  // Filter candidates based on selected tour
+  const filteredCandidates = candidates.filter((c) => {
+    if (selectedTour === 1) return true;
+    if (selectedTour === 2) {
+      const t1 = c.deliberation?.tour1Status;
+      return t1 === 'accepted' || t1 === 'waiting';
+    }
+    if (selectedTour === 3) {
+      const t1 = c.deliberation?.tour1Status;
+      const t2 = c.deliberation?.tour2Status;
+      return (t1 === 'accepted') && (t2 === 'accepted' || t2 === 'waiting');
+    }
+    return true;
+  });
+
   // Stats
-  const reserveCandidates = candidates.filter(
+  const reserveCandidates = filteredCandidates.filter(
     (c) => getStatus(c) === "waiting"
   );
-  const acceptedCount = candidates.filter(
+  const acceptedCount = filteredCandidates.filter(
     (c) => getStatus(c) === "accepted"
   ).length;
-  const refusedCount = candidates.filter(
+  const refusedCount = filteredCandidates.filter(
     (c) => getStatus(c) === "refused"
   ).length;
 
@@ -273,7 +288,7 @@ export default function DeliberationsPage() {
         {/* Section Header */}
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">
-            &#128101; Revue des candidats ({candidates.length})
+            &#128101; Revue des candidats ({filteredCandidates.length})
           </h2>
         </div>
 
@@ -287,7 +302,7 @@ export default function DeliberationsPage() {
 
         {/* Candidate List */}
         <div className="p-6 space-y-4">
-          {candidates.map((c) => {
+          {filteredCandidates.map((c) => {
             const status = getStatus(c);
             const isReserve = status === "waiting";
 
@@ -504,7 +519,7 @@ export default function DeliberationsPage() {
             );
           })}
 
-          {candidates.length === 0 && (
+          {filteredCandidates.length === 0 && (
             <div className="text-center text-gray-400 py-12">
               Aucun candidat trouv&eacute;.
             </div>

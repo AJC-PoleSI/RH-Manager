@@ -1,8 +1,10 @@
 "use client";
 
 import Sidebar from './Sidebar';
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { SettingsProvider } from "@/context/SettingsContext";
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 function TopNav() {
     const { user, role, logout } = useAuth();
@@ -55,20 +57,40 @@ function TopNav() {
     );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
+    const { token } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!token) {
+            router.push('/login');
+        }
+    }, [token, router]);
+
+    // Show loading while redirecting
+    if (!token) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <p className="text-gray-600">Redirection...</p>
+            </div>
+        );
+    }
+
     return (
-        <AuthProvider>
-            <SettingsProvider>
-                <div className="flex flex-col h-screen">
-                    <TopNav />
-                    <div className="flex flex-1 overflow-hidden">
-                        <Sidebar />
-                        <main className="flex-1 bg-gray-50 overflow-y-auto p-[26px_30px]">
-                            {children}
-                        </main>
-                    </div>
+        <SettingsProvider>
+            <div className="flex flex-col h-screen">
+                <TopNav />
+                <div className="flex flex-1 overflow-hidden">
+                    <Sidebar />
+                    <main className="flex-1 bg-gray-50 overflow-y-auto p-[26px_30px]">
+                        {children}
+                    </main>
                 </div>
-            </SettingsProvider>
-        </AuthProvider>
+            </div>
+        </SettingsProvider>
     );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return <DashboardContent>{children}</DashboardContent>;
 }

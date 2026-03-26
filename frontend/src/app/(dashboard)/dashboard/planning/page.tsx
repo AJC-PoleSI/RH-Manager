@@ -270,8 +270,46 @@ export default function PlanningPage() {
         toast('Fonctionnalite de relance par email a configurer (necessite un service email)', 'info');
     };
 
-    const handleRepartir = () => {
-        toast('Repartition automatique en cours de developpement', 'info');
+    const [repartitionLoading, setRepartitionLoading] = useState(false);
+    const [repartitionResult, setRepartitionResult] = useState<any>(null);
+
+    const handleRepartir = async () => {
+        if (!selectedEpreuveId) {
+            toast('Selectionnez une epreuve', 'error');
+            return;
+        }
+
+        setRepartitionLoading(true);
+        setRepartitionResult(null);
+
+        try {
+            const res = await api.post('/slots/auto-assign', {
+                epreuveId: selectedEpreuveId,
+                sallesParCreneau,
+                evalParSalle,
+            });
+
+            const data = res.data;
+            setRepartitionResult(data);
+
+            if (data.summary.totalSlots === 0) {
+                toast('Aucun creneau avec suffisamment d\'evaluateurs disponibles', 'info');
+            } else {
+                toast(
+                    `Repartition terminee : ${data.summary.totalSlots} salle(s) creee(s), ${data.summary.totalAssignments} affectation(s)`,
+                    'success'
+                );
+            }
+
+            // Refresh slot data
+            fetchSlotData();
+            fetchAvailabilityData();
+        } catch (e) {
+            console.error('Erreur repartition:', e);
+            toast('Erreur lors de la repartition automatique', 'error');
+        } finally {
+            setRepartitionLoading(false);
+        }
     };
 
     if (loading) {
@@ -424,11 +462,33 @@ export default function PlanningPage() {
                         <div className="mt-4">
                             <button
                                 onClick={handleRepartir}
-                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                                disabled={repartitionLoading}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
                             >
-                                Repartir les evaluateurs
+                                {repartitionLoading ? 'Repartition en cours...' : 'Repartir les evaluateurs'}
                             </button>
                         </div>
+
+                        {/* Repartition results */}
+                        {repartitionResult && repartitionResult.assignments?.length > 0 && (
+                            <div className="mt-5 border-t border-gray-100 pt-4">
+                                <h3 className="text-sm font-semibold text-gray-700 mb-3">Resultat de la repartition</h3>
+                                <div className="space-y-2">
+                                    {repartitionResult.assignments.map((a: any, idx: number) => (
+                                        <div key={idx} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                                            <span className="font-medium text-gray-700 whitespace-nowrap">{a.room}</span>
+                                            <span className="text-gray-400">|</span>
+                                            <span className="text-gray-600">{a.time}</span>
+                                            <span className="text-gray-400">|</span>
+                                            <span className="text-gray-500">{a.members.join(', ')}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">
+                                    {repartitionResult.summary.totalSlots} salle(s) &bull; {repartitionResult.summary.totalAssignments} affectation(s) &bull; Statut : brouillon
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

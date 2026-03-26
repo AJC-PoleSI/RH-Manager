@@ -278,8 +278,10 @@ export default function CreationPage() {
       closeModal();
       setEditingEpreuveId(null);
       fetchEpreuves();
-    } catch {
-      toast("Erreur lors de la sauvegarde", "error");
+    } catch (err: any) {
+      console.error('Erreur création/modification épreuve:', err);
+      const msg = err.response?.data?.error || err.message || "Erreur lors de la sauvegarde";
+      toast(msg, "error");
     } finally {
       setCreatingEpreuve(false);
     }
@@ -294,8 +296,10 @@ export default function CreationPage() {
       closeModal();
       setEditingEpreuveId(null);
       fetchEpreuves();
-    } catch {
-      toast("Erreur lors de la suppression", "error");
+    } catch (err: any) {
+      console.error('Erreur suppression épreuve:', err);
+      const msg = err.response?.data?.error || err.message || "Erreur lors de la suppression";
+      toast(msg, "error");
     }
   };
 

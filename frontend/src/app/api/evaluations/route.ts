@@ -7,14 +7,31 @@ export async function GET() {
   try {
     const { data: evaluations, error } = await supabaseAdmin
       .from('candidate_evaluations')
-      .select('*, epreuves(*), candidates(*), members(email)');
+      .select('*, epreuves(*), candidates(*), members(id, email, first_name, last_name)');
 
     if (error) throw error;
 
-    const parsed = (evaluations || []).map((e) => ({
-      ...e,
-      scores:
-        typeof e.scores === 'string' ? JSON.parse(e.scores) : e.scores,
+    const parsed = (evaluations || []).map((e: any) => ({
+      id: e.id,
+      scores: typeof e.scores === 'string' ? JSON.parse(e.scores) : e.scores,
+      comment: e.comment,
+      createdAt: e.created_at,
+      candidate: e.candidates ? {
+        id: e.candidates.id,
+        firstName: e.candidates.first_name,
+        lastName: e.candidates.last_name,
+      } : { id: '', firstName: '', lastName: '' },
+      epreuve: e.epreuves ? {
+        name: e.epreuves.name,
+        tour: e.epreuves.tour,
+        type: e.epreuves.type,
+      } : { name: '', tour: 0, type: '' },
+      member: e.members ? {
+        id: e.members.id,
+        firstName: e.members.first_name || '',
+        lastName: e.members.last_name || '',
+        email: e.members.email,
+      } : null,
     }));
 
     return Response.json(parsed);
