@@ -41,7 +41,14 @@
       "Bash(kill 21166)",
       "mcp__Desktop_Commander__get_file_info",
       "Bash(head -30 \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
-      "Bash(grep -E \"\\\\.$|vercel\")"
+      "Bash(grep -E \"\\\\.$|vercel\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/availability/page.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(cat \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/evaluations/page.tsx\")",
+      "Bash(cat '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/kpis/page.tsx')",
+      "Bash(cat '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/cross-calendar/page.tsx')",
+      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/candidates/[id]\")",
+      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/members/[id]\")"
     ]
   },
   "hooks": {
