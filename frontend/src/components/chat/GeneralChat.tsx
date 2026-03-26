@@ -1,31 +1,45 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import api from '@/lib/api';
 
 interface ChatMessage {
+    id?: string;
     name: string;
     text: string;
     time: string;
     role: 'admin' | 'member' | 'candidate';
 }
 
-const DEMO_MESSAGES: ChatMessage[] = [
-    { name: 'Admin AJC', text: 'Bienvenue sur la plateforme AJC Recrutement 2025 !', time: '09:58', role: 'admin' },
-    { name: 'Sophie L.', text: 'Merci ! Tout est clair pour commencer.', time: '10:05', role: 'member' },
-    { name: 'Alice M.', text: 'Bonjour à tous, hâte de commencer !', time: '10:12', role: 'candidate' },
-    { name: 'Marc D.', text: 'Bon courage à tous les candidats !', time: '10:18', role: 'member' },
-];
-
 export default function GeneralChat() {
     const { user, role } = useAuth();
-    const [messages, setMessages] = useState<ChatMessage[]>(DEMO_MESSAGES);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
+
+    const fetchMessages = useCallback(async () => {
+        try {
+            const res = await api.get('/chat');
+            setMessages(res.data);
+        } catch (e) {
+            console.error('Failed to fetch chat:', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchMessages();
+        // Poll every 5 seconds for new messages
+        const interval = setInterval(fetchMessages, 5000);
+        return () => clearInterval(interval);
+    }, [fetchMessages]);
 
     useEffect(() => {
         scrollToBottom();
@@ -42,12 +56,12 @@ export default function GeneralChat() {
     const getCurrentName = (): string => {
         if (!user) return 'Utilisateur';
         if (role === 'candidate') {
-            return `${user.firstName || user.prenom || ''} ${(user.lastName || user.nom || '').charAt(0)}.`.trim();
+            return `${user.firstName || user.first_name || ''} ${(user.lastName || user.last_name || '').charAt(0)}.`.trim();
         }
-        return `${user.firstName || user.prenom || ''} ${(user.lastName || user.nom || '').charAt(0)}.`.trim() || 'Membre';
+        return user.email?.split('@')[0] || 'Membre';
     };
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!input.trim()) return;
         const now = new Date();
         const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -57,8 +71,20 @@ export default function GeneralChat() {
             time,
             role: getCurrentRole(),
         };
+
+        // Optimistic update
         setMessages((prev) => [...prev, newMessage]);
+        const messageText = input.trim();
         setInput('');
+
+        try {
+            await api.post('/chat', {
+                message: messageText,
+                senderName: getCurrentName(),
+            });
+        } catch (e) {
+            console.error('Failed to send message:', e);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -122,19 +148,29 @@ export default function GeneralChat() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
                 {/* Messages Area */}
                 <div className="h-[460px] overflow-y-auto p-5 space-y-4">
-                    {messages.map((msg, i) => {
-                        const style = getBubbleStyle(msg.role);
-                        return (
-                            <div key={i} className={`flex ${style.align}`}>
-                                <div className={`max-w-[70%] ${style.bg} ${style.radius} px-4 py-2.5`}>
-                                    <p className={`text-sm ${style.text}`}>{msg.text}</p>
-                                    <p className={`text-[11px] mt-1 ${style.meta}`}>
-                                        {msg.name} &middot; {msg.time}
-                                    </p>
+                    {loading ? (
+                        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                            Chargement des messages...
+                        </div>
+                    ) : messages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                            Aucun message. Soyez le premier !
+                        </div>
+                    ) : (
+                        messages.map((msg, i) => {
+                            const style = getBubbleStyle(msg.role);
+                            return (
+                                <div key={msg.id || i} className={`flex ${style.align}`}>
+                                    <div className={`max-w-[70%] ${style.bg} ${style.radius} px-4 py-2.5`}>
+                                        <p className={`text-sm ${style.text}`}>{msg.text}</p>
+                                        <p className={`text-[11px] mt-1 ${style.meta}`}>
+                                            {msg.name} &middot; {msg.time}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })
+                    )}
                     <div ref={messagesEndRef} />
                 </div>
 

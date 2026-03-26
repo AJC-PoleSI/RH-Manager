@@ -339,7 +339,19 @@ export default function CreationPage() {
         </div>
 
         <div className="mt-4">
-          <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors">
+          <button
+            onClick={async () => {
+              const name = `Tour ${tours.length + 1}`;
+              try {
+                const res = await api.post('/tours', { name, status: 'a_venir' });
+                setTours(prev => [...prev, res.data]);
+                toast('Tour ajouté', 'success');
+              } catch {
+                toast('Erreur lors de la création du tour', 'error');
+              }
+            }}
+            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors"
+          >
             + Ajouter un tour
           </button>
         </div>
