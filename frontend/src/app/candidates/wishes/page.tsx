@@ -13,6 +13,7 @@ const DEFAULT_POLES = [
   "Trésorerie",
   "Bureau - VP",
   "Bureau - Président",
+  "Bureau - Trésorier",
 ];
 
 export default function CandidateWishesPage() {
