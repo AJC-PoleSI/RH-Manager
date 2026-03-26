@@ -25,7 +25,7 @@ interface EvaluationData {
     member?: { id: string; firstName?: string; lastName?: string; email: string };
 }
 
-const POLES = ["Système d'information", 'Marketing', 'Développement commercial', 'Audit Qualité', 'Ressource Humaine', 'VP'];
+const POLES = ["Système d'information", 'Marketing', 'Développement commercial', 'Audit Qualité', 'Ressource Humaine', 'Trésorerie', 'Bureau - VP', 'Bureau - Président'];
 
 function getScoreTotal(scores: Record<string, number>): number {
     const values = Object.values(scores);

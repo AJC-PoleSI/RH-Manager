@@ -10,7 +10,9 @@ const DEFAULT_POLES = [
   "Développement commercial",
   "Audit Qualité",
   "Ressource Humaine",
-  "VP",
+  "Trésorerie",
+  "Bureau - VP",
+  "Bureau - Président",
 ];
 
 export default function CandidateWishesPage() {
