@@ -135,6 +135,7 @@ export default function CreationPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NewEpreuveForm>({ ...EMPTY_FORM });
   const [creatingEpreuve, setCreatingEpreuve] = useState(false);
+  const [editingEpreuveId, setEditingEpreuveId] = useState<string | null>(null);
 
   /* ================================================================ */
   /*  Data fetching                                                    */
@@ -198,7 +199,31 @@ export default function CreationPage() {
   };
 
   const openModal = () => {
+    setEditingEpreuveId(null);
     setForm({ ...EMPTY_FORM });
+    setModalOpen(true);
+  };
+
+  const openEditModal = (ep: any) => {
+    setEditingEpreuveId(ep.id);
+    const criteres = Array.isArray(ep.evaluationQuestions)
+      ? ep.evaluationQuestions.map((q: any) => ({ name: q.q || q.name || '', coefficient: q.weight || q.coefficient || 1 }))
+      : [{ name: '', coefficient: 1 }];
+    setForm({
+      name: ep.name || '',
+      tourId: String(ep.tour || ''),
+      type: ep.type || 'commune',
+      date: '',
+      time: '',
+      salle: '',
+      presentedBy: '',
+      dateDebut: '',
+      dateFin: '',
+      duree: String(ep.durationMinutes || ''),
+      pole: ep.pole || '',
+      documents: null,
+      criteres,
+    });
     setModalOpen(true);
   };
 
@@ -235,27 +260,26 @@ export default function CreationPage() {
     try {
       const payload: any = {
         name: form.name,
-        tourId: form.tourId,
+        tour: form.tourId ? parseInt(form.tourId) : 1,
         type: form.type,
-        criteres: form.criteres,
+        durationMinutes: form.duree ? parseInt(form.duree) : 30,
+        evaluationQuestions: form.criteres.map(c => ({ q: c.name, weight: c.coefficient })),
+        pole: form.pole || null,
+        isPoleTest: !!form.pole,
       };
-      if (form.type === "commune") {
-        payload.date = form.date;
-        payload.time = form.time;
-        payload.salle = form.salle;
-        payload.presentedBy = form.presentedBy;
+
+      if (editingEpreuveId) {
+        await api.put(`/epreuves/${editingEpreuveId}`, payload);
+        toast("Épreuve modifiée", "success");
       } else {
-        payload.dateDebut = form.dateDebut;
-        payload.dateFin = form.dateFin;
-        payload.duree = form.duree;
-        payload.pole = form.pole;
+        await api.post("/epreuves", payload);
+        toast("Épreuve créée", "success");
       }
-      await api.post("/epreuves", payload);
-      toast("Épreuve créée", "success");
       closeModal();
+      setEditingEpreuveId(null);
       fetchEpreuves();
     } catch {
-      toast("Erreur lors de la création", "error");
+      toast("Erreur lors de la sauvegarde", "error");
     } finally {
       setCreatingEpreuve(false);
     }
@@ -403,7 +427,10 @@ export default function CreationPage() {
                     {ep.visibleCandidats ? "🟢" : "⚪"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                    <button
+                      onClick={() => openEditModal(ep)}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
                       Modifier
                     </button>
                   </td>
@@ -435,7 +462,7 @@ export default function CreationPage() {
 
           {/* Panel */}
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[620px] max-h-[90vh] overflow-y-auto mx-4 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-5">Nouvelle épreuve</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-5">{editingEpreuveId ? 'Modifier l\u0027épreuve' : 'Nouvelle épreuve'}</h2>
 
             {/* Name */}
             <div className="mb-4">
@@ -639,10 +666,10 @@ export default function CreationPage() {
               </button>
               <button
                 onClick={handleCreateEpreuve}
-                disabled={creatingEpreuve || !form.name || !form.tourId}
+                disabled={creatingEpreuve || !form.name}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {creatingEpreuve ? "Création..." : "Créer"}
+                {creatingEpreuve ? "Sauvegarde..." : editingEpreuveId ? "Enregistrer" : "Créer"}
               </button>
             </div>
           </div>
