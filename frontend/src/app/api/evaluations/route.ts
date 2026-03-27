@@ -2,12 +2,27 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
-// GET /api/evaluations - Fetch all evaluations
-export async function GET() {
+// GET /api/evaluations - Fetch evaluations (scoped by role)
+export async function GET(req: NextRequest) {
+  const payload = getTokenFromRequest(req);
+  if (!payload) return unauthorized();
+
+  // ── Candidats : pas d'accès aux évaluations ──
+  if (payload.role === 'candidate') {
+    return Response.json({ error: 'Acces interdit' }, { status: 403 });
+  }
+
   try {
-    const { data: evaluations, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('candidate_evaluations')
       .select('*, epreuves(*), candidates(*), members(id, email, first_name, last_name)');
+
+    // ── Membres non-admin : uniquement leurs propres évaluations ──
+    if (!payload.isAdmin) {
+      query = query.eq('member_id', payload.id);
+    }
+
+    const { data: evaluations, error } = await query;
 
     if (error) throw error;
 

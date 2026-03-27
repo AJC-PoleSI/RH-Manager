@@ -8,10 +8,21 @@ export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
+  // ── Candidats : pas d'accès à la liste des membres ──
+  if (payload.role === 'candidate') {
+    return Response.json({ error: 'Acces interdit' }, { status: 403 });
+  }
+
   try {
+    // Admin : accès complet avec password hash
+    // Membre : infos basiques sans mot de passe
+    const selectFields = payload.isAdmin
+      ? 'id, email, password_hash, is_admin, first_name, last_name, pole'
+      : 'id, email, is_admin, first_name, last_name, pole';
+
     const { data, error } = await supabaseAdmin
       .from('members')
-      .select('id, email, password_hash, is_admin, first_name, last_name, pole');
+      .select(selectFields);
 
     if (error) {
       return Response.json({ error: 'Failed to fetch members' }, { status: 500 });
@@ -20,7 +31,7 @@ export async function GET(req: NextRequest) {
     const mapped = (data || []).map((m: any) => ({
       id: m.id,
       email: m.email,
-      password: m.password_hash ? '••••••' : '',
+      password: payload.isAdmin ? (m.password_hash ? '••••••' : '') : undefined,
       isAdmin: m.is_admin,
       firstName: m.first_name || '',
       lastName: m.last_name || '',

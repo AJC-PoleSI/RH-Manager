@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -7,7 +8,29 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { candidateId: string } }
 ) {
+  const payload = getTokenFromRequest(req);
+  if (!payload) return unauthorized();
+
   const { candidateId } = params;
+
+  // ── Permission : candidats ne peuvent pas voir les évaluations ──
+  if (payload.role === 'candidate') {
+    return forbidden();
+  }
+
+  // ── Permission membre non-admin : vérifier qu'il est assigné à ce candidat ──
+  if (payload.role === 'member' && !payload.isAdmin) {
+    const { data: assignments } = await supabaseAdmin
+      .from('slot_member_assignments')
+      .select('slot:evaluation_slots!inner(enrollments:slot_enrollments!inner(candidate_id))')
+      .eq('member_id', payload.id)
+      .eq('slot.enrollments.candidate_id', candidateId)
+      .limit(1);
+
+    if (!assignments || assignments.length === 0) {
+      return forbidden();
+    }
+  }
 
   try {
     const { data: evaluations, error } = await supabaseAdmin

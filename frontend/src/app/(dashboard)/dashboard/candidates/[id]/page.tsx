@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import { Loader2, ArrowLeft } from 'lucide-react';
 
 interface EvalMember {
@@ -31,44 +32,70 @@ interface EpreuveGroup {
 
 export default function CandidateDetailPage({ params }: { params: { id: string } }) {
     const router = useRouter();
+    const { user, role } = useAuth();
+    const isAdmin = role === 'member' && user?.isAdmin;
+    const isCandidate = role === 'candidate';
+    const isMember = role === 'member' && !user?.isAdmin;
+
     const [candidate, setCandidate] = useState<any>(null);
     const [epreuveGroups, setEpreuveGroups] = useState<EpreuveGroup[]>([]);
     const [allEvals, setAllEvals] = useState<Evaluation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [accessDenied, setAccessDenied] = useState(false);
 
     useEffect(() => {
         const load = async () => {
             try {
-                const [candRes, evalRes] = await Promise.all([
-                    api.get(`/candidates/${params.id}`),
-                    api.get(`/evaluations/candidate/${params.id}`),
-                ]);
+                // Fetch candidat
+                const candRes = await api.get(`/candidates/${params.id}`);
                 setCandidate(candRes.data);
 
-                // Le nouvel API retourne { evaluations, byEpreuve }
-                const data = evalRes.data;
-                if (data.byEpreuve) {
-                    setEpreuveGroups(data.byEpreuve);
-                    setAllEvals(data.evaluations || []);
-                } else {
-                    // Fallback ancien format (tableau simple)
-                    const evals = Array.isArray(data) ? data : [];
-                    setAllEvals(evals);
-                    setEpreuveGroups([]);
+                // Les candidats ne peuvent pas voir les évaluations
+                if (!isCandidate) {
+                    try {
+                        const evalRes = await api.get(`/evaluations/candidate/${params.id}`);
+                        const data = evalRes.data;
+                        if (data.byEpreuve) {
+                            setEpreuveGroups(data.byEpreuve);
+                            setAllEvals(data.evaluations || []);
+                        } else {
+                            const evals = Array.isArray(data) ? data : [];
+                            setAllEvals(evals);
+                            setEpreuveGroups([]);
+                        }
+                    } catch {
+                        // Permission denied or error — silently ignore evaluations
+                    }
                 }
-            } catch (e) {
+            } catch (e: any) {
+                if (e?.response?.status === 403) {
+                    setAccessDenied(true);
+                }
                 console.error(e);
             } finally {
                 setLoading(false);
             }
         };
         load();
-    }, [params.id]);
+    }, [params.id, isCandidate]);
 
     if (loading) {
         return (
             <div className="flex justify-center items-center h-[60vh]">
                 <Loader2 className="animate-spin text-blue-500" size={32} />
+            </div>
+        );
+    }
+
+    if (accessDenied) {
+        return (
+            <div className="text-center py-16">
+                <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">🔒</span>
+                </div>
+                <h2 className="text-lg font-semibold text-gray-800 mb-2">Acces refuse</h2>
+                <p className="text-sm text-gray-500 mb-4">Vous n&apos;avez pas la permission de consulter cette fiche.</p>
+                <button onClick={() => router.back()} className="text-blue-600 hover:underline text-sm">Retour</button>
             </div>
         );
     }
@@ -118,45 +145,51 @@ export default function CandidateDetailPage({ params }: { params: { id: string }
                         </div>
                     </div>
                 </div>
-                {candidate.comments && (
+                {/* Notes internes : masquées pour les candidats */}
+                {!isCandidate && candidate.comments && (
                     <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm border border-yellow-100">
-                        <span className="font-medium text-yellow-700">Note : </span>{candidate.comments}
+                        <span className="font-medium text-yellow-700">Note interne : </span>{candidate.comments}
                     </div>
                 )}
-                <div className="mt-4 flex gap-2">
-                    <button
-                        onClick={() => router.push(`/dashboard/candidates/${params.id}/evaluate`)}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        Evaluer ce candidat
-                    </button>
-                </div>
+                {/* Bouton évaluer : visible uniquement pour admin et membres */}
+                {!isCandidate && (
+                    <div className="mt-4 flex gap-2">
+                        <button
+                            onClick={() => router.push(`/dashboard/candidates/${params.id}/evaluate`)}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Evaluer ce candidat
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {/* Stats globales */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white border border-blue-200 rounded-xl p-5">
-                    <p className="text-sm text-blue-600 font-medium">Evaluations</p>
-                    <p className="text-3xl font-bold text-blue-700 mt-1">{allEvals.length}</p>
+            {/* Stats globales : masquées pour les candidats */}
+            {!isCandidate && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-blue-200 rounded-xl p-5">
+                        <p className="text-sm text-blue-600 font-medium">Evaluations</p>
+                        <p className="text-3xl font-bold text-blue-700 mt-1">{allEvals.length}</p>
+                    </div>
+                    <div className="bg-white border border-green-200 rounded-xl p-5">
+                        <p className="text-sm text-green-600 font-medium">Note collective globale</p>
+                        <p className="text-3xl font-bold text-green-700 mt-1">{globalAvg}</p>
+                    </div>
+                    <div className="bg-white border border-purple-200 rounded-xl p-5">
+                        <p className="text-sm text-purple-600 font-medium">Epreuves evaluees</p>
+                        <p className="text-3xl font-bold text-purple-700 mt-1">{epreuveGroups.length}</p>
+                    </div>
                 </div>
-                <div className="bg-white border border-green-200 rounded-xl p-5">
-                    <p className="text-sm text-green-600 font-medium">Note collective globale</p>
-                    <p className="text-3xl font-bold text-green-700 mt-1">{globalAvg}</p>
-                </div>
-                <div className="bg-white border border-purple-200 rounded-xl p-5">
-                    <p className="text-sm text-purple-600 font-medium">Epreuves evaluees</p>
-                    <p className="text-3xl font-bold text-purple-700 mt-1">{epreuveGroups.length}</p>
-                </div>
-            </div>
+            )}
 
-            {/* Évaluations groupées par épreuve */}
-            {epreuveGroups.length === 0 && allEvals.length === 0 && (
+            {/* Évaluations groupées par épreuve : masquées pour les candidats */}
+            {!isCandidate && epreuveGroups.length === 0 && allEvals.length === 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
                     Aucune evaluation pour ce candidat
                 </div>
             )}
 
-            {epreuveGroups.map((group, gIdx) => (
+            {!isCandidate && epreuveGroups.map((group, gIdx) => (
                 <div key={gIdx} className="bg-white rounded-xl border border-gray-200">
                     {/* Header épreuve + note collective */}
                     <div className="px-6 py-4 border-b border-gray-100">

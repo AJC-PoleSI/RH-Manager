@@ -12,6 +12,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // ── Permission candidat : ne peut voir que SA propre fiche ──
+    if (payload.role === 'candidate' && payload.id !== id) {
+      return forbidden();
+    }
+
     const { data, error } = await supabaseAdmin
       .from('candidates')
       .select('*, candidate_evaluations(*)')
@@ -22,8 +27,29 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return Response.json({ error: 'Candidate not found' }, { status: 404 });
     }
 
+    // ── Permission membre non-admin : vérifier qu'il est assigné à évaluer ce candidat ──
+    if (payload.role === 'member' && !payload.isAdmin) {
+      const { data: assignments } = await supabaseAdmin
+        .from('slot_member_assignments')
+        .select('slot:evaluation_slots!inner(enrollments:slot_enrollments!inner(candidate_id))')
+        .eq('member_id', payload.id)
+        .eq('slot.enrollments.candidate_id', id)
+        .limit(1);
+
+      if (!assignments || assignments.length === 0) {
+        return forbidden();
+      }
+    }
+
     // Map snake_case to camelCase
-    const mapped = { ...data, firstName: data.first_name, lastName: data.last_name, createdAt: data.created_at };
+    const mapped: any = { ...data, firstName: data.first_name, lastName: data.last_name, createdAt: data.created_at };
+
+    // ── Candidat : retirer les évaluations et notes internes ──
+    if (payload.role === 'candidate') {
+      delete mapped.candidate_evaluations;
+      delete mapped.comments;
+    }
+
     return Response.json(mapped);
   } catch {
     return Response.json({ error: 'Failed to fetch candidate' }, { status: 500 });

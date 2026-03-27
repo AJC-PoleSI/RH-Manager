@@ -7,6 +7,11 @@ export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
+  // ── Permission : candidats ne peuvent pas voir la liste ──
+  if (payload.role === 'candidate') {
+    return Response.json({ error: 'Acces interdit aux candidats' }, { status: 403 });
+  }
+
   const { searchParams } = req.nextUrl;
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '50');
@@ -14,10 +19,40 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
+    // ── Membres non-admin : uniquement les candidats qu'ils doivent évaluer ──
+    let allowedCandidateIds: string[] | null = null;
+    if (!payload.isAdmin) {
+      const { data: assignments } = await supabaseAdmin
+        .from('slot_member_assignments')
+        .select('slot:evaluation_slots!inner(enrollments:slot_enrollments(candidate_id))')
+        .eq('member_id', payload.id);
+
+      const ids = new Set<string>();
+      (assignments || []).forEach((a: any) => {
+        const enrollments = a.slot?.enrollments || [];
+        enrollments.forEach((e: any) => {
+          if (e.candidate_id) ids.add(e.candidate_id);
+        });
+      });
+      allowedCandidateIds = Array.from(ids);
+
+      if (allowedCandidateIds.length === 0) {
+        return Response.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+      }
+    }
+
     let query = supabaseAdmin
       .from('candidates')
       .select('*, candidate_evaluations(*, members(email))', { count: 'exact' })
       .range(offset, offset + limit - 1);
+
+    // Filtrer par candidats autorisés pour les membres
+    if (allowedCandidateIds) {
+      query = query.in('id', allowedCandidateIds);
+    }
 
     if (search) {
       query = query.or(
