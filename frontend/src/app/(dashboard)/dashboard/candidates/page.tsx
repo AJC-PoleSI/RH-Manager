@@ -88,7 +88,21 @@ export default function CandidatesPage() {
         setLoadingEvals(true);
         try {
             const res = await api.get(`/evaluations/candidate/${candidateId}`);
-            setEvaluations(res.data);
+            // L'API retourne { evaluations, byEpreuve } — extraire le tableau
+            const rawEvals = res.data?.evaluations || (Array.isArray(res.data) ? res.data : []);
+            // Mapper le format camelCase de l'API vers le format snake_case attendu par le panneau
+            const evalsData = rawEvals.map((ev: any) => ({
+                id: ev.id,
+                candidate_id: ev.candidateId || ev.candidate_id,
+                epreuve_id: ev.epreuveId || ev.epreuve_id || ev.epreuve?.id,
+                member_id: ev.memberId || ev.member_id || ev.member?.id,
+                scores: ev.scores || {},
+                comment: ev.comment || '',
+                created_at: ev.createdAt || ev.created_at,
+                epreuves: ev.epreuves || ev.epreuve || null,
+                members: ev.members || (ev.member ? { email: ev.member.email } : null),
+            }));
+            setEvaluations(evalsData);
         } catch (e) {
             console.error(e);
             toast("Erreur lors du chargement des évaluations", 'error');

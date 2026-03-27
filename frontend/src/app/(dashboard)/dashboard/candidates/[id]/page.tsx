@@ -33,9 +33,10 @@ interface EpreuveGroup {
 export default function CandidateDetailPage({ params }: { params: { id: string } }) {
     const router = useRouter();
     const { user, role } = useAuth();
-    const isAdmin = role === 'member' && user?.isAdmin;
     const isCandidate = role === 'candidate';
-    const isMember = role === 'member' && !user?.isAdmin;
+
+    // Extraire l'id de manière sûre (Next.js 13 = sync, Next.js 15 = Promise)
+    const candidateId = typeof params?.id === 'string' ? params.id : '';
 
     const [candidate, setCandidate] = useState<any>(null);
     const [epreuveGroups, setEpreuveGroups] = useState<EpreuveGroup[]>([]);
@@ -44,23 +45,24 @@ export default function CandidateDetailPage({ params }: { params: { id: string }
     const [accessDenied, setAccessDenied] = useState(false);
 
     useEffect(() => {
+        if (!candidateId) return;
+
         const load = async () => {
             try {
                 // Fetch candidat
-                const candRes = await api.get(`/candidates/${params.id}`);
+                const candRes = await api.get(`/candidates/${candidateId}`);
                 setCandidate(candRes.data);
 
                 // Les candidats ne peuvent pas voir les évaluations
-                if (!isCandidate) {
+                if (role !== 'candidate') {
                     try {
-                        const evalRes = await api.get(`/evaluations/candidate/${params.id}`);
+                        const evalRes = await api.get(`/evaluations/candidate/${candidateId}`);
                         const data = evalRes.data;
-                        if (data.byEpreuve) {
+                        if (data && data.byEpreuve) {
                             setEpreuveGroups(data.byEpreuve);
                             setAllEvals(data.evaluations || []);
-                        } else {
-                            const evals = Array.isArray(data) ? data : [];
-                            setAllEvals(evals);
+                        } else if (Array.isArray(data)) {
+                            setAllEvals(data);
                             setEpreuveGroups([]);
                         }
                     } catch {
@@ -77,7 +79,7 @@ export default function CandidateDetailPage({ params }: { params: { id: string }
             }
         };
         load();
-    }, [params.id, isCandidate]);
+    }, [candidateId, role]);
 
     if (loading) {
         return (
