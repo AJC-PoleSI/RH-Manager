@@ -291,10 +291,11 @@ function AdminView() {
                 </div>
             </div>
 
-            {/* Table: Evaluation recap */}
+            {/* Table: Evaluation recap with collective scores */}
             <div className="bg-white border rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold text-gray-900">Récap des évaluations données</h2>
+                    <p className="text-xs text-gray-400 mt-1">Note individuelle de chaque évaluateur + note collective (moyenne automatique)</p>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -304,25 +305,44 @@ function AdminView() {
                                 <th className="px-6 py-3">Candidat</th>
                                 <th className="px-6 py-3">Épreuve</th>
                                 <th className="px-6 py-3 text-center">Tour</th>
-                                <th className="px-6 py-3 text-center">Note</th>
+                                <th className="px-6 py-3 text-center">Note individuelle</th>
+                                <th className="px-6 py-3 text-center">Note collective</th>
                                 <th className="px-6 py-3">Commentaire</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {evaluations.map(ev => (
-                                <tr key={ev.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-3 font-medium text-gray-900">
-                                        {ev.member ? `${ev.member.firstName || ''} ${ev.member.lastName || ''}`.trim() || ev.member.email : '-'}
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-700">
-                                        {ev.candidate.firstName} {ev.candidate.lastName}
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-600">{ev.epreuve.name}</td>
-                                    <td className="px-6 py-3 text-center">{ev.epreuve.tour}</td>
-                                    <td className="px-6 py-3 text-center font-bold">{getScoreTotal(ev.scores)}</td>
-                                    <td className="px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
-                                </tr>
-                            ))}
+                            {evaluations.map(ev => {
+                                // Calculer la note collective = moyenne des évaluations pour le même candidat + même épreuve
+                                const sameGroup = evaluations.filter(
+                                    e => e.candidate.id === ev.candidate.id && e.epreuve.name === ev.epreuve.name && e.epreuve.tour === ev.epreuve.tour
+                                );
+                                const groupTotals = sameGroup.map(e => getScoreTotal(e.scores));
+                                const collectiveScore = groupTotals.length > 0
+                                    ? Math.round((groupTotals.reduce((a, b) => a + b, 0) / groupTotals.length) * 10) / 10
+                                    : 0;
+                                const evalCount = sameGroup.length;
+
+                                return (
+                                    <tr key={ev.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-3 font-medium text-gray-900">
+                                            {ev.member ? `${ev.member.firstName || ''} ${ev.member.lastName || ''}`.trim() || ev.member.email : '-'}
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-700">
+                                            {ev.candidate.firstName} {ev.candidate.lastName}
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-600">{ev.epreuve.name}</td>
+                                        <td className="px-6 py-3 text-center">{ev.epreuve.tour}</td>
+                                        <td className="px-6 py-3 text-center font-bold text-blue-600">{getScoreTotal(ev.scores)}</td>
+                                        <td className="px-6 py-3 text-center">
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <span className="font-bold text-green-700">{collectiveScore}</span>
+                                                <span className="text-xs text-gray-400">({evalCount} eval{evalCount > 1 ? 's' : ''})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                     {evaluations.length === 0 && (

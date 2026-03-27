@@ -46,7 +46,38 @@ export async function PUT(req: NextRequest) {
   const memberId = payload.id;
 
   try {
+    // Check if saisie is open (non-admin members only)
+    if (!payload.isAdmin) {
+      const { data: settings } = await supabaseAdmin
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'saisie_dispos_ouverte')
+        .single();
+
+      if (!settings || settings.value !== 'true') {
+        return Response.json(
+          { error: 'La saisie des disponibilites est fermee. Contactez l\'administrateur.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const { availabilities, startDate, endDate } = await req.json();
+
+    // Anti-doublon: check no two availabilities overlap on the same weekday/time
+    if (availabilities && availabilities.length > 0) {
+      const seen = new Set<string>();
+      for (const a of availabilities) {
+        const key = `${a.weekday}-${a.startTime}`;
+        if (seen.has(key)) {
+          return Response.json(
+            { error: `Doublon detecte : vous avez selectionne deux epreuves sur le meme creneau (${a.weekday} ${a.startTime}). Un membre ne peut pas etre a deux endroits en meme temps.` },
+            { status: 400 }
+          );
+        }
+        seen.add(key);
+      }
+    }
 
     if (startDate && endDate) {
       // Date-specific mode: delete only in this range, then create
