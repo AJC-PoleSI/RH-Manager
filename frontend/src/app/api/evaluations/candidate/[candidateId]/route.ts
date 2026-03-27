@@ -18,19 +18,7 @@ export async function GET(
     return forbidden();
   }
 
-  // ── Permission membre non-admin : vérifier qu'il est assigné à ce candidat ──
-  if (payload.role === 'member' && !payload.isAdmin) {
-    const { data: assignments } = await supabaseAdmin
-      .from('slot_member_assignments')
-      .select('slot:evaluation_slots!inner(enrollments:slot_enrollments!inner(candidate_id))')
-      .eq('member_id', payload.id)
-      .eq('slot.enrollments.candidate_id', candidateId)
-      .limit(1);
-
-    if (!assignments || assignments.length === 0) {
-      return forbidden();
-    }
-  }
+  // ── Membres : accès aux évaluations de tous les candidats ──
 
   try {
     const { data: evaluations, error } = await supabaseAdmin

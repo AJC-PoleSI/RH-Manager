@@ -27,19 +27,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return Response.json({ error: 'Candidate not found' }, { status: 404 });
     }
 
-    // ── Permission membre non-admin : vérifier qu'il est assigné à évaluer ce candidat ──
-    if (payload.role === 'member' && !payload.isAdmin) {
-      const { data: assignments } = await supabaseAdmin
-        .from('slot_member_assignments')
-        .select('slot:evaluation_slots!inner(enrollments:slot_enrollments!inner(candidate_id))')
-        .eq('member_id', payload.id)
-        .eq('slot.enrollments.candidate_id', id)
-        .limit(1);
-
-      if (!assignments || assignments.length === 0) {
-        return forbidden();
-      }
-    }
+    // ── Membres : accès à toutes les fiches candidat ──
+    // La restriction se fait au niveau de l'évaluation (seuls les assignés peuvent évaluer)
 
     // Map snake_case to camelCase
     const mapped: any = { ...data, firstName: data.first_name, lastName: data.last_name, createdAt: data.created_at };
