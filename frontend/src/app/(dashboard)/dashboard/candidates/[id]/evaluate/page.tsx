@@ -15,6 +15,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
     const [epreuves, setEpreuves] = useState<any[]>([]);
     const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>('');
     const [formData, setFormData] = useState<{ scores: any, comment: string }>({ scores: {}, comment: '' });
+    const [scoreErrors, setScoreErrors] = useState<Record<number, string>>({});
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
 
@@ -50,15 +51,34 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
         questions = [];
     }
 
-    const handleScoreChange = (index: number, val: string) => {
+    const handleScoreChange = (index: number, val: string, maxPoints: number) => {
+        const numVal = Number(val);
         setFormData(prev => ({
             ...prev,
             scores: { ...prev.scores, [index]: val }
         }));
+        // Validation en temps réel : erreur si > max
+        if (val !== '' && numVal > maxPoints) {
+            setScoreErrors(prev => ({ ...prev, [index]: `La note ne peut pas dépasser ${maxPoints}` }));
+        } else if (val !== '' && numVal < 0) {
+            setScoreErrors(prev => ({ ...prev, [index]: `La note ne peut pas être négative` }));
+        } else {
+            setScoreErrors(prev => {
+                const copy = { ...prev };
+                delete copy[index];
+                return copy;
+            });
+        }
     };
+
+    const hasScoreErrors = Object.keys(scoreErrors).length > 0;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (hasScoreErrors) {
+            toast("Corrigez les notes avant de soumettre", 'error');
+            return;
+        }
         try {
             await api.post('/evaluations', {
                 candidateId: params.id,
@@ -116,18 +136,33 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
                                     <h3 className="font-semibold text-lg">Critères d&apos;évaluation</h3>
                                     {questions.length === 0 && <p className="text-sm text-gray-500 italic">Aucun critère défini pour cette épreuve.</p>}
 
-                                    {questions.map((q: any, idx: number) => (
-                                        <div key={idx} className="grid grid-cols-[1fr_100px] gap-4 items-center">
-                                            <Label>{q.q || q.question} <span className="text-xs text-gray-400">(Coeff. {q.weight || q.maxScore || 1})</span></Label>
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                placeholder="Points"
-                                                required
-                                                onChange={e => handleScoreChange(idx, e.target.value)}
-                                            />
-                                        </div>
-                                    ))}
+                                    {questions.map((q: any, idx: number) => {
+                                        const maxPoints = Number(q.weight || q.maxScore || q.coefficient || 20);
+                                        return (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="grid grid-cols-[1fr_140px] gap-4 items-center">
+                                                    <Label>{q.q || q.question}</Label>
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            max={maxPoints}
+                                                            placeholder="0"
+                                                            required
+                                                            className={scoreErrors[idx] ? 'border-red-500' : ''}
+                                                            onChange={e => handleScoreChange(idx, e.target.value, maxPoints)}
+                                                        />
+                                                        <span className="text-sm text-gray-500 whitespace-nowrap font-medium">/ {maxPoints}</span>
+                                                    </div>
+                                                </div>
+                                                {scoreErrors[idx] && (
+                                                    <p className="text-red-500 text-xs ml-auto" style={{ maxWidth: '140px', textAlign: 'right' }}>
+                                                        {scoreErrors[idx]}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <div className="space-y-2">
@@ -141,7 +176,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full">Enregistrer l&apos;évaluation</Button>
+                                <Button type="submit" className="w-full" disabled={hasScoreErrors}>Enregistrer l&apos;évaluation</Button>
                             </>
                         )}
                     </form>

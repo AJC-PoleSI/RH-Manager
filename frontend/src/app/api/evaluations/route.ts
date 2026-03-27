@@ -103,6 +103,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // GARDE : Validation des scores vs. points max des critères
+    // Chaque note doit être >= 0 et <= au nombre de points max du critère
+    // ══════════════════════════════════════════════════════════════════
+    if (scores) {
+      const { data: epreuveData } = await supabaseAdmin
+        .from('epreuves')
+        .select('evaluation_questions')
+        .eq('id', epreuveId)
+        .single();
+
+      if (epreuveData?.evaluation_questions) {
+        const questions: any[] = typeof epreuveData.evaluation_questions === 'string'
+          ? JSON.parse(epreuveData.evaluation_questions)
+          : epreuveData.evaluation_questions;
+
+        const parsedScores = typeof scores === 'string' ? JSON.parse(scores) : scores;
+
+        for (const [key, value] of Object.entries(parsedScores)) {
+          const idx = Number(key);
+          const scoreVal = Number(value);
+          const question = questions[idx];
+          if (!question) continue;
+
+          const maxPoints = Number(question.weight || question.maxScore || question.coefficient || 20);
+
+          if (scoreVal < 0) {
+            return Response.json(
+              { error: `La note pour le critère "${question.q || question.question}" ne peut pas être négative.` },
+              { status: 400 }
+            );
+          }
+          if (scoreVal > maxPoints) {
+            return Response.json(
+              { error: `La note pour le critère "${question.q || question.question}" ne peut pas dépasser ${maxPoints} points.` },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    }
+
     // ── Création de l'évaluation ──
     const { data: evaluation, error: evalError } = await supabaseAdmin
       .from('candidate_evaluations')
