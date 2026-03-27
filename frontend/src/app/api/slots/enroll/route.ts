@@ -79,6 +79,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // GARDE ABSOLUE : Anti-double évaluation [Candidat + Épreuve]
+    // Si ce candidat a DÉJÀ été évalué pour cette épreuve, il ne peut
+    // plus s'inscrire sur un créneau de la même épreuve.
+    // ══════════════════════════════════════════════════════════════════
+    if (slot.epreuve_id) {
+      const { data: existingEval } = await supabaseAdmin
+        .from('candidate_evaluations')
+        .select('id, members(first_name, last_name, email)')
+        .eq('candidate_id', candidateId)
+        .eq('epreuve_id', slot.epreuve_id)
+        .limit(1);
+
+      if (existingEval && existingEval.length > 0) {
+        const m = (existingEval[0] as any).members;
+        const evaluerName = m
+          ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email
+          : 'Un membre';
+        return Response.json(
+          { error: `${evaluerName} a déjà évalué ce candidat pour cette épreuve. Inscription impossible.` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create enrollment
     const { data: enrollment, error: enrollError } = await supabaseAdmin
       .from('slot_enrollments')

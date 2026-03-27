@@ -64,18 +64,46 @@ export async function PUT(req: NextRequest) {
 
     const { availabilities, startDate, endDate } = await req.json();
 
-    // Anti-doublon: check no two availabilities overlap on the same weekday/time
+    // ══════════════════════════════════════════════════════════════════
+    // GARDE 1 : Anti-chevauchement (overlapping) strict
+    // Un membre ne peut pas avoir deux disponibilités qui se chevauchent
+    // sur la même journée (même weekday OU même date).
+    // On compare les plages horaires réelles, pas juste la clé startTime.
+    // ══════════════════════════════════════════════════════════════════
     if (availabilities && availabilities.length > 0) {
-      const seen = new Set<string>();
-      for (const a of availabilities) {
-        const key = `${a.weekday}-${a.startTime}`;
-        if (seen.has(key)) {
-          return Response.json(
-            { error: `Doublon detecte : vous avez selectionne deux epreuves sur le meme creneau (${a.weekday} ${a.startTime}). Un membre ne peut pas etre a deux endroits en meme temps.` },
-            { status: 400 }
-          );
+      // Convertit "09h00" ou "09:00" en minutes depuis minuit
+      const toMinutes = (t: string): number => {
+        const clean = t.replace('h', ':').replace(/[^0-9:]/g, '');
+        const [h, m] = clean.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+
+      for (let i = 0; i < availabilities.length; i++) {
+        for (let j = i + 1; j < availabilities.length; j++) {
+          const a = availabilities[i];
+          const b = availabilities[j];
+
+          // Même jour ? (par weekday ou par date)
+          const sameDay =
+            (a.weekday && b.weekday && a.weekday === b.weekday) ||
+            (a.date && b.date && a.date === b.date);
+
+          if (!sameDay) continue;
+
+          // Vérification chevauchement : [startA, endA[ ∩ [startB, endB[ ≠ ∅
+          const startA = toMinutes(a.startTime);
+          const endA   = toMinutes(a.endTime);
+          const startB = toMinutes(b.startTime);
+          const endB   = toMinutes(b.endTime);
+
+          if (startA < endB && startB < endA) {
+            const dayLabel = a.weekday || a.date || '';
+            return Response.json(
+              { error: `Chevauchement detecte le ${dayLabel} : ${a.startTime}-${a.endTime} et ${b.startTime}-${b.endTime}. Un membre ne peut pas etre a deux endroits en meme temps.` },
+              { status: 400 }
+            );
+          }
         }
-        seen.add(key);
       }
     }
 
@@ -155,7 +183,51 @@ export async function POST(req: NextRequest) {
   const memberId = payload.id;
 
   try {
+    // ── Vérifier que la saisie est ouverte ──
+    if (!payload.isAdmin) {
+      const { data: settings } = await supabaseAdmin
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'saisie_dispos_ouverte')
+        .single();
+
+      if (!settings || settings.value !== 'true') {
+        return Response.json(
+          { error: 'La saisie des disponibilites est fermee. Contactez l\'administrateur.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const { weekday, start_time, end_time } = await req.json();
+
+    // ── Anti-chevauchement avec les dispos existantes en base ──
+    const { data: existing } = await supabaseAdmin
+      .from('availabilities')
+      .select('*')
+      .eq('member_id', memberId)
+      .eq('weekday', weekday);
+
+    if (existing && existing.length > 0) {
+      const toMin = (t: string): number => {
+        const clean = t.replace('h', ':').replace(/[^0-9:]/g, '');
+        const [h, m] = clean.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+      const newStart = toMin(start_time);
+      const newEnd = toMin(end_time);
+
+      for (const ex of existing) {
+        const exStart = toMin(ex.start_time);
+        const exEnd = toMin(ex.end_time);
+        if (newStart < exEnd && exStart < newEnd) {
+          return Response.json(
+            { error: `Chevauchement detecte le ${weekday} : ${start_time}-${end_time} chevauche ${ex.start_time}-${ex.end_time}.` },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     const { data, error } = await supabaseAdmin
       .from('availabilities')

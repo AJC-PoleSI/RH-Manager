@@ -68,9 +68,11 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
             });
             toast("Évaluation enregistrée !", 'success');
             router.push('/dashboard/candidates');
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast("Erreur lors de l'enregistrement", 'error');
+            // Afficher le message d'erreur exact du backend (anti-double évaluation)
+            const serverMsg = error?.response?.data?.error;
+            toast(serverMsg || "Erreur lors de l'enregistrement", 'error');
         }
     };
 

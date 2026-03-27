@@ -69,66 +69,37 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'candidateId et epreuveId requis' }, { status: 400 });
     }
 
-    // ── GARDE 1 : Anti-répétition ──
-    // Vérifie que ce membre n'a PAS déjà évalué ce candidat pour cette épreuve
+    // ══════════════════════════════════════════════════════════════════
+    // GARDE ABSOLUE : Anti-double évaluation [Candidat + Épreuve]
+    // Un candidat ne peut EN AUCUN CAS passer la même épreuve deux fois.
+    // On vérifie TOUS les membres, pas seulement le membre courant.
+    // ══════════════════════════════════════════════════════════════════
     const { data: existingEval } = await supabaseAdmin
       .from('candidate_evaluations')
-      .select('id')
-      .eq('member_id', memberId)
+      .select('id, member_id, members(email, first_name, last_name)')
       .eq('candidate_id', candidateId)
       .eq('epreuve_id', epreuveId)
       .limit(1);
 
     if (existingEval && existingEval.length > 0) {
-      // Récupérer les noms pour le message d'erreur
-      const [memberRes, candidateRes] = await Promise.all([
-        supabaseAdmin.from('members').select('email, first_name, last_name').eq('id', memberId).single(),
-        supabaseAdmin.from('candidates').select('first_name, last_name').eq('id', candidateId).single(),
-      ]);
-      const memberName = memberRes.data
-        ? `${memberRes.data.first_name || ''} ${memberRes.data.last_name || ''}`.trim() || memberRes.data.email
-        : 'Ce membre';
-      const candidateName = candidateRes.data
-        ? `${candidateRes.data.first_name || ''} ${candidateRes.data.last_name || ''}`.trim()
+      // Récupérer les noms pour le message d'erreur exact
+      const existingMember = (existingEval[0] as any).members;
+      const { data: candidateData } = await supabaseAdmin
+        .from('candidates')
+        .select('first_name, last_name')
+        .eq('id', candidateId)
+        .single();
+
+      const memberName = existingMember
+        ? `${existingMember.first_name || ''} ${existingMember.last_name || ''}`.trim() || existingMember.email
+        : 'Un membre';
+      const candidateName = candidateData
+        ? `${candidateData.first_name || ''} ${candidateData.last_name || ''}`.trim()
         : 'ce candidat';
 
       return Response.json(
-        { error: `${memberName} a deja evalue le candidat ${candidateName} pour cette epreuve.` },
-        { status: 409 }
-      );
-    }
-
-    // ── GARDE 2 : Vérifier que le membre est assigné à un créneau pour cette épreuve ──
-    // (Seuls les membres assignés via le planning ont le droit d'évaluer)
-    // On vérifie qu'il existe un slot pour cette épreuve où ce membre est assigné
-    if (!user.isAdmin) {
-      const { data: assignments } = await supabaseAdmin
-        .from('slot_member_assignments')
-        .select('id, slot:evaluation_slots!inner(epreuve_id)')
-        .eq('member_id', memberId)
-        .eq('slot.epreuve_id', epreuveId)
-        .limit(1);
-
-      if (!assignments || assignments.length === 0) {
-        return Response.json(
-          { error: 'Vous n\'etes pas assigne a un creneau pour cette epreuve. Seuls les evaluateurs assignes via le planning peuvent soumettre une note.' },
-          { status: 403 }
-        );
-      }
-    }
-
-    // ── GARDE 3 : Vérifier le nombre max d'évaluateurs (1-2) par candidat/épreuve ──
-    const { data: existingEvals } = await supabaseAdmin
-      .from('candidate_evaluations')
-      .select('id')
-      .eq('candidate_id', candidateId)
-      .eq('epreuve_id', epreuveId);
-
-    const maxEvaluators = 2; // Configurable : 1 ou 2 évaluateurs max par candidat/épreuve
-    if (existingEvals && existingEvals.length >= maxEvaluators) {
-      return Response.json(
-        { error: `Ce candidat a deja ete evalue par ${maxEvaluators} evaluateur(s) pour cette epreuve. Nombre maximum atteint.` },
-        { status: 409 }
+        { error: `${memberName} a déjà évalué ${candidateName}` },
+        { status: 400 }
       );
     }
 
