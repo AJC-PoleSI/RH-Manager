@@ -20,7 +20,7 @@ interface NavSection {
 const Sidebar = () => {
     const pathname = usePathname();
     const { role, user } = useAuth();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     const isAdmin = role === 'member' && user?.isAdmin;
@@ -102,9 +102,13 @@ const Sidebar = () => {
         return pathname === href || pathname.startsWith(href + '/');
     };
 
+    // Sur desktop, la sidebar est toujours "collapsed" (68px d'espace réservé).
+    // Au hover, elle se déploie PAR-DESSUS le contenu (absolute + shadow).
+    const isExpanded = isHovered;
+
     return (
         <>
-            {/* Bouton hamburger mobile (visible uniquement sur petits écrans) */}
+            {/* Bouton hamburger mobile */}
             <button
                 onClick={() => setIsMobileOpen(true)}
                 className="md:hidden fixed top-3 left-3 z-[60] bg-white border border-gray-200 rounded-lg p-2 shadow-sm"
@@ -123,22 +127,27 @@ const Sidebar = () => {
                 />
             )}
 
+            {/* Espace réservé desktop (68px fixe, toujours visible) */}
+            <div className="hidden md:block w-[68px] min-w-[68px] shrink-0" />
+
             {/* Sidebar */}
             <aside
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
                 className={cn(
                     "bg-white border-r border-gray-200 h-full overflow-y-auto flex flex-col transition-all duration-300 ease-in-out",
-                    // Desktop : collapsed = icônes seules, expanded = pleine largeur
-                    isCollapsed ? "w-[68px] min-w-[68px]" : "w-[220px] min-w-[220px]",
+                    // Desktop : absolute pour passer par-dessus le contenu
+                    "md:absolute md:top-0 md:left-0 md:z-40",
+                    isExpanded
+                        ? "md:w-[220px] md:shadow-[4px_0_24px_rgba(0,0,0,0.08)]"
+                        : "md:w-[68px]",
                     // Mobile : off-canvas
-                    "max-md:fixed max-md:top-0 max-md:left-0 max-md:z-[80] max-md:h-full max-md:shadow-xl",
-                    isMobileOpen ? "max-md:translate-x-0 max-md:w-[260px]" : "max-md:-translate-x-full max-md:w-[260px]"
+                    "max-md:fixed max-md:top-0 max-md:left-0 max-md:z-[80] max-md:h-full max-md:shadow-xl max-md:w-[260px]",
+                    isMobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full"
                 )}
             >
-                {/* Bouton toggle */}
-                <div className={cn(
-                    "flex items-center border-b border-gray-100 px-3 h-12 min-h-[48px]",
-                    isCollapsed ? "justify-center" : "justify-between"
-                )}>
+                {/* En-tête sidebar */}
+                <div className="flex items-center border-b border-gray-100 px-3 h-12 min-h-[48px] justify-center">
                     {/* Fermer sur mobile */}
                     <button
                         onClick={() => setIsMobileOpen(false)}
@@ -150,30 +159,25 @@ const Sidebar = () => {
                         </svg>
                     </button>
 
-                    {/* Toggle collapse sur desktop */}
-                    <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ml-auto"
-                        aria-label={isCollapsed ? "Ouvrir le menu" : "Rabattre le menu"}
-                        title={isCollapsed ? "Ouvrir le menu" : "Rabattre le menu"}
-                    >
-                        <svg
-                            className={cn("w-4 h-4 transition-transform duration-300", isCollapsed && "rotate-180")}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                        </svg>
-                    </button>
+                    {/* Indicateur visuel desktop */}
+                    <div className={cn(
+                        "hidden md:flex items-center gap-2 transition-opacity duration-200",
+                        isExpanded ? "opacity-100" : "opacity-0"
+                    )}>
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Menu</span>
+                    </div>
                 </div>
 
                 {/* Navigation */}
-                <nav className="px-3 py-4 flex-1">
+                <nav className="px-2 py-4 flex-1">
                     {sections.map((section, idx) => (
-                        <div key={section.title} className={idx > 0 ? 'mt-6' : ''}>
-                            {/* Titre de section : masqué quand collapsed */}
+                        <div key={section.title} className={idx > 0 ? 'mt-5' : ''}>
+                            {/* Titre de section */}
                             <p className={cn(
-                                "px-3 text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2 transition-opacity duration-200 whitespace-nowrap overflow-hidden",
-                                isCollapsed ? "opacity-0 h-0 mb-0" : "opacity-100"
+                                "px-3 text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all duration-200",
+                                isExpanded ? "opacity-100 mb-2 h-auto max-md:opacity-100 max-md:mb-2" : "md:opacity-0 md:h-0 md:mb-0",
+                                // Mobile toujours visible quand ouvert
+                                "max-md:opacity-100 max-md:mb-2 max-md:h-auto"
                             )}>
                                 {section.title}
                             </p>
@@ -184,10 +188,12 @@ const Sidebar = () => {
                                         <Link
                                             key={item.href}
                                             href={item.href}
-                                            title={isCollapsed ? item.label : undefined}
+                                            title={!isExpanded ? item.label : undefined}
                                             className={cn(
-                                                "flex items-center gap-3 py-2 text-sm rounded-lg transition-colors whitespace-nowrap overflow-hidden",
-                                                isCollapsed ? "px-0 justify-center" : "px-3",
+                                                "flex items-center gap-3 py-2.5 text-sm rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden",
+                                                isExpanded ? "px-3" : "md:px-0 md:justify-center",
+                                                // Mobile toujours expanded
+                                                "max-md:px-3 max-md:justify-start",
                                                 active
                                                     ? isCandidate
                                                         ? "bg-[#FFF0F3] text-[#E8446A] font-semibold"
@@ -197,8 +203,10 @@ const Sidebar = () => {
                                         >
                                             <span className="text-base leading-none shrink-0">{item.icon}</span>
                                             <span className={cn(
-                                                "transition-opacity duration-200",
-                                                isCollapsed ? "opacity-0 w-0" : "opacity-100"
+                                                "transition-all duration-200",
+                                                isExpanded ? "opacity-100 w-auto" : "md:opacity-0 md:w-0",
+                                                // Mobile toujours visible
+                                                "max-md:opacity-100 max-md:w-auto"
                                             )}>
                                                 {item.label}
                                             </span>
