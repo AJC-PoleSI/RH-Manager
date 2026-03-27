@@ -137,6 +137,10 @@ export default function CreationPage() {
   const [creatingEpreuve, setCreatingEpreuve] = useState(false);
   const [editingEpreuveId, setEditingEpreuveId] = useState<string | null>(null);
 
+  /* ---- tour deletion modal ---- */
+  const [tourToDelete, setTourToDelete] = useState<Tour | null>(null);
+  const [deletingTour, setDeletingTour] = useState(false);
+
   /* ================================================================ */
   /*  Data fetching                                                    */
   /* ================================================================ */
@@ -303,6 +307,23 @@ export default function CreationPage() {
     }
   };
 
+  const handleDeleteTour = async () => {
+    if (!tourToDelete) return;
+    setDeletingTour(true);
+    try {
+      await api.delete(`/tours/${tourToDelete.id}`);
+      setTours((prev) => prev.filter((t) => t.id !== tourToDelete.id));
+      toast("Tour supprimé", "success");
+      setTourToDelete(null);
+    } catch (err: any) {
+      console.error('Erreur suppression tour:', err);
+      const msg = err.response?.data?.error || err.message || "Erreur lors de la suppression";
+      toast(msg, "error");
+    } finally {
+      setDeletingTour(false);
+    }
+  };
+
   /* ================================================================ */
   /*  Render                                                           */
   /* ================================================================ */
@@ -371,7 +392,16 @@ export default function CreationPage() {
                 <span className="text-sm font-medium text-gray-800">{tour.name}</span>
                 <StatusBadge status={tour.status} />
               </div>
-              <span className="text-xs text-gray-500">{tour.candidateCount} candidat(s)</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">{tour.candidateCount} candidat(s)</span>
+                <button
+                  onClick={() => setTourToDelete(tour)}
+                  className="p-1.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                  title="Supprimer ce tour"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              </div>
             </div>
           ))}
 
@@ -398,6 +428,46 @@ export default function CreationPage() {
           </button>
         </div>
       </div>
+
+      {/* ---- Modal confirmation suppression tour ---- */}
+      {tourToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !deletingTour && setTourToDelete(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[420px] mx-4 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Supprimer le tour</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Êtes-vous sûr de vouloir supprimer <strong>{tourToDelete.name}</strong> ?
+            </p>
+
+            {tourToDelete.candidateCount > 0 && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-sm font-medium text-red-700">⚠️ Attention</p>
+                <p className="text-sm text-red-600 mt-1">
+                  Ce tour contient <strong>{tourToDelete.candidateCount} candidat(s)</strong>.
+                  La suppression entraînera la perte de leurs données pour ce tour.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setTourToDelete(null)}
+                disabled={deletingTour}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteTour}
+                disabled={deletingTour}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deletingTour ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================================================================ */}
       {/*  3. Épreuves & Formations                                        */}
