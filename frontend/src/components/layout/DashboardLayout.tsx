@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from './Sidebar';
+import Footer from './Footer';
 import { useAuth } from "@/hooks/useAuth";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { useRouter } from 'next/navigation';
@@ -78,13 +79,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
     return (
         <SettingsProvider>
-            <div className="flex flex-col h-screen">
+            <div className="flex flex-col min-h-screen">
                 <TopNav />
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex flex-1">
                     <Sidebar />
-                    <main className="flex-1 bg-gray-50 overflow-y-auto p-[26px_30px]">
-                        {children}
-                    </main>
+                    <div className="flex-1 flex flex-col overflow-y-auto">
+                        <main className="flex-1 bg-gray-50 p-[26px_30px]">
+                            {children}
+                        </main>
+                        <Footer />
+                    </div>
                 </div>
             </div>
         </SettingsProvider>
