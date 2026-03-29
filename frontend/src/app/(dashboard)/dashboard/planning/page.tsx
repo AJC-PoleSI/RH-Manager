@@ -74,6 +74,12 @@ export default function PlanningPage() {
     const [repartitionResult, setRepartitionResult] = useState<any>(null);
     const [resetLoading, setResetLoading] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    // Modale modification créneau
+    const [editSlot, setEditSlot] = useState<any>(null);
+    const [editRoom, setEditRoom] = useState('');
+    const [editSaving, setEditSaving] = useState(false);
+    // Tous les membres (pour le sélecteur dans la modale)
+    const [allMembers, setAllMembers] = useState<{id: string; email: string; firstName?: string; lastName?: string}[]>([]);
 
     // Member state
     const [memberAvailabilities, setMemberAvailabilities] = useState<Record<string, SlotAvailability>>({});
@@ -116,9 +122,24 @@ export default function PlanningPage() {
         }
     }, [isAdmin]);
 
+    // Fetch tous les membres pour le sélecteur dans la modale
+    const fetchAllMembers = useCallback(async () => {
+        if (!isAdmin) return;
+        try {
+            const res = await api.get('/members');
+            setAllMembers((res.data || []).map((m: any) => ({
+                id: m.id,
+                email: m.email,
+                firstName: m.firstName || m.first_name || '',
+                lastName: m.lastName || m.last_name || '',
+            })));
+        } catch { setAllMembers([]); }
+    }, [isAdmin]);
+
     useEffect(() => {
         fetchAdminSettings();
-    }, [fetchAdminSettings]);
+        fetchAllMembers();
+    }, [fetchAdminSettings, fetchAllMembers]);
 
     // Fetch real availability data from API
     const fetchAvailabilityData = useCallback(async () => {
@@ -440,6 +461,50 @@ export default function PlanningPage() {
         }
     };
 
+    // ══════════════════════════════════════════════════════════════════
+    // Modale modification créneau : ouvrir / sauvegarder / toggle membre
+    // ══════════════════════════════════════════════════════════════════
+    const openEditSlot = (slot: any) => {
+        setEditSlot(slot);
+        setEditRoom(slot.room || '');
+    };
+
+    const handleSaveSlot = async () => {
+        if (!editSlot) return;
+        setEditSaving(true);
+        try {
+            await api.put(`/slots/${editSlot.id}`, { room: editRoom });
+            toast('Creneau mis a jour', 'success');
+            setEditSlot(null);
+            setRepartitionResult(null); // Force re-fetch from DB
+            fetchSlotData();
+        } catch {
+            toast('Erreur mise a jour', 'error');
+        } finally {
+            setEditSaving(false);
+        }
+    };
+
+    const handleToggleMemberOnSlot = async (slotId: string, memberId: string, isAssigned: boolean) => {
+        try {
+            if (isAssigned) {
+                // Retirer le membre
+                await api.post('/slots/toggle-member', { slotId, memberId, action: 'remove' });
+            } else {
+                // Ajouter le membre
+                await api.post('/slots/toggle-member', { slotId, memberId, action: 'add' });
+            }
+            // Re-fetch le slot modifié
+            const res = await api.get('/slots/all');
+            const updated = (res.data || []).find((s: any) => s.id === slotId);
+            if (updated) setEditSlot(updated);
+            setRepartitionResult(null);
+            fetchSlotData();
+        } catch (e: any) {
+            toast(e?.response?.data?.error || 'Erreur modification evaluateur', 'error');
+        }
+    };
+
     const handleRepartir = async () => {
         if (!selectedEpreuveId) {
             toast('Selectionnez une epreuve', 'error');
@@ -681,23 +746,67 @@ export default function PlanningPage() {
                             </div>
                         )}
 
-                        {/* Repartition results */}
-                        {repartitionResult && repartitionResult.assignments?.length > 0 && (
+                        {/* ══════════════════════════════════════════════════ */}
+                        {/* Grille visuelle interactive des créneaux         */}
+                        {/* ══════════════════════════════════════════════════ */}
+                        {existingSlots.length > 0 && (
                             <div className="mt-5 border-t border-gray-100 pt-4">
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3">Resultat de la repartition</h3>
-                                <div className="space-y-2">
-                                    {repartitionResult.assignments.map((a: any, idx: number) => (
-                                        <div key={idx} className="flex items-start gap-3 px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                                            <span className="font-medium text-gray-700 whitespace-nowrap">{a.room}</span>
-                                            <span className="text-gray-400">|</span>
-                                            <span className="text-gray-600">{a.time}</span>
-                                            <span className="text-gray-400">|</span>
-                                            <span className="text-gray-500">{a.members.join(', ')}</span>
-                                        </div>
-                                    ))}
+                                <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                    Creneaux ({existingSlots.length})
+                                    <span className="text-xs font-normal text-gray-400 ml-2">Cliquez pour modifier</span>
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {existingSlots.map((slot: any) => {
+                                        const members = (slot.members || []).map((m: any) => m.member?.email || m.email || '');
+                                        const enrollments = (slot.enrollments || []).length;
+                                        const statusColors: Record<string, string> = {
+                                            draft: 'border-gray-200 bg-gray-50',
+                                            published: 'border-blue-200 bg-blue-50',
+                                            ready: 'border-green-200 bg-green-50',
+                                            full: 'border-amber-200 bg-amber-50',
+                                            closed: 'border-red-200 bg-red-50',
+                                        };
+                                        const statusLabels: Record<string, string> = {
+                                            draft: 'Brouillon', published: 'Publie', ready: 'Pret',
+                                            full: 'Complet', closed: 'Ferme',
+                                        };
+                                        return (
+                                            <div
+                                                key={slot.id}
+                                                onClick={() => openEditSlot(slot)}
+                                                className={`rounded-lg border-2 p-3 cursor-pointer hover:shadow-md transition-all ${statusColors[slot.status] || 'border-gray-200 bg-white'}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <span className="text-xs font-bold text-gray-800">{slot.room || 'Salle ?'}</span>
+                                                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-white/80 text-gray-600">
+                                                        {statusLabels[slot.status] || slot.status}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-600 mb-1">{slot.start_time} - {slot.end_time}</p>
+                                                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                                    <span>👤 {members.length} eval.</span>
+                                                    <span className="text-gray-300">|</span>
+                                                    <span>🎯 {enrollments} cand.</span>
+                                                </div>
+                                                {members.length > 0 && (
+                                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                                        {members.slice(0, 3).map((email: string, i: number) => (
+                                                            <span key={i} className="text-[10px] bg-white/70 text-gray-600 px-1.5 py-0.5 rounded">
+                                                                {email.split('@')[0]}
+                                                            </span>
+                                                        ))}
+                                                        {members.length > 3 && (
+                                                            <span className="text-[10px] text-gray-400">+{members.length - 3}</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <p className="text-xs text-gray-400 mt-2">
-                                    {repartitionResult.summary.totalSlots} salle(s) &bull; {repartitionResult.summary.totalAssignments} affectation(s) &bull; Statut : brouillon
+
+                                <p className="text-xs text-gray-400 mt-3">
+                                    {existingSlots.length} salle(s) &bull; {existingSlots.reduce((s: number, sl: any) => s + (sl.members?.length || 0), 0)} affectation(s)
                                 </p>
 
                                 {/* Bouton publier le planning pour les membres */}
@@ -718,6 +827,98 @@ export default function PlanningPage() {
                         )}
                     </div>
                 </div>
+
+                {/* ══════════════════════════════════════════════════ */}
+                {/* Modale modification créneau (salle + évaluateurs)*/}
+                {/* ══════════════════════════════════════════════════ */}
+                {editSlot && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/40" onClick={() => setEditSlot(null)} />
+                        <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-1">Modifier le creneau</h3>
+                            <p className="text-sm text-gray-500 mb-5">{editSlot.start_time} - {editSlot.end_time} | {editSlot.label || ''}</p>
+
+                            {/* Salle */}
+                            <div className="mb-5">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Salle</label>
+                                <input
+                                    type="text"
+                                    value={editRoom}
+                                    onChange={e => setEditRoom(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ex: Salle B102"
+                                />
+                            </div>
+
+                            {/* Évaluateurs assignés */}
+                            <div className="mb-5">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Evaluateurs assignes ({(editSlot.members || []).length})
+                                </label>
+                                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                                    {allMembers.map(member => {
+                                        const isAssigned = (editSlot.members || []).some(
+                                            (m: any) => (m.member?.id || m.member_id) === member.id
+                                        );
+                                        return (
+                                            <div
+                                                key={member.id}
+                                                onClick={() => handleToggleMemberOnSlot(editSlot.id, member.id, isAssigned)}
+                                                className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+                                                    isAssigned
+                                                        ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                                                        : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                <span>
+                                                    {member.firstName || member.lastName
+                                                        ? `${member.firstName} ${member.lastName}`.trim()
+                                                        : member.email}
+                                                </span>
+                                                <span className="text-xs font-semibold">
+                                                    {isAssigned ? '✓ Assigne' : '+ Ajouter'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Candidats inscrits (lecture seule) */}
+                            {editSlot.enrollments?.length > 0 && (
+                                <div className="mb-5">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Candidats inscrits ({editSlot.enrollments.length})
+                                    </label>
+                                    <div className="space-y-1">
+                                        {editSlot.enrollments.map((e: any, i: number) => (
+                                            <div key={i} className="text-sm text-gray-600 px-3 py-1.5 bg-amber-50 rounded border border-amber-200">
+                                                {e.candidate?.first_name} {e.candidate?.last_name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+                                <button
+                                    onClick={() => setEditSlot(null)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                                >
+                                    Fermer
+                                </button>
+                                <button
+                                    onClick={handleSaveSlot}
+                                    disabled={editSaving}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                >
+                                    {editSaving ? 'Sauvegarde...' : 'Enregistrer'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Card: Inscriptions candidats */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm">

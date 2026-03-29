@@ -7,10 +7,11 @@ export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
-  const memberId = payload.id;
-
   try {
-    const { slotId } = await req.json();
+    const body = await req.json();
+    const { slotId, action } = body;
+    // Admin peut spécifier un memberId arbitraire, sinon on prend l'utilisateur connecté
+    const memberId = (payload.isAdmin && body.memberId) ? body.memberId : payload.id;
     if (!slotId) {
       return Response.json({ error: 'slotId required' }, { status: 400 });
     }
@@ -23,7 +24,11 @@ export async function POST(req: NextRequest) {
       .eq('member_id', memberId)
       .limit(1);
 
-    if (existing && existing.length > 0) {
+    // Si action explicite fournie par l'admin, respecter; sinon toggle
+    const shouldRemove = action === 'remove' || (!action && existing && existing.length > 0);
+    const shouldAdd = action === 'add' || (!action && (!existing || existing.length === 0));
+
+    if (shouldRemove && existing && existing.length > 0) {
       // Remove assignment
       const { error: deleteError } = await supabaseAdmin
         .from('slot_member_assignments')
@@ -51,7 +56,7 @@ export async function POST(req: NextRequest) {
       }
 
       return Response.json({ action: 'removed' });
-    } else {
+    } else if (shouldAdd) {
       // Add assignment
       const { error: insertError } = await supabaseAdmin
         .from('slot_member_assignments')
@@ -84,6 +89,8 @@ export async function POST(req: NextRequest) {
       }
 
       return Response.json({ action: 'added' });
+    } else {
+      return Response.json({ action: 'no_change' });
     }
   } catch (error) {
     console.error('Toggle member slot error:', error);

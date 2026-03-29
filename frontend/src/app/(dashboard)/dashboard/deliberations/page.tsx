@@ -53,6 +53,19 @@ export default function DeliberationsPage() {
 
   const tourKey = `tour${selectedTour}Status` as keyof Deliberation;
 
+  // KPI Pôles
+  const [poleKpis, setPoleKpis] = useState<any>(null);
+  const [showPoleKpis, setShowPoleKpis] = useState(false);
+
+  const fetchPoleKpis = useCallback(async () => {
+    try {
+      const res = await api.get('/kpis/poles');
+      setPoleKpis(res.data);
+    } catch { setPoleKpis(null); }
+  }, []);
+
+  useEffect(() => { fetchPoleKpis(); }, [fetchPoleKpis]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -321,6 +334,83 @@ export default function DeliberationsPage() {
           <p className="text-xs text-red-400 mt-0.5">Elimines</p>
         </div>
       </div>
+
+      {/* ════════════════ KPI VOEUX DE PÔLES ════════════════ */}
+      {poleKpis && poleKpis.poles?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setShowPoleKpis(!showPoleKpis)}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <span className="text-sm font-semibold text-gray-800">Voeux de poles</span>
+              <span className="text-xs text-gray-400 ml-1">
+                {poleKpis.totalCandidatesWithWishes} candidat(s) &bull; {poleKpis.totalWishes} voeu(x)
+              </span>
+            </div>
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPoleKpis ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showPoleKpis && (
+            <div className="px-5 pb-5 border-t border-gray-100">
+              <div className="overflow-x-auto mt-3">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Pole</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">1er choix</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">2e choix</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">3e choix</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">Total</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">Acceptes</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase text-center">Ratio</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {poleKpis.poles.map((p: any) => {
+                      const ratio = p.totalDemandes > 0
+                        ? Math.round((p.placesAcceptees / p.totalDemandes) * 100)
+                        : 0;
+                      return (
+                        <tr key={p.pole} className="hover:bg-gray-50">
+                          <td className="px-3 py-2.5 font-medium text-gray-800">{p.pole}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="inline-block min-w-[24px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-semibold">{p.demandesRang1}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="inline-block min-w-[24px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-medium">{p.demandesRang2}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="inline-block min-w-[24px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-xs font-medium">{p.demandesRang3}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-semibold text-gray-700">{p.totalDemandes}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="inline-block min-w-[24px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-xs font-semibold">{p.placesAcceptees}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${ratio}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-500">{ratio}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ════════════════ TINDER CARD AREA ════════════════ */}
       {filteredCandidates.length === 0 ? (
