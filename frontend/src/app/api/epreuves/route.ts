@@ -16,6 +16,7 @@ export async function GET() {
       id: e.id,
       name: e.name,
       tour: e.tour,
+      tourName: `Tour ${e.tour}`,
       type: e.type,
       durationMinutes: e.duration_minutes,
       evaluationQuestions:
@@ -26,6 +27,13 @@ export async function GET() {
       pole: e.pole,
       isGroupEpreuve: e.is_group_epreuve,
       groupSize: e.group_size,
+      // Champs date/logistique
+      date: e.date || null,
+      time: e.time || null,
+      salle: e.salle || null,
+      presentedBy: e.presented_by || null,
+      dateDebut: e.date_debut || null,
+      dateFin: e.date_fin || null,
     }));
 
     return Response.json(parsed);
@@ -62,6 +70,13 @@ export async function POST(req: NextRequest) {
             : JSON.stringify(questionsValue),
         is_pole_test: isPoleTest,
         pole: body.pole || null,
+        // Champs date/logistique
+        date: body.date || null,
+        time: body.time || null,
+        salle: body.salle || null,
+        presented_by: body.presentedBy || null,
+        date_debut: body.dateDebut || null,
+        date_fin: body.dateFin || null,
       })
       .select()
       .single();

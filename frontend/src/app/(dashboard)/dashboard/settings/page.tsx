@@ -217,12 +217,12 @@ export default function CreationPage() {
       name: ep.name || '',
       tourId: String(ep.tour || ''),
       type: ep.type || 'commune',
-      date: '',
-      time: '',
-      salle: '',
-      presentedBy: '',
-      dateDebut: '',
-      dateFin: '',
+      date: ep.date || '',
+      time: ep.time || '',
+      salle: ep.salle || '',
+      presentedBy: ep.presentedBy || '',
+      dateDebut: ep.dateDebut || '',
+      dateFin: ep.dateFin || '',
       duree: String(ep.durationMinutes || ''),
       pole: ep.pole || '',
       documents: null,
@@ -270,6 +270,13 @@ export default function CreationPage() {
         evaluationQuestions: form.criteres.map(c => ({ q: c.name, weight: c.coefficient })),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
+        // Champs date/logistique
+        date: form.date || null,
+        time: form.time || null,
+        salle: form.salle || null,
+        presentedBy: form.presentedBy || null,
+        dateDebut: form.dateDebut || null,
+        dateFin: form.dateFin || null,
       };
 
       if (editingEpreuveId) {
@@ -573,11 +580,14 @@ export default function CreationPage() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="">Sélectionner un tour</option>
-                {tours.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
+                {tours.map((t, idx) => {
+                  const tourNum = t.name.match(/(\d+)/)?.[1] ?? String(idx + 1);
+                  return (
+                    <option key={t.id} value={tourNum}>
+                      {t.name}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
