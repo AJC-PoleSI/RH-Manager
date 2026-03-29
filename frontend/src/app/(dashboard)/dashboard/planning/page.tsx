@@ -69,6 +69,11 @@ export default function PlanningPage() {
     const [inscriptionData, setInscriptionData] = useState<{ creneau: string; inscrits: number; capacite: number; statut: string }[]>([]);
     const [saisiOuverte, setSaisiOuverte] = useState(false);
     const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
+    const [existingSlots, setExistingSlots] = useState<any[]>([]);
+    const [repartitionLoading, setRepartitionLoading] = useState(false);
+    const [repartitionResult, setRepartitionResult] = useState<any>(null);
+    const [resetLoading, setResetLoading] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
 
     // Member state
     const [memberAvailabilities, setMemberAvailabilities] = useState<Record<string, SlotAvailability>>({});
@@ -95,6 +100,25 @@ export default function PlanningPage() {
     useEffect(() => {
         fetchEpreuves();
     }, [fetchEpreuves]);
+
+    // ══════════════════════════════════════════════════════════════════
+    // PERSISTANCE : Charger l'état admin depuis les settings au montage
+    // ══════════════════════════════════════════════════════════════════
+    const fetchAdminSettings = useCallback(async () => {
+        if (!isAdmin) return;
+        try {
+            const res = await api.get('/settings');
+            const saisieVal = res.data?.saisie_dispos_ouverte;
+            setSaisiOuverte(saisieVal === 'true' || saisieVal === true);
+            // inscriptions_ouvertes n'est pas en settings, on le déduit des slots publiés
+        } catch {
+            console.error('Erreur chargement settings admin');
+        }
+    }, [isAdmin]);
+
+    useEffect(() => {
+        fetchAdminSettings();
+    }, [fetchAdminSettings]);
 
     // Fetch real availability data from API
     const fetchAvailabilityData = useCallback(async () => {
@@ -138,18 +162,29 @@ export default function PlanningPage() {
         }
     }, [isAdmin, selectedEpreuveId]);
 
-    // Fetch slots for inscription data
+    // Fetch slots for inscription data + reconstruct repartition from DB
     const fetchSlotData = useCallback(async () => {
         if (!isAdmin || !selectedEpreuveId) return;
         try {
             const res = await api.get('/slots/all');
-            const slots = (res.data || []).filter((s: any) => s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId);
-            const mapped = slots.map((s: any) => {
+            const allSlots = (res.data || []).filter((s: any) => s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId);
+
+            // Stocker les slots bruts pour la répartition persistée
+            setExistingSlots(allSlots);
+
+            // Détecter si des inscriptions sont ouvertes (au moins 1 slot published)
+            const hasPublished = allSlots.some((s: any) => s.status === 'published');
+            setInscriptionsOuvertes(hasPublished);
+
+            // Table d'inscriptions (exclure les drafts pour éviter les fantômes)
+            const activeSlots = allSlots.filter((s: any) => s.status !== 'draft' || (s.members?.length > 0));
+            const mapped = activeSlots.map((s: any) => {
                 const inscrits = s.enrollments?.length || 0;
                 const capacite = s.max_candidates || s.maxCandidates || 1;
+                const memberCount = s.members?.length || 0;
                 let statut = 'Disponible';
                 if (inscrits >= capacite) statut = 'Complet';
-                else if (inscrits === 0) statut = 'Incomplet';
+                else if (inscrits === 0 && memberCount === 0) statut = 'Incomplet';
                 return {
                     creneau: `${s.start_time || s.startTime || ''} - ${s.end_time || s.endTime || ''}`,
                     inscrits,
@@ -158,10 +193,41 @@ export default function PlanningPage() {
                 };
             });
             setInscriptionData(mapped);
+
+            // Reconstruire repartitionResult depuis les slots en base (persistance)
+            if (allSlots.length > 0 && !repartitionResult) {
+                const assignments = allSlots
+                    .filter((s: any) => s.members?.length > 0)
+                    .map((s: any) => ({
+                        slotId: s.id,
+                        room: s.room || 'Salle',
+                        day: s.start_time || '',
+                        time: `${s.start_time || ''} - ${s.end_time || ''}`,
+                        status: s.status,
+                        members: (s.members || []).map((m: any) => m.member?.email || m.email || ''),
+                        enrollments: (s.enrollments || []).map((e: any) =>
+                            e.candidate ? `${e.candidate.first_name} ${e.candidate.last_name}` : ''
+                        ).filter(Boolean),
+                    }));
+
+                if (assignments.length > 0) {
+                    setRepartitionResult({
+                        fromDB: true,
+                        summary: {
+                            totalSlots: allSlots.length,
+                            totalAssignments: assignments.reduce((sum: number, a: any) => sum + a.members.length, 0),
+                            sallesParCreneau,
+                            evalParSalle,
+                            creneauxDisponibles: allSlots.length,
+                        },
+                        assignments,
+                    });
+                }
+            }
         } catch {
             setInscriptionData([]);
         }
-    }, [isAdmin, selectedEpreuveId]);
+    }, [isAdmin, selectedEpreuveId, repartitionResult, sallesParCreneau, evalParSalle]);
 
     useEffect(() => {
         fetchAvailabilityData();
@@ -345,8 +411,34 @@ export default function PlanningPage() {
         toast('Fonctionnalite de relance par email a configurer (necessite un service email)', 'info');
     };
 
-    const [repartitionLoading, setRepartitionLoading] = useState(false);
-    const [repartitionResult, setRepartitionResult] = useState<any>(null);
+    // ══════════════════════════════════════════════════════════════════
+    // Réinitialiser tous les créneaux pour l'épreuve sélectionnée
+    // ══════════════════════════════════════════════════════════════════
+    const handleResetSlots = async () => {
+        if (!selectedEpreuveId) return;
+        setResetLoading(true);
+        try {
+            const slotIds = existingSlots.map((s: any) => s.id);
+            if (slotIds.length === 0) {
+                toast('Aucun creneau a supprimer', 'info');
+                setShowResetConfirm(false);
+                setResetLoading(false);
+                return;
+            }
+            await api.post('/slots/reset', { epreuveId: selectedEpreuveId, slotIds });
+            setRepartitionResult(null);
+            setExistingSlots([]);
+            setInscriptionData([]);
+            setShowResetConfirm(false);
+            toast(`${slotIds.length} creneau(x) supprime(s)`, 'success');
+            fetchSlotData();
+        } catch (e) {
+            console.error('Erreur reset:', e);
+            toast('Erreur lors de la reinitialisation', 'error');
+        } finally {
+            setResetLoading(false);
+        }
+    };
 
     const handleRepartir = async () => {
         if (!selectedEpreuveId) {
@@ -413,7 +505,7 @@ export default function PlanningPage() {
                     <select
                         className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={selectedEpreuveId}
-                        onChange={e => setSelectedEpreuveId(e.target.value)}
+                        onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setExistingSlots([]); }}
                     >
                         {epreuves.map(ep => (
                             <option key={ep.id} value={ep.id}>{ep.name} — {ep.type} (Tour {ep.tour})</option>
@@ -534,7 +626,7 @@ export default function PlanningPage() {
                             Capacite : <span className="font-semibold text-gray-800">{capacite} evaluateurs</span> necessaires par creneau ({sallesParCreneau} salles x {evalParSalle} eval./salle)
                         </p>
 
-                        <div className="mt-4">
+                        <div className="mt-4 flex gap-3">
                             <button
                                 onClick={handleRepartir}
                                 disabled={repartitionLoading}
@@ -542,7 +634,52 @@ export default function PlanningPage() {
                             >
                                 {repartitionLoading ? 'Repartition en cours...' : 'Repartir les evaluateurs'}
                             </button>
+                            {existingSlots.length > 0 && (
+                                <button
+                                    onClick={() => setShowResetConfirm(true)}
+                                    className="px-4 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-colors border border-red-200"
+                                >
+                                    Reinitialiser les creneaux ({existingSlots.length})
+                                </button>
+                            )}
                         </div>
+
+                        {/* Modale de confirmation reset */}
+                        {showResetConfirm && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/40" onClick={() => setShowResetConfirm(false)} />
+                                <div className="relative bg-white rounded-xl shadow-xl max-w-md mx-4 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Reinitialiser les creneaux ?</h3>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        Cette action supprimera <strong>{existingSlots.length} creneau(x)</strong> pour cette epreuve,
+                                        ainsi que toutes les affectations d&apos;evaluateurs et inscriptions de candidats associees.
+                                    </p>
+                                    {existingSlots.some((s: any) => (s.enrollments?.length || 0) > 0) && (
+                                        <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg mb-4">
+                                            <span className="text-red-500 text-base">⚠️</span>
+                                            <p className="text-sm text-red-700">
+                                                <strong>Attention :</strong> certains creneaux contiennent des candidats inscrits. Leurs inscriptions seront perdues.
+                                            </p>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-3 justify-end">
+                                        <button
+                                            onClick={() => setShowResetConfirm(false)}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                                        >
+                                            Annuler
+                                        </button>
+                                        <button
+                                            onClick={handleResetSlots}
+                                            disabled={resetLoading}
+                                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                                        >
+                                            {resetLoading ? 'Suppression...' : 'Tout supprimer'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Repartition results */}
                         {repartitionResult && repartitionResult.assignments?.length > 0 && (
