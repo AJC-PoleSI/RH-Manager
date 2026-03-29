@@ -12,6 +12,11 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get('end');
 
   try {
+    // ══════════════════════════════════════════════════════════════════
+    // Récupérer les événements personnels + événements GLOBAUX
+    // Globaux = is_global=true OU (member_id IS NULL AND candidate_id IS NULL)
+    // Ce sont les épreuves "Sur table" visibles par tout le monde
+    // ══════════════════════════════════════════════════════════════════
     let query = supabaseAdmin
       .from('calendar_events')
       .select(`
@@ -33,7 +38,21 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json(data);
+    // Filtrer : retourner les événements globaux + ceux assignés à l'utilisateur
+    const userId = payload.id;
+    const filtered = (data || []).filter((event: any) => {
+      // Événement global (sur table) → visible par tous
+      if (event.is_global) return true;
+      if (!event.related_member_id && !event.related_candidate_id) return true;
+      // Événement assigné à cet utilisateur
+      if (payload.role === 'member' && event.related_member_id === userId) return true;
+      if (payload.role === 'candidate' && event.related_candidate_id === userId) return true;
+      // Admin voit tout
+      if (payload.isAdmin) return true;
+      return false;
+    });
+
+    return Response.json(filtered);
   } catch (error) {
     return Response.json({ error: 'Failed to fetch events' }, { status: 500 });
   }

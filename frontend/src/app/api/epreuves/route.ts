@@ -27,6 +27,7 @@ export async function GET() {
       pole: e.pole,
       isGroupEpreuve: e.is_group_epreuve,
       groupSize: e.group_size,
+      isCommune: e.type === 'commune',
       // Champs date/logistique
       date: e.date || null,
       time: e.time || null,
@@ -82,6 +83,34 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // ══════════════════════════════════════════════════════════════════
+    // ÉPREUVE COMMUNE / SUR TABLE : Créer un événement calendrier global
+    // Visible par TOUS les utilisateurs (member_id et candidate_id = null)
+    // ══════════════════════════════════════════════════════════════════
+    if (body.type === 'commune' && body.date) {
+      const calendarEvent = {
+        title: `${body.name} (Sur table)`,
+        description: `Épreuve commune — Tour ${tourValue}${body.salle ? ` — Salle : ${body.salle}` : ''}${body.presentedBy ? ` — Présenté par : ${body.presentedBy}` : ''}`,
+        day: new Date(body.date + 'T12:00:00').toISOString(),
+        start_time: body.time || '09:00',
+        end_time: body.time
+          ? (() => { const [h, m] = body.time.split(':').map(Number); const t = h * 60 + (m || 0) + durationValue; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; })()
+          : '10:00',
+        related_epreuve_id: epreuve.id,
+        related_member_id: null,
+        related_candidate_id: null,
+        is_global: true,
+      };
+
+      const { error: calError } = await supabaseAdmin
+        .from('calendar_events')
+        .insert(calendarEvent);
+
+      if (calError) {
+        console.error('Erreur creation evenement calendrier global:', calError);
+      }
+    }
 
     return Response.json(epreuve, { status: 201 });
   } catch (error) {

@@ -94,12 +94,12 @@ function StatusBadge({ status }: { status: string }) {
 
 function TypeBadge({ type }: { type: string }) {
   const map: Record<string, string> = {
-    commune: "bg-blue-100 text-blue-700",
+    commune: "bg-amber-100 text-amber-700",
     individuelle: "bg-pink-100 text-pink-700",
     groupe: "bg-green-100 text-green-700",
   };
   const label: Record<string, string> = {
-    commune: "Commune",
+    commune: "Sur table",
     individuelle: "Individuelle",
     groupe: "Groupe",
   };
@@ -601,7 +601,7 @@ export default function CreationPage() {
                 }
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="commune">Commune</option>
+                <option value="commune">Sur table (commune, convocation globale)</option>
                 <option value="individuelle">Individuelle</option>
                 <option value="groupe">Groupe</option>
               </select>

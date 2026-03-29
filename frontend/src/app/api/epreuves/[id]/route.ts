@@ -49,6 +49,42 @@ export async function PUT(
 
     if (error) throw error;
 
+    // ══════════════════════════════════════════════════════════════════
+    // ÉPREUVE COMMUNE / SUR TABLE : Mettre à jour l'événement calendrier global
+    // ══════════════════════════════════════════════════════════════════
+    if (epreuve.type === 'commune' && epreuve.date) {
+      const durationMin = epreuve.duration_minutes || 30;
+      const startTime = epreuve.time || '09:00';
+      const [h, m] = startTime.split(':').map(Number);
+      const totalMin = h * 60 + (m || 0) + durationMin;
+      const endTime = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+
+      // Chercher un événement existant pour cette épreuve
+      const { data: existingEvent } = await supabaseAdmin
+        .from('calendar_events')
+        .select('id')
+        .eq('related_epreuve_id', id)
+        .limit(1);
+
+      const eventData = {
+        title: `${epreuve.name} (Sur table)`,
+        description: `Épreuve commune — Tour ${epreuve.tour}${epreuve.salle ? ` — Salle : ${epreuve.salle}` : ''}${epreuve.presented_by ? ` — Présenté par : ${epreuve.presented_by}` : ''}`,
+        day: new Date(epreuve.date + 'T12:00:00').toISOString(),
+        start_time: startTime,
+        end_time: endTime,
+        related_epreuve_id: id,
+        related_member_id: null,
+        related_candidate_id: null,
+        is_global: true,
+      };
+
+      if (existingEvent && existingEvent.length > 0) {
+        await supabaseAdmin.from('calendar_events').update(eventData).eq('id', existingEvent[0].id);
+      } else {
+        await supabaseAdmin.from('calendar_events').insert(eventData);
+      }
+    }
+
     return Response.json(epreuve);
   } catch (error) {
     return Response.json({ error: 'Failed to update epreuve' }, { status: 400 });
