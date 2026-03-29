@@ -41,6 +41,21 @@ export async function POST(req: NextRequest) {
     const candidateCapacity =
       maxCandidates || (epreuve.is_group_epreuve ? epreuve.group_size : 1);
 
+    // ══════════════════════════════════════════════════════════════════
+    // DURÉE DU CRÉNEAU = durée épreuve + 10 min de roulement (buffer)
+    // ══════════════════════════════════════════════════════════════════
+    const BUFFER_MINUTES = 10;
+    const epreuveDuration = epreuve.duration_minutes || 30;
+    const slotDuration = epreuveDuration + BUFFER_MINUTES;
+
+    const addMinutesToTime = (timeStr: string, minutes: number): string => {
+      const [h, m] = timeStr.split(':').map(Number);
+      const totalMin = h * 60 + (m || 0) + minutes;
+      const newH = Math.floor(totalMin / 60);
+      const newM = totalMin % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
+
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
@@ -119,10 +134,16 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // end_time calculé : start_time + durée épreuve + buffer
+      const computedEndTime = addMinutesToTime(slot.startTime, slotDuration);
+
       return {
         date: slot.date,
         startTime: slot.startTime,
-        endTime: slot.endTime,
+        endTime: computedEndTime,
+        durationMinutes: slotDuration,
+        epreuveDurationMinutes: epreuveDuration,
+        bufferMinutes: BUFFER_MINUTES,
         totalAvailableMembers: slot.memberCount,
         rooms,
       };

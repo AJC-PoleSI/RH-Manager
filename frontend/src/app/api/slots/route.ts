@@ -15,11 +15,37 @@ export async function POST(req: NextRequest) {
       epreuveId, tour, room,
     } = await req.json();
 
-    if (!date || !startTime || !endTime) {
+    if (!date || !startTime) {
       return Response.json(
-        { error: 'date, startTime, endTime are required' },
+        { error: 'date et startTime sont requis' },
         { status: 400 }
       );
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // Si une épreuve est liée, calculer la durée : épreuve + 10min buffer
+    // ══════════════════════════════════════════════════════════════════
+    const BUFFER_MINUTES = 10;
+    let computedDuration = durationMinutes || 60;
+    let computedEndTime = endTime;
+
+    if (epreuveId) {
+      const { data: ep } = await supabaseAdmin.from('epreuves').select('duration_minutes').eq('id', epreuveId).single();
+      if (ep?.duration_minutes) {
+        computedDuration = ep.duration_minutes + BUFFER_MINUTES;
+        // Calculer end_time depuis start_time si pas fourni
+        if (!endTime) {
+          const [h, m] = startTime.split(':').map(Number);
+          const totalMin = h * 60 + (m || 0) + computedDuration;
+          computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+        }
+      }
+    }
+
+    if (!computedEndTime) {
+      const [h, m] = startTime.split(':').map(Number);
+      const totalMin = h * 60 + (m || 0) + computedDuration;
+      computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
     }
 
     const { data: slot, error } = await supabaseAdmin
@@ -27,8 +53,8 @@ export async function POST(req: NextRequest) {
       .insert({
         date: new Date(date + 'T12:00:00').toISOString(),
         start_time: startTime,
-        end_time: endTime,
-        duration_minutes: durationMinutes || 60,
+        end_time: computedEndTime,
+        duration_minutes: computedDuration,
         label: label || null,
         max_candidates: maxCandidates || 1,
         min_members: minMembers || 1,

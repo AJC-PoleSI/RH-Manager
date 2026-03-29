@@ -84,6 +84,22 @@ export async function POST(req: NextRequest) {
         .in('id', slotIds);
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // DURÉE DU CRÉNEAU = durée épreuve + 10 min de roulement (buffer)
+    // ══════════════════════════════════════════════════════════════════
+    const BUFFER_MINUTES = 10;
+    const epreuveDuration = epreuve.duration_minutes || 30;
+    const slotDuration = epreuveDuration + BUFFER_MINUTES;
+
+    // Fonction utilitaire : additionner des minutes à un horaire "HH:MM"
+    const addMinutes = (timeStr: string, minutes: number): string => {
+      const [h, m] = timeStr.split(':').map(Number);
+      const totalMin = h * 60 + (m || 0) + minutes;
+      const newH = Math.floor(totalMin / 60);
+      const newM = totalMin % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
+
     // Track how many times each member has been assigned (for fair distribution)
     const memberAssignmentCount: Record<string, number> = {};
 
@@ -127,6 +143,9 @@ export async function POST(req: NextRequest) {
       let memberIndex = 0;
 
       for (let room = 0; room < actualRooms; room++) {
+        // Calculer le end_time réel : start_time + durée épreuve + buffer
+        const computedEndTime = addMinutes(slotData.startTime, slotDuration);
+
         // Create evaluation slot
         const { data: newSlot, error: slotError } = await supabaseAdmin
           .from('evaluation_slots')
@@ -134,10 +153,10 @@ export async function POST(req: NextRequest) {
             epreuve_id: epreuveId,
             date: `${dateStr}T00:00:00Z`,
             start_time: slotData.startTime,
-            end_time: slotData.endTime,
-            duration_minutes: epreuve.duration_minutes || 60,
+            end_time: computedEndTime,
+            duration_minutes: slotDuration,
             room: `Salle ${room + 1}`,
-            label: `${epreuve.name} - ${slotData.weekday.charAt(0).toUpperCase() + slotData.weekday.slice(1)} ${slotData.startTime}`,
+            label: `${epreuve.name} - ${slotData.weekday.charAt(0).toUpperCase() + slotData.weekday.slice(1)} ${slotData.startTime} (${epreuveDuration}min + ${BUFFER_MINUTES}min)`,
             max_candidates: epreuve.is_group_epreuve ? (epreuve.group_size || 1) : 1,
             min_members: membersPerRoom,
             status: 'draft',
