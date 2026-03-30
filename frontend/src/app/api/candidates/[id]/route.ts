@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const { data, error } = await supabaseAdmin
       .from('candidates')
-      .select('*, candidate_evaluations(*)')
+      .select('*, candidate_evaluations(*), candidate_wishes(id, pole, rank)')
       .eq('id', id)
       .single();
 
@@ -32,6 +32,15 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // Map snake_case to camelCase
     const mapped: any = { ...data, firstName: data.first_name, lastName: data.last_name, createdAt: data.created_at };
+
+    // Map wishes sorted by rank
+    if (data.candidate_wishes) {
+      mapped.wishes = (data.candidate_wishes as any[])
+        .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))
+        .map((w: any) => ({ pole: w.pole, rank: w.rank }));
+    } else {
+      mapped.wishes = [];
+    }
 
     // ── Candidat : retirer les évaluations et notes internes ──
     if (payload.role === 'candidate') {

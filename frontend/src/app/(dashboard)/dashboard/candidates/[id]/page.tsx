@@ -166,6 +166,35 @@ export default function CandidateDetailPage({ params }: { params: { id: string }
                 )}
             </div>
 
+            {/* Voeux de pôle */}
+            {candidate.wishes && candidate.wishes.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        Choix de pôle
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                        {candidate.wishes.map((w: any, i: number) => (
+                            <span
+                                key={i}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${
+                                    i === 0
+                                        ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                                        : i === 1
+                                        ? 'bg-gray-50 text-gray-700 border-gray-200'
+                                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}
+                            >
+                                <span className="font-bold text-xs">{w.rank}.</span>
+                                {w.pole}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Stats globales : masquées pour les candidats */}
             {!isCandidate && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
