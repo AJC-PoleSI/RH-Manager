@@ -747,84 +747,212 @@ export default function PlanningPage() {
                         )}
 
                         {/* ══════════════════════════════════════════════════ */}
-                        {/* Grille visuelle interactive des créneaux         */}
+                        {/* Vue emploi du temps : colonnes=jours, lignes=heures */}
                         {/* ══════════════════════════════════════════════════ */}
-                        {existingSlots.length > 0 && (
-                            <div className="mt-5 border-t border-gray-100 pt-4">
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                                    Creneaux ({existingSlots.length})
-                                    <span className="text-xs font-normal text-gray-400 ml-2">Cliquez pour modifier</span>
-                                </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {existingSlots.map((slot: any) => {
-                                        const members = (slot.members || []).map((m: any) => m.member?.email || m.email || '');
-                                        const enrollments = (slot.enrollments || []).length;
-                                        const statusColors: Record<string, string> = {
-                                            draft: 'border-gray-200 bg-gray-50',
-                                            published: 'border-blue-200 bg-blue-50',
-                                            ready: 'border-green-200 bg-green-50',
-                                            full: 'border-amber-200 bg-amber-50',
-                                            closed: 'border-red-200 bg-red-50',
-                                        };
-                                        const statusLabels: Record<string, string> = {
-                                            draft: 'Brouillon', published: 'Publie', ready: 'Pret',
-                                            full: 'Complet', closed: 'Ferme',
-                                        };
-                                        return (
-                                            <div
-                                                key={slot.id}
-                                                onClick={() => openEditSlot(slot)}
-                                                className={`rounded-lg border-2 p-3 cursor-pointer hover:shadow-md transition-all ${statusColors[slot.status] || 'border-gray-200 bg-white'}`}
-                                            >
-                                                <div className="flex items-center justify-between mb-1.5">
-                                                    <span className="text-xs font-bold text-gray-800">{slot.room || 'Salle ?'}</span>
-                                                    <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-white/80 text-gray-600">
-                                                        {statusLabels[slot.status] || slot.status}
+                        {existingSlots.length > 0 && (() => {
+                            // Regrouper les slots par date et par heure de début
+                            const slotDates = Array.from(new Set(existingSlots.map((s: any) => {
+                                const d = s.date?.split('T')[0] || '';
+                                return d;
+                            }).filter(Boolean))).sort();
+
+                            // Si pas de dates réelles, grouper par start_time uniquement
+                            const hasDates = slotDates.length > 0 && slotDates[0] !== '';
+
+                            // Extraire les horaires uniques
+                            const timeKeys = Array.from(new Set(existingSlots.map((s: any) => s.start_time || ''))).filter(Boolean).sort();
+
+                            // Format date label
+                            const fmtDate = (d: string) => {
+                                try {
+                                    const dt = new Date(d + 'T00:00:00');
+                                    const jours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+                                    return `${jours[dt.getDay()]} ${dt.getDate()}/${(dt.getMonth()+1).toString().padStart(2,'0')}`;
+                                } catch { return d; }
+                            };
+
+                            // Format heure
+                            const fmtTime = (t: string) => {
+                                const parts = t.split(':');
+                                return `${parts[0]?.padStart(2,'0')}h${parts[1] || '00'}`;
+                            };
+
+                            const statusBg: Record<string, string> = {
+                                draft: '#F9FAFB', published: '#EFF6FF', ready: '#F0FDF4',
+                                full: '#FFFBEB', closed: '#FFF5F5',
+                            };
+                            const statusBorder: Record<string, string> = {
+                                draft: '#E5E7EB', published: '#BFDBFE', ready: '#BBF7D0',
+                                full: '#FDE68A', closed: '#FECDD3',
+                            };
+                            const statusLabel: Record<string, string> = {
+                                draft: 'Brouillon', published: 'Ouvert', ready: 'Pret',
+                                full: 'Complet', closed: 'Ferme',
+                            };
+
+                            // Colonnes = dates (ou juste "Tous" si pas de dates)
+                            const columns = hasDates ? slotDates : ['all'];
+
+                            return (
+                                <div className="mt-5 border-t border-gray-100 pt-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-semibold text-gray-700">
+                                            Emploi du temps ({existingSlots.length} creneaux)
+                                            <span className="text-xs font-normal text-gray-400 ml-2">Cliquez pour modifier</span>
+                                        </h3>
+                                        <span className="text-xs text-gray-400">
+                                            {existingSlots.reduce((s: number, sl: any) => s + (sl.members?.length || 0), 0)} affectation(s)
+                                        </span>
+                                    </div>
+
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: `80px repeat(${columns.length}, minmax(180px, 1fr))`,
+                                            minWidth: columns.length > 3 ? `${80 + columns.length * 180}px` : undefined,
+                                        }}>
+                                            {/* Header row : dates */}
+                                            <div className="bg-gray-100 border-b border-r border-gray-200 px-2 py-3 text-xs font-semibold text-gray-500 flex items-center justify-center">
+                                                Horaire
+                                            </div>
+                                            {columns.map(col => (
+                                                <div key={col} className="bg-gray-100 border-b border-r border-gray-200 px-3 py-3 text-center">
+                                                    <span className="text-sm font-bold text-gray-800">
+                                                        {hasDates ? fmtDate(col) : 'Tous les creneaux'}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-gray-600 mb-1">{slot.start_time} - {slot.end_time}</p>
-                                                <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                                    <span>👤 {members.length} eval.</span>
-                                                    <span className="text-gray-300">|</span>
-                                                    <span>🎯 {enrollments} cand.</span>
-                                                </div>
-                                                {members.length > 0 && (
-                                                    <div className="mt-1.5 flex flex-wrap gap-1">
-                                                        {members.slice(0, 3).map((email: string, i: number) => (
-                                                            <span key={i} className="text-[10px] bg-white/70 text-gray-600 px-1.5 py-0.5 rounded">
-                                                                {email.split('@')[0]}
-                                                            </span>
-                                                        ))}
-                                                        {members.length > 3 && (
-                                                            <span className="text-[10px] text-gray-400">+{members.length - 3}</span>
-                                                        )}
+                                            ))}
+
+                                            {/* Rows : par horaire */}
+                                            {timeKeys.map((time, rowIdx) => (
+                                                <div key={time} style={{ display: 'contents' }}>
+                                                    {/* Heure label */}
+                                                    <div className={`border-r border-gray-200 px-2 py-3 text-xs font-semibold text-gray-600 flex items-start justify-center ${rowIdx % 2 === 0 ? 'bg-gray-50/50' : ''}`}>
+                                                        {fmtTime(time)}
                                                     </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+
+                                                    {/* Cellules par colonne */}
+                                                    {columns.map(col => {
+                                                        // Trouver les slots pour cette date + heure
+                                                        const cellSlots = existingSlots.filter((s: any) => {
+                                                            const sDate = s.date?.split('T')[0] || '';
+                                                            const matchDate = hasDates ? sDate === col : true;
+                                                            return matchDate && (s.start_time || '') === time;
+                                                        });
+
+                                                        return (
+                                                            <div
+                                                                key={`${col}-${time}`}
+                                                                className={`border-r border-b border-gray-100 p-1.5 min-h-[80px] ${rowIdx % 2 === 0 ? 'bg-gray-50/30' : 'bg-white'}`}
+                                                            >
+                                                                <div className="space-y-1.5">
+                                                                    {cellSlots.map((slot: any) => {
+                                                                        const members = (slot.members || []).map((m: any) =>
+                                                                            m.member?.first_name
+                                                                                ? `${m.member.first_name} ${(m.member.last_name || '')[0] || ''}.`
+                                                                                : (m.member?.email || m.email || '').split('@')[0]
+                                                                        );
+                                                                        const enrollments = (slot.enrollments || []).length;
+                                                                        return (
+                                                                            <div
+                                                                                key={slot.id}
+                                                                                onClick={() => openEditSlot(slot)}
+                                                                                className="rounded-lg p-2 cursor-pointer hover:shadow-md transition-all text-left"
+                                                                                style={{
+                                                                                    backgroundColor: statusBg[slot.status] || '#FFF',
+                                                                                    border: `1.5px solid ${statusBorder[slot.status] || '#E5E7EB'}`,
+                                                                                }}
+                                                                            >
+                                                                                <div className="flex items-center justify-between mb-1">
+                                                                                    <span className="text-[11px] font-bold text-gray-800 truncate">
+                                                                                        {slot.room || 'Salle ?'}
+                                                                                    </span>
+                                                                                    <span className="text-[9px] font-semibold uppercase px-1 py-0.5 rounded ml-1 flex-shrink-0"
+                                                                                        style={{
+                                                                                            backgroundColor: `${statusBorder[slot.status] || '#E5E7EB'}40`,
+                                                                                            color: slot.status === 'published' ? '#1E40AF' :
+                                                                                                   slot.status === 'ready' ? '#166534' :
+                                                                                                   slot.status === 'full' ? '#92400E' :
+                                                                                                   slot.status === 'closed' ? '#9F1239' : '#374151',
+                                                                                        }}
+                                                                                    >
+                                                                                        {statusLabel[slot.status] || slot.status}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <p className="text-[10px] text-gray-500 mb-1">
+                                                                                    {fmtTime(slot.start_time)} - {fmtTime(slot.end_time || '')}
+                                                                                </p>
+                                                                                <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                                                                                    <span>&#128100;{members.length}</span>
+                                                                                    <span className="text-gray-300">|</span>
+                                                                                    <span>&#127919;{enrollments}</span>
+                                                                                </div>
+                                                                                {members.length > 0 && (
+                                                                                    <div className="mt-1 flex flex-wrap gap-0.5">
+                                                                                        {members.slice(0, 2).map((name: string, i: number) => (
+                                                                                            <span key={i} className="text-[9px] bg-white/80 text-gray-600 px-1 py-0.5 rounded truncate max-w-[70px]">
+                                                                                                {name}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                        {members.length > 2 && (
+                                                                                            <span className="text-[9px] text-gray-400">+{members.length - 2}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {cellSlots.length === 0 && (
+                                                                        <div className="flex items-center justify-center h-full min-h-[60px] text-gray-300 text-[10px]">
+                                                                            -
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Légende */}
+                                    <div className="flex flex-wrap gap-3 mt-3 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-3 h-3 rounded" style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }} />
+                                            Ouvert
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-3 h-3 rounded" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }} />
+                                            Pret
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-3 h-3 rounded" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }} />
+                                            Complet
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-3 h-3 rounded" style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }} />
+                                            Brouillon
+                                        </div>
+                                    </div>
+
+                                    {/* Bouton publier */}
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await api.put('/settings', { planning_generated: 'true' });
+                                                toast('Planning publie ! Les membres peuvent maintenant consulter leur emploi du temps.', 'success');
+                                            } catch {
+                                                toast('Erreur lors de la publication du planning', 'error');
+                                            }
+                                        }}
+                                        className="mt-4 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                                    >
+                                        Publier le planning aux membres
+                                    </button>
                                 </div>
-
-                                <p className="text-xs text-gray-400 mt-3">
-                                    {existingSlots.length} salle(s) &bull; {existingSlots.reduce((s: number, sl: any) => s + (sl.members?.length || 0), 0)} affectation(s)
-                                </p>
-
-                                {/* Bouton publier le planning pour les membres */}
-                                <button
-                                    onClick={async () => {
-                                        try {
-                                            await api.put('/settings', { planning_generated: 'true' });
-                                            toast('Planning publie ! Les membres peuvent maintenant consulter leur emploi du temps.', 'success');
-                                        } catch {
-                                            toast('Erreur lors de la publication du planning', 'error');
-                                        }
-                                    }}
-                                    className="mt-4 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
-                                >
-                                    Publier le planning aux membres
-                                </button>
-                            </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 </div>
 
