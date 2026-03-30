@@ -38,13 +38,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Ce créneau n'est plus disponible" }, { status: 400 });
     }
 
-    // Check min members met
-    if ((slot.members?.length || 0) < slot.min_members) {
-      return Response.json(
-        { error: "Pas assez d'évaluateurs sur ce créneau" },
-        { status: 400 }
-      );
-    }
+    // Note: min_members check removed — status published/ready is the source of truth
 
     if ((slot.enrollments?.length || 0) >= slot.max_candidates) {
       return Response.json({ error: 'Ce créneau est complet' }, { status: 400 });

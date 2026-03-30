@@ -24,9 +24,8 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    // Filter: only slots where min members is met
+    // Map slots — published/ready status already guarantees visibility
     const available = (slots || [])
-      .filter((slot: any) => (slot.members?.length || 0) >= slot.min_members)
       .map((slot: any) => {
         const enrolledCount = slot.enrollments?.length || 0;
         const isFull = enrolledCount >= slot.max_candidates;
