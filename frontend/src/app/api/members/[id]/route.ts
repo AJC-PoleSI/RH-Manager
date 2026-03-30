@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { data, error } = await supabaseAdmin
       .from('members')
-      .select('id, email, is_admin')
+      .select('id, email, is_admin, first_name, last_name, pole')
       .eq('id', id)
       .single();
 
@@ -23,7 +23,14 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return Response.json({ error: 'Member not found' }, { status: 404 });
     }
 
-    return Response.json(data);
+    return Response.json({
+      id: data.id,
+      email: data.email,
+      isAdmin: data.is_admin,
+      firstName: data.first_name || '',
+      lastName: data.last_name || '',
+      pole: data.pole || '',
+    });
   } catch {
     return Response.json({ error: 'Failed to fetch member' }, { status: 500 });
   }
@@ -39,11 +46,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 
   try {
     const body = await req.json();
-    const { email, password, isAdmin } = body;
+    const { email, password, isAdmin, firstName, lastName, pole } = body;
 
     const updateData: Record<string, unknown> = {};
     if (email !== undefined) updateData.email = email;
     if (isAdmin !== undefined) updateData.is_admin = isAdmin;
+    if (firstName !== undefined) updateData.first_name = firstName;
+    if (lastName !== undefined) updateData.last_name = lastName;
+    if (pole !== undefined) updateData.pole = pole;
     if (password) {
       updateData.password_hash = await bcrypt.hash(password, 10);
     }
@@ -52,14 +62,21 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       .from('members')
       .update(updateData)
       .eq('id', id)
-      .select('id, email, is_admin')
+      .select('id, email, is_admin, first_name, last_name, pole')
       .single();
 
     if (error) {
       return Response.json({ error: 'Failed to update member' }, { status: 400 });
     }
 
-    return Response.json(data);
+    return Response.json({
+      id: data.id,
+      email: data.email,
+      isAdmin: data.is_admin,
+      firstName: data.first_name || '',
+      lastName: data.last_name || '',
+      pole: data.pole || '',
+    });
   } catch {
     return Response.json({ error: 'Failed to update member' }, { status: 400 });
   }

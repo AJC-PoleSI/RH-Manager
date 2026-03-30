@@ -25,15 +25,20 @@ export async function GET(req: NextRequest) {
 
     const safe = (enrollments || []).map((e: any) => ({
       id: e.id,
-      slot_id: e.slot_id,
+      slotId: e.slot_id,
       status: e.status,
-      enrolled_at: e.enrolled_at,
+      enrolledAt: e.enrolled_at,
       date: e.slot?.date,
-      start_time: e.slot?.start_time,
-      end_time: e.slot?.end_time,
+      startTime: e.slot?.start_time,
+      endTime: e.slot?.end_time,
       room: e.slot?.room,
       label: e.slot?.label,
-      epreuve: e.slot?.epreuve,
+      epreuve: e.slot?.epreuve ? {
+        name: e.slot.epreuve.name,
+        tour: e.slot.epreuve.tour,
+        type: e.slot.epreuve.type,
+        durationMinutes: e.slot.epreuve.duration_minutes,
+      } : null,
     }));
 
     return Response.json(safe);

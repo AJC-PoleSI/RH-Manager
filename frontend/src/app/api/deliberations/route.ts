@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         email,
         phone,
         comments,
+        formation,
         deliberations(*),
         candidate_evaluations(
           id,
@@ -24,8 +25,13 @@ export async function GET(req: NextRequest) {
           comment,
           member_id,
           created_at,
-          members(email),
+          members(email, first_name, last_name),
           epreuves(id, name, tour, type)
+        ),
+        candidate_wishes(
+          id,
+          pole,
+          rank
         )
       `)
       .order('last_name', { ascending: true });
@@ -34,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     // If tour filter is specified, filter evaluations client-side
     const result = (candidates || []).map((c) => {
-      let evaluations = c.candidate_evaluations || [];
+      let evaluations: any[] = c.candidate_evaluations || [];
 
       if (tour) {
         const tourNum = parseInt(tour);
@@ -43,12 +49,35 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      // Parse scores
+      // Parse scores + map member info
       evaluations = evaluations.map((ev: any) => ({
-        ...ev,
-        scores:
-          typeof ev.scores === 'string' ? JSON.parse(ev.scores) : ev.scores,
+        id: ev.id,
+        scores: typeof ev.scores === 'string' ? JSON.parse(ev.scores) : ev.scores,
+        comment: ev.comment,
+        createdAt: ev.created_at,
+        member: ev.members ? {
+          email: ev.members.email,
+          firstName: ev.members.first_name,
+          lastName: ev.members.last_name,
+        } : null,
+        epreuve: ev.epreuves ? {
+          name: ev.epreuves.name,
+          tour: ev.epreuves.tour,
+          type: ev.epreuves.type,
+        } : null,
       }));
+
+      // Map wishes
+      const wishes = (c.candidate_wishes || [])
+        .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))
+        .map((w: any) => ({
+          pole: w.pole,
+          rank: w.rank,
+        }));
+
+      const delib = Array.isArray(c.deliberations)
+        ? c.deliberations[0] || null
+        : c.deliberations;
 
       return {
         id: c.id,
@@ -56,10 +85,17 @@ export async function GET(req: NextRequest) {
         lastName: c.last_name,
         email: c.email,
         phone: c.phone,
+        formation: c.formation,
         comments: c.comments,
-        deliberation: Array.isArray(c.deliberations)
-          ? c.deliberations[0] || null
-          : c.deliberations,
+        deliberation: delib ? {
+          tour1Status: delib.tour1_status,
+          tour2Status: delib.tour2_status,
+          tour3Status: delib.tour3_status,
+          prosComment: delib.pros_comment,
+          consComment: delib.cons_comment,
+          assignedPole: delib.assigned_pole,
+        } : null,
+        wishes,
         evaluations,
       };
     });

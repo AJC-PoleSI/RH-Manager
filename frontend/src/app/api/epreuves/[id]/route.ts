@@ -16,7 +16,7 @@ export async function PUT(
   try {
     const body = await req.json();
     const { name, tour, type, durationMinutes, evaluationQuestions, isPoleTest, pole,
-            date, time, salle, presentedBy, dateDebut, dateFin } = body;
+            date, time, salle, presentedBy, dateDebut, dateFin, description, documentsUrls } = body;
 
     // Build update object with only provided fields (snake_case for Supabase)
     const updateData: Record<string, unknown> = {};
@@ -39,6 +39,8 @@ export async function PUT(
     if (presentedBy !== undefined) updateData.presented_by = presentedBy;
     if (dateDebut !== undefined) updateData.date_debut = dateDebut;
     if (dateFin !== undefined) updateData.date_fin = dateFin;
+    if (description !== undefined) updateData.description = description;
+    if (documentsUrls !== undefined) updateData.documents_urls = documentsUrls;
 
     const { data: epreuve, error } = await supabaseAdmin
       .from('epreuves')

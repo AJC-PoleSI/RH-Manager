@@ -28,6 +28,8 @@ export async function GET() {
       isGroupEpreuve: e.is_group_epreuve,
       groupSize: e.group_size,
       isCommune: e.type === 'commune',
+      description: e.description || null,
+      documentsUrls: e.documents_urls || [],
       // Champs date/logistique
       date: e.date || null,
       time: e.time || null,
@@ -71,6 +73,8 @@ export async function POST(req: NextRequest) {
             : JSON.stringify(questionsValue),
         is_pole_test: isPoleTest,
         pole: body.pole || null,
+        description: body.description || null,
+        documents_urls: body.documentsUrls || [],
         // Champs date/logistique
         date: body.date || null,
         time: body.time || null,
