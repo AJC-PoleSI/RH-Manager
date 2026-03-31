@@ -21,8 +21,6 @@ export default function EpreuvesPage() {
         type: 'Entretien',
         duration_minutes: 30,
         roulement_minutes: 10,
-        nb_salles: 1,
-        min_evaluators_per_salle: 2,
         date_debut: '',
         date_fin: '',
         is_pole_test: false,
@@ -57,8 +55,6 @@ export default function EpreuvesPage() {
             type: epreuve.type,
             duration_minutes: epreuve.durationMinutes,
             roulement_minutes: epreuve.roulementMinutes || 10,
-            nb_salles: epreuve.nbSalles || 1,
-            min_evaluators_per_salle: epreuve.minEvaluatorsPerSalle || 2,
             date_debut: epreuve.dateDebut || '',
             date_fin: epreuve.dateFin || '',
             is_pole_test: epreuve.isPoleTest,
@@ -100,8 +96,6 @@ export default function EpreuvesPage() {
             type: 'Entretien',
             duration_minutes: 30,
             roulement_minutes: 10,
-            nb_salles: 1,
-            min_evaluators_per_salle: 2,
             date_debut: '',
             date_fin: '',
             is_pole_test: false,
@@ -120,8 +114,6 @@ export default function EpreuvesPage() {
             type: formData.type,
             durationMinutes: formData.duration_minutes,
             roulementMinutes: formData.roulement_minutes,
-            nbSalles: formData.nb_salles,
-            minEvaluatorsPerSalle: formData.min_evaluators_per_salle,
             dateDebut: formData.date_debut || null,
             dateFin: formData.date_fin || null,
             isPoleTest: formData.is_pole_test,
@@ -176,7 +168,6 @@ export default function EpreuvesPage() {
                                 <CardTitle>{viewingEpreuve.name}</CardTitle>
                                 <p className="text-sm text-gray-500 mt-1">
                                     {viewingEpreuve.type} • {viewingEpreuve.durationMinutes}min + {viewingEpreuve.roulementMinutes || 10}min roulement • Tour {viewingEpreuve.tour}
-                                    {viewingEpreuve.nbSalles > 1 && ` • ${viewingEpreuve.nbSalles} salles`}
                                 </p>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => setViewingEpreuve(null)}><X size={20} /></Button>
@@ -300,21 +291,11 @@ export default function EpreuvesPage() {
                             {/* Planning configuration */}
                             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
                                 <h3 className="text-sm font-bold text-blue-800">Configuration Planning</h3>
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label className="text-xs">Roulement (min)</Label>
                                         <Input type="number" min={0} value={formData.roulement_minutes} onChange={e => setFormData({ ...formData, roulement_minutes: parseInt(e.target.value) || 0 })} />
                                         <p className="text-[10px] text-gray-500 mt-0.5">Pause entre passages</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Nb. Salles</Label>
-                                        <Input type="number" min={1} value={formData.nb_salles} onChange={e => setFormData({ ...formData, nb_salles: parseInt(e.target.value) || 1 })} />
-                                        <p className="text-[10px] text-gray-500 mt-0.5">Salles en parallèle</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs">Min. évaluateurs/salle</Label>
-                                        <Input type="number" min={1} value={formData.min_evaluators_per_salle} onChange={e => setFormData({ ...formData, min_evaluators_per_salle: parseInt(e.target.value) || 1 })} />
-                                        <p className="text-[10px] text-gray-500 mt-0.5">Minimum par salle</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">

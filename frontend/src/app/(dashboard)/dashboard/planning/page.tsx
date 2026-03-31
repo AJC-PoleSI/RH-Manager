@@ -78,6 +78,11 @@ export default function PlanningPage() {
     const [repartitionResult, setRepartitionResult] = useState<any>(null);
     const [resetLoading, setResetLoading] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    // Logistique des créneaux (Phase 1 — déplacé depuis le formulaire épreuves)
+    const [logNbSalles, setLogNbSalles] = useState(1);
+    const [logMinEval, setLogMinEval] = useState(2);
+    const [logSaving, setLogSaving] = useState(false);
+
     // Modale modification créneau
     const [editSlot, setEditSlot] = useState<any>(null);
     const [editRoom, setEditRoom] = useState('');
@@ -144,6 +149,40 @@ export default function PlanningPage() {
         fetchAdminSettings();
         fetchAllMembers();
     }, [fetchAdminSettings, fetchAllMembers]);
+
+    // Sync logistique fields when selected epreuve changes
+    useEffect(() => {
+        if (!selectedEpreuveId) return;
+        const ep = epreuves.find((e: any) => e.id === selectedEpreuveId) as any;
+        if (ep) {
+            setLogNbSalles(ep.nbSalles || ep.nb_salles || 1);
+            setLogMinEval(ep.minEvaluatorsPerSalle || ep.min_evaluators_per_salle || 2);
+        }
+    }, [selectedEpreuveId, epreuves]);
+
+    // Save logistique fields to epreuve
+    const handleSaveLogistique = async () => {
+        if (!selectedEpreuveId) return;
+        setLogSaving(true);
+        try {
+            await api.put(`/epreuves/${selectedEpreuveId}`, {
+                nbSalles: logNbSalles,
+                minEvaluatorsPerSalle: logMinEval,
+            });
+            // Update epreuves list in local state
+            setEpreuves((prev: any) => prev.map((ep: any) =>
+                ep.id === selectedEpreuveId
+                    ? { ...ep, nbSalles: logNbSalles, minEvaluatorsPerSalle: logMinEval }
+                    : ep
+            ));
+            toast('Configuration logistique sauvegardee', 'success');
+        } catch (e) {
+            console.error('Erreur sauvegarde logistique:', e);
+            toast('Erreur lors de la sauvegarde', 'error');
+        } finally {
+            setLogSaving(false);
+        }
+    };
 
     // Fetch real availability data from API
     const fetchAvailabilityData = useCallback(async () => {
@@ -592,13 +631,56 @@ export default function PlanningPage() {
                     </select>
                 </div>
 
-                                {selectedEpreuveId ? (
-                    <CalendarAdminBuilder 
-                        selectedEpreuveId={selectedEpreuveId}
-                        epreuve={epreuves.find(e => e.id === selectedEpreuveId)}
-                        toast={toast}
-                        onUpdate={() => {}} 
-                    />
+                {selectedEpreuveId ? (
+                    <>
+                        {/* ══════════════════════════════════════════════════════════════════
+                            LOGISTIQUE DES CRÉNEAUX — nb salles + min évaluateurs
+                            (Déplacé depuis le formulaire de création d'épreuve)
+                            ══════════════════════════════════════════════════════════════════ */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                            <h3 className="text-sm font-semibold text-gray-800 mb-4">⚙️ Logistique des créneaux</h3>
+                            <div className="grid grid-cols-2 gap-6 max-w-lg">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Nombre de salles</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={logNbSalles}
+                                        onChange={e => setLogNbSalles(parseInt(e.target.value) || 1)}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-0.5">Salles en parallèle pour cette épreuve</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Min. évaluateurs / salle</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={logMinEval}
+                                        onChange={e => setLogMinEval(parseInt(e.target.value) || 1)}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-0.5">Minimum d&apos;évaluateurs requis par salle</p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end mt-4">
+                                <button
+                                    onClick={handleSaveLogistique}
+                                    disabled={logSaving}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                >
+                                    {logSaving ? 'Sauvegarde...' : 'Sauvegarder la logistique'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <CalendarAdminBuilder
+                            selectedEpreuveId={selectedEpreuveId}
+                            epreuve={epreuves.find(e => e.id === selectedEpreuveId)}
+                            toast={toast}
+                            onUpdate={() => {}}
+                        />
+                    </>
                 ) : (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center text-gray-500">
                         Veuillez selectionner une epreuve ci-dessus pour configurer son planning.
