@@ -66,34 +66,57 @@ export async function POST(req: NextRequest) {
     const questionsValue = body.evaluationQuestions ?? body.criteres?.map((c: any) => ({ q: c.name, weight: c.coefficient })) ?? [];
     const isPoleTest = body.isPoleTest ?? (body.pole ? true : false);
 
-    const { data: epreuve, error } = await supabaseAdmin
-      .from('epreuves')
-      .insert({
+    // Core fields (always exist in DB)
+    const coreData: Record<string, unknown> = {
         name: body.name,
         tour: tourValue,
         type: body.type,
         duration_minutes: durationValue,
-        roulement_minutes: roulementValue,
-        nb_salles: nbSallesValue,
-        min_evaluators_per_salle: minEvaluatorsValue,
         evaluation_questions:
           typeof questionsValue === 'string'
             ? questionsValue
             : JSON.stringify(questionsValue),
         is_pole_test: isPoleTest,
         pole: body.pole || null,
-        description: body.description || null,
-        documents_urls: body.documentsUrls || [],
-        // Champs date/logistique
-        date: body.date || null,
-        time: body.time || null,
-        salle: body.salle || null,
-        presented_by: body.presentedBy || null,
-        date_debut: body.dateDebut || null,
-        date_fin: body.dateFin || null,
-      })
+    };
+
+    // Extended fields (may not exist if migration not run yet)
+    const extendedFields: Record<string, unknown> = {};
+    if (roulementValue !== undefined) extendedFields.roulement_minutes = roulementValue;
+    if (nbSallesValue !== undefined) extendedFields.nb_salles = nbSallesValue;
+    if (minEvaluatorsValue !== undefined) extendedFields.min_evaluators_per_salle = minEvaluatorsValue;
+    if (body.description) extendedFields.description = body.description;
+    if (body.documentsUrls && body.documentsUrls.length > 0) extendedFields.documents_urls = body.documentsUrls;
+    if (body.date) extendedFields.date = body.date;
+    if (body.time) extendedFields.time = body.time;
+    if (body.salle) extendedFields.salle = body.salle;
+    if (body.presentedBy) extendedFields.presented_by = body.presentedBy;
+    if (body.dateDebut) extendedFields.date_debut = body.dateDebut;
+    if (body.dateFin) extendedFields.date_fin = body.dateFin;
+
+    // Try with all fields first, fallback to core only if columns don't exist
+    let epreuve: any;
+    let error: any;
+
+    const fullInsert = await supabaseAdmin
+      .from('epreuves')
+      .insert({ ...coreData, ...extendedFields })
       .select()
       .single();
+
+    if (fullInsert.error && String(fullInsert.error.message).includes('column')) {
+      // Fallback: insert with core fields only
+      const fallback = await supabaseAdmin
+        .from('epreuves')
+        .insert(coreData)
+        .select()
+        .single();
+      epreuve = fallback.data;
+      error = fallback.error;
+    } else {
+      epreuve = fullInsert.data;
+      error = fullInsert.error;
+    }
 
     if (error) throw error;
 
