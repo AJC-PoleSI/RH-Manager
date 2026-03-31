@@ -259,7 +259,7 @@ function AdminView() {
                                     required
                                     value={form.email}
                                     onChange={e => setForm({ ...form, email: e.target.value })}
-                                    placeholder="jean.dupont@essec.edu"
+                                    placeholder="jean.dupont@ecole.fr"
                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
@@ -573,10 +573,9 @@ function MemberView() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [evalsRes] = await Promise.all([
-                    api.get('/evaluations/my-evaluations'),
-                ]);
-                setEvaluations(evalsRes.data);
+                // Utiliser /evaluations directement — l'API scope déjà par member_id pour les non-admin
+                const evalsRes = await api.get('/evaluations');
+                setEvaluations(Array.isArray(evalsRes.data) ? evalsRes.data : []);
 
                 // Try to fetch next candidates to evaluate
                 try {
@@ -586,7 +585,7 @@ function MemberView() {
                     // Endpoint may not exist yet
                 }
             } catch (e) {
-                console.error(e);
+                console.error('Erreur chargement evaluations:', e);
             } finally {
                 setLoading(false);
             }

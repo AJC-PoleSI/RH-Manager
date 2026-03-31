@@ -59,20 +59,20 @@ function TopNav() {
 }
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
-    const { token } = useAuth();
+    const { token, isInitialized } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
-        if (!token) {
+        if (isInitialized && !token) {
             router.push('/login');
         }
-    }, [token, router]);
+    }, [isInitialized, token, router]);
 
-    // Show loading while redirecting
-    if (!token) {
+    // Show loading while initializing or redirecting
+    if (!isInitialized || !token) {
         return (
             <div className="flex items-center justify-center h-screen">
-                <p className="text-gray-600">Redirection...</p>
+                <p className="text-gray-600">Chargement...</p>
             </div>
         );
     }

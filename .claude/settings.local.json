@@ -49,7 +49,25 @@
       "Bash(cat '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/cross-calendar/page.tsx')",
       "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/candidates/[id]\")",
       "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/members/[id]\")",
-      "Bash(node -e \"const bcrypt = require\\(''bcryptjs''\\); bcrypt.hash\\(''admin123'', 10\\).then\\(h => console.log\\(h\\)\\)\")"
+      "Bash(node -e \"const bcrypt = require\\(''bcryptjs''\\); bcrypt.hash\\(''admin123'', 10\\).then\\(h => console.log\\(h\\)\\)\")",
+      "Bash(grep -r \"deliberation\\\\|deliberateu\\\\|soirée.*débat\\\\|debat.*soirée\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app' --include=*.ts --include=*.tsx --include=*.js --include=*.jsx)",
+      "Bash(grep -r \"evaluateur\\\\|evaluator.*admin\\\\|member.*list\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app' --include=*.ts --include=*.tsx --include=*.js --include=*.jsx)",
+      "Bash(find \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\))",
+      "Bash(grep -l \"assign\\\\|repartition\\\\|evaluateur\\\\|member\" \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api\"/*)",
+      "Bash(grep -r \"toggle.*member\\\\|assign.*evaluateu\\\\|repartition\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app' --include=*.tsx --include=*.ts)",
+      "Bash(grep -r \"isAdmin\\\\|member.*list\\\\|evaluateur.*list\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard' --include=*.tsx)",
+      "Bash(grep -r \"tour.*deliberat\\\\|deliberat.*tour\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app' --include=*.tsx --include=*.ts)",
+      "Bash(grep -r \"Repartir\\\\|repartition\\\\|Dispos.*evaluateu\" '/Users/felixpitz/Desktop/RH Manager Anti /frontend/src' --include=*.tsx)",
+      "Bash(grep -l \"member\\\\|evaluateu\" \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/members\"/*)",
+      "Bash(ls \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/candidates/\")",
+      "Bash(ls \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/candidates/[id]/\")",
+      "Bash(wc -l \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/\\(dashboard\\)/dashboard/candidates/[id]/page.tsx\")",
+      "Bash(node -e \":*)",
+      "mcp__Desktop_Commander__start_search",
+      "mcp__Desktop_Commander__get_more_search_results",
+      "Bash(ls -la \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app\"/*.tsx)",
+      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/mentions-legales\")",
+      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/politique-confidentialite\")"
     ]
   },
   "hooks": {

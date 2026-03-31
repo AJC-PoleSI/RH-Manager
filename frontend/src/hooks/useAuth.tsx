@@ -8,6 +8,7 @@ interface AuthState {
     token: string | null;
     user: any | null; // member or candidate
     role: 'member' | 'candidate' | null;
+    isInitialized: boolean;
     loginMember: (token: string, member: any) => void;
     loginCandidate: (token: string, candidate: any) => void;
     logout: () => void;
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthState>({
     token: null,
     user: null,
     role: null,
+    isInitialized: false,
     loginMember: () => { },
     loginCandidate: () => { },
     logout: () => { },
@@ -26,6 +28,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [token, setToken] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
     const [role, setRole] = useState<'member' | 'candidate' | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -39,6 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(JSON.parse(storedUser));
             setRole(storedRole);
         }
+        setIsInitialized(true);
     }, []);
 
     const loginMember = (newToken: string, member: any) => {
@@ -70,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ token, user, role, loginMember, loginCandidate, logout }}>
+        <AuthContext.Provider value={{ token, user, role, isInitialized, loginMember, loginCandidate, logout }}>
             {children}
         </AuthContext.Provider>
     );

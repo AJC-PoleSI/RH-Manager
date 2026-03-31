@@ -14,9 +14,9 @@ export default function PolitiqueConfidentialitePage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">1. Responsable du traitement</h2>
             <p>
-              Le responsable du traitement des donnees personnelles est la Junior-Entreprise ESSEC,
-              association loi 1901, dont le siege social est situe a ESSEC Business School,
-              3 Avenue Bernard Hirsch, 95021 Cergy-Pontoise.
+              Le responsable du traitement des donnees personnelles est Audencia Junior Conseil,
+              association loi 1901, dont le siege social est situe 8 Route de la Joneliere,
+              44312 Nantes.
             </p>
           </section>
 
@@ -47,7 +47,7 @@ export default function PolitiqueConfidentialitePage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">4. Base legale</h2>
             <p>
-              Le traitement des donnees repose sur l&apos;interet legitime de la Junior-Entreprise
+              Le traitement des donnees repose sur l&apos;interet legitime d&apos;Audencia Junior Conseil
               a gerer son processus de recrutement, ainsi que sur le consentement des candidats
               lors de leur inscription sur la plateforme.
             </p>
@@ -65,7 +65,7 @@ export default function PolitiqueConfidentialitePage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">6. Destinataires des donnees</h2>
             <p>
-              Les donnees sont accessibles uniquement aux membres habilites de la Junior-Entreprise
+              Les donnees sont accessibles uniquement aux membres habilites d&apos;Audencia Junior Conseil
               (administrateurs et evaluateurs) dans le cadre strict de leurs missions de recrutement.
               Aucune donnee n&apos;est transmise a des tiers commerciaux.
             </p>
@@ -91,7 +91,7 @@ export default function PolitiqueConfidentialitePage() {
               <li><strong>Droit d&apos;opposition :</strong> vous opposer au traitement de vos donnees</li>
             </ul>
             <p className="mt-3">
-              Pour exercer ces droits, contactez-nous a : <strong>contact@junior-essec.com</strong>
+              Pour exercer ces droits, contactez-nous a : <strong>contact@ajc-mail.com</strong>
             </p>
           </section>
 
@@ -109,7 +109,7 @@ export default function PolitiqueConfidentialitePage() {
             <p>
               Pour toute question concernant cette politique de confidentialite ou l&apos;exercice
               de vos droits, vous pouvez nous ecrire a :{' '}
-              <strong>contact@junior-essec.com</strong>
+              <strong>contact@ajc-mail.com</strong>
             </p>
             <p className="mt-2">
               Vous pouvez egalement introduire une reclamation aupres de la CNIL :{' '}

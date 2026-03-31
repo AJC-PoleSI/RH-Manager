@@ -14,20 +14,20 @@ export default function MentionsLegalesPage() {
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Editeur du site</h2>
             <p>
-              Ce site est edite par la Junior-Entreprise ESSEC dans le cadre de la gestion
+              Ce site est edite par Audencia Junior Conseil dans le cadre de la gestion
               de son processus de recrutement interne.
             </p>
             <ul className="mt-2 space-y-1 text-gray-600">
-              <li><strong>Denomination :</strong> Junior-Entreprise ESSEC</li>
+              <li><strong>Denomination :</strong> Audencia Junior Conseil</li>
               <li><strong>Forme juridique :</strong> Association loi 1901</li>
-              <li><strong>Siege social :</strong> ESSEC Business School, 3 Avenue Bernard Hirsch, 95021 Cergy-Pontoise</li>
-              <li><strong>Email :</strong> contact@junior-essec.com</li>
+              <li><strong>Siege social :</strong> 8 Route de la Joneliere, 44312 Nantes</li>
+              <li><strong>Email :</strong> contact@ajc-mail.com</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Directeur de la publication</h2>
-            <p>Le directeur de la publication est le/la President(e) de la Junior-Entreprise.</p>
+            <p>Le directeur de la publication est le/la President(e) d&apos;Audencia Junior Conseil.</p>
           </section>
 
           <section>
@@ -41,7 +41,7 @@ export default function MentionsLegalesPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Propriete intellectuelle</h2>
             <p>
               L&apos;ensemble des contenus (textes, images, logos, elements graphiques) presentes sur ce site
-              sont la propriete exclusive de la Junior-Entreprise ESSEC ou de ses partenaires.
+              sont la propriete exclusive d&apos;Audencia Junior Conseil ou de ses partenaires.
               Toute reproduction, representation, modification ou exploitation, meme partielle,
               est interdite sans autorisation ecrite prealable.
             </p>
@@ -70,7 +70,7 @@ export default function MentionsLegalesPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Contact</h2>
             <p>
               Pour toute question relative aux mentions legales, vous pouvez nous contacter
-              a l&apos;adresse : <strong>contact@junior-essec.com</strong>
+              a l&apos;adresse : <strong>contact@ajc-mail.com</strong>
             </p>
           </section>
         </div>
