@@ -64,6 +64,8 @@ export default function PlanningPage() {
 
     // Admin state
     const [availabilityData, setAvailabilityData] = useState<Record<string, number>>({});
+    const [availabilityDetails, setAvailabilityDetails] = useState<Record<string, any[]>>({});
+    const [selectedDispoCell, setSelectedDispoCell] = useState<{ key: string; label: string; members: any[] } | null>(null);
     const [sallesParCreneau, setSallesParCreneau] = useState(2);
     const [evalParSalle, setEvalParSalle] = useState(3);
     const [inscriptionData, setInscriptionData] = useState<{ creneau: string; inscrits: number; capacite: number; statut: string }[]>([]);
@@ -147,10 +149,13 @@ export default function PlanningPage() {
         try {
             const res = await api.get('/availability/all');
             const data: Record<string, number> = {};
+            const details: Record<string, any[]> = {};
             // Initialize all cells to 0
             DAYS.forEach(day => {
                 TIME_SLOTS.forEach(slot => {
-                    data[`${day}-${slot}`] = 0;
+                    const key = `${day}-${slot}`;
+                    data[key] = 0;
+                    details[key] = [];
                 });
             });
             // Count availabilities per day/slot
@@ -167,19 +172,25 @@ export default function PlanningPage() {
                 const key = `${dayLabel}-${slotLabel}`;
                 if (data[key] !== undefined) {
                     data[key] = (data[key] || 0) + 1;
+                    details[key].push(a);
                 }
             });
             setAvailabilityData(data);
+            setAvailabilityDetails(details);
         } catch (e) {
             console.error('Erreur chargement dispos:', e);
             // Fallback to empty data
             const data: Record<string, number> = {};
+            const details: Record<string, any[]> = {};
             DAYS.forEach(day => {
                 TIME_SLOTS.forEach(slot => {
-                    data[`${day}-${slot}`] = 0;
+                    const key = `${day}-${slot}`;
+                    data[key] = 0;
+                    details[key] = [];
                 });
             });
             setAvailabilityData(data);
+            setAvailabilityDetails(details);
         }
     }, [isAdmin, selectedEpreuveId]);
 
@@ -603,6 +614,11 @@ export default function PlanningPage() {
                                             return (
                                                 <div
                                                     key={key}
+                                                    onClick={() => {
+                                                        const label = `${day} à ${slot}`;
+                                                        setSelectedDispoCell({ key, label, members: availabilityDetails[key] || [] });
+                                                    }}
+                                                    className="hover:opacity-80 transition-opacity cursor-pointer flex flex-col items-center justify-center"
                                                     style={{
                                                         padding: '6px 3px',
                                                         borderRadius: '5px',
@@ -610,7 +626,6 @@ export default function PlanningPage() {
                                                         backgroundColor: getAvailBg(count),
                                                         textAlign: 'center',
                                                         fontSize: '12px',
-                                                        cursor: 'default',
                                                     }}
                                                 >
                                                     <span style={{ fontWeight: 600 }}>👤{count}</span>
@@ -655,6 +670,63 @@ export default function PlanningPage() {
                                 Fermer saisie
                             </button>
                         </div>
+
+                        {/* Modale Dispos Evaluateurs Click */}
+                        {selectedDispoCell && (
+                            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedDispoCell(null)} />
+                                <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                        Evaluateurs disponibles
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mb-5">{selectedDispoCell.label}</p>
+
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                        {selectedDispoCell.members.length === 0 ? (
+                                            <p className="text-sm text-gray-400 text-center py-4">Aucun evaluateur inscrit</p>
+                                        ) : (
+                                            selectedDispoCell.members.map((a: any) => {
+                                                const mName = a.member?.first_name || a.member?.last_name ? `${a.member.first_name || ''} ${a.member.last_name || ''}`.trim() : a.member?.email || 'Evaluateur inconnu';
+                                                return (
+                                                <div key={a.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-800 break-all pr-2">
+                                                            {mName}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!window.confirm('Voulez-vous vraiment supprimer cette disponibilite ?')) return;
+                                                            try {
+                                                                await api.delete(`/availability/${a.id}`);
+                                                                toast('Disponibilite supprimee', 'success');
+                                                                fetchAvailabilityData();
+                                                                setSelectedDispoCell(prev => prev ? { ...prev, members: prev.members.filter((m: any) => m.id !== a.id) } : null);
+                                                            } catch (e) {
+                                                                toast('Erreur lors de la suppression', 'error');
+                                                            }
+                                                        }}
+                                                        className="mt-2 sm:mt-0 px-2 flex-shrink-0 py-1 text-[11px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors"
+                                                    >
+                                                        Supprimer
+                                                    </button>
+                                                </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+
+                                    <div className="mt-5 pt-4 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            onClick={() => setSelectedDispoCell(null)}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                                        >
+                                            Fermer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
