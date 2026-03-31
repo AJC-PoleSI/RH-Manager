@@ -39,7 +39,7 @@ const Sidebar = () => {
                 { href: '/dashboard/settings', label: 'Création', icon: '⚙️' },
                 { href: '/dashboard/candidates', label: 'Candidats', icon: '👥' },
                 { href: '/dashboard/evaluations', label: 'Évaluateurs', icon: '📝' },
-                { href: '/dashboard/deliberations', label: 'Soirée débat', icon: '🌙' },
+                { href: '/dashboard/deliberations', label: 'Soirée délibération', icon: '🌙' },
                 { href: '/dashboard/planning', label: 'Planning', icon: '📅' },
             ],
         },

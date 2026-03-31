@@ -250,7 +250,7 @@ export default function DashboardPage() {
         const quickLinks = [
             { label: 'Gestion candidats', href: '/dashboard/candidates' },
             { label: 'Épreuves', href: '/dashboard/epreuves' },
-            { label: 'Soirée débat', href: '/dashboard/deliberations' },
+            { label: 'Soirée délibération', href: '/dashboard/deliberations' },
             { label: 'Paramètres', href: '/dashboard/settings' },
         ];
 

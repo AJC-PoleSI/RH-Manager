@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
-// GET /api/kpis/poles — KPI des voeux de pôles pour la Soirée Débat
+// GET /api/kpis/poles — KPI des voeux de pôles pour la Soirée Délibération
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();

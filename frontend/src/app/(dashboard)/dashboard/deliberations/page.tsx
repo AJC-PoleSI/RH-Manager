@@ -415,8 +415,8 @@ export default function DeliberationsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Soiree Debat</h1>
-          <p className="text-sm text-gray-500 mt-1">Deliberation de fin de tour</p>
+          <h1 className="text-2xl font-bold text-gray-900">Soirée Délibération</h1>
+          <p className="text-sm text-gray-500 mt-1">Délibération de fin de tour</p>
         </div>
         {/* View toggle */}
         <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
