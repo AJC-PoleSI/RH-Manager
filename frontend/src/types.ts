@@ -32,4 +32,7 @@ export interface Epreuve {
     tour: number;
     type: string;
     durationMinutes: number;
+    roulementMinutes: number;
+    nbSalles: number;
+    minEvaluatorsPerSalle: number;
 }

@@ -30,9 +30,9 @@ const POLES = ["Système d'information", 'Marketing', 'Développement commercial
 /**
  * Calcule le total des scores (somme de tous les critères)
  */
-function getScoreTotal(scores: Record<string, number>): number {
+function getScoreTotal(scores: Record<string, number | string>): number {
     if (!scores || typeof scores !== 'object') return 0;
-    const values = Object.values(scores).filter(v => typeof v === 'number' && !isNaN(v));
+    const values = Object.values(scores).map(Number).filter(v => !isNaN(v));
     if (values.length === 0) return 0;
     return values.reduce((sum, v) => sum + v, 0);
 }
@@ -159,10 +159,10 @@ function AdminView() {
     // ── Stats ──
     const evaluateurCount = members.filter(m => !m.isAdmin).length;
 
-    // Note moyenne GLOBALE = moyenne des moyennes par critère (pas la somme des totaux !)
-    const allAverages = evaluations.map(ev => getScoreAverage(ev.scores)).filter(v => v > 0);
-    const avgScore = allAverages.length > 0
-        ? Math.round((allAverages.reduce((a, b) => a + b, 0) / allAverages.length) * 10) / 10
+    // Note moyenne GLOBALE = vraie moyenne des totaux (et plus la moyenne des moyennes qui était mathématiquement fausse)
+    const allTotals = evaluations.map(ev => getScoreTotal(ev.scores)).filter(v => v > 0);
+    const avgScore = allTotals.length > 0
+        ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
     const evalCount = evaluations.length;
 
@@ -173,7 +173,7 @@ function AdminView() {
         const mId = ev.member?.id || '';
         memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
         if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
-        memberEvalAverages[mId].push(getScoreAverage(ev.scores));
+        memberEvalAverages[mId].push(getScoreTotal(ev.scores));
     });
 
     if (loading) {
@@ -208,7 +208,7 @@ function AdminView() {
                     <p className="text-3xl font-bold text-blue-700 mt-1">{evaluateurCount}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-sm text-gray-500 font-medium">Note moyenne / critère</p>
+                    <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
                     <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore || '-'}</p>
                 </div>
                 <div className="bg-white border border-green-200 rounded-xl p-5">
@@ -311,7 +311,7 @@ function AdminView() {
                                 <th className="px-6 py-3">Pôle</th>
                                 <th className="px-6 py-3">Email</th>
                                 <th className="px-6 py-3 text-center">Évals</th>
-                                <th className="px-6 py-3 text-center">Moy. / critère</th>
+                                <th className="px-6 py-3 text-center">Note moyenne</th>
                                 <th className="px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -374,6 +374,7 @@ function AdminView() {
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
+                                                {!m.isAdmin && (
                                                 <button
                                                     onClick={() => handleDelete(m.id)}
                                                     className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -381,6 +382,7 @@ function AdminView() {
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -408,8 +410,7 @@ function AdminView() {
                                 <th className="px-6 py-3">Candidat</th>
                                 <th className="px-6 py-3">Épreuve</th>
                                 <th className="px-6 py-3 text-center">Tour</th>
-                                <th className="px-6 py-3 text-center">Total</th>
-                                <th className="px-6 py-3 text-center">Moy. / critère</th>
+                                <th className="px-6 py-3 text-center">Note individuelle</th>
                                 <th className="px-6 py-3 text-center">Note collective</th>
                                 <th className="px-6 py-3">Commentaire</th>
                             </tr>
@@ -441,7 +442,6 @@ function AdminView() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-3 text-center font-bold text-blue-600">{getScoreTotal(ev.scores)}</td>
-                                        <td className="px-6 py-3 text-center text-gray-600">{getScoreAverage(ev.scores)}</td>
                                         <td className="px-6 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className="font-bold text-green-700">{collectiveScore}</span>
@@ -462,7 +462,7 @@ function AdminView() {
 
             {/* ─── Edit Member Modal ─── */}
             {editingMember && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditingMember(null)}>
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                     <div
                         className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6"
                         onClick={e => e.stopPropagation()}
@@ -593,11 +593,11 @@ function MemberView() {
         fetchData();
     }, []);
 
-    // Stats — moyenne par critère (pas le total)
+    // Stats — moyenne globale des notes au lieu de moyenne par critère
     const totalEvals = evaluations.length;
-    const allAverages = evaluations.map(ev => getScoreAverage(ev.scores)).filter(v => v > 0);
-    const avgScore = allAverages.length > 0
-        ? Math.round((allAverages.reduce((a, b) => a + b, 0) / allAverages.length) * 10) / 10
+    const allTotals = evaluations.map(ev => getScoreTotal(ev.scores)).filter(v => v > 0);
+    const avgScore = allTotals.length > 0
+        ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
 
     if (loading) {
@@ -623,7 +623,7 @@ function MemberView() {
                     <p className="text-3xl font-bold text-blue-700 mt-1">{totalEvals}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-sm text-gray-500 font-medium">Note moyenne / critère</p>
+                    <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
                     <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore || '-'}</p>
                 </div>
             </div>

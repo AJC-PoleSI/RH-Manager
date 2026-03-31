@@ -23,6 +23,9 @@ export async function GET() {
         typeof e.evaluation_questions === 'string'
           ? JSON.parse(e.evaluation_questions || '[]')
           : e.evaluation_questions ?? [],
+      roulementMinutes: e.roulement_minutes || 10,
+      nbSalles: e.nb_salles || 1,
+      minEvaluatorsPerSalle: e.min_evaluators_per_salle || 2,
       isPoleTest: e.is_pole_test,
       pole: e.pole,
       isGroupEpreuve: e.is_group_epreuve,
@@ -57,6 +60,9 @@ export async function POST(req: NextRequest) {
     // Support both formats: settings page (tourId, criteres, duree) and epreuves page (tour, durationMinutes, evaluationQuestions)
     const tourValue = body.tour ?? (body.tourId ? parseInt(body.tourId) : 1);
     const durationValue = body.durationMinutes ?? (body.duree ? parseInt(body.duree) : 30);
+    const roulementValue = body.roulementMinutes ?? 10;
+    const nbSallesValue = body.nbSalles ?? 1;
+    const minEvaluatorsValue = body.minEvaluatorsPerSalle ?? 2;
     const questionsValue = body.evaluationQuestions ?? body.criteres?.map((c: any) => ({ q: c.name, weight: c.coefficient })) ?? [];
     const isPoleTest = body.isPoleTest ?? (body.pole ? true : false);
 
@@ -67,6 +73,9 @@ export async function POST(req: NextRequest) {
         tour: tourValue,
         type: body.type,
         duration_minutes: durationValue,
+        roulement_minutes: roulementValue,
+        nb_salles: nbSallesValue,
+        min_evaluators_per_salle: minEvaluatorsValue,
         evaluation_questions:
           typeof questionsValue === 'string'
             ? questionsValue

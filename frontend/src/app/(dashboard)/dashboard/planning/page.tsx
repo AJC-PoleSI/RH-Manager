@@ -583,6 +583,7 @@ export default function PlanningPage() {
                         value={selectedEpreuveId}
                         onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setExistingSlots([]); }}
                     >
+                        <option value="">-- Sélectionner une épreuve --</option>
                         {epreuves.map(ep => (
                             <option key={ep.id} value={ep.id}>{ep.name} — {ep.type} (Tour {ep.tour})</option>
                         ))}
@@ -674,7 +675,7 @@ export default function PlanningPage() {
                         {/* Modale Dispos Evaluateurs Click */}
                         {selectedDispoCell && (
                             <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                                <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedDispoCell(null)} />
+                                <div className="absolute inset-0 bg-black/40" />
                                 <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
                                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
                                         Evaluateurs disponibles
@@ -784,7 +785,7 @@ export default function PlanningPage() {
                         {/* Modale de confirmation reset */}
                         {showResetConfirm && (
                             <div className="fixed inset-0 z-50 flex items-center justify-center">
-                                <div className="absolute inset-0 bg-black/40" onClick={() => setShowResetConfirm(false)} />
+                                <div className="absolute inset-0 bg-black/40" />
                                 <div className="relative bg-white rounded-xl shadow-xl max-w-md mx-4 p-6">
                                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Reinitialiser les creneaux ?</h3>
                                     <p className="text-sm text-gray-600 mb-4">
@@ -1033,7 +1034,7 @@ export default function PlanningPage() {
                 {/* ══════════════════════════════════════════════════ */}
                 {editSlot && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-black/40" onClick={() => setEditSlot(null)} />
+                        <div className="absolute inset-0 bg-black/40" />
                         <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">Modifier le creneau</h3>
                             <p className="text-sm text-gray-500 mb-5">{editSlot.start_time} - {editSlot.end_time} | {editSlot.label || ''}</p>

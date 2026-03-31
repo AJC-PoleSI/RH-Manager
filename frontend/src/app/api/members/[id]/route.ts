@@ -91,6 +91,17 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
+    // SECURITY: Prevent deleting admins
+    const { data: memberToDelete } = await supabaseAdmin
+      .from('members')
+      .select('is_admin')
+      .eq('id', id)
+      .single();
+
+    if (memberToDelete?.is_admin) {
+      return Response.json({ error: 'Cannot delete an administrator account' }, { status: 403 });
+    }
+
     const { error } = await supabaseAdmin
       .from('members')
       .delete()

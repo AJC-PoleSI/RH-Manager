@@ -9,6 +9,19 @@ import { useToast } from "@/components/ui/toast";
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+const POLES = [
+  "Système d'information",
+  "Marketing",
+  "Développement commercial",
+  "Audit Qualité",
+  "Ressource Humaine",
+  "Trésorerie",
+  "Bureau - VP",
+  "Bureau - Président",
+  "Bureau - Trésorier",
+  "Bureau - Secrétaire générale"
+];
+
 interface Tour {
   id: string;
   name: string;
@@ -46,6 +59,9 @@ interface NewEpreuveForm {
   dateDebut: string;
   dateFin: string;
   duree: string;
+  roulementMinutes: string;
+  nbSalles: string;
+  minEvaluatorsPerSalle: string;
   pole: string;
   /* shared */
   description: string;
@@ -64,6 +80,9 @@ const EMPTY_FORM: NewEpreuveForm = {
   dateDebut: "",
   dateFin: "",
   duree: "",
+  roulementMinutes: "10",
+  nbSalles: "1",
+  minEvaluatorsPerSalle: "2",
   pole: "",
   description: "",
   documents: null,
@@ -223,11 +242,14 @@ export default function CreationPage() {
       time: ep.time || '',
       salle: ep.salle || '',
       presentedBy: ep.presentedBy || '',
-      dateDebut: ep.dateDebut || '',
-      dateFin: ep.dateFin || '',
-      duree: String(ep.durationMinutes || ''),
-      pole: ep.pole || '',
-      description: ep.description || '',
+      dateDebut: ep.dateDebut || "",
+      dateFin: ep.dateFin || "",
+      duree: String(ep.durationMinutes || ""),
+      roulementMinutes: String(ep.roulementMinutes || "10"),
+      nbSalles: String(ep.nbSalles || "1"),
+      minEvaluatorsPerSalle: String(ep.minEvaluatorsPerSalle || "2"),
+      pole: ep.pole || "",
+      description: ep.description || "",
       documents: null,
       criteres,
     });
@@ -443,7 +465,7 @@ export default function CreationPage() {
       {/* ---- Modal confirmation suppression tour ---- */}
       {tourToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !deletingTour && setTourToDelete(null)} />
+          <div className="absolute inset-0 bg-black/40" />
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[420px] mx-4 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Supprimer le tour</h2>
             <p className="text-sm text-gray-600 mb-4">
@@ -556,7 +578,6 @@ export default function CreationPage() {
           {/* Overlay */}
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={closeModal}
           />
 
           {/* Panel */}
@@ -687,14 +708,47 @@ export default function CreationPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pôle</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Roulement (min)</label>
                   <input
-                    type="text"
+                    type="number"
+                    value={form.roulementMinutes}
+                    onChange={(e) => handleFormChange("roulementMinutes", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nb. Salles</label>
+                  <input
+                    type="number"
+                    value={form.nbSalles}
+                    onChange={(e) => handleFormChange("nbSalles", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="3"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Évaluateurs Min/Salle</label>
+                  <input
+                    type="number"
+                    value={form.minEvaluatorsPerSalle}
+                    onChange={(e) => handleFormChange("minEvaluatorsPerSalle", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pôle (Optionnel)</label>
+                  <select
                     value={form.pole}
                     onChange={(e) => handleFormChange("pole", e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Communication"
-                  />
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">Sélectionner un pôle (optionnel)</option>
+                    {POLES.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}

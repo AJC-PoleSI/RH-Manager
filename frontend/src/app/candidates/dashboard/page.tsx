@@ -533,7 +533,7 @@ export default function CandidateCalendarPage() {
           MODALE DÉTAIL ÉVÉNEMENT + BOUTON ANNULATION
           ═══════════════════════════════════════════════ */}
       {selectedEvent && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEvent(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
