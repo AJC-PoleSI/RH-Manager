@@ -47,16 +47,21 @@ model Member {
 }
 
 model Epreuve {
-  id                 String   @id @default(uuid())
-  name               String
-  tour               Int      // 1, 2, 3
-  type               String   // oral, business game, individual, group, common
-  durationMinutes    Int      @map("duration_minutes")
-  evaluationQuestions String  @map("evaluation_questions") // Stored as JSON string
-  isPoleTest         Boolean  @default(false) @map("is_pole_test")
-  pole               String?  // RH, SI, etc.
-  isGroupEpreuve     Boolean  @default(false) @map("is_group_epreuve")
-  groupSize          Int      @default(1) @map("group_size") // nb candidates per group (1=individual)
+  id                    String   @id @default(uuid())
+  name                  String
+  tour                  Int      // 1, 2, 3
+  type                  String   // oral, business game, individual, group, common
+  durationMinutes       Int      @map("duration_minutes")
+  roulementMinutes      Int      @default(10) @map("roulement_minutes")
+  nbSalles              Int      @default(1) @map("nb_salles")
+  minEvaluatorsPerSalle Int      @default(2) @map("min_evaluators_per_salle")
+  dateDebut             String?  @map("date_debut")
+  dateFin               String?  @map("date_fin")
+  evaluationQuestions   String   @map("evaluation_questions") // Stored as JSON string
+  isPoleTest            Boolean  @default(false) @map("is_pole_test")
+  pole                  String?  // RH, SI, etc.
+  isGroupEpreuve        Boolean  @default(false) @map("is_group_epreuve")
+  groupSize             Int      @default(1) @map("group_size") // nb candidates per group (1=individual)
 
   evaluations    CandidateEvaluation[]
   calendarEvents CalendarEvent[]

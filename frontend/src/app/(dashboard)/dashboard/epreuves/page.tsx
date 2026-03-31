@@ -20,8 +20,14 @@ export default function EpreuvesPage() {
         tour: 1,
         type: 'Entretien',
         duration_minutes: 30,
+        roulement_minutes: 10,
+        nb_salles: 1,
+        min_evaluators_per_salle: 2,
+        date_debut: '',
+        date_fin: '',
         is_pole_test: false,
-        pole: 'None'
+        pole: 'None',
+        description: '',
     });
     const [questions, setQuestions] = useState<{ q: string; weight: number }[]>([{ q: '', weight: 1 }]);
     const { toast } = useToast();
@@ -50,8 +56,14 @@ export default function EpreuvesPage() {
             tour: epreuve.tour,
             type: epreuve.type,
             duration_minutes: epreuve.durationMinutes,
+            roulement_minutes: epreuve.roulementMinutes || 10,
+            nb_salles: epreuve.nbSalles || 1,
+            min_evaluators_per_salle: epreuve.minEvaluatorsPerSalle || 2,
+            date_debut: epreuve.dateDebut || '',
+            date_fin: epreuve.dateFin || '',
             is_pole_test: epreuve.isPoleTest,
-            pole: epreuve.pole || 'None'
+            pole: epreuve.pole || 'None',
+            description: epreuve.description || '',
         });
 
         try {
@@ -87,8 +99,14 @@ export default function EpreuvesPage() {
             tour: 1,
             type: 'Entretien',
             duration_minutes: 30,
+            roulement_minutes: 10,
+            nb_salles: 1,
+            min_evaluators_per_salle: 2,
+            date_debut: '',
+            date_fin: '',
             is_pole_test: false,
-            pole: 'None'
+            pole: 'None',
+            description: '',
         });
         setQuestions([{ q: '', weight: 1 }]);
         setEditingId(null);
@@ -101,8 +119,14 @@ export default function EpreuvesPage() {
             tour: formData.tour,
             type: formData.type,
             durationMinutes: formData.duration_minutes,
+            roulementMinutes: formData.roulement_minutes,
+            nbSalles: formData.nb_salles,
+            minEvaluatorsPerSalle: formData.min_evaluators_per_salle,
+            dateDebut: formData.date_debut || null,
+            dateFin: formData.date_fin || null,
             isPoleTest: formData.is_pole_test,
             pole: formData.pole,
+            description: formData.description || null,
             evaluationQuestions: questions
         };
 
@@ -145,12 +169,15 @@ export default function EpreuvesPage() {
 
             {/* View Details Modal */}
             {viewingEpreuve && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewingEpreuve(null)}>
+                    <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
                                 <CardTitle>{viewingEpreuve.name}</CardTitle>
-                                <p className="text-sm text-gray-500 mt-1">{viewingEpreuve.type} • {viewingEpreuve.durationMinutes} min • Tour {viewingEpreuve.tour}</p>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {viewingEpreuve.type} • {viewingEpreuve.durationMinutes}min + {viewingEpreuve.roulementMinutes || 10}min roulement • Tour {viewingEpreuve.tour}
+                                    {viewingEpreuve.nbSalles > 1 && ` • ${viewingEpreuve.nbSalles} salles`}
+                                </p>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => setViewingEpreuve(null)}><X size={20} /></Button>
                         </CardHeader>
@@ -193,9 +220,113 @@ export default function EpreuvesPage() {
                                 <div><Label>Nom</Label><Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required /></div>
                                 <div><Label>Durée (min)</Label><Input type="number" value={formData.duration_minutes} onChange={e => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })} /></div>
                             </div>
-                            <div className="flex gap-4">
-                                <div><Label>Tour</Label><Input type="number" max={3} min={1} value={formData.tour} onChange={e => setFormData({ ...formData, tour: parseInt(e.target.value) })} /></div>
-                                <div><Label>Type</Label><Input value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label>Tour</Label>
+                                    <select
+                                        value={formData.tour}
+                                        onChange={e => setFormData({ ...formData, tour: parseInt(e.target.value) })}
+                                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    >
+                                        <option value={1}>Tour 1</option>
+                                        <option value={2}>Tour 2</option>
+                                        <option value={3}>Tour 3</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <Label>Type</Label>
+                                    <select
+                                        value={formData.type}
+                                        onChange={e => setFormData({ ...formData, type: e.target.value })}
+                                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    >
+                                        <option value="Entretien">Entretien</option>
+                                        <option value="commune">Sur table (commune)</option>
+                                        <option value="individuelle">Individuelle</option>
+                                        <option value="groupe">Groupe</option>
+                                        <option value="oral">Oral</option>
+                                        <option value="business_game">Business Game</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label>Épreuve de pôle</Label>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.is_pole_test}
+                                            onChange={e => setFormData({ ...formData, is_pole_test: e.target.checked, pole: e.target.checked ? formData.pole : 'None' })}
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm text-gray-600">Oui, c&apos;est une épreuve de pôle</span>
+                                    </div>
+                                </div>
+                                {formData.is_pole_test && (
+                                    <div>
+                                        <Label>Pôle</Label>
+                                        <select
+                                            value={formData.pole}
+                                            onChange={e => setFormData({ ...formData, pole: e.target.value })}
+                                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                        >
+                                            <option value="None">-- Sélectionner --</option>
+                                            <option value="Système d'information">Système d&apos;information</option>
+                                            <option value="Marketing">Marketing</option>
+                                            <option value="Développement commercial">Développement commercial</option>
+                                            <option value="Audit Qualité">Audit Qualité</option>
+                                            <option value="Ressource Humaine">Ressource Humaine</option>
+                                            <option value="Trésorerie">Trésorerie</option>
+                                            <option value="Bureau - VP">Bureau - VP</option>
+                                            <option value="Bureau - Président">Bureau - Président</option>
+                                            <option value="Bureau - Trésorier">Bureau - Trésorier</option>
+                                            <option value="Bureau - Secrétaire générale">Bureau - Secrétaire générale</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <Label>Description (visible par les candidats)</Label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
+                                    placeholder="Décrivez brièvement l'épreuve, ses objectifs, ce que le candidat doit préparer..."
+                                />
+                            </div>
+
+                            {/* Planning configuration */}
+                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
+                                <h3 className="text-sm font-bold text-blue-800">Configuration Planning</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <Label className="text-xs">Roulement (min)</Label>
+                                        <Input type="number" min={0} value={formData.roulement_minutes} onChange={e => setFormData({ ...formData, roulement_minutes: parseInt(e.target.value) || 0 })} />
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Pause entre passages</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs">Nb. Salles</Label>
+                                        <Input type="number" min={1} value={formData.nb_salles} onChange={e => setFormData({ ...formData, nb_salles: parseInt(e.target.value) || 1 })} />
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Salles en parallèle</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs">Min. évaluateurs/salle</Label>
+                                        <Input type="number" min={1} value={formData.min_evaluators_per_salle} onChange={e => setFormData({ ...formData, min_evaluators_per_salle: parseInt(e.target.value) || 1 })} />
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Minimum par salle</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-xs">Date de début</Label>
+                                        <Input type="date" value={formData.date_debut} onChange={e => setFormData({ ...formData, date_debut: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs">Date de fin</Label>
+                                        <Input type="date" value={formData.date_fin} onChange={e => setFormData({ ...formData, date_fin: e.target.value })} />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Questions Section */}

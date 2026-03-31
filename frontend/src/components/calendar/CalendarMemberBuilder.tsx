@@ -172,7 +172,7 @@ export default function CalendarMemberBuilder({
       <div className="p-4 overflow-x-auto">
         {uniqueDates.length === 0 ? (
           <div className="text-center py-12 text-gray-500 text-sm border-2 border-dashed border-gray-200 rounded-xl">
-            Aucun créneau d'évaluation n'a encore été généré par l'administration.
+            Aucun créneau d&apos;évaluation n&apos;a encore été généré par l&apos;administration.
           </div>
         ) : (
           <table className="w-full text-sm text-left border-collapse">
@@ -235,7 +235,7 @@ export default function CalendarMemberBuilder({
                                 </div>
                             )}
                             <span className={`text-[11px] font-bold ${isSelected ? 'text-blue-800' : 'text-gray-700'}`}>
-                              jusqu'à {formatTime(blockObj.endTime)}
+                              jusqu&apos;à {formatTime(blockObj.endTime)}
                             </span>
                             <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
                                 {epreuvesArr.map((ep, idx) => (
@@ -259,7 +259,7 @@ export default function CalendarMemberBuilder({
       <div className="px-5 py-3 border-t border-gray-100 bg-amber-50 flex items-start gap-3">
         <span className="text-amber-600 text-lg leading-none mt-0.5">⚠️</span>
         <p className="text-xs text-amber-800">
-          <strong>N'oubliez pas d'Enregistrer</strong> pour figer vos disponibilités dans le système. Les cases grisées correspondent à des absences de configuration d'épreuve pour ces horaires.
+          <strong>N&apos;oubliez pas d&apos;Enregistrer</strong> pour figer vos disponibilités dans le système. Les cases grisées correspondent à des absences de configuration d&apos;épreuve pour ces horaires.
         </p>
       </div>
     </div>

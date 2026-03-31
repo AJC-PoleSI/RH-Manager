@@ -136,7 +136,7 @@ export default function CalendarAdminBuilder({
     return (
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
         <p className="text-gray-500 mb-2">Les dates de cette épreuve ne semblent pas configurées (Date de début et fin).</p>
-        <p className="text-sm text-gray-400">Veuillez paramétrer l'épreuve dans les Réglages pour utiliser le Calendar Builder.</p>
+        <p className="text-sm text-gray-400">Veuillez paramétrer l&apos;épreuve dans les Réglages pour utiliser le Calendar Builder.</p>
       </div>
     );
   }
