@@ -46,8 +46,7 @@ const Sidebar = () => {
         {
             title: 'Communication',
             items: [
-                { href: '/dashboard/chat', label: 'Chat général', icon: '💬' },
-                { href: '/dashboard/messages', label: 'Messagerie privée', icon: '✉️' },
+                { href: '/dashboard/messages', label: 'Messagerie', icon: '✉️' },
             ],
         },
     ];
@@ -65,8 +64,7 @@ const Sidebar = () => {
         {
             title: 'Communication',
             items: [
-                { href: '/dashboard/chat', label: 'Chat général', icon: '💬' },
-                { href: '/dashboard/messages', label: 'Messagerie privée', icon: '✉️' },
+                { href: '/dashboard/messages', label: 'Messages', icon: '✉️' },
             ],
         },
     ];
@@ -83,8 +81,7 @@ const Sidebar = () => {
         {
             title: 'Communication',
             items: [
-                { href: '/candidates/chat', label: 'Chat général', icon: '💬' },
-                { href: '/candidates/messages', label: 'Messagerie privée', icon: '✉️' },
+                { href: '/candidates/messages', label: 'Messages', icon: '✉️' },
             ],
         },
     ];
