@@ -139,12 +139,11 @@ export async function PUT(req: NextRequest) {
         if (insertError) throw insertError;
       }
     } else {
-      // Legacy/generic mode: delete where date is null, then create
+      // Overwrite all mode: delete all member's availabilities, then create
       const { error: deleteError } = await supabaseAdmin
         .from('availabilities')
         .delete()
-        .eq('member_id', memberId)
-        .is('date', null);
+        .eq('member_id', memberId);
 
       if (deleteError) throw deleteError;
 
@@ -152,7 +151,7 @@ export async function PUT(req: NextRequest) {
         const rows = availabilities.map((a: any) => ({
           member_id: memberId,
           weekday: a.weekday,
-          date: null,
+          date: a.date ? new Date(a.date).toISOString() : null,
           start_time: a.startTime,
           end_time: a.endTime,
         }));

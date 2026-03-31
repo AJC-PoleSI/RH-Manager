@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import CalendarAdminBuilder from '@/components/calendar/CalendarAdminBuilder';
+import CalendarMemberBuilder from '@/components/calendar/CalendarMemberBuilder';
 
 interface Epreuve {
     id: string;
@@ -671,93 +672,11 @@ export default function PlanningPage() {
     if (saisieOuverteMember) {
         return (
             <div className="flex flex-col gap-6 p-6">
-                {/* Header */}
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Mes disponibilites</h1>
-                    <p className="text-sm text-gray-500 mt-1">Cochez vos creneaux puis cliquez sur &quot;Enregistrer&quot;</p>
-                </div>
-
-                {/* Bannière saisie ouverte */}
-                <div className="flex items-start gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
-                    <span className="text-base mt-0.5">✅</span>
-                    <p className="text-sm text-green-800">La saisie des disponibilites est <strong>ouverte</strong>. Cochez vos creneaux puis cliquez sur &quot;Enregistrer&quot;.</p>
-                </div>
-
-                {/* Grilles de disponibilités par épreuve */}
-                {epreuves.map(ep => {
-                    const epAvail = memberAvailabilities[ep.id] || {};
-                    const selectedCount = Object.values(epAvail).filter(Boolean).length;
-                    const conflicts = getConflictingSlots(ep.id);
-
-                    return (
-                        <div key={ep.id} className="bg-white rounded-xl border border-gray-200 shadow-sm">
-                            <div className="px-5 py-4 border-b border-gray-100">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <h2 className="text-base font-semibold text-gray-900">{ep.name}</h2>
-                                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200">{ep.type}</span>
-                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium border border-gray-200">Tour {ep.tour}</span>
-                                </div>
-                            </div>
-                            <div className="p-5">
-                                <div className="overflow-x-auto">
-                                    <div style={{ display: 'grid', gridTemplateColumns: '60px repeat(5, 1fr)', gap: '4px' }}>
-                                        <div />
-                                        {DAYS.map(day => (
-                                            <div key={day} className="text-center text-xs font-semibold text-gray-600 py-2">{day}</div>
-                                        ))}
-                                        {TIME_SLOTS.map(slot => (
-                                            <div key={`row-${ep.id}-${slot}`} style={{ display: 'contents' }}>
-                                                <div className="text-xs text-gray-500 font-medium flex items-center justify-end pr-2">{slot}</div>
-                                                {DAYS.map(day => {
-                                                    const key = `${day}-${slot}`;
-                                                    const isSelected = epAvail[key] || false;
-                                                    const isConflict = conflicts.has(key);
-                                                    const cellDisabled = isConflict;
-                                                    return (
-                                                        <div
-                                                            key={`${ep.id}-${key}`}
-                                                            onClick={() => !cellDisabled && toggleMemberSlot(ep.id, key)}
-                                                            title={isConflict ? 'Deja selectionne sur une autre epreuve' : ''}
-                                                            style={{
-                                                                padding: '6px 3px', borderRadius: '5px',
-                                                                border: isSelected ? '1.5px solid #2563EB' : isConflict ? '1.5px solid #FCA5A5' : '1.5px solid #E5E7EB',
-                                                                backgroundColor: isSelected ? '#EFF6FF' : isConflict ? '#FEF2F2' : '#FFFFFF',
-                                                                textAlign: 'center', fontSize: '12px',
-                                                                cursor: cellDisabled ? 'not-allowed' : 'pointer',
-                                                                fontWeight: isSelected ? 600 : 400,
-                                                                color: isSelected ? '#2563EB' : isConflict ? '#EF4444' : '#9CA3AF',
-                                                                userSelect: 'none', transition: 'all 0.15s ease',
-                                                            }}
-                                                        >
-                                                            {isConflict ? '✕' : '✓'}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 mt-3 text-xs text-gray-500">
-                                    <span>{selectedCount} creneau{selectedCount > 1 ? 'x' : ''} selectionne{selectedCount > 1 ? 's' : ''}</span>
-                                    {conflicts.size > 0 && (
-                                        <span className="flex items-center gap-1">
-                                            <span style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', display: 'inline-block' }} />
-                                            <span className="text-red-500">Pris sur autre epreuve</span>
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex gap-3 mt-4">
-                                    <button onClick={() => handleSaveMemberAvailability(ep.id)} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">Enregistrer</button>
-                                    <button onClick={() => resetMemberSlots(ep.id)} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200">Reinitialiser</button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {epreuves.length === 0 && (
-                    <div className="text-center py-12 text-gray-400 text-sm">Aucune epreuve disponible pour le moment.</div>
-                )}
+                <CalendarMemberBuilder 
+                    memberId={user?.id || ''}
+                    toast={toast}
+                    epreuvesConfigured={epreuves}
+                />
             </div>
         );
     }
