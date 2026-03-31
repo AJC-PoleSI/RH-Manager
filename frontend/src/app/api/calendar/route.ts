@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
+import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -12,11 +12,6 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get('end');
 
   try {
-    // ══════════════════════════════════════════════════════════════════
-    // Récupérer les événements personnels + événements GLOBAUX
-    // Globaux = is_global=true OU (member_id IS NULL AND candidate_id IS NULL)
-    // Ce sont les épreuves "Sur table" visibles par tout le monde
-    // ══════════════════════════════════════════════════════════════════
     let query = supabaseAdmin
       .from('calendar_events')
       .select(`
@@ -41,7 +36,7 @@ export async function GET(req: NextRequest) {
     // Filtrer : retourner les événements globaux + ceux assignés à l'utilisateur
     const userId = payload.id;
     const filtered = (data || []).filter((event: any) => {
-      // Événement global (sur table) → visible par tous
+      // Événement global → visible par tous
       if (event.is_global) return true;
       if (!event.related_member_id && !event.related_candidate_id) return true;
       // Événement assigné à cet utilisateur
@@ -58,30 +53,46 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/calendar — create a calendar event
+// POST /api/calendar — create a calendar event (admin only for global events)
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
   try {
+    const body = await req.json();
     const {
       title, description, day,
       start_time, end_time, startTime, endTime,
       related_epreuve_id, related_member_id, related_candidate_id,
-    } = await req.json();
+      is_global, type,
+    } = body;
+
+    // Only admins can create global events
+    const isGlobal = is_global === true || type === 'global';
+    if (isGlobal && !payload.isAdmin) {
+      return forbidden();
+    }
+
+    const insertData: Record<string, any> = {
+      title,
+      description: description || null,
+      day: new Date(day).toISOString(),
+      start_time: start_time || startTime || '09:00',
+      end_time: end_time || endTime || '10:00',
+      related_epreuve_id: related_epreuve_id || null,
+      related_member_id: isGlobal ? null : (related_member_id || null),
+      related_candidate_id: isGlobal ? null : (related_candidate_id || null),
+      is_global: isGlobal,
+    };
+
+    // max_candidates only for non-global events
+    if (body.max_candidates) {
+      insertData.max_candidates = body.max_candidates;
+    }
 
     const { data, error } = await supabaseAdmin
       .from('calendar_events')
-      .insert({
-        title,
-        description,
-        day: new Date(day).toISOString(),
-        start_time: start_time || startTime,
-        end_time: end_time || endTime,
-        related_epreuve_id,
-        related_member_id,
-        related_candidate_id,
-      })
+      .insert(insertData)
       .select()
       .single();
 

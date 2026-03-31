@@ -1127,6 +1127,11 @@ export default function PlanningPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* ══════════════════════════════════════════════════════════════════
+                    RÈGLE 5 : Événements globaux (visibles par tous les candidats)
+                    ══════════════════════════════════════════════════════════════════ */}
+                <GlobalEventsAdmin toast={toast} />
             </div>
         );
     }
@@ -1637,6 +1642,218 @@ export default function PlanningPage() {
                     }
                 }
             `}</style>
+        </div>
+    );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   COMPOSANT : Événements globaux Admin (RÈGLE 5)
+   Permet de créer des événements visibles par TOUS les candidats
+   ══════════════════════════════════════════════════════════════════════ */
+function GlobalEventsAdmin({ toast }: { toast: (msg: string, type?: any) => void }) {
+    const [events, setEvents] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState<string | null>(null);
+
+    // Form state
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [day, setDay] = useState('');
+    const [startTime, setStartTime] = useState('09:00');
+    const [endTime, setEndTime] = useState('10:00');
+
+    const fetchEvents = async () => {
+        try {
+            const res = await api.get('/calendar');
+            const globals = (res.data || []).filter((ev: any) => ev.is_global === true);
+            setEvents(globals);
+        } catch {
+            setEvents([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
+    const handleCreate = async () => {
+        if (!title.trim() || !day) {
+            toast('Titre et date requis', 'error');
+            return;
+        }
+        setSaving(true);
+        try {
+            await api.post('/calendar', {
+                title: title.trim(),
+                description: description.trim() || null,
+                day,
+                start_time: startTime,
+                end_time: endTime,
+                is_global: true,
+            });
+            toast('Événement global créé et visible par tous les candidats', 'success');
+            setTitle('');
+            setDescription('');
+            setDay('');
+            setStartTime('09:00');
+            setEndTime('10:00');
+            setShowForm(false);
+            fetchEvents();
+        } catch (err: any) {
+            toast(err?.response?.data?.error || 'Erreur création événement', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        setDeleting(id);
+        try {
+            await api.delete(`/calendar/${id}`);
+            toast('Événement supprimé', 'success');
+            fetchEvents();
+        } catch {
+            toast('Erreur suppression', 'error');
+        } finally {
+            setDeleting(null);
+        }
+    };
+
+    const formatDateFr = (dateStr: string) => {
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+        } catch {
+            return dateStr;
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                    <h2 className="text-base font-semibold text-gray-900">📢 Événements globaux</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        Publiés automatiquement dans le calendrier de tous les candidats
+                    </p>
+                </div>
+                <button
+                    onClick={() => setShowForm(!showForm)}
+                    className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    {showForm ? 'Annuler' : '+ Nouvel événement'}
+                </button>
+            </div>
+
+            <div className="p-5">
+                {/* Formulaire création */}
+                {showForm && (
+                    <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={e => setTitle(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Ex: Réunion d'information, Date limite de rendu..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea
+                                value={description}
+                                onChange={e => setDescription(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                rows={2}
+                                placeholder="Détails de l'événement (optionnel)"
+                            />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                                <input
+                                    type="date"
+                                    value={day}
+                                    onChange={e => setDay(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Début</label>
+                                <input
+                                    type="time"
+                                    value={startTime}
+                                    onChange={e => setStartTime(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Fin</label>
+                                <input
+                                    type="time"
+                                    value={endTime}
+                                    onChange={e => setEndTime(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={handleCreate}
+                                disabled={saving}
+                                className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {saving ? 'Création...' : 'Publier l\'événement'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Liste des événements globaux */}
+                {loading ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">Chargement...</div>
+                ) : events.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                        Aucun événement global créé
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {events.map((ev: any) => (
+                            <div
+                                key={ev.id}
+                                className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                            >
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                                        <span className="text-sm font-semibold text-gray-900 truncate">{ev.title}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5 ml-5">
+                                        {formatDateFr(ev.day)}
+                                        {ev.start_time && ` — ${ev.start_time.slice(0, 5)}`}
+                                        {ev.end_time && ` - ${ev.end_time.slice(0, 5)}`}
+                                    </p>
+                                    {ev.description && (
+                                        <p className="text-xs text-gray-400 mt-0.5 ml-5 truncate">{ev.description}</p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => handleDelete(ev.id)}
+                                    disabled={deleting === ev.id}
+                                    className="ml-3 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                                >
+                                    {deleting === ev.id ? '...' : 'Supprimer'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
