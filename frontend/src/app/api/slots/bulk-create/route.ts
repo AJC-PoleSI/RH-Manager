@@ -25,10 +25,10 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Fetch Epreuve configuration (durée + roulement)
+    // Fetch Epreuve configuration — use select('*') to avoid errors on missing columns
     const { data: epreuve, error: epreuveError } = await supabaseAdmin
       .from('epreuves')
-      .select('duration_minutes, roulement_minutes, min_evaluators_per_salle, tour')
+      .select('*')
       .eq('id', epreuveId)
       .single();
 
@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
     }
 
     const duration = epreuve.duration_minutes || 30;
-    const roulement = epreuve.roulement_minutes || 10;
-    const minMembers = epreuve.min_evaluators_per_salle || 2;
+    const roulement = epreuve.roulement_minutes ?? 10;
+    const minMembers = epreuve.min_evaluators_per_salle ?? 2;
     const tour = epreuve.tour || 1;
 
     let currentMin = timeToMinutes(startTime);
