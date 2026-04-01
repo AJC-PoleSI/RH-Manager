@@ -78,11 +78,14 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase INSERT error:', error);
+      return Response.json({ error: error.message || 'Failed to create epreuve', details: error }, { status: 400 });
+    }
 
     return Response.json(data, { status: 201 });
   } catch (error) {
-    console.error('POST /epreuves error:', error);
-    return Response.json({ error: 'Failed to create epreuve' }, { status: 400 });
+    console.error('POST /epreuves catch error:', error);
+    return Response.json({ error: String(error), message: 'Failed to create epreuve' }, { status: 400 });
   }
 }

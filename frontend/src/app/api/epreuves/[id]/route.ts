@@ -43,12 +43,15 @@ export async function PUT(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase UPDATE error:', error);
+      return Response.json({ error: error.message || 'Failed to update epreuve', details: error }, { status: 400 });
+    }
 
     return Response.json(data);
   } catch (error) {
-    console.error('PUT /epreuves/:id error:', error);
-    return Response.json({ error: 'Failed to update epreuve' }, { status: 400 });
+    console.error('PUT /epreuves/:id catch error:', error);
+    return Response.json({ error: String(error), message: 'Failed to update epreuve' }, { status: 400 });
   }
 }
 
