@@ -1,19 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 
 // FullCalendar
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import type { EventInput, DateSelectArg, EventDropArg, EventClickArg } from "@fullcalendar/core";
+import type {
+  EventInput,
+  EventDropArg,
+  EventClickArg,
+} from "@fullcalendar/core";
+import type { DateClickArg } from "@fullcalendar/interaction";
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface CalendarAdminBuilderProps {
   selectedEpreuveId: string;
   epreuve: any;
-  toast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  toast: (msg: string, type?: "success" | "error" | "info") => void;
   onUpdate: () => void;
 }
 
@@ -34,7 +39,8 @@ interface SlotData {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
-const ROOM_COLORS = [
+const ROOM_COLORS: Record<string, { bg: string; border: string; text: string }> = {};
+const ROOM_PALETTE = [
   { bg: "#DBEAFE", border: "#3B82F6", text: "#1E40AF" }, // Blue
   { bg: "#E9D5FF", border: "#8B5CF6", text: "#6D28D9" }, // Violet
   { bg: "#D1FAE5", border: "#10B981", text: "#065F46" }, // Green
@@ -43,37 +49,52 @@ const ROOM_COLORS = [
   { bg: "#CFFAFE", border: "#06B6D4", text: "#155E75" }, // Cyan
 ];
 
-const DEFAULT_SLOT_MIN_TIME = "07:00:00";
-const DEFAULT_SLOT_MAX_TIME = "20:00:00";
+const DEFAULT_MIN_TIME = "07:00:00";
+const DEFAULT_MAX_TIME = "20:00:00";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function getValidDays(startStr?: string, endStr?: string): string[] {
-  if (!startStr || !endStr) return [];
-  const dStart = new Date(startStr);
-  const dEnd = new Date(endStr);
-  if (dStart > dEnd) return [];
-  
-  const days: string[] = [];
-  const current = new Date(dStart);
-  while (current <= dEnd) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      days.push(current.toISOString().split("T")[0]);
-    }
-    current.setDate(current.getDate() + 1);
-  }
-  return days;
-}
-
-function addMinutesToTime(time: string, minutes: number): string {
+function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;
-  return `${Math.floor(total / 60).toString().padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
+  return `${Math.floor(total / 60)
+    .toString()
+    .padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
 }
 
-function formatDateFr(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+/** Get Monday of the week containing `date` */
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatWeekRange(monday: Date): string {
+  const friday = new Date(monday);
+  friday.setDate(friday.getDate() + 4);
+  const opts: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "long",
+  };
+  const monStr = monday.toLocaleDateString("fr-FR", opts);
+  const friStr = friday.toLocaleDateString("fr-FR", {
+    ...opts,
+    year: "numeric",
+  });
+  return `Du ${monStr} au ${friStr}`;
+}
+
+function formatDateISO(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function getRoomColor(room: string, roomIndex: number) {
+  if (!ROOM_COLORS[room]) {
+    ROOM_COLORS[room] = ROOM_PALETTE[roomIndex % ROOM_PALETTE.length];
+  }
+  return ROOM_COLORS[room];
 }
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -83,98 +104,79 @@ export default function CalendarAdminBuilder({
   toast,
   onUpdate,
 }: CalendarAdminBuilderProps) {
-  const [existingSlots, setExistingSlots] = useState<SlotData[]>([]);
+  // State
+  const [slots, setSlots] = useState<SlotData[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Calendar config (modifiable)
-  const [slotMinTime, setSlotMinTime] = useState(DEFAULT_SLOT_MIN_TIME);
-  const [slotMaxTime, setSlotMaxTime] = useState(DEFAULT_SLOT_MAX_TIME);
+  const [slotMinTime, setSlotMinTime] = useState(DEFAULT_MIN_TIME);
+  const [slotMaxTime, setSlotMaxTime] = useState(DEFAULT_MAX_TIME);
   const [showConfig, setShowConfig] = useState(false);
-  
-  // Room renaming
-  const [roomNames, setRoomNames] = useState<Record<number, string>>({});
-  const [editingRoom, setEditingRoom] = useState<number | null>(null);
-  const [tempRoomName, setTempRoomName] = useState("");
-  
-  // Quick create modal
-  const [quickCreateModal, setQuickCreateModal] = useState<{
-    day: string;
-    startTime: string;
-    room: string;
-    roomIndex: number;
-  } | null>(null);
-  
-  // Computed
-  const validDays = getValidDays(epreuve?.dateDebut, epreuve?.dateFin);
-  const [activeTabDay, setActiveTabDay] = useState<string>(validDays[0] || "");
-  
-  const nbSalles = parseInt(epreuve?.nbSalles || epreuve?.nb_salles || "1");
-  const sallesArray = Array.from({ length: nbSalles }, (_, i) => i + 1);
-  const durationMinutes = epreuve?.durationMinutes || epreuve?.duration_minutes || 30;
-  const roulementMinutes = epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
+  const [currentWeekLabel, setCurrentWeekLabel] = useState("");
+
+  // Refs
+  const calendarRef = useRef<FullCalendar>(null);
+
+  // Computed from epreuve
+  const durationMinutes =
+    epreuve?.durationMinutes || epreuve?.duration_minutes || 30;
+  const roulementMinutes =
+    epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
   const totalSlotDuration = durationMinutes + roulementMinutes;
-  
-  // Get room display name
-  const getRoomName = useCallback((roomNum: number): string => {
-    return roomNames[roomNum] || `Salle ${roomNum}`;
-  }, [roomNames]);
+  const nbSalles = parseInt(
+    epreuve?.nbSalles || epreuve?.nb_salles || "1"
+  );
 
-  // ─── Effects ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (validDays.length > 0 && !validDays.includes(activeTabDay)) {
-      setActiveTabDay(validDays[0]);
-    }
-  }, [epreuve, validDays]);
-
-  useEffect(() => {
-    if (selectedEpreuveId) {
-      fetchSlots();
-    }
-  }, [selectedEpreuveId]);
-
-  // Initialize room names from existing slots
-  useEffect(() => {
-    if (existingSlots.length > 0) {
-      const names: Record<number, string> = {};
-      existingSlots.forEach(slot => {
-        const room = slot.room || "";
-        // Check if it matches "Salle X" pattern
-        const match = room.match(/^Salle (\d+)$/);
-        if (!match && room) {
-          // It was renamed — figure out which room number it belongs to
-          // We'll store custom names by trying to map them
-          sallesArray.forEach(num => {
-            const existingSlotsForRoom = existingSlots.filter(s => s.room === room);
-            if (existingSlotsForRoom.length > 0 && !names[num]) {
-              // Try to assign by order of detection
-            }
-          });
-        }
-      });
-      // Only set if we found custom names
-      const customRooms: Record<number, string> = {};
-      const uniqueRooms = Array.from(new Set(existingSlots.map(s => s.room).filter(Boolean)));
-      uniqueRooms.sort().forEach((room, idx) => {
-        const num = idx + 1;
-        if (num <= nbSalles && room !== `Salle ${num}`) {
-          customRooms[num] = room!;
-        }
-      });
-      if (Object.keys(customRooms).length > 0) {
-        setRoomNames(prev => ({ ...prev, ...customRooms }));
+  // Build unique room list from existing slots + expected rooms
+  const roomList = useMemo(() => {
+    const roomsFromSlots = Array.from(
+      new Set(slots.map((s) => s.room).filter(Boolean))
+    ) as string[];
+    // Add expected rooms that might not have slots yet
+    for (let i = 1; i <= nbSalles; i++) {
+      const defaultName = `Salle ${i}`;
+      if (!roomsFromSlots.includes(defaultName)) {
+        roomsFromSlots.push(defaultName);
       }
     }
-  }, [existingSlots, nbSalles]);
+    return roomsFromSlots.sort();
+  }, [slots, nbSalles]);
 
-  // ─── API ─────────────────────────────────────────────────────────────
+  // ─── validRange for FullCalendar ─────────────────────────────────
+  const validRange = useMemo(() => {
+    const start = epreuve?.dateDebut || epreuve?.date_debut;
+    const end = epreuve?.dateFin || epreuve?.date_fin;
+    if (start && end) {
+      const endPlus = new Date(end + "T12:00:00");
+      endPlus.setDate(endPlus.getDate() + 1);
+      return { start: start, end: formatDateISO(endPlus) };
+    }
+    return undefined;
+  }, [epreuve]);
+
+  // ─── Initial date: first Monday of the epreuve date range ────────
+  const initialDate = useMemo(() => {
+    const start = epreuve?.dateDebut || epreuve?.date_debut;
+    if (start) {
+      return getMonday(new Date(start + "T12:00:00"));
+    }
+    return getMonday(new Date());
+  }, [epreuve]);
+
+  // ─── Effects ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedEpreuveId) fetchSlots();
+  }, [selectedEpreuveId]);
+
+  // ─── API ─────────────────────────────────────────────────────────
   async function fetchSlots() {
     try {
       setLoading(true);
       const res = await api.get(`/slots/all?epreuve=${selectedEpreuveId}`);
-      const filtered = (res.data || []).filter((s: any) =>
-        s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId
+      const filtered = (res.data || []).filter(
+        (s: any) =>
+          s.epreuve_id === selectedEpreuveId ||
+          s.epreuveId === selectedEpreuveId
       );
-      setExistingSlots(filtered);
+      setSlots(filtered);
     } catch (e) {
       console.error(e);
       toast("Erreur lors du chargement des créneaux", "error");
@@ -183,9 +185,8 @@ export default function CalendarAdminBuilder({
     }
   }
 
-  async function handleCreateSlot(date: string, startTime: string, roomName: string) {
-    const endTime = addMinutesToTime(startTime, durationMinutes);
-    
+  async function createSlot(date: string, startTime: string, room: string) {
+    const endTime = addMinutes(startTime, durationMinutes);
     try {
       setLoading(true);
       await api.post("/slots", {
@@ -194,39 +195,59 @@ export default function CalendarAdminBuilder({
         startTime,
         endTime,
         durationMinutes,
-        room: roomName,
+        room,
         tour: epreuve?.tour || 1,
-        maxCandidates: epreuve?.isGroupEpreuve ? (epreuve?.groupSize || 1) : 1,
-        minMembers: epreuve?.minEvaluatorsPerSalle || epreuve?.min_evaluators_per_salle || 2,
+        maxCandidates: epreuve?.isGroupEpreuve
+          ? epreuve?.groupSize || 1
+          : 1,
+        minMembers:
+          epreuve?.minEvaluatorsPerSalle ||
+          epreuve?.min_evaluators_per_salle ||
+          2,
       });
-      toast(`Créneau créé : ${startTime} - ${endTime}`, "success");
+      toast(`Créneau créé : ${startTime} → ${endTime} (${room})`, "success");
       fetchSlots();
       onUpdate();
     } catch (error: any) {
-      toast(error.response?.data?.error || "Erreur création du créneau", "error");
+      toast(
+        error.response?.data?.error || "Erreur création du créneau",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleMoveSlot(slotId: string, newStartTime: string, newEndTime: string) {
+  async function moveSlot(
+    slotId: string,
+    newDate: string,
+    newStartTime: string
+  ) {
+    const newEndTime = addMinutes(newStartTime, durationMinutes);
     try {
       setLoading(true);
       await api.put(`/slots/${slotId}`, {
+        date: newDate,
         startTime: newStartTime,
         endTime: newEndTime,
       });
-      toast(`Créneau déplacé : ${newStartTime} - ${newEndTime}`, "success");
+      toast(
+        `Créneau déplacé → ${newDate} ${newStartTime} - ${newEndTime}`,
+        "success"
+      );
       fetchSlots();
       onUpdate();
     } catch (error: any) {
-      toast(error.response?.data?.error || "Erreur déplacement", "error");
+      toast(
+        error.response?.data?.error || "Erreur déplacement",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDeleteSlot(slotId: string) {
+  async function deleteSlot(slotId: string) {
     if (!window.confirm("Supprimer ce créneau définitivement ?")) return;
     try {
       setLoading(true);
@@ -234,341 +255,483 @@ export default function CalendarAdminBuilder({
       toast("Créneau supprimé", "success");
       fetchSlots();
       onUpdate();
-    } catch (e) {
+    } catch {
       toast("Erreur suppression", "error");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleRenameRoom(roomNum: number, newName: string) {
-    const oldName = getRoomName(roomNum);
-    if (!newName.trim() || newName.trim() === oldName) {
-      setEditingRoom(null);
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      // Update all slots with this room name
-      const slotsToUpdate = existingSlots.filter(s => s.room === oldName);
-      for (const slot of slotsToUpdate) {
-        await api.put(`/slots/${slot.id}`, { room: newName.trim() });
-      }
-      setRoomNames(prev => ({ ...prev, [roomNum]: newName.trim() }));
-      setEditingRoom(null);
-      toast(`Salle renommée en "${newName.trim()}"`, "success");
-      fetchSlots();
-    } catch (e) {
-      toast("Erreur renommage", "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // ─── Guard ───────────────────────────────────────────────────────────
-  if (!epreuve) return null;
-
-  if (validDays.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
-        <p className="text-gray-500 mb-2">Les dates de cette épreuve ne semblent pas configurées.</p>
-        <p className="text-sm text-gray-400">Veuillez paramétrer l&apos;épreuve dans les Réglages (Date de début et fin).</p>
-      </div>
-    );
-  }
-
-  // ─── Build events for the active day ─────────────────────────────────
-  const currentDaySlots = existingSlots.filter(
-    s => (s.date || "").split("T")[0] === activeTabDay
-  );
-
-  function buildEventsForRoom(roomName: string, colorIndex: number): EventInput[] {
-    const roomSlots = currentDaySlots.filter(s => s.room === roomName);
-    return roomSlots.map(slot => {
+  // ─── Build FullCalendar events ────────────────────────────────────
+  const events: EventInput[] = useMemo(() => {
+    return slots.map((slot) => {
       const startTime = slot.start_time || slot.startTime || "08:00";
       const endTime = slot.end_time || slot.endTime || "09:00";
-      const color = ROOM_COLORS[colorIndex % ROOM_COLORS.length];
-      
+      const dateStr = (slot.date || "").split("T")[0];
+      const room = slot.room || "Salle 1";
+      const roomIdx = roomList.indexOf(room);
+      const color = getRoomColor(room, roomIdx >= 0 ? roomIdx : 0);
+
       return {
         id: slot.id,
-        title: `${startTime} - ${endTime}`,
-        start: `${activeTabDay}T${startTime}:00`,
-        end: `${activeTabDay}T${endTime}:00`,
+        title: room,
+        start: `${dateStr}T${startTime}:00`,
+        end: `${dateStr}T${endTime}:00`,
         backgroundColor: color.bg,
         borderColor: color.border,
         textColor: color.text,
         extendedProps: {
           slotId: slot.id,
-          roomName,
+          room,
+          startTime,
+          endTime,
           status: slot.status,
           duration: slot.duration_minutes || slot.durationMinutes || durationMinutes,
         },
       };
     });
+  }, [slots, roomList, durationMinutes]);
+
+  // ─── FullCalendar handlers ────────────────────────────────────────
+
+  /** Click on grid → create slot (ask which room if multiple) */
+  const handleDateClick = useCallback(
+    (info: DateClickArg) => {
+      const clickedDate = info.date;
+      // Skip weekends
+      if (clickedDate.getDay() === 0 || clickedDate.getDay() === 6) return;
+
+      const dateStr = formatDateISO(clickedDate);
+      const hours = clickedDate
+        .getHours()
+        .toString()
+        .padStart(2, "0");
+      const minutes = clickedDate
+        .getMinutes()
+        .toString()
+        .padStart(2, "0");
+      const startTime = `${hours}:${minutes}`;
+
+      if (roomList.length <= 1) {
+        createSlot(dateStr, startTime, roomList[0] || "Salle 1");
+      } else {
+        // Quick room picker
+        const choice = window.prompt(
+          `Créer un créneau à ${startTime} le ${new Date(dateStr + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}\n\nChoisissez la salle (numéro) :\n${roomList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}`,
+          "1"
+        );
+        if (!choice) return;
+        const idx = parseInt(choice) - 1;
+        const room = roomList[idx] || roomList[0] || "Salle 1";
+        createSlot(dateStr, startTime, room);
+      }
+    },
+    [roomList, selectedEpreuveId]
+  );
+
+  /** Drag event to new time/day → update slot */
+  const handleEventDrop = useCallback(
+    (info: EventDropArg) => {
+      const event = info.event;
+      const slotId = event.extendedProps?.slotId || event.id;
+
+      if (!event.start) {
+        info.revert();
+        return;
+      }
+
+      const newDate = formatDateISO(event.start);
+
+      // Skip weekends
+      if (event.start.getDay() === 0 || event.start.getDay() === 6) {
+        toast("Impossible de déplacer sur un week-end", "error");
+        info.revert();
+        return;
+      }
+
+      const newStartTime = `${event.start
+        .getHours()
+        .toString()
+        .padStart(2, "0")}:${event.start
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`;
+
+      moveSlot(slotId, newDate, newStartTime);
+    },
+    [durationMinutes]
+  );
+
+  /** Click on event → delete */
+  const handleEventClick = useCallback(
+    (info: EventClickArg) => {
+      const target = info.jsEvent?.target as HTMLElement;
+      if (target?.classList?.contains("fc-event-delete-btn")) {
+        const slotId =
+          info.event.extendedProps?.slotId || info.event.id;
+        deleteSlot(slotId);
+      }
+    },
+    []
+  );
+
+  /** Custom event rendering */
+  const renderEventContent = useCallback(
+    (eventInfo: any) => {
+      const start =
+        eventInfo.event.start?.toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }) || "";
+      const end =
+        eventInfo.event.end?.toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }) || "";
+      const room = eventInfo.event.extendedProps?.room || "";
+      const dur = eventInfo.event.extendedProps?.duration;
+
+      return (
+        <div className="relative w-full h-full px-1 py-0.5 overflow-hidden">
+          <button
+            className="fc-event-delete-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              const slotId =
+                eventInfo.event.extendedProps?.slotId ||
+                eventInfo.event.id;
+              deleteSlot(slotId);
+            }}
+            title="Supprimer"
+          >
+            ✕
+          </button>
+          <div className="text-[10px] font-bold leading-tight truncate">
+            {room}
+          </div>
+          <div className="text-[10px] leading-tight opacity-80">
+            {start} – {end}
+          </div>
+          {dur && (
+            <div className="text-[9px] opacity-60">{dur}min</div>
+          )}
+        </div>
+      );
+    },
+    []
+  );
+
+  /** Week header label update */
+  const handleDatesSet = useCallback((info: any) => {
+    const monday = getMonday(info.start);
+    setCurrentWeekLabel(formatWeekRange(monday));
+  }, []);
+
+  // ─── Navigation ──────────────────────────────────────────────────
+  function navigatePrev() {
+    calendarRef.current?.getApi().prev();
+  }
+  function navigateNext() {
+    calendarRef.current?.getApi().next();
+  }
+  function navigateToday() {
+    calendarRef.current?.getApi().today();
   }
 
+  // ─── Guard ───────────────────────────────────────────────────────
+  if (!epreuve) return null;
+
+  const hasDateRange = epreuve?.dateDebut || epreuve?.date_debut;
+  if (!hasDateRange) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+        <p className="text-gray-500 mb-2">
+          Les dates de cette épreuve ne semblent pas configurées.
+        </p>
+        <p className="text-sm text-gray-400">
+          Veuillez paramétrer l&apos;épreuve dans les Réglages (Date de
+          début et fin).
+        </p>
+      </div>
+    );
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-      {/* HEADER */}
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-gray-900">📅 Calendar Builder</h2>
-          {loading && <span className="text-xs text-blue-600 animate-pulse">Synchronisation...</span>}
+      {/* ═══ HEADER ═══ */}
+      <div className="px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-gray-900">
+              📅 Calendar Builder
+            </h2>
+            {loading && (
+              <span className="text-xs text-blue-600 animate-pulse">
+                Synchronisation…
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+              {durationMinutes}min + {roulementMinutes}min roulement ={" "}
+              {totalSlotDuration}min/créneau
+            </span>
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              title="Paramètres"
+            >
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path
+                  d="M10 13a3 3 0 100-6 3 3 0 000 6z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="M17.4 12.5a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V18a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H8a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V8a1.65 1.65 0 001.51 1H18a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Info badge */}
-          <span className="text-[11px] text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-            {durationMinutes}min + {roulementMinutes}min roulement = {totalSlotDuration}min/créneau
-          </span>
-          {/* Config toggle */}
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            title="Paramètres du calendrier"
-          >
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M10 13a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M17.4 12.5a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V18a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H8a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V8a1.65 1.65 0 001.51 1H18a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.5"/>
-            </svg>
-          </button>
+
+        {/* Week navigation */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={navigatePrev}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              ‹ Précédent
+            </button>
+            <button
+              onClick={navigateToday}
+              className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              Aujourd&apos;hui
+            </button>
+            <button
+              onClick={navigateNext}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Suivant ›
+            </button>
+          </div>
+          <h3 className="text-sm font-semibold text-gray-800">
+            {currentWeekLabel}
+          </h3>
         </div>
       </div>
 
-      {/* CONFIG PANEL */}
+      {/* Config panel */}
       {showConfig && (
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center gap-6">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-600">Début :</label>
+            <label className="text-xs font-medium text-gray-600">
+              Début :
+            </label>
             <input
               type="time"
               value={slotMinTime.slice(0, 5)}
-              onChange={e => setSlotMinTime(e.target.value + ":00")}
+              onChange={(e) =>
+                setSlotMinTime(e.target.value + ":00")
+              }
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-600">Fin :</label>
+            <label className="text-xs font-medium text-gray-600">
+              Fin :
+            </label>
             <input
               type="time"
               value={slotMaxTime.slice(0, 5)}
-              onChange={e => setSlotMaxTime(e.target.value + ":00")}
+              onChange={(e) =>
+                setSlotMaxTime(e.target.value + ":00")
+              }
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
-          <span className="text-[10px] text-gray-400">Plage horaire visible du calendrier</span>
+          <span className="text-[10px] text-gray-400">
+            Plage horaire visible du calendrier
+          </span>
         </div>
       )}
 
-      {/* TABS JOURS */}
-      <div className="flex border-b border-gray-100 bg-gray-50/50 px-2 pt-2 gap-1 overflow-x-auto">
-        {validDays.map(day => {
-          const isActive = activeTabDay === day;
-          const daySlotCount = existingSlots.filter(s => (s.date || "").split("T")[0] === day).length;
-          return (
-            <button
-              key={day}
-              onClick={() => setActiveTabDay(day)}
-              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 flex items-center gap-2 ${
-                isActive
-                  ? "bg-white text-blue-600 border-blue-600 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]"
-                  : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              {formatDateFr(day)}
-              {daySlotCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                  isActive ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"
-                }`}>
-                  {daySlotCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* CALENDAR GRID — one FullCalendar per room, side by side */}
+      {/* ═══ FULLCALENDAR WEEK VIEW ═══ */}
       <div className="p-4 flex-1 bg-gray-50/30">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">
-              Planning du {formatDateFr(activeTabDay)}
-            </h3>
-            <p className="text-sm text-gray-500">
-              Cliquez pour créer un créneau · Glissez pour le déplacer (snap 5min)
-            </p>
-          </div>
-        </div>
+        {/* Instructions */}
+        <p className="text-xs text-gray-500 mb-3">
+          <strong>Clic</strong> pour créer · <strong>Glissez</strong>{" "}
+          pour déplacer (snap 5min, multi-jours) ·{" "}
+          <strong>✕</strong> au survol pour supprimer
+        </p>
 
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: `repeat(${nbSalles}, minmax(0, 1fr))` }}
-        >
-          {sallesArray.map((roomNum, idx) => {
-            const roomName = getRoomName(roomNum);
-            const color = ROOM_COLORS[idx % ROOM_COLORS.length];
-            const events = buildEventsForRoom(roomName, idx);
-
-            return (
-              <div key={roomNum} className="flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                {/* Room header with rename */}
-                <div
-                  className="px-4 py-3 border-b border-gray-200 flex items-center justify-between"
-                  style={{ backgroundColor: color.bg + "60" }}
-                >
-                  {editingRoom === roomNum ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input
-                        autoFocus
-                        value={tempRoomName}
-                        onChange={e => setTempRoomName(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") handleRenameRoom(roomNum, tempRoomName);
-                          if (e.key === "Escape") setEditingRoom(null);
-                        }}
-                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Nom de la salle"
-                      />
-                      <button
-                        onClick={() => handleRenameRoom(roomNum, tempRoomName)}
-                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={() => setEditingRoom(null)}
-                        className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <h4 className="font-semibold text-gray-700 text-center flex-1">
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full mr-2"
-                          style={{ backgroundColor: color.border }}
-                        />
-                        {roomName}
-                      </h4>
-                      <button
-                        onClick={() => {
-                          setEditingRoom(roomNum);
-                          setTempRoomName(roomName);
-                        }}
-                        className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-                        title="Renommer la salle"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.793 8.794-3.536.707.707-3.536 8.794-8.793z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* FullCalendar instance for this room */}
-                <div className="calendar-room-grid" style={{ minHeight: 500 }}>
-                  <RoomCalendar
-                    key={`${activeTabDay}-${roomNum}-${events.length}`}
-                    activeDay={activeTabDay}
-                    roomName={roomName}
-                    roomIndex={idx}
-                    events={events}
-                    slotMinTime={slotMinTime}
-                    slotMaxTime={slotMaxTime}
-                    durationMinutes={durationMinutes}
-                    totalSlotDuration={totalSlotDuration}
-                    onCreateSlot={(startTime) => handleCreateSlot(activeTabDay, startTime, roomName)}
-                    onMoveSlot={(slotId, newStart, newEnd) => handleMoveSlot(slotId, newStart, newEnd)}
-                    onDeleteSlot={handleDeleteSlot}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        <div className="calendar-week-grid bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            initialDate={formatDateISO(initialDate)}
+            locale="fr"
+            firstDay={1}
+            weekends={false}
+            headerToolbar={false}
+            allDaySlot={false}
+            slotMinTime={slotMinTime}
+            slotMaxTime={slotMaxTime}
+            slotDuration="00:05:00"
+            snapDuration="00:05:00"
+            slotLabelInterval="01:00:00"
+            slotLabelFormat={{
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }}
+            dayHeaderFormat={{
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+            }}
+            height="auto"
+            expandRows={true}
+            editable={true}
+            droppable={false}
+            eventDurationEditable={false}
+            eventStartEditable={true}
+            selectable={false}
+            validRange={validRange}
+            dateClick={handleDateClick}
+            eventDrop={handleEventDrop}
+            eventClick={handleEventClick}
+            eventContent={renderEventContent}
+            datesSet={handleDatesSet}
+            events={events}
+            nowIndicator={true}
+          />
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-500">
+      {/* ═══ LEGEND ═══ */}
+      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-500 flex-wrap">
         <span className="font-medium text-gray-600">Légende :</span>
-        {sallesArray.map((roomNum, idx) => {
-          const color = ROOM_COLORS[idx % ROOM_COLORS.length];
+        {roomList.map((room, idx) => {
+          const color = getRoomColor(room, idx);
+          const count = slots.filter((s) => s.room === room).length;
           return (
-            <span key={roomNum} className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded" style={{ backgroundColor: color.bg, border: `2px solid ${color.border}` }} />
-              {getRoomName(roomNum)}
+            <span key={room} className="flex items-center gap-1.5">
+              <span
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: color.bg,
+                  border: `2px solid ${color.border}`,
+                }}
+              />
+              {room}
+              <span className="text-gray-400">({count})</span>
             </span>
           );
         })}
         <span className="ml-auto text-gray-400">
-          {currentDaySlots.length} créneau{currentDaySlots.length !== 1 ? "x" : ""} ce jour
+          {slots.length} créneau{slots.length !== 1 ? "x" : ""} au total
         </span>
       </div>
 
-      {/* Global CSS overrides for FullCalendar inside this component */}
+      {/* ═══ CSS OVERRIDES ═══ */}
       <style jsx global>{`
-        .calendar-room-grid .fc {
+        .calendar-week-grid .fc {
           font-family: inherit;
           border: none;
         }
-        .calendar-room-grid .fc .fc-timegrid-col-events {
-          margin: 0 2px;
+        /* Day header */
+        .calendar-week-grid .fc .fc-col-header-cell {
+          background: #f9fafb;
+          border-bottom: 2px solid #e5e7eb;
+          padding: 10px 4px;
         }
-        .calendar-room-grid .fc .fc-timegrid-event {
-          border-radius: 6px;
-          border-left-width: 3px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-          cursor: grab;
-          transition: box-shadow 0.15s, transform 0.15s;
-          padding: 2px 4px;
-        }
-        .calendar-room-grid .fc .fc-timegrid-event:hover {
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          transform: scale(1.02);
-        }
-        .calendar-room-grid .fc .fc-timegrid-event:active {
-          cursor: grabbing;
-        }
-        .calendar-room-grid .fc .fc-event-title {
+        .calendar-week-grid .fc .fc-col-header-cell-cushion {
           font-weight: 600;
-          font-size: 11px;
+          font-size: 12px;
+          color: #374151;
+          text-transform: capitalize;
         }
-        .calendar-room-grid .fc .fc-col-header {
-          display: none;
+        /* Today column highlight */
+        .calendar-week-grid .fc .fc-day-today {
+          background: rgba(59, 130, 246, 0.03) !important;
         }
-        .calendar-room-grid .fc .fc-timegrid-slot {
+        .calendar-week-grid
+          .fc
+          .fc-col-header-cell.fc-day-today
+          .fc-col-header-cell-cushion {
+          color: #2563eb;
+        }
+        /* Time grid */
+        .calendar-week-grid .fc .fc-timegrid-slot {
           height: 20px;
           border-color: #f3f4f6;
         }
-        .calendar-room-grid .fc .fc-timegrid-slot-minor {
+        .calendar-week-grid .fc .fc-timegrid-slot-minor {
           border-top-style: dotted;
           border-color: #f9fafb;
         }
-        .calendar-room-grid .fc .fc-timegrid-axis {
+        .calendar-week-grid .fc .fc-timegrid-axis {
           font-size: 10px;
           color: #9ca3af;
           font-weight: 500;
         }
-        .calendar-room-grid .fc .fc-timegrid-now-indicator-line {
-          border-color: #EF4444;
-          border-width: 2px;
+        .calendar-week-grid .fc .fc-timegrid-axis-cushion {
+          padding: 2px 6px;
         }
-        .calendar-room-grid .fc .fc-scrollgrid {
-          border: none;
+        /* Events */
+        .calendar-week-grid .fc .fc-timegrid-col-events {
+          margin: 0 2px;
         }
-        .calendar-room-grid .fc td, .calendar-room-grid .fc th {
-          border-color: #f3f4f6;
-        }
-        .calendar-room-grid .fc .fc-timegrid-event .fc-event-main {
-          padding: 2px 4px;
+        .calendar-week-grid .fc .fc-timegrid-event {
+          border-radius: 6px;
+          border-left-width: 3px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+          cursor: grab;
+          transition: box-shadow 0.15s, transform 0.15s;
           overflow: hidden;
         }
-        .calendar-room-grid .fc .fc-highlight {
+        .calendar-week-grid .fc .fc-timegrid-event:hover {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          transform: scale(1.02);
+          z-index: 10 !important;
+        }
+        .calendar-week-grid .fc .fc-timegrid-event:active {
+          cursor: grabbing;
+        }
+        .calendar-week-grid .fc .fc-timegrid-event .fc-event-main {
+          padding: 1px 2px;
+          overflow: hidden;
+        }
+        /* Dragging */
+        .calendar-week-grid .fc .fc-event-dragging {
+          opacity: 0.85;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+          transform: scale(1.05);
+        }
+        /* Now indicator */
+        .calendar-week-grid .fc .fc-timegrid-now-indicator-line {
+          border-color: #ef4444;
+          border-width: 2px;
+        }
+        /* Scrollgrid borders */
+        .calendar-week-grid .fc .fc-scrollgrid {
+          border: none;
+        }
+        .calendar-week-grid .fc td,
+        .calendar-week-grid .fc th {
+          border-color: #f3f4f6;
+        }
+        .calendar-week-grid .fc .fc-highlight {
           background-color: rgba(59, 130, 246, 0.12);
         }
+        /* Delete button on event hover */
         .fc-event-delete-btn {
           position: absolute;
           top: 2px;
@@ -587,147 +750,13 @@ export default function CalendarAdminBuilder({
           line-height: 1;
           z-index: 10;
         }
-        .calendar-room-grid .fc .fc-timegrid-event:hover .fc-event-delete-btn {
+        .calendar-week-grid
+          .fc
+          .fc-timegrid-event:hover
+          .fc-event-delete-btn {
           display: flex;
         }
       `}</style>
     </div>
-  );
-}
-
-// ─── Sub-component: Individual room calendar ─────────────────────────
-interface RoomCalendarProps {
-  activeDay: string;
-  roomName: string;
-  roomIndex: number;
-  events: EventInput[];
-  slotMinTime: string;
-  slotMaxTime: string;
-  durationMinutes: number;
-  totalSlotDuration: number;
-  onCreateSlot: (startTime: string) => void;
-  onMoveSlot: (slotId: string, newStart: string, newEnd: string) => void;
-  onDeleteSlot: (slotId: string) => void;
-}
-
-function RoomCalendar({
-  activeDay,
-  roomName,
-  roomIndex,
-  events,
-  slotMinTime,
-  slotMaxTime,
-  durationMinutes,
-  totalSlotDuration,
-  onCreateSlot,
-  onMoveSlot,
-  onDeleteSlot,
-}: RoomCalendarProps) {
-  const calendarRef = useRef<FullCalendar>(null);
-
-  // Navigate to the active day when it changes
-  useEffect(() => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(activeDay);
-    }
-  }, [activeDay]);
-
-  // Handle click on empty time slot → create
-  const handleDateClick = useCallback((info: any) => {
-    const clickedDate = info.date as Date;
-    const hours = clickedDate.getHours().toString().padStart(2, "0");
-    const minutes = clickedDate.getMinutes().toString().padStart(2, "0");
-    const startTime = `${hours}:${minutes}`;
-    onCreateSlot(startTime);
-  }, [onCreateSlot]);
-
-  // Handle drag & drop of existing events  
-  const handleEventDrop = useCallback((info: EventDropArg) => {
-    const event = info.event;
-    const slotId = event.extendedProps?.slotId || event.id;
-    
-    if (!event.start) {
-      info.revert();
-      return;
-    }
-    
-    const newStart = event.start;
-    const newStartTime = `${newStart.getHours().toString().padStart(2, "0")}:${newStart.getMinutes().toString().padStart(2, "0")}`;
-    const newEndTime = addMinutesToTime(newStartTime, durationMinutes);
-    
-    onMoveSlot(slotId, newStartTime, newEndTime);
-  }, [onMoveSlot, durationMinutes]);
-
-  // Handle click on existing event → show delete option
-  const handleEventClick = useCallback((info: EventClickArg) => {
-    // Check if delete button was clicked
-    const target = info.jsEvent?.target as HTMLElement;
-    if (target?.classList?.contains("fc-event-delete-btn")) {
-      const slotId = info.event.extendedProps?.slotId || info.event.id;
-      onDeleteSlot(slotId);
-    }
-  }, [onDeleteSlot]);
-
-  // Custom event rendering with delete button
-  const renderEventContent = useCallback((eventInfo: any) => {
-    const startStr = eventInfo.event.start?.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) || "";
-    const endStr = eventInfo.event.end?.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) || "";
-    const status = eventInfo.event.extendedProps?.status;
-    const dur = eventInfo.event.extendedProps?.duration;
-    
-    return (
-      <div className="relative w-full h-full p-0.5">
-        <button
-          className="fc-event-delete-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            const slotId = eventInfo.event.extendedProps?.slotId || eventInfo.event.id;
-            onDeleteSlot(slotId);
-          }}
-          title="Supprimer"
-        >
-          ✕
-        </button>
-        <div className="text-[11px] font-bold leading-tight">{startStr} - {endStr}</div>
-        <div className="text-[9px] opacity-70 mt-0.5">
-          {dur}min
-          {status && status !== "open" && (
-            <span className="ml-1 uppercase font-semibold">{status}</span>
-          )}
-        </div>
-      </div>
-    );
-  }, [onDeleteSlot]);
-
-  return (
-    <FullCalendar
-      ref={calendarRef}
-      plugins={[timeGridPlugin, interactionPlugin]}
-      initialView="timeGridDay"
-      initialDate={activeDay}
-      headerToolbar={false}
-      allDaySlot={false}
-      slotMinTime={slotMinTime}
-      slotMaxTime={slotMaxTime}
-      slotDuration="00:05:00"
-      snapDuration="00:05:00"
-      slotLabelInterval="01:00:00"
-      slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-      height="auto"
-      expandRows={true}
-      editable={true}
-      droppable={false}
-      eventDurationEditable={false}
-      eventStartEditable={true}
-      selectable={false}
-      dateClick={handleDateClick}
-      eventDrop={handleEventDrop}
-      eventClick={handleEventClick}
-      eventContent={renderEventContent}
-      events={events}
-      nowIndicator={true}
-      dayHeaders={false}
-    />
   );
 }
