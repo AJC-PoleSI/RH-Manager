@@ -33,7 +33,7 @@ export const createEreuve = async (req: Request, res: Response) => {
             pole: body.pole || null,
         };
 
-        // Optional fields
+        // Optional fields — only pass fields that exist in the Prisma Epreuve model
         if (body.roulementMinutes !== undefined) data.roulementMinutes = body.roulementMinutes;
         if (body.nbSalles !== undefined) data.nbSalles = body.nbSalles;
         if (body.minEvaluatorsPerSalle !== undefined) data.minEvaluatorsPerSalle = body.minEvaluatorsPerSalle;
@@ -41,6 +41,11 @@ export const createEreuve = async (req: Request, res: Response) => {
         if (body.dateFin) data.dateFin = body.dateFin;
         if (body.description) data.description = body.description;
         if (body.isVisible !== undefined) data.isVisible = body.isVisible;
+        if (body.isGroupEpreuve !== undefined) data.isGroupEpreuve = body.isGroupEpreuve;
+        if (body.groupSize !== undefined) data.groupSize = body.groupSize;
+
+        // NOTE: fields like date, time, salle, presentedBy, documentsUrls
+        // are NOT in the Prisma Epreuve model and must NOT be passed to prisma.create()
 
         const epreuve = await prisma.epreuve.create({ data });
         res.status(201).json(epreuve);

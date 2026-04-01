@@ -60,8 +60,6 @@ interface NewEpreuveForm {
   dateFin: string;
   duree: string;
   roulementMinutes: string;
-  nbSalles: string;
-  minEvaluatorsPerSalle: string;
   pole: string;
   /* shared */
   description: string;
@@ -81,8 +79,6 @@ const EMPTY_FORM: NewEpreuveForm = {
   dateFin: "",
   duree: "",
   roulementMinutes: "10",
-  nbSalles: "1",
-  minEvaluatorsPerSalle: "2",
   pole: "",
   description: "",
   documents: null,
@@ -246,8 +242,6 @@ export default function CreationPage() {
       dateFin: ep.dateFin || "",
       duree: String(ep.durationMinutes || ""),
       roulementMinutes: String(ep.roulementMinutes || "10"),
-      nbSalles: String(ep.nbSalles || "1"),
-      minEvaluatorsPerSalle: String(ep.minEvaluatorsPerSalle || "2"),
       pole: ep.pole || "",
       description: ep.description || "",
       documents: null,
@@ -295,11 +289,7 @@ export default function CreationPage() {
         evaluationQuestions: form.criteres.map(c => ({ q: c.name, weight: c.coefficient })),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
-        // Champs date/logistique
-        date: form.date || null,
-        time: form.time || null,
-        salle: form.salle || null,
-        presentedBy: form.presentedBy || null,
+        roulementMinutes: form.roulementMinutes ? parseInt(form.roulementMinutes) : 10,
         dateDebut: form.dateDebut || null,
         dateFin: form.dateFin || null,
         description: form.description || null,
@@ -715,26 +705,6 @@ export default function CreationPage() {
                     onChange={(e) => handleFormChange("roulementMinutes", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="10"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nb. Salles</label>
-                  <input
-                    type="number"
-                    value={form.nbSalles}
-                    onChange={(e) => handleFormChange("nbSalles", e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Évaluateurs Min/Salle</label>
-                  <input
-                    type="number"
-                    value={form.minEvaluatorsPerSalle}
-                    onChange={(e) => handleFormChange("minEvaluatorsPerSalle", e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="2"
                   />
                 </div>
                 <div>
