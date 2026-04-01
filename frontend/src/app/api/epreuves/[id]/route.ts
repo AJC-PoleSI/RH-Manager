@@ -15,6 +15,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
+    console.log('[PUT /api/epreuves/:id] Request body:', JSON.stringify(body));
     const updateData: any = {};
 
     if (body.name !== undefined) updateData.name = body.name;
@@ -45,7 +46,12 @@ export async function PUT(
 
     if (error) {
       console.error('Supabase UPDATE error:', error);
-      return Response.json({ error: error.message || 'Failed to update epreuve', details: error }, { status: 400 });
+      console.error('Updated fields:', JSON.stringify(updateData));
+      return Response.json({
+        error: error.message || 'Failed to update epreuve',
+        details: error,
+        updatedFields: updateData
+      }, { status: 400 });
     }
 
     return Response.json(data);
