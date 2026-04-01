@@ -29,7 +29,7 @@ export async function PUT(
     if (body.isPoleTest !== undefined) updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
     if (body.description !== undefined) updateData.description = body.description;
-    if (body.isVisible !== undefined) updateData.is_visible = body.isVisible;
+    // if (body.isVisible !== undefined) updateData.is_visible = body.isVisible; // TODO: add to Supabase schema
     if (body.evaluationQuestions !== undefined) {
       updateData.evaluation_questions = typeof body.evaluationQuestions === 'string'
         ? body.evaluationQuestions

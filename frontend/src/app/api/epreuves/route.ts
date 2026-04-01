@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       description: e.description || null,
       dateDebut: e.date_debut || null,
       dateFin: e.date_fin || null,
-      isVisible: e.is_visible !== false,
+      isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
     return Response.json(parsed);
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       date_debut: body.dateDebut || null,
       date_fin: body.dateFin || null,
       description: body.description || null,
-      is_visible: body.isVisible !== undefined ? body.isVisible : true,
+      // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };
 
     const { data, error } = await supabaseAdmin
