@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Search, Trash2, Edit, X, ChevronRight, Save, ArrowLeft } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, X, ChevronRight, Save, ArrowLeft, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
@@ -47,6 +47,9 @@ export default function CandidatesPage() {
     const [searchInput, setSearchInput] = useState('');
     const [editingCandidate, setEditingCandidate] = useState<any>(null);
     const { toast } = useToast();
+
+    // Phase 3 — Filtre par pôle (Choix n°1)
+    const [filterPole, setFilterPole] = useState<string>('all');
 
     // --- Detail panel state ---
     const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
@@ -342,13 +345,43 @@ export default function CandidatesPage() {
                                 onChange={(e) => setSearchInput(e.target.value)}
                             />
                         </div>
+                        {/* Phase 3 — Filtre Pôle Choix n°1 */}
+                        <div className="relative">
+                            <Filter className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                            <select
+                                value={filterPole}
+                                onChange={e => { setFilterPole(e.target.value); }}
+                                className="pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                            >
+                                <option value="all">Tous les pôles</option>
+                                <option value="Système d'information">SI</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Développement commercial">Dev. Commercial</option>
+                                <option value="Audit Qualité">Audit Qualité</option>
+                                <option value="Ressource Humaine">RH</option>
+                                <option value="Trésorerie">Trésorerie</option>
+                                <option value="Bureau - VP">Bureau - VP</option>
+                                <option value="Bureau - Président">Bureau - Président</option>
+                                <option value="Bureau - Trésorier">Bureau - Trésorier</option>
+                                <option value="Bureau - Secrétaire générale">Bureau - SG</option>
+                                <option value="_none">Sans vœu</option>
+                            </select>
+                        </div>
                     </div>
                     <CardContent className="p-0">
                         {loading ? (
                             <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary-500" /></div>
                         ) : (
                             <div className="divide-y divide-gray-100">
-                                {candidates.map((candidate: any) => (
+                                {candidates
+                                    .filter((candidate: any) => {
+                                        if (filterPole === 'all') return true;
+                                        const wishes = candidate.wishes || [];
+                                        const wish1 = wishes.find((w: any) => w.rank === 1);
+                                        if (filterPole === '_none') return !wish1;
+                                        return wish1?.pole === filterPole;
+                                    })
+                                    .map((candidate: any) => (
                                     <div
                                         key={candidate.id}
                                         className={`p-4 flex items-center justify-between hover:bg-gray-50 group cursor-pointer transition-colors ${selectedCandidate?.id === candidate.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
@@ -363,6 +396,12 @@ export default function CandidatesPage() {
                                                 <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                                                     <span>{candidate.email}</span>
                                                     {candidate.phone && <><span>·</span><span>{candidate.phone}</span></>}
+                                                    {/* Pole badge */}
+                                                    {candidate.wishes?.[0]?.pole && (
+                                                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                                                            {candidate.wishes[0].pole}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

@@ -137,7 +137,8 @@ export default function CandidateEpreuvesPage() {
         ]);
 
         if (epRes.data && Array.isArray(epRes.data)) {
-          setEpreuves(epRes.data);
+          // Phase 4: Only show visible epreuves to candidates
+          setEpreuves(epRes.data.filter((e: any) => e.isVisible !== false));
         }
 
         // Track enrolled épreuves + slot IDs

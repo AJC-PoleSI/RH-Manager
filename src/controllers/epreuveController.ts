@@ -56,6 +56,8 @@ export const updateEpreuve = async (req: Request, res: Response) => {
                 ? evaluationQuestions
                 : JSON.stringify(evaluationQuestions);
         }
+        // Phase 4: Visibility toggle
+        if (req.body.isVisible !== undefined) data.isVisible = req.body.isVisible;
 
         const epreuve = await prisma.epreuve.update({
             where: { id },

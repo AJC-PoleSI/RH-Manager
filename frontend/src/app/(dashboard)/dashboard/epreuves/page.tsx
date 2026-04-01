@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Trash2, X, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -151,6 +151,19 @@ export default function EpreuvesPage() {
                 console.error("Erreur lors de la suppression:", error);
                 toast("Erreur lors de la suppression de l'épreuve", 'error');
             }
+        }
+    };
+
+    // Phase 4 — Toggle visibility
+    const handleToggleVisibility = async (epreuve: any) => {
+        const newVal = !(epreuve.isVisible !== false);
+        try {
+            await api.put(`/epreuves/${epreuve.id}`, { isVisible: newVal });
+            fetchEpreuves();
+            toast(newVal ? 'Épreuve rendue visible' : 'Épreuve masquée', 'success');
+        } catch (error) {
+            console.error(error);
+            toast("Erreur lors du changement de visibilité", 'error');
         }
     };
 
@@ -344,27 +357,89 @@ export default function EpreuvesPage() {
                 </Card>
             )}
 
+            {/* Phase 3 — Filtres Tour / Type */}
+            <div className="flex gap-3 items-center flex-wrap bg-white border border-gray-200 rounded-xl p-3">
+                <span className="text-sm font-medium text-gray-600">Filtres :</span>
+                <select
+                    value={filterTour}
+                    onChange={e => setFilterTour(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="all">Tous les tours</option>
+                    <option value="1">Tour 1</option>
+                    <option value="2">Tour 2</option>
+                    <option value="3">Tour 3</option>
+                </select>
+                <select
+                    value={filterType}
+                    onChange={e => setFilterType(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="all">Tous les types</option>
+                    <option value="Entretien">Entretien</option>
+                    <option value="commune">Sur table (commune)</option>
+                    <option value="individuelle">Individuelle</option>
+                    <option value="groupe">Groupe</option>
+                    <option value="oral">Oral</option>
+                    <option value="business_game">Business Game</option>
+                </select>
+                {(filterTour !== 'all' || filterType !== 'all') && (
+                    <button
+                        onClick={() => { setFilterTour('all'); setFilterType('all'); }}
+                        className="text-xs text-gray-500 hover:text-red-500 underline"
+                    >
+                        Réinitialiser
+                    </button>
+                )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {epreuves.map((epreuve: any) => (
+                {epreuves
+                    .filter((epreuve: any) => filterTour === 'all' || String(epreuve.tour) === filterTour)
+                    .filter((epreuve: any) => filterType === 'all' || epreuve.type === filterType)
+                    .map((epreuve: any) => {
+                    const isVisible = epreuve.isVisible !== false;
+                    return (
                     <Card
                         key={epreuve.id}
-                        className="group hover:shadow-md transition-shadow cursor-pointer hover:border-primary-200"
+                        className={`group hover:shadow-md transition-shadow cursor-pointer hover:border-primary-200 ${!isVisible ? 'opacity-60 border-dashed' : ''}`}
                         onClick={() => handleView(epreuve)}
                     >
                         <CardHeader>
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-lg">{epreuve.name}</CardTitle>
-                                <span className="bg-primary-100 text-primary-700 text-xs px-2 py-1 rounded font-bold">Tour {epreuve.tour}</span>
+                                <div className="flex items-center gap-2">
+                                    {/* Phase 4 — Visibility toggle */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleToggleVisibility(epreuve); }}
+                                        title={isVisible ? 'Visible (cliquer pour masquer)' : 'Masqué (cliquer pour rendre visible)'}
+                                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 ${
+                                            isVisible
+                                                ? 'border-green-400 bg-white hover:border-green-600'
+                                                : 'border-gray-400 bg-gray-800 hover:border-gray-600'
+                                        }`}
+                                    >
+                                        {isVisible
+                                            ? <Eye size={12} className="text-green-600" />
+                                            : <EyeOff size={12} className="text-gray-200" />
+                                        }
+                                    </button>
+                                    <span className="bg-primary-100 text-primary-700 text-xs px-2 py-1 rounded font-bold">Tour {epreuve.tour}</span>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-gray-500 mb-4">{epreuve.type} • {epreuve.durationMinutes} min</p>
+                            <p className="text-sm text-gray-500 mb-4">
+                                {epreuve.type} • {epreuve.durationMinutes} min
+                                {!isVisible && <span className="ml-2 text-xs text-red-500 font-medium">• Masqué</span>}
+                            </p>
                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(epreuve); }}>Modifier</Button>
                             </div>
                         </CardContent>
                     </Card>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

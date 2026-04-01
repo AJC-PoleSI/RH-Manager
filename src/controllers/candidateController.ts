@@ -22,7 +22,7 @@ export const getAllCandidates = async (req: Request, res: Response) => {
                 where,
                 skip,
                 take: limit,
-                select: {
+                    select: {
                     id: true,
                     firstName: true,
                     lastName: true,
@@ -30,6 +30,13 @@ export const getAllCandidates = async (req: Request, res: Response) => {
                     phone: true,
                     comments: true,
                     deliberation: true,
+                    wishes: {
+                        select: {
+                            pole: true,
+                            rank: true,
+                        },
+                        orderBy: { rank: 'asc' },
+                    },
                     evaluations: {
                         select: {
                             id: true,
