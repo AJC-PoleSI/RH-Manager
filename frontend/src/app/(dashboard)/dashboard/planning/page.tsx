@@ -88,6 +88,8 @@ export default function PlanningPage() {
     const [repartitionResult, setRepartitionResult] = useState<any>(null);
     const [resetLoading, setResetLoading] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    // Planning visibility for candidates
+    const [planningVisible, setPlanningVisible] = useState(false);
     // Logistique des créneaux (Phase 1 — déplacé depuis le formulaire épreuves)
     const [logNbSalles, setLogNbSalles] = useState(1);
     const [logMinEval, setLogMinEval] = useState(2);
@@ -135,7 +137,8 @@ export default function PlanningPage() {
             const res = await api.get('/settings');
             const saisieVal = res.data?.saisie_dispos_ouverte;
             setSaisiOuverte(saisieVal === 'true' || saisieVal === true);
-            // inscriptions_ouvertes n'est pas en settings, on le déduit des slots publiés
+            const planningVisibleVal = res.data?.planning_visible_candidats;
+            setPlanningVisible(planningVisibleVal === 'true' || planningVisibleVal === true);
         } catch {
             console.error('Erreur chargement settings admin');
         }
@@ -490,6 +493,26 @@ export default function PlanningPage() {
         }
     };
 
+    const handlePublierCandidats = async () => {
+        try {
+            await api.put('/settings', { planning_visible_candidats: 'true', planning_generated: 'true' });
+            setPlanningVisible(true);
+            toast('Planning visible pour les candidats — ils peuvent maintenant s\'inscrire', 'success');
+        } catch {
+            toast('Erreur publication candidats', 'error');
+        }
+    };
+
+    const handleMasquerCandidats = async () => {
+        try {
+            await api.put('/settings', { planning_visible_candidats: 'false' });
+            setPlanningVisible(false);
+            toast('Planning masque pour les candidats', 'success');
+        } catch {
+            toast('Erreur masquage', 'error');
+        }
+    };
+
     const handleRelancer = () => {
         toast('Fonctionnalite de relance par email a configurer (necessite un service email)', 'info');
     };
@@ -688,8 +711,176 @@ export default function PlanningPage() {
                             selectedEpreuveId={selectedEpreuveId}
                             epreuve={epreuves.find(e => e.id === selectedEpreuveId)}
                             toast={toast}
-                            onUpdate={() => {}}
+                            onUpdate={() => { fetchSlotData(); }}
                         />
+
+                        {/* ══════════════════════════════════════════════════════════════════
+                            PANNEAU DE CONTRÔLE DU WORKFLOW
+                            ══════════════════════════════════════════════════════════════════ */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                            <h3 className="text-sm font-semibold text-gray-800 mb-4">🚦 Gestion du workflow</h3>
+                            <p className="text-xs text-gray-500 mb-5">Gérez les étapes de publication du planning pour cette épreuve.</p>
+
+                            {/* Workflow steps */}
+                            <div className="space-y-4">
+
+                                {/* ÉTAPE 1 — Saisie des disponibilités membres */}
+                                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                                    saisiOuverte
+                                        ? 'bg-green-50 border-green-200'
+                                        : 'bg-gray-50 border-gray-200'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                                            saisiOuverte ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600'
+                                        }`}>1</div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800">Saisie des disponibilités</p>
+                                            <p className="text-xs text-gray-500">
+                                                {saisiOuverte
+                                                    ? '✅ Ouverte — les membres peuvent saisir leurs disponibilités'
+                                                    : '⏸️ Fermée — les membres ne peuvent pas modifier leurs disponibilités'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 flex-shrink-0">
+                                        {saisiOuverte ? (
+                                            <button
+                                                onClick={handleFermerSaisieDispos}
+                                                className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 border border-orange-200 rounded-lg hover:bg-orange-200 transition-colors"
+                                            >
+                                                Fermer la saisie
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleOuvrirSaisieDispos}
+                                                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                                            >
+                                                Ouvrir la saisie
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* ÉTAPE 2 — Publier les créneaux aux membres */}
+                                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                                    inscriptionsOuvertes
+                                        ? 'bg-blue-50 border-blue-200'
+                                        : 'bg-gray-50 border-gray-200'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                                            inscriptionsOuvertes ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'
+                                        }`}>2</div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800">Publication aux membres</p>
+                                            <p className="text-xs text-gray-500">
+                                                {inscriptionsOuvertes
+                                                    ? '✅ Publiés — les membres peuvent voir et s\'inscrire aux créneaux'
+                                                    : '⏸️ Non publié — les créneaux sont en brouillon'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 flex-shrink-0">
+                                        {inscriptionsOuvertes ? (
+                                            <button
+                                                onClick={handleFermerInscriptions}
+                                                className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 border border-orange-200 rounded-lg hover:bg-orange-200 transition-colors"
+                                            >
+                                                Fermer les inscriptions
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleOuvrirInscriptions}
+                                                disabled={existingSlots.length === 0}
+                                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Publier aux membres
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* ÉTAPE 3 — Publier pour les candidats */}
+                                <div className={`flex items-center justify-between p-4 rounded-xl border ${
+                                    planningVisible
+                                        ? 'bg-purple-50 border-purple-200'
+                                        : 'bg-gray-50 border-gray-200'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                                            planningVisible ? 'bg-purple-200 text-purple-800' : 'bg-gray-200 text-gray-600'
+                                        }`}>3</div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800">Visible pour les candidats</p>
+                                            <p className="text-xs text-gray-500">
+                                                {planningVisible
+                                                    ? '✅ Visible — les candidats peuvent voir le planning et s\'inscrire aux créneaux'
+                                                    : '⏸️ Masqué — les candidats ne voient pas le planning'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 flex-shrink-0">
+                                        {planningVisible ? (
+                                            <button
+                                                onClick={handleMasquerCandidats}
+                                                className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-200 rounded-lg hover:bg-red-200 transition-colors"
+                                            >
+                                                Masquer le planning
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handlePublierCandidats}
+                                                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+                                            >
+                                                Publier aux candidats
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            {/* Résumé rapide */}
+                            <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                <span>{existingSlots.length} créneau(x) créé(s) pour cette épreuve</span>
+                                {existingSlots.length > 0 && (
+                                    <button
+                                        onClick={() => setShowResetConfirm(true)}
+                                        className="text-red-500 hover:text-red-700 hover:underline transition-colors"
+                                    >
+                                        Réinitialiser tous les créneaux
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Confirmation de réinitialisation */}
+                        {showResetConfirm && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-red-800">Supprimer tous les créneaux ?</p>
+                                    <p className="text-xs text-red-600 mt-0.5">
+                                        Cette action supprimera {existingSlots.length} créneau(x), toutes les inscriptions et affectations associées.
+                                    </p>
+                                </div>
+                                <div className="flex gap-2 flex-shrink-0">
+                                    <button
+                                        onClick={() => setShowResetConfirm(false)}
+                                        className="px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={handleResetSlots}
+                                        disabled={resetLoading}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                                    >
+                                        {resetLoading ? 'Suppression...' : 'Confirmer la suppression'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </>
                 ) : (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center text-gray-500">

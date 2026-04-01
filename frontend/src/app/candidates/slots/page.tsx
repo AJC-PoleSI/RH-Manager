@@ -51,9 +51,20 @@ export default function CandidateSlotsPage() {
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState<string | null>(null);
     const [cancelling, setCancelling] = useState<string | null>(null);
+    const [planningVisible, setPlanningVisible] = useState<boolean | null>(null);
 
     const fetchData = async () => {
         try {
+            // Check if planning is visible for candidates
+            const settingsRes = await api.get('/settings');
+            const visible = settingsRes.data?.planning_visible_candidats;
+            setPlanningVisible(visible === 'true' || visible === true);
+
+            if (visible !== 'true' && visible !== true) {
+                setLoading(false);
+                return;
+            }
+
             const [slotsRes, enrollRes] = await Promise.all([
                 api.get('/slots/available'),
                 api.get('/slots/my-enrollments')
@@ -112,6 +123,40 @@ export default function CandidateSlotsPage() {
     }, {});
 
     if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin" size={32} /></div>;
+
+    // Planning not visible for candidates
+    if (planningVisible === false) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Inscription aux créneaux</h1>
+                    <p className="text-sm text-gray-500 mt-1">Choisissez vos créneaux d&apos;évaluation parmi ceux disponibles.</p>
+                </div>
+                <div className="flex items-center justify-center py-16">
+                    <div className="text-center max-w-md">
+                        <div className="w-20 h-20 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center mx-auto mb-5">
+                            <Calendar size={36} className="text-blue-400" />
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-800 mb-2">Planning en cours de préparation</h2>
+                        <p className="text-sm text-gray-500 leading-relaxed">
+                            Les créneaux d&apos;évaluation ne sont pas encore disponibles. Vous serez informé(e) dès qu&apos;ils seront publiés.
+                        </p>
+                        <div className="mt-5 flex items-center justify-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                            <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                            <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                        </div>
+                        <button
+                            onClick={() => { setLoading(true); fetchData(); }}
+                            className="mt-6 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200"
+                        >
+                            Actualiser
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
