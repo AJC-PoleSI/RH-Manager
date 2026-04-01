@@ -63,6 +63,7 @@ model Epreuve {
   isGroupEpreuve        Boolean  @default(false) @map("is_group_epreuve")
   groupSize             Int      @default(1) @map("group_size") // nb candidates per group (1=individual)
   isVisible             Boolean  @default(true) @map("is_visible") // Phase 4: visibility toggle
+  description           String?  // Description visible par les candidats
 
   evaluations    CandidateEvaluation[]
   calendarEvents CalendarEvent[]
