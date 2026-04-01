@@ -1,21 +1,45 @@
+import { supabaseAdmin } from '@/lib/supabase';
+import { signToken } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
-
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const { email, password } = await req.json();
 
-    const backendRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    if (!email || !password) {
+      return Response.json({ error: 'Email and password are required.' }, { status: 400 });
+    }
+
+    const { data: member, error } = await supabaseAdmin
+      .from('members')
+      .select('id, email, password_hash, is_admin')
+      .eq('email', email)
+      .single();
+
+    if (error || !member) {
+      return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const validPassword = await bcrypt.compare(password, member.password_hash);
+
+    if (!validPassword) {
+      return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const token = signToken({
+      id: member.id,
+      email: member.email,
+      role: 'member',
+      isAdmin: member.is_admin,
     });
 
-    const data = await backendRes.json().catch(() => ({}));
-    return Response.json(data, { status: backendRes.status });
+    return Response.json({
+      token,
+      member: { id: member.id, email: member.email, isAdmin: member.is_admin },
+    });
   } catch (error) {
-    console.error('Login proxy error:', error);
-    return Response.json({ error: 'Erreur de connexion. Le serveur est inaccessible.' }, { status: 500 });
+    console.error('Login error:', error);
+    return Response.json({ error: 'Login failed' }, { status: 500 });
   }
 }

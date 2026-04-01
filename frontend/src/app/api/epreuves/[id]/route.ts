@@ -1,9 +1,8 @@
+import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
-
-// PUT /api/epreuves/[id] - Proxy to Express backend
+// PUT /api/epreuves/[id]
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -16,34 +15,44 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const token = req.headers.get('authorization') || '';
+    const updateData: any = {};
 
-    const backendRes = await fetch(`${BACKEND_URL}/api/epreuves/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await backendRes.json().catch(() => ({}));
-
-    if (!backendRes.ok) {
-      return Response.json(
-        data || { error: 'Backend error' },
-        { status: backendRes.status }
-      );
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.tour !== undefined) updateData.tour = body.tour;
+    if (body.type !== undefined) updateData.type = body.type;
+    if (body.durationMinutes !== undefined) updateData.duration_minutes = body.durationMinutes;
+    if (body.roulementMinutes !== undefined) updateData.roulement_minutes = body.roulementMinutes;
+    if (body.nbSalles !== undefined) updateData.nb_salles = body.nbSalles;
+    if (body.minEvaluatorsPerSalle !== undefined) updateData.min_evaluators_per_salle = body.minEvaluatorsPerSalle;
+    if (body.dateDebut !== undefined) updateData.date_debut = body.dateDebut;
+    if (body.dateFin !== undefined) updateData.date_fin = body.dateFin;
+    if (body.isPoleTest !== undefined) updateData.is_pole_test = body.isPoleTest;
+    if (body.pole !== undefined) updateData.pole = body.pole;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.isVisible !== undefined) updateData.is_visible = body.isVisible;
+    if (body.evaluationQuestions !== undefined) {
+      updateData.evaluation_questions = typeof body.evaluationQuestions === 'string'
+        ? body.evaluationQuestions
+        : JSON.stringify(body.evaluationQuestions);
     }
+
+    const { data, error } = await supabaseAdmin
+      .from('epreuves')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return Response.json(data);
   } catch (error) {
-    console.error('Proxy PUT /epreuves/:id error:', error);
-    return Response.json({ error: 'Failed to update epreuve' }, { status: 500 });
+    console.error('PUT /epreuves/:id error:', error);
+    return Response.json({ error: 'Failed to update epreuve' }, { status: 400 });
   }
 }
 
-// DELETE /api/epreuves/[id] - Proxy to Express backend
+// DELETE /api/epreuves/[id]
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -55,26 +64,16 @@ export async function DELETE(
   const { id } = params;
 
   try {
-    const token = req.headers.get('authorization') || '';
+    const { error } = await supabaseAdmin
+      .from('epreuves')
+      .delete()
+      .eq('id', id);
 
-    const backendRes = await fetch(`${BACKEND_URL}/api/epreuves/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': token,
-      },
-    });
-
-    if (!backendRes.ok) {
-      const data = await backendRes.json().catch(() => ({}));
-      return Response.json(
-        data || { error: 'Backend error' },
-        { status: backendRes.status }
-      );
-    }
+    if (error) throw error;
 
     return new Response(null, { status: 204 });
   } catch (error) {
-    console.error('Proxy DELETE /epreuves/:id error:', error);
+    console.error('DELETE /epreuves/:id error:', error);
     return Response.json({ error: 'Failed to delete epreuve' }, { status: 400 });
   }
 }
