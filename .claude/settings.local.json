@@ -75,7 +75,25 @@
       "Bash(head -500 \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
       "Bash(head -100 \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
       "Bash(rm \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/candidates/chat/page.tsx\")",
-      "Bash(rmdir \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/candidates/chat\")"
+      "Bash(rmdir \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/candidates/chat\")",
+      "Bash(node -e \"const { PrismaClient } = require\\(''@prisma/client''\\); const p = new PrismaClient\\(\\); p.epreuve.create\\({data:{name:''test_desc'',tour:1,type:''Entretien'',durationMinutes:30,evaluationQuestions:''[]'',description:''hello''}}\\).then\\(r=>console.log\\(''OK''\\)\\).catch\\(e=>console.error\\(''FAIL:'',e.message\\)\\).finally\\(\\(\\)=>p.$disconnect\\(\\)\\)\")",
+      "Bash(node -e \"const { PrismaClient } = require\\(''@prisma/client''\\); const p = new PrismaClient\\(\\); p.epreuve.deleteMany\\({where:{name:{in:[''test'',''test_desc'']}}}\\).then\\(r=>console.log\\(''cleaned'',r.count\\)\\).finally\\(\\(\\)=>p.$disconnect\\(\\)\\)\")",
+      "Bash(PRISMA_HIDE_UPDATE_MESSAGE=1 npx prisma db push)",
+      "Bash(node -e \"const { PrismaClient } = require\\(''@prisma/client''\\); const p = new PrismaClient\\(\\); p.epreuve.create\\({data:{name:''test_ok'',tour:1,type:''Entretien'',durationMinutes:30,evaluationQuestions:''[]'',description:''Une description test''}}\\).then\\(r=>console.log\\(''OK'',r.id\\)\\).catch\\(e=>console.error\\(''FAIL:'',e.message\\)\\).finally\\(\\(\\)=>p.$disconnect\\(\\)\\)\")",
+      "Bash(node -e \"const { PrismaClient } = require\\(''@prisma/client''\\); const p = new PrismaClient\\(\\); p.epreuve.delete\\({where:{id:''7d85eecf-dc5f-4fce-b967-6b9184639465''}}\\).then\\(\\(\\)=>console.log\\(''cleaned''\\)\\).finally\\(\\(\\)=>p.$disconnect\\(\\)\\)\")",
+      "Bash(grep -r \"BACKEND_URL\\\\|PORT\" '/Users/felixpitz/Desktop/RH Manager Anti /' --include=*.env* --include=.env)",
+      "Bash(curl -s http://localhost:4000/api/epreuves -H \"Authorization: Bearer invalid\")",
+      "Bash(curl -s -X POST http://localhost:4000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@rhmanager.com\"\",\"\"password\"\":\"\"password123\"\"}')",
+      "Bash(kill 9670)",
+      "Bash(curl -s -X POST http://localhost:4000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@ajc.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin123\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:4000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@rhmanager.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"admin123\"\"\"\"}')",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhNmNiMjlmOS1hNDFlLTQ4YTEtOGVkMy03ZDZkZDQ3MTg3ZGIiLCJpc0FkbWluIjp0cnVlLCJpYXQiOjE3NzUwMzIxNDAsImV4cCI6MTc3NTExODU0MH0.JrUpuTNmwh0zxFUzs7A9nyoseUpZ0Im0FdVgc3AYez0\")",
+      "Bash(__NEW_LINE_ec4e0bb7d38dbf1d__ curl:*)",
+      "Bash(find '/Users/felixpitz/Desktop/RH Manager Anti /src' -name *.ts)",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@rhmanager.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"password123\"\"\"\"}')",
+      "Bash(npx vercel:*)",
+      "Bash(supabase status:*)",
+      "Bash(wc -l echo 'références à Express trouvées \\(devrait être 0\\):' __NEW_LINE_62d880db1525dd43__ echo echo '### Routes utilisant supabaseAdmin.from\\(\\):' grep -l supabaseAdmin.from frontend/src/app/api/**/*.ts)"
     ]
   },
   "hooks": {

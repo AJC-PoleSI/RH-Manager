@@ -121,7 +121,7 @@ export default function EpreuvesPage() {
             dateDebut: formData.date_debut || null,
             dateFin: formData.date_fin || null,
             isPoleTest: formData.is_pole_test,
-            pole: formData.pole,
+            pole: formData.pole === 'None' ? null : formData.pole,
             description: formData.description || null,
             evaluationQuestions: questions
         };
@@ -154,9 +154,9 @@ export default function EpreuvesPage() {
         }
     };
 
-    // Phase 4 — Toggle visibility
+    // Phase 4 — Toggle visibility (disabled until is_visible column exists in Supabase)
     const handleToggleVisibility = async (epreuve: any) => {
-        const newVal = !(epreuve.isVisible !== false);
+        const newVal = !epreuve.isVisible;
         try {
             await api.put(`/epreuves/${epreuve.id}`, { isVisible: newVal });
             fetchEpreuves();
@@ -409,14 +409,14 @@ export default function EpreuvesPage() {
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-lg">{epreuve.name}</CardTitle>
                                 <div className="flex items-center gap-2">
-                                    {/* Phase 4 — Visibility toggle */}
+                                    {/* Phase 4 — Visibility toggle (disabled until is_visible column exists in Supabase) */}
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleToggleVisibility(epreuve); }}
-                                        title={isVisible ? 'Visible (cliquer pour masquer)' : 'Masqué (cliquer pour rendre visible)'}
-                                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 ${
+                                        disabled
+                                        title="La visibilité sera configurable dans une prochaine version"
+                                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-not-allowed opacity-50 ${
                                             isVisible
-                                                ? 'border-green-400 bg-white hover:border-green-600'
-                                                : 'border-gray-400 bg-gray-800 hover:border-gray-600'
+                                                ? 'border-green-400 bg-white'
+                                                : 'border-gray-400 bg-gray-800'
                                         }`}
                                     >
                                         {isVisible
