@@ -15,7 +15,9 @@ import {
     getAvailableSlots,
     enrollInSlot,
     cancelEnrollment,
-    getMyEnrollments
+    getMyEnrollments,
+    bulkCreateSlots,
+    resetSlots
 } from '../controllers/slotController';
 
 const router = Router();
@@ -24,6 +26,8 @@ router.use(authenticateToken);
 
 // Admin routes
 router.post('/', requireAdmin, createSlot);
+router.post('/bulk-create', requireAdmin, bulkCreateSlots);
+router.post('/reset', requireAdmin, resetSlots);
 router.put('/:id', requireAdmin, updateSlot);
 router.delete('/:id', requireAdmin, deleteSlot);
 router.get('/all', requireAdmin, getAllSlots);
@@ -44,3 +48,4 @@ router.delete('/enroll/:slotId', cancelEnrollment);
 router.get('/my-enrollments', getMyEnrollments);
 
 export default router;
+

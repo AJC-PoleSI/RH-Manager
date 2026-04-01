@@ -15,6 +15,16 @@ interface Epreuve {
     isCommune: boolean;
     dateDebut?: string;
     dateFin?: string;
+    durationMinutes?: number;
+    duration_minutes?: number;
+    roulementMinutes?: number;
+    roulement_minutes?: number;
+    nbSalles?: number;
+    nb_salles?: number;
+    minEvaluatorsPerSalle?: number;
+    min_evaluators_per_salle?: number;
+    isGroupEpreuve?: boolean;
+    groupSize?: number;
 }
 
 interface SlotAvailability {

@@ -673,3 +673,106 @@ export const getMyEnrollments = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to fetch enrollments' });
     }
 };
+
+// =============================================
+// ADMIN: Bulk create slots from a time range
+// Slices a time range into individual slots
+// based on epreuve duration + roulement
+// =============================================
+export const bulkCreateSlots = async (req: Request, res: Response) => {
+    const { epreuveId, date, startTime, endTime, rooms } = req.body;
+
+    if (!epreuveId || !date || !startTime || !endTime || !rooms || !Array.isArray(rooms)) {
+        return res.status(400).json({ error: 'epreuveId, date, startTime, endTime, rooms are required' });
+    }
+
+    try {
+        const epreuve = await prisma.epreuve.findUnique({ where: { id: epreuveId } }) as any;
+        if (!epreuve) return res.status(404).json({ error: 'Epreuve not found' });
+
+        const roulement = epreuve.roulementMinutes ?? epreuve.roulement_minutes ?? 10;
+        const slotDuration = epreuve.durationMinutes + roulement;
+        const [startH, startM] = startTime.split(':').map(Number);
+        const [endH, endM] = endTime.split(':').map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        const createdSlots = [];
+
+        for (const roomNum of rooms) {
+            const roomName = `Salle ${roomNum}`;
+            let current = startMinutes;
+
+            while (current + slotDuration <= endMinutes) {
+                const slotStart = `${Math.floor(current / 60).toString().padStart(2, '0')}:${(current % 60).toString().padStart(2, '0')}`;
+                const slotEndMin = current + epreuve.durationMinutes;
+                const slotEnd = `${Math.floor(slotEndMin / 60).toString().padStart(2, '0')}:${(slotEndMin % 60).toString().padStart(2, '0')}`;
+
+                const slot = await prisma.evaluationSlot.create({
+                    data: {
+                        epreuveId,
+                        date: new Date(date + 'T12:00:00'),
+                        startTime: slotStart,
+                        endTime: slotEnd,
+                        durationMinutes: epreuve.durationMinutes,
+                        room: roomName,
+                        maxCandidates: epreuve.isGroupEpreuve ? epreuve.groupSize : 1,
+                        minMembers: epreuve.minEvaluatorsPerSalle ?? epreuve.min_evaluators_per_salle ?? 2,
+                        tour: epreuve.tour,
+                        status: 'open',
+                    },
+                });
+                createdSlots.push(slot);
+
+                current += slotDuration;
+            }
+        }
+
+        res.status(201).json({ success: true, count: createdSlots.length, slots: createdSlots });
+    } catch (error) {
+        console.error('Bulk create slots error:', error);
+        res.status(500).json({ error: 'Failed to bulk create slots', details: String(error) });
+    }
+};
+
+// =============================================
+// ADMIN: Reset (delete) all slots for an epreuve
+// =============================================
+export const resetSlots = async (req: Request, res: Response) => {
+    const { epreuveId, slotIds } = req.body;
+
+    if (!epreuveId && (!slotIds || !Array.isArray(slotIds))) {
+        return res.status(400).json({ error: 'epreuveId or slotIds required' });
+    }
+
+    try {
+        let deletedCount = 0;
+
+        if (slotIds && slotIds.length > 0) {
+            // Delete by specific IDs
+            for (const id of slotIds) {
+                await prisma.slotMemberAssignment.deleteMany({ where: { slotId: id } });
+                await prisma.slotEnrollment.deleteMany({ where: { slotId: id } });
+                await prisma.slotAvailabilityRequest.deleteMany({ where: { slotId: id } });
+            }
+            const result = await prisma.evaluationSlot.deleteMany({ where: { id: { in: slotIds } } });
+            deletedCount = result.count;
+        } else if (epreuveId) {
+            // Delete all slots for the epreuve
+            const slots = await prisma.evaluationSlot.findMany({ where: { epreuveId }, select: { id: true } });
+            const ids = slots.map(s => s.id);
+            for (const id of ids) {
+                await prisma.slotMemberAssignment.deleteMany({ where: { slotId: id } });
+                await prisma.slotEnrollment.deleteMany({ where: { slotId: id } });
+                await prisma.slotAvailabilityRequest.deleteMany({ where: { slotId: id } });
+            }
+            const result = await prisma.evaluationSlot.deleteMany({ where: { epreuveId } });
+            deletedCount = result.count;
+        }
+
+        res.json({ success: true, deleted: deletedCount });
+    } catch (error) {
+        console.error('Reset slots error:', error);
+        res.status(500).json({ error: 'Failed to reset slots', details: String(error) });
+    }
+};

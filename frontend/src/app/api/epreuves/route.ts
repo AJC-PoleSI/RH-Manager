@@ -40,6 +40,7 @@ export async function GET() {
       presentedBy: e.presented_by || null,
       dateDebut: e.date_debut || null,
       dateFin: e.date_fin || null,
+      isVisible: e.is_visible !== false, // default true si colonne absente
     }));
 
     return Response.json(parsed);
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
     if (body.presentedBy) extendedFields.presented_by = body.presentedBy;
     if (body.dateDebut) extendedFields.date_debut = body.dateDebut;
     if (body.dateFin) extendedFields.date_fin = body.dateFin;
+    if (body.isVisible !== undefined) extendedFields.is_visible = body.isVisible;
 
     // Try with all fields first, fallback to core only if columns don't exist
     let epreuve: any;

@@ -30,6 +30,10 @@ export default function EpreuvesPage() {
     const [questions, setQuestions] = useState<{ q: string; weight: number }[]>([{ q: '', weight: 1 }]);
     const { toast } = useToast();
 
+    // Phase 3 — Filtres
+    const [filterTour, setFilterTour] = useState<string>('all');
+    const [filterType, setFilterType] = useState<string>('all');
+
     useEffect(() => {
         fetchEpreuves();
     }, []);

@@ -67,7 +67,15 @@
       "mcp__Desktop_Commander__get_more_search_results",
       "Bash(ls -la \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app\"/*.tsx)",
       "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/mentions-legales\")",
-      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/politique-confidentialite\")"
+      "Bash(mkdir -p \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/politique-confidentialite\")",
+      "Bash(ls -la ./frontend/src/app/\\\\\\(dashboard\\\\\\)/)",
+      "Bash(ls -la ./frontend/src/app/\\\\\\(dashboard\\\\\\)/dashboard/)",
+      "Bash(cat \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(wc -l \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(head -500 \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(head -100 \"./frontend/src/app/\\(dashboard\\)/dashboard/planning/page.tsx\")",
+      "Bash(rm \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/candidates/chat/page.tsx\")",
+      "Bash(rmdir \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/candidates/chat\")"
     ]
   },
   "hooks": {
