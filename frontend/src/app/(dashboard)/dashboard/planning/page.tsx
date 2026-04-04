@@ -95,6 +95,9 @@ export default function PlanningPage() {
     const [logMinEval, setLogMinEval] = useState(2);
     const [logSaving, setLogSaving] = useState(false);
 
+    // ViewMode state
+    const [activeTab, setActiveTab] = useState<"creation" | "evaluators" | "candidates">("creation");
+
     // Modale modification créneau
     const [editSlot, setEditSlot] = useState<any>(null);
     const [editRoom, setEditRoom] = useState('');
@@ -655,7 +658,7 @@ export default function PlanningPage() {
                     <select
                         className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={selectedEpreuveId}
-                        onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setExistingSlots([]); }}
+                        onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setExistingSlots([]); setActiveTab("creation"); }}
                     >
                         <option value="">-- Sélectionner une épreuve --</option>
                         {epreuves.map(ep => (
@@ -707,11 +710,50 @@ export default function PlanningPage() {
                             </div>
                         </div>
 
+                        {/* TABS DE VUES */}
+                        <div className="flex items-center gap-1 bg-gray-100 p-1 mb-2 rounded-lg w-fit">
+                            <button
+                                onClick={() => setActiveTab("creation")}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                    activeTab === "creation"
+                                        ? "bg-white text-gray-900 shadow-sm"
+                                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                }`}
+                            >
+                                🛠️ Création
+                            </button>
+                            {inscriptionsOuvertes && (
+                                <button
+                                    onClick={() => setActiveTab("evaluators")}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                        activeTab === "evaluators"
+                                            ? "bg-white text-gray-900 shadow-sm"
+                                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    👥 Planning Évaluateurs
+                                </button>
+                            )}
+                            {planningVisible && (
+                                <button
+                                    onClick={() => setActiveTab("candidates")}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                        activeTab === "candidates"
+                                            ? "bg-white text-gray-900 shadow-sm"
+                                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    🎓 Suivi Candidats
+                                </button>
+                            )}
+                        </div>
+
                         <CalendarAdminBuilder
                             selectedEpreuveId={selectedEpreuveId}
                             epreuve={epreuves.find(e => e.id === selectedEpreuveId)}
                             toast={toast}
                             onUpdate={() => { fetchSlotData(); }}
+                            viewMode={activeTab}
                         />
 
                         {/* ══════════════════════════════════════════════════════════════════

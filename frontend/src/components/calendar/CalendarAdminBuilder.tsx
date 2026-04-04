@@ -20,6 +20,7 @@ interface CalendarAdminBuilderProps {
   epreuve: any;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
   onUpdate: () => void;
+  viewMode?: "creation" | "evaluators" | "candidates";
 }
 
 interface SlotData {
@@ -36,6 +37,10 @@ interface SlotData {
   epreuve_id?: string;
   epreuveId?: string;
   label?: string;
+  members?: { member: { email: string; firstName?: string; lastName?: string; first_name?: string; last_name?: string } }[];
+  enrollments?: { candidate: { first_name: string; last_name: string } }[];
+  maxCandidates?: number;
+  max_candidates?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -103,6 +108,7 @@ export default function CalendarAdminBuilder({
   epreuve,
   toast,
   onUpdate,
+  viewMode = "creation",
 }: CalendarAdminBuilderProps) {
   // State
   const [slots, setSlots] = useState<SlotData[]>([]);
@@ -111,6 +117,9 @@ export default function CalendarAdminBuilder({
   const [slotMaxTime, setSlotMaxTime] = useState(DEFAULT_MAX_TIME);
   const [showConfig, setShowConfig] = useState(false);
   const [currentWeekLabel, setCurrentWeekLabel] = useState("");
+  const [editingSlot, setEditingSlot] = useState<SlotData | null>(null);
+  const [editedRoom, setEditedRoom] = useState("");
+  const [savingRoom, setSavingRoom] = useState(false);
 
   // Refs
   const calendarRef = useRef<FullCalendar>(null);
@@ -262,6 +271,56 @@ export default function CalendarAdminBuilder({
     }
   }
 
+  const saveEditedRoom = async () => {
+    if (!editingSlot) return;
+    try {
+      setSavingRoom(true);
+      await api.put(`/slots/${editingSlot.id}`, { room: editedRoom });
+      toast("Salle modifiée", "success");
+      setEditingSlot(null);
+      fetchSlots();
+      onUpdate();
+    } catch {
+      toast("Erreur lors de la modification de la salle", "error");
+    } finally {
+      setSavingRoom(false);
+    }
+  };
+
+  const checkOverlap = useCallback(
+    (targetDateStr: string, targetStart: string, targetDurationMins: number, excludeSlotId?: string) => {
+      const targetDaySlots = slots.filter(
+        (s) =>
+          ((s.date || "").split("T")[0] === targetDateStr) &&
+          s.id !== excludeSlotId
+      );
+      
+      const toMins = (hhmm: string) => {
+        const [h, m] = hhmm.split(":").map(Number);
+        return h * 60 + m;
+      };
+
+      const startA = toMins(targetStart);
+      const endA = startA + targetDurationMins;
+
+      let maxOverlap = 0;
+      for (let min = startA; min < endA; min++) {
+        let count = 0;
+        targetDaySlots.forEach((s) => {
+          const sDur = s.duration_minutes || s.durationMinutes || durationMinutes;
+          const sStart = toMins(s.start_time || s.startTime || "08:00");
+          const sEnd = sStart + sDur;
+          if (min >= sStart && min < sEnd) {
+            count++;
+          }
+        });
+        if (count > maxOverlap) maxOverlap = count;
+      }
+      return maxOverlap;
+    },
+    [slots, durationMinutes]
+  );
+
   // ─── Build FullCalendar events ────────────────────────────────────
   const events: EventInput[] = useMemo(() => {
     return slots.map((slot) => {
@@ -287,6 +346,9 @@ export default function CalendarAdminBuilder({
           endTime,
           status: slot.status,
           duration: slot.duration_minutes || slot.durationMinutes || durationMinutes,
+          members: slot.members || [],
+          enrollments: slot.enrollments || [],
+          maxCandidates: slot.maxCandidates || slot.max_candidates || 1
         },
       };
     });
@@ -311,6 +373,14 @@ export default function CalendarAdminBuilder({
         .toString()
         .padStart(2, "0");
       const startTime = `${hours}:${minutes}`;
+
+      if (viewMode !== "creation") return;
+
+      const currentOverlap = checkOverlap(dateStr, startTime, durationMinutes);
+      if (currentOverlap >= nbSalles) {
+        toast(`Impossible d'ajouter : capacité max (${nbSalles} salles) atteinte sur cette plage horaire.`, "error");
+        return;
+      }
 
       if (roomList.length <= 1) {
         createSlot(dateStr, startTime, roomList[0] || "Salle 1");
@@ -357,6 +427,18 @@ export default function CalendarAdminBuilder({
         .toString()
         .padStart(2, "0")}`;
 
+      if (viewMode !== "creation") {
+        info.revert();
+        return;
+      }
+
+      const currentOverlap = checkOverlap(newDate, newStartTime, durationMinutes, slotId);
+      if (currentOverlap >= nbSalles) {
+        toast(`Impossible de déplacer : capacité max (${nbSalles} salles) atteinte.`, "error");
+        info.revert();
+        return;
+      }
+
       moveSlot(slotId, newDate, newStartTime);
     },
     [durationMinutes]
@@ -366,13 +448,21 @@ export default function CalendarAdminBuilder({
   const handleEventClick = useCallback(
     (info: EventClickArg) => {
       const target = info.jsEvent?.target as HTMLElement;
+      const slotId = info.event.extendedProps?.slotId || info.event.id;
+
+      if (viewMode !== "creation") return;
+
       if (target?.classList?.contains("fc-event-delete-btn")) {
-        const slotId =
-          info.event.extendedProps?.slotId || info.event.id;
         deleteSlot(slotId);
+      } else {
+        const sl = slots.find((s) => s.id === slotId);
+        if (sl) {
+          setEditingSlot(sl);
+          setEditedRoom(sl.room || "Salle 1");
+        }
       }
     },
-    []
+    [slots, viewMode]
   );
 
   /** Custom event rendering */
@@ -390,22 +480,62 @@ export default function CalendarAdminBuilder({
         }) || "";
       const room = eventInfo.event.extendedProps?.room || "";
       const dur = eventInfo.event.extendedProps?.duration;
+      const members = eventInfo.event.extendedProps?.members || [];
+      const enrollments = eventInfo.event.extendedProps?.enrollments || [];
+      const maxCand = eventInfo.event.extendedProps?.maxCandidates || 1;
+
+      if (viewMode === "evaluators") {
+         return (
+           <div className="relative w-full h-full p-1 overflow-hidden" style={{ cursor: "default" }}>
+             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">{start} - {room}</div>
+             {members.length > 0 ? (
+               members.map((m: any, i: number) => (
+                 <div key={i} className="text-[9px] font-medium leading-tight truncate text-blue-900 bg-blue-100/90 rounded px-1 mb-0.5" title={`${m.member?.firstName || m.member?.first_name || ""} ${m.member?.lastName || m.member?.last_name || m.member?.email}`}>
+                   {m.member?.firstName || m.member?.first_name || ""} {m.member?.lastName || m.member?.last_name || m.member?.email}
+                 </div>
+               ))
+             ) : (
+               <div className="text-[9px] italic text-red-700 bg-red-100/80 px-1 rounded">0 éval</div>
+             )}
+           </div>
+         );
+      }
+
+      if (viewMode === "candidates") {
+         return (
+           <div className="relative w-full h-full p-1 overflow-hidden" style={{ cursor: "default" }}>
+             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">{start} - {room}</div>
+             <div className="text-[9px] font-medium bg-black/10 px-1 rounded inline-block mb-1 opacity-90">{enrollments.length}/{maxCand} inscrit(s)</div>
+             {enrollments.length > 0 ? (
+               enrollments.map((e: any, i: number) => (
+                 <div key={i} className="text-[9px] font-medium leading-tight truncate text-green-900 bg-green-100/90 rounded px-1 flex mb-0.5">
+                   🎓 {e.candidate?.first_name} {e.candidate?.last_name}
+                 </div>
+               ))
+             ) : (
+               <div className="text-[9px] italic text-gray-500 opacity-80 pl-1">Vide</div>
+             )}
+           </div>
+         );
+      }
 
       return (
         <div className="relative w-full h-full px-1 py-0.5 overflow-hidden">
-          <button
-            className="fc-event-delete-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              const slotId =
-                eventInfo.event.extendedProps?.slotId ||
-                eventInfo.event.id;
-              deleteSlot(slotId);
-            }}
-            title="Supprimer"
-          >
-            ✕
-          </button>
+          {viewMode === "creation" && (
+            <button
+              className="fc-event-delete-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                const slotId =
+                  eventInfo.event.extendedProps?.slotId ||
+                  eventInfo.event.id;
+                deleteSlot(slotId);
+              }}
+              title="Supprimer"
+            >
+              ✕
+            </button>
+          )}
           <div className="text-[10px] font-bold leading-tight truncate">
             {room}
           </div>
@@ -598,10 +728,10 @@ export default function CalendarAdminBuilder({
             }}
             height="auto"
             expandRows={true}
-            editable={true}
+            editable={viewMode === "creation"}
             droppable={false}
             eventDurationEditable={false}
-            eventStartEditable={true}
+            eventStartEditable={viewMode === "creation"}
             selectable={false}
             validRange={validRange}
             dateClick={handleDateClick}
@@ -614,6 +744,54 @@ export default function CalendarAdminBuilder({
           />
         </div>
       </div>
+
+      {/* Modal Édition Salle */}
+      {editingSlot && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Éditer le créneau</h3>
+              <button 
+                onClick={() => setEditingSlot(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom de la salle
+              </label>
+              <input
+                type="text"
+                value={editedRoom}
+                onChange={(e) => setEditedRoom(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                autoFocus
+                onKeyDown={(e) => {
+                   if (e.key === "Enter") saveEditedRoom();
+                }}
+              />
+            </div>
+            <div className="p-5 bg-gray-50 flex justify-end gap-3 rounded-b-xl border-t border-gray-100">
+              <button
+                onClick={() => setEditingSlot(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 bg-gray-100 rounded-lg transition-colors"
+                disabled={savingRoom}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={saveEditedRoom}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                disabled={savingRoom}
+              >
+                {savingRoom ? "Enregistrement..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ LEGEND ═══ */}
       <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-500 flex-wrap">

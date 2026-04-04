@@ -34,9 +34,9 @@ export const createEreuve = async (req: Request, res: Response) => {
         };
 
         // Optional fields — only pass fields that exist in the Prisma Epreuve model
-        if (body.roulementMinutes !== undefined) data.roulementMinutes = body.roulementMinutes;
-        if (body.nbSalles !== undefined) data.nbSalles = body.nbSalles;
-        if (body.minEvaluatorsPerSalle !== undefined) data.minEvaluatorsPerSalle = body.minEvaluatorsPerSalle;
+        if (body.roulementMinutes !== undefined) data.roulementMinutes = typeof body.roulementMinutes === 'string' ? parseInt(body.roulementMinutes, 10) : body.roulementMinutes;
+        if (body.nbSalles !== undefined) data.nbSalles = typeof body.nbSalles === 'string' ? parseInt(body.nbSalles, 10) : body.nbSalles;
+        if (body.minEvaluatorsPerSalle !== undefined) data.minEvaluatorsPerSalle = typeof body.minEvaluatorsPerSalle === 'string' ? parseInt(body.minEvaluatorsPerSalle, 10) : body.minEvaluatorsPerSalle;
         if (body.dateDebut) data.dateDebut = body.dateDebut;
         if (body.dateFin) data.dateFin = body.dateFin;
         if (body.description) data.description = body.description;
@@ -64,10 +64,10 @@ export const updateEpreuve = async (req: Request, res: Response) => {
         if (body.name !== undefined) data.name = body.name;
         if (body.tour !== undefined) data.tour = body.tour;
         if (body.type !== undefined) data.type = body.type;
-        if (body.durationMinutes !== undefined) data.durationMinutes = body.durationMinutes;
-        if (body.roulementMinutes !== undefined) data.roulementMinutes = body.roulementMinutes;
-        if (body.nbSalles !== undefined) data.nbSalles = body.nbSalles;
-        if (body.minEvaluatorsPerSalle !== undefined) data.minEvaluatorsPerSalle = body.minEvaluatorsPerSalle;
+        if (body.durationMinutes !== undefined) data.durationMinutes = typeof body.durationMinutes === 'string' ? parseInt(body.durationMinutes, 10) : body.durationMinutes;
+        if (body.roulementMinutes !== undefined) data.roulementMinutes = typeof body.roulementMinutes === 'string' ? parseInt(body.roulementMinutes, 10) : body.roulementMinutes;
+        if (body.nbSalles !== undefined) data.nbSalles = typeof body.nbSalles === 'string' ? parseInt(body.nbSalles, 10) : body.nbSalles;
+        if (body.minEvaluatorsPerSalle !== undefined) data.minEvaluatorsPerSalle = typeof body.minEvaluatorsPerSalle === 'string' ? parseInt(body.minEvaluatorsPerSalle, 10) : body.minEvaluatorsPerSalle;
         if (body.dateDebut !== undefined) data.dateDebut = body.dateDebut;
         if (body.dateFin !== undefined) data.dateFin = body.dateFin;
         if (body.isPoleTest !== undefined) data.isPoleTest = body.isPoleTest;
