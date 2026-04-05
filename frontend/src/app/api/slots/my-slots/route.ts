@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     const slots = (assignments || [])
+      .filter((a: any) => a.slot && ['published', 'closed'].includes(a.slot.status))
       .map((a: any) => ({
         ...a.slot,
         myAssignment: true,

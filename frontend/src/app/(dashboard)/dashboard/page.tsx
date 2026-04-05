@@ -48,6 +48,7 @@ export default function DashboardPage() {
     const [deadlines, setDeadlines] = useState<{ deadline_candidats?: string; deadline_membres?: string }>({});
     const [mySlots, setMySlots] = useState<any[]>([]);
     const [showEventModal, setShowEventModal] = useState(false);
+    const [selectedMemberSlot, setSelectedMemberSlot] = useState<any>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [eventFormData, setEventFormData] = useState({
         title: '',
@@ -108,16 +109,23 @@ export default function DashboardPage() {
                 });
             }
 
-            const slotEvents = mySlots.map((slot: any) => ({
-                id: `slot-${slot.id}`,
-                title: `${slot.epreuve?.name || 'Evaluation'}`,
-                description: slot.enrollments?.map((e: any) => `${e.candidate?.firstName} ${e.candidate?.lastName}`).join(', ') || '',
-                day: slot.date,
-                startTime: slot.startTime,
-                endTime: slot.endTime,
-                isSlot: true,
-                room: slot.room
-            }));
+            const slotEvents = mySlots.map((slot: any) => {
+                const mappedEnrollments = slot.enrollments?.map((e: any) => ({
+                    firstName: e.candidate?.firstName || e.candidate?.first_name || '',
+                    lastName: e.candidate?.lastName || e.candidate?.last_name || '',
+                })) || [];
+                return {
+                    id: `slot-${slot.id}`,
+                    title: `${slot.epreuve?.name || 'Evaluation'}`,
+                    description: mappedEnrollments.map((c: any) => `${c.firstName} ${c.lastName}`).join(', ') || '',
+                    day: slot.date,
+                    startTime: slot.startTime || slot.start_time,
+                    endTime: slot.endTime || slot.end_time,
+                    isSlot: true,
+                    room: slot.room,
+                    rawCandidates: mappedEnrollments
+                };
+            });
 
             setEvents([...res.data, ...deadlineEvents, ...slotEvents]);
         } catch (e) {
@@ -176,7 +184,6 @@ export default function DashboardPage() {
     };
 
     const openEditModal = (event: any) => {
-        if (!isAdmin) return;
         setEditingId(event.id);
         const eventDate = new Date(event.day);
         setEventFormData({
@@ -187,6 +194,16 @@ export default function DashboardPage() {
             end_time: event.endTime
         });
         setShowEventModal(true);
+    };
+
+    const handleEventClick = (event: any) => {
+        if (isAdmin) {
+            openEditModal(event);
+        } else {
+            if (event.isSlot) {
+                setSelectedMemberSlot(event);
+            }
+        }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -455,7 +472,7 @@ export default function DashboardPage() {
                             events={events}
                             isMember={role === 'member'}
                             variant="simple-list"
-                            onEventClick={openEditModal}
+                            onEventClick={handleEventClick}
                         />
                     ))}
                 </div>
@@ -550,6 +567,72 @@ export default function DashboardPage() {
                                     </div>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Member Slot Details Modal */}
+            {selectedMemberSlot && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                    <div className="bg-white rounded-xl border border-gray-200 w-96 shadow-xl overflow-hidden">
+                        <div className="px-5 py-4 bg-purple-50 border-b border-purple-100 flex justify-between items-center">
+                            <h3 className="text-base font-semibold text-purple-900">
+                                {selectedMemberSlot.title}
+                            </h3>
+                            <button onClick={() => setSelectedMemberSlot(null)} className="text-purple-400 hover:text-purple-600 transition-colors">
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div className="flex items-start gap-3">
+                                <div className="text-gray-400 mt-0.5">🗓️</div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800 capitalize">
+                                        {format(new Date(selectedMemberSlot.day), 'EEEE d MMMM yyyy', { locale: fr })}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                        De {selectedMemberSlot.startTime} à {selectedMemberSlot.endTime}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                                <div className="text-gray-400 mt-0.5">📍</div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">Salle d&apos;évaluation</p>
+                                    <p className="text-sm text-gray-600">
+                                        {selectedMemberSlot.room ? selectedMemberSlot.room : <span className="italic text-gray-400">Non renseignée</span>}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                                <div className="text-gray-400 mt-0.5">🎓</div>
+                                <div className="w-full">
+                                    <p className="text-sm font-medium text-gray-800 mb-2">Candidat(s) évalué(s)</p>
+                                    {selectedMemberSlot.rawCandidates && selectedMemberSlot.rawCandidates.length > 0 ? (
+                                        <ul className="space-y-1.5">
+                                            {selectedMemberSlot.rawCandidates.map((c: any, idx: number) => (
+                                                <li key={idx} className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                                                    {c.firstName} {c.lastName}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-gray-400 italic bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">Aucun candidat assigné</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+                            <button
+                                onClick={() => setSelectedMemberSlot(null)}
+                                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 font-medium rounded-lg text-sm hover:bg-gray-100 transition-colors shadow-sm"
+                            >
+                                Fermer
+                            </button>
                         </div>
                     </div>
                 </div>
