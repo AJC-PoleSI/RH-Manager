@@ -86,6 +86,7 @@ export default function PlanningPage() {
     const [saisiOuverte, setSaisiOuverte] = useState(false);
     const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
     const [existingSlots, setExistingSlots] = useState<any[]>([]);
+    const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
     const [repartitionLoading, setRepartitionLoading] = useState(false);
     const [repartitionResult, setRepartitionResult] = useState<any>(null);
     const [resetLoading, setResetLoading] = useState(false);
@@ -135,9 +136,20 @@ export default function PlanningPage() {
         }
     }, [selectedEpreuveId]);
 
+    const fetchGlobalCalendarEvents = useCallback(async () => {
+        try {
+            const res = await api.get('/calendar');
+            const globals = (res.data || []).filter((ev: any) => ev.is_global === true);
+            setGlobalEvents(globals);
+        } catch (e) {
+            console.error('Erreur global events:', e);
+        }
+    }, []);
+
     useEffect(() => {
         fetchEpreuves();
-    }, [fetchEpreuves]);
+        fetchGlobalCalendarEvents();
+    }, [fetchEpreuves, fetchGlobalCalendarEvents]);
 
     // ══════════════════════════════════════════════════════════════════
     // PERSISTANCE : Charger l'état admin depuis les settings au montage
@@ -711,16 +723,85 @@ export default function PlanningPage() {
                 {/* Header */}
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Dispos &amp; Inscriptions</h1>
-                    <p className="text-sm text-gray-500 mt-1">Logistique des creneaux</p>
+                    <p className="text-sm text-gray-500 mt-1">Gérez le recrutement global et les épreuves</p>
                 </div>
 
-                {/* Epreuve selector */}
+                {/* ══════════════════════════════════════════════════════════════════
+                    CALENDRIER ADMINISTRATEUR GLOBAL (TOUT LE RECRUTEMENT)
+                    ══════════════════════════════════════════════════════════════════ */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col h-[600px]">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                            <span className="text-xl">🗺️</span> Vue Globale du Recrutement
+                        </h3>
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                            <button onClick={() => setAdminWeekOffset(adminWeekOffset - 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">◀</button>
+                            <span className="text-xs font-semibold px-2 text-gray-700 min-w-[120px] text-center">Semaine décalée ({adminWeekOffset})</span>
+                            <button onClick={() => setAdminWeekOffset(adminWeekOffset + 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">▶</button>
+                        </div>
+                    </div>
+                    
+                    {existingSlots.length === 0 && globalEvents.length === 0 ? (
+                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                             <p className="text-sm">Aucun événement ou créneau généré.</p>
+                         </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto flex rounded-lg border border-gray-100 bg-gray-50/30">
+                            {Array.from({ length: 5 }).map((_, i) => {
+                                const dayDate = addDays(currentAdminWeek, i);
+                                const dateString = dayDate.toISOString().split('T')[0];
+                                
+                                // TOUS les slots du jour (pas de filtre d'epreuve)
+                                const daySlots = existingSlots.filter((slot: any) => {
+                                    if (!slot.date) return false;
+                                    return slot.date.split('T')[0] === dateString;
+                                }).map((s: any) => {
+                                    // Build evaluator string
+                                    const evalNames = s.members?.map((m:any) => m.member?.email?.split('@')[0]).join(', ') || '0M';
+                                    const candCount = s.enrollments?.length || 0;
+                                    const epName = s.epreuve?.name ? `[${s.epreuve.name}]` : '';
+                                    
+                                    return {
+                                        id: s.id,
+                                        day: s.date,
+                                        startTime: s.startTime || s.start_time,
+                                        endTime: s.endTime || s.end_time,
+                                        title: `${epName} Salle ${s.room || '?'}: ${candCount}C | Par: ${evalNames}`,
+                                        isSlot: true
+                                    };
+                                });
+
+                                // TOUS les événements globaux du jour
+                                const globalsForDay = globalEvents.filter((ev: any) => ev.day === dateString).map((g: any) => ({
+                                    ...g,
+                                    isGlobal: true,
+                                    title: `📌 ${g.title}`
+                                }));
+
+                                const combinedEvents = [...daySlots, ...globalsForDay].sort((a,b) => (a.startTime || a.start_time || '').localeCompare(b.startTime || b.start_time || ''));
+
+                                return (
+                                    <CalendarColumn
+                                        key={dayDate.toISOString()}
+                                        date={dayDate}
+                                        events={combinedEvents}
+                                        variant="simple-list"
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <hr className="my-2 border-gray-200" />
+
+                {/* Epreuve selector pour le paramétrage */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Epreuve</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Configuration d'une Epreuve</label>
                     <select
                         className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={selectedEpreuveId}
-                        onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setExistingSlots([]); setActiveTab("creation"); }}
+                        onChange={e => { setSelectedEpreuveId(e.target.value); setRepartitionResult(null); setActiveTab("creation"); }}
                     >
                         <option value="">-- Sélectionner une épreuve --</option>
                         {epreuves.map(ep => (
@@ -772,46 +853,7 @@ export default function PlanningPage() {
                             </div>
                         </div>
 
-                        {/* ══════════════════════════════════════════════════════════════════
-                            CALENDRIER ADMINISTRATEUR
-                            ══════════════════════════════════════════════════════════════════ */}
-                        {existingSlots.length > 0 && (
-                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col h-[600px]">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                                        <span className="text-xl">📅</span> Extrait Visuel du Planning
-                                    </h3>
-                                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                                        <button onClick={() => setAdminWeekOffset(adminWeekOffset - 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">◀</button>
-                                        <span className="text-xs font-semibold px-2 text-gray-700 min-w-[120px] text-center">Semaine décalée ({adminWeekOffset})</span>
-                                        <button onClick={() => setAdminWeekOffset(adminWeekOffset + 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">▶</button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto flex rounded-lg border border-gray-100 bg-gray-50/30">
-                                    {Array.from({ length: 5 }).map((_, i) => {
-                                        const dayDate = addDays(currentAdminWeek, i);
-                                        // Filter specific to selected epreuve + match schema of CalendarColumn
-                                        const daySlots = existingSlots.filter((slot: any) => slot.epreuve_id === selectedEpreuveId || slot.epreuveId === selectedEpreuveId).map((s: any) => ({
-                                            id: s.id,
-                                            day: s.date,
-                                            startTime: s.startTime || s.start_time,
-                                            endTime: s.endTime || s.end_time,
-                                            title: `Salle ${s.room || '?'}: ${s.enrollments?.length || 0}C / ${s.members?.length || 0}M`,
-                                            isSlot: true
-                                        }));
-
-                                        return (
-                                            <CalendarColumn
-                                                key={dayDate.toISOString()}
-                                                date={dayDate}
-                                                events={daySlots}
-                                                variant="simple-list"
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                        {/* Ancienne position du calendrier supprimée */}
 
                         {/* TABS DE VUES */}
                         <div className="flex items-center gap-1 bg-gray-100 p-1 mb-2 rounded-lg w-fit">

@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
       groupSize: e.group_size ?? 1,
       isCommune: e.type === 'commune',
       description: e.description || null,
-      dateDebut: e.date_debut || null,
-      dateFin: e.date_fin || null,
+      dateDebut: e.date_debut ? e.date_debut.split('T')[0] : null,
+      dateFin: e.date_fin ? e.date_fin.split('T')[0] : null,
       isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
@@ -57,17 +57,17 @@ export async function POST(req: NextRequest) {
       name: body.name,
       tour: body.tour ?? 1,
       type: body.type ?? 'commune',
-      duration_minutes: body.durationMinutes ?? 30,
+      duration_minutes: Number(body.durationMinutes) || 30,
       evaluation_questions: typeof body.evaluationQuestions === 'string'
         ? body.evaluationQuestions
         : JSON.stringify(body.evaluationQuestions ?? []),
-      is_pole_test: body.isPoleTest ?? false,
+      is_pole_test: Boolean(body.isPoleTest),
       pole: body.pole || null,
-      roulement_minutes: body.roulementMinutes ?? 10,
-      nb_salles: body.nbSalles ?? 1,
-      min_evaluators_per_salle: body.minEvaluatorsPerSalle ?? 2,
-      date_debut: body.dateDebut || null,
-      date_fin: body.dateFin || null,
+      roulement_minutes: Number(body.roulementMinutes) || 10,
+      nb_salles: Number(body.nbSalles) || 1,
+      min_evaluators_per_salle: Number(body.minEvaluatorsPerSalle) || 2,
+      date_debut: body.dateDebut ? new Date(body.dateDebut).toISOString() : null,
+      date_fin: body.dateFin ? new Date(body.dateFin).toISOString() : null,
       description: body.description || null,
       // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };

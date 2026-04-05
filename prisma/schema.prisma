@@ -55,8 +55,8 @@ model Epreuve {
   roulementMinutes      Int      @default(10) @map("roulement_minutes")
   nbSalles              Int      @default(1) @map("nb_salles")
   minEvaluatorsPerSalle Int      @default(2) @map("min_evaluators_per_salle")
-  dateDebut             String?  @map("date_debut")
-  dateFin               String?  @map("date_fin")
+  dateDebut             DateTime? @map("date_debut")
+  dateFin               DateTime? @map("date_fin")
   evaluationQuestions   String   @map("evaluation_questions") // Stored as JSON string
   isPoleTest            Boolean  @default(false) @map("is_pole_test")
   pole                  String?  // RH, SI, etc.
@@ -80,7 +80,7 @@ model CandidateEvaluation {
   createdAt   DateTime @default(now()) @map("created_at")
 
   candidate Candidate @relation(fields: [candidateId], references: [id])
-  epreuve   Epreuve   @relation(fields: [epreuveId], references: [id])
+  epreuve   Epreuve   @relation(fields: [epreuveId], references: [id], onDelete: Cascade)
   member    Member    @relation(fields: [memberId], references: [id])
 
   evaluatorTracking EvaluatorTracking[]
@@ -145,7 +145,7 @@ model CalendarEvent {
   relatedCandidateId String?  @map("related_candidate_id")
   maxCandidates     Int      @default(1) @map("max_candidates")
 
-  epreuve   Epreuve?   @relation(fields: [relatedEpreuveId], references: [id])
+  epreuve   Epreuve?   @relation(fields: [relatedEpreuveId], references: [id], onDelete: Cascade)
   member    Member?    @relation(fields: [relatedMemberId], references: [id])
   candidate Candidate? @relation(fields: [relatedCandidateId], references: [id])
 
@@ -194,7 +194,7 @@ model EvaluationSlot {
   tour              Int      @default(1)
   createdAt         DateTime @default(now()) @map("created_at")
 
-  epreuve       Epreuve?             @relation(fields: [epreuveId], references: [id])
+  epreuve       Epreuve?             @relation(fields: [epreuveId], references: [id], onDelete: Cascade)
   members       SlotMemberAssignment[]
   enrollments   SlotEnrollment[]
   requests      SlotAvailabilityRequest[]

@@ -21,12 +21,12 @@ export async function PUT(
     if (body.name !== undefined) updateData.name = body.name;
     if (body.tour !== undefined) updateData.tour = body.tour;
     if (body.type !== undefined) updateData.type = body.type;
-    if (body.durationMinutes !== undefined) updateData.duration_minutes = body.durationMinutes;
-    if (body.roulementMinutes !== undefined) updateData.roulement_minutes = body.roulementMinutes;
-    if (body.nbSalles !== undefined) updateData.nb_salles = body.nbSalles;
-    if (body.minEvaluatorsPerSalle !== undefined) updateData.min_evaluators_per_salle = body.minEvaluatorsPerSalle;
-    if (body.dateDebut !== undefined) updateData.date_debut = body.dateDebut;
-    if (body.dateFin !== undefined) updateData.date_fin = body.dateFin;
+    if (body.durationMinutes !== undefined) updateData.duration_minutes = Number(body.durationMinutes);
+    if (body.roulementMinutes !== undefined) updateData.roulement_minutes = Number(body.roulementMinutes);
+    if (body.nbSalles !== undefined) updateData.nb_salles = Number(body.nbSalles);
+    if (body.minEvaluatorsPerSalle !== undefined) updateData.min_evaluators_per_salle = Number(body.minEvaluatorsPerSalle);
+    if (body.dateDebut !== undefined) updateData.date_debut = body.dateDebut ? new Date(body.dateDebut).toISOString() : null;
+    if (body.dateFin !== undefined) updateData.date_fin = body.dateFin ? new Date(body.dateFin).toISOString() : null;
     if (body.isPoleTest !== undefined) updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
     if (body.description !== undefined) updateData.description = body.description;
