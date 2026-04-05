@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettings } from '@/context/SettingsContext'; // Import settings
@@ -35,11 +35,7 @@ export default function AvailabilityPage() {
     // Store slots as simple objects { id, weekday: 1-5, startTime: "HH:mm", endTime: "HH:mm" }
     const [slots, setSlots] = useState<any[]>([]);
 
-    useEffect(() => {
-        fetchAvailabilities();
-    }, [currentWeekStart]); // Refetch when week changes
-
-    const fetchAvailabilities = async () => {
+    const fetchAvailabilities = useCallback(async () => {
         setLoading(true);
         try {
             // Check global settings
@@ -61,7 +57,11 @@ export default function AvailabilityPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentWeekStart]);
+
+    useEffect(() => {
+        fetchAvailabilities();
+    }, [fetchAvailabilities]);
 
     const handleSave = async () => {
         setSaving(true);

@@ -78,30 +78,8 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
         setDragX(dx);
     }, [isDragging]);
 
-    const handleEnd = useCallback(() => {
-        if (!isDragging) return;
-        setIsDragging(false);
 
-        if (Math.abs(dragX) > SWIPE_THRESHOLD) {
-            const direction = dragX > 0 ? 'right' : 'left';
-            triggerDecision(direction === 'right' ? 'accepted' : 'refused');
-        } else {
-            setDragX(0);
-        }
-    }, [isDragging, dragX]);
-
-    // Mouse
-    const onMouseDown = (e: React.MouseEvent) => handleStart(e.clientX);
-    const onMouseMove = (e: React.MouseEvent) => handleMove(e.clientX);
-    const onMouseUp = () => handleEnd();
-    const onMouseLeave = () => { if (isDragging) handleEnd(); };
-
-    // Touch
-    const onTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientX);
-    const onTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientX);
-    const onTouchEnd = () => handleEnd();
-
-    const triggerDecision = async (decision: 'accepted' | 'refused' | 'waiting') => {
+    const triggerDecision = useCallback(async (decision: 'accepted' | 'refused' | 'waiting') => {
         if (!currentCandidate || !isAdmin) return;
 
         if (decision === 'waiting') {
@@ -122,7 +100,30 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                 setCurrentIndex(prev => prev + 1);
             }
         }, 350);
-    };
+    }, [currentCandidate, isAdmin, onDecision, currentIndex, candidates.length]);
+
+    const handleEnd = useCallback(() => {
+        if (!isDragging) return;
+        setIsDragging(false);
+
+        if (Math.abs(dragX) > SWIPE_THRESHOLD) {
+            const direction = dragX > 0 ? 'right' : 'left';
+            triggerDecision(direction === 'right' ? 'accepted' : 'refused');
+        } else {
+            setDragX(0);
+        }
+    }, [isDragging, dragX, triggerDecision]);
+
+    // Mouse
+    const onMouseDown = (e: React.MouseEvent) => handleStart(e.clientX);
+    const onMouseMove = (e: React.MouseEvent) => handleMove(e.clientX);
+    const onMouseUp = () => handleEnd();
+    const onMouseLeave = () => { if (isDragging) handleEnd(); };
+
+    // Touch
+    const onTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientX);
+    const onTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientX);
+    const onTouchEnd = () => handleEnd();
 
     const handleReserveSubmit = async () => {
         if (!currentCandidate) return;

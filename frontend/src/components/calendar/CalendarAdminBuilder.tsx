@@ -170,13 +170,9 @@ export default function CalendarAdminBuilder({
     return getMonday(new Date());
   }, [epreuve]);
 
-  // ─── Effects ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (selectedEpreuveId) fetchSlots();
-  }, [selectedEpreuveId]);
 
   // ─── API ─────────────────────────────────────────────────────────
-  async function fetchSlots() {
+  const fetchSlots = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get(`/slots/all?epreuve=${selectedEpreuveId}`);
@@ -192,7 +188,12 @@ export default function CalendarAdminBuilder({
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedEpreuveId, toast]);
+
+  // ─── Effects ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedEpreuveId) fetchSlots();
+  }, [selectedEpreuveId, fetchSlots]);
 
   async function createSlot(date: string, startTime: string, room: string) {
     const endTime = addMinutes(startTime, durationMinutes);

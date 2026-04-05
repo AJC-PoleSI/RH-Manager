@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,12 +68,9 @@ export default function CandidatesPage() {
         return () => clearTimeout(timer);
     }, [searchInput]);
 
-    useEffect(() => {
-        fetchCandidates();
-    }, [page, search]);
 
     /* ---- Fetch candidates ---- */
-    const fetchCandidates = async () => {
+    const fetchCandidates = useCallback(async () => {
         setLoading(true);
         try {
             const res = await api.get('/candidates', { params: { page, limit: 10, search } });
@@ -84,7 +81,11 @@ export default function CandidatesPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, search]);
+
+    useEffect(() => {
+        fetchCandidates();
+    }, [fetchCandidates]);
 
     /* ---- Fetch evaluations for a candidate ---- */
     const fetchEvaluations = async (candidateId: string) => {

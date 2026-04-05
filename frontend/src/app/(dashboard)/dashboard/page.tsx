@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { CalendarColumn } from '@/components/calendar/CalendarColumn';
@@ -63,25 +63,25 @@ export default function DashboardPage() {
     );
 
     // ── Fetchers ──────────────────────────────
-    const fetchKPIs = async () => {
+    const fetchKPIs = useCallback(async () => {
         try {
             const res = await api.get('/kpis/global');
             setKpis(res.data);
         } catch (e) {
             console.error(e);
         }
-    };
+    }, []);
 
-    const fetchEpreuves = async () => {
+    const fetchEpreuves = useCallback(async () => {
         try {
             const res = await api.get('/epreuves');
             setEpreuves(res.data);
         } catch (e) {
             console.error(e);
         }
-    };
+    }, []);
 
-    const fetchEvents = async () => {
+    const fetchEvents = useCallback(async () => {
         try {
             const start = daysToShow[0].toISOString();
             const end = daysToShow[4].toISOString();
@@ -131,9 +131,9 @@ export default function DashboardPage() {
         } catch (e) {
             console.error(e);
         }
-    };
+    }, [daysToShow, deadlines, mySlots]);
 
-    const fetchDeadlines = async () => {
+    const fetchDeadlines = useCallback(async () => {
         try {
             const res = await api.get('/settings');
             setDeadlines({
@@ -143,16 +143,16 @@ export default function DashboardPage() {
         } catch (e) {
             console.error(e);
         }
-    };
+    }, []);
 
-    const fetchMySlots = async () => {
+    const fetchMySlots = useCallback(async () => {
         try {
             const res = await api.get('/slots/my-slots');
             setMySlots(res.data);
         } catch (e) {
             console.error(e);
         }
-    };
+    }, []);
 
     // ── Effects ───────────────────────────────
     useEffect(() => {
@@ -160,7 +160,7 @@ export default function DashboardPage() {
         if (isAdmin) {
             fetchEpreuves();
         }
-    }, [role, user]);
+    }, [role, user, isAdmin, fetchKPIs, fetchEpreuves]);
 
     useEffect(() => {
         if (!isAdmin) {
@@ -168,7 +168,7 @@ export default function DashboardPage() {
             fetchDeadlines();
             fetchMySlots();
         }
-    }, [role, user, currentDate]);
+    }, [role, user, currentDate, isAdmin, fetchEvents, fetchDeadlines, fetchMySlots]);
 
     // ── Calendar event handlers ───────────────
     const openCreateModal = () => {

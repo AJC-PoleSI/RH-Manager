@@ -36,7 +36,7 @@ export default function EvaluateCandidatePage({ params }: { params: { id: string
             }
         };
         loadData();
-    }, [params.id]);
+    }, [params.id, toast]);
 
     const selectedEpreuve = epreuves.find(e => e.id === selectedEpreuveId);
     let questions = [];

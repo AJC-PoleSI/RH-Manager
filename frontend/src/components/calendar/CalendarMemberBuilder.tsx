@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import api from "@/lib/api";
 
 interface CalendarMemberBuilderProps {
@@ -23,11 +23,8 @@ export default function CalendarMemberBuilder({
   // Disponibilités cochées par l'utilisateur: Set is easier for fast toggle. Format "{date}|{start_time}|{end_time}"
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchData();
-  }, [memberId]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -61,7 +58,11 @@ export default function CalendarMemberBuilder({
     } finally {
       setLoading(false);
     }
-  };
+  }, [epreuvesConfigured, toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [memberId, fetchData]);
 
   // 3. Traitement des slots pour la grille Calendrier (Jours en colonnes, Heures en lignes)
   const gridData = useMemo(() => {

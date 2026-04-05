@@ -167,8 +167,8 @@ export default function CandidateEpreuvesPage() {
   }, []);
 
   // Active tour
-  const now = new Date();
   const activeTour = useMemo(() => {
+    const now = new Date();
     const toursWithFutureEpreuves = epreuves
       .filter((e) => {
         const dateStr = e.date || e.dateFin || e.dateDebut;

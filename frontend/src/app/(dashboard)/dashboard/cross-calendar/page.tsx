@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import api from '@/lib/api';
 import { useSettings } from '@/context/SettingsContext';
 import { Button } from '@/components/ui/button';
@@ -66,22 +66,7 @@ export default function CrossCalendarPage() {
 
     const days = useMemo(() => Array.from({ length: 5 }).map((_, i) => addDays(currentWeekStart, i)), [currentWeekStart]);
 
-    // Fetch availabilities
-    useEffect(() => {
-        if (activeTab === 'availabilities') fetchAvailabilities();
-    }, [currentWeekStart, activeTab]);
-
-    // Fetch epreuves for generation
-    useEffect(() => {
-        if (activeTab === 'generate') fetchEpreuves();
-    }, [activeTab]);
-
-    // Fetch existing slots
-    useEffect(() => {
-        if (activeTab === 'slots') fetchExistingSlots();
-    }, [activeTab, filterTour]);
-
-    const fetchAvailabilities = async () => {
+    const fetchAvailabilities = useCallback(async () => {
         setLoading(true);
         try {
             const startStr = format(currentWeekStart, 'yyyy-MM-dd');
@@ -90,16 +75,16 @@ export default function CrossCalendarPage() {
             setAvailabilities(res.data);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
-    };
+    }, [currentWeekStart]);
 
-    const fetchEpreuves = async () => {
+    const fetchEpreuves = useCallback(async () => {
         try {
             const res = await api.get('/epreuves');
             setEpreuves(res.data);
         } catch (e) { console.error(e); }
-    };
+    }, []);
 
-    const fetchExistingSlots = async () => {
+    const fetchExistingSlots = useCallback(async () => {
         setSlotsLoading(true);
         try {
             const params: any = {};
@@ -108,7 +93,22 @@ export default function CrossCalendarPage() {
             setExistingSlots(res.data);
         } catch (e) { console.error(e); }
         finally { setSlotsLoading(false); }
-    };
+    }, [filterTour]);
+
+    // Fetch availabilities
+    useEffect(() => {
+        if (activeTab === 'availabilities') fetchAvailabilities();
+    }, [activeTab, fetchAvailabilities]);
+
+    // Fetch epreuves for generation
+    useEffect(() => {
+        if (activeTab === 'generate') fetchEpreuves();
+    }, [activeTab, fetchEpreuves]);
+
+    // Fetch existing slots
+    useEffect(() => {
+        if (activeTab === 'slots') fetchExistingSlots();
+    }, [activeTab, fetchExistingSlots]);
 
     // Generate slots
     const handleGenerate = async () => {
