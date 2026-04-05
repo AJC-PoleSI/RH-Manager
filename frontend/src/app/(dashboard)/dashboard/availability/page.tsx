@@ -1,15 +1,14 @@
-"use client";
+import "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { useSettings } from '@/context/SettingsContext'; // Import settings
+import { useSettings } from '@/context/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { CalendarColumn } from '@/components/calendar/CalendarColumn';
-import { startOfWeek, addDays, format, setHours, setMinutes, addMinutes } from 'date-fns'; // Added addMinutes
+import { startOfWeek, addDays, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { Loader2, Save, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 
 export default function AvailabilityPage() {
@@ -38,8 +37,16 @@ export default function AvailabilityPage() {
     const fetchAvailabilities = useCallback(async () => {
         setLoading(true);
         try {
-            // Check global settings
-            const settingsRes = await api.get('/settings');
+            // Désactiver le cache pour charger les données à jour
+            const fetchOptions = {
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate',
+                    'Pragma': 'no-cache',
+                },
+                params: { t: Date.now() }
+            };
+
+            const settingsRes = await api.get('/settings', fetchOptions);
             const saisieVal = settingsRes.data?.saisie_dispos_ouverte;
             setSaisieOuverte(saisieVal === 'true' || saisieVal === true);
 
@@ -47,17 +54,19 @@ export default function AvailabilityPage() {
             const endStr = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
 
             const res = await api.get('/availability', {
-                params: { start: startStr, end: endStr }
+                ...fetchOptions,
+                params: { ...fetchOptions.params, start: startStr, end: endStr }
             });
 
             const data = res.data.map((s: any, i: number) => ({ ...s, id: s.id || `server-${i}` }));
             setSlots(data);
         } catch (e) {
             console.error(e);
+            toast("Erreur de récupération de vos disponibilités", "error");
         } finally {
             setLoading(false);
         }
-    }, [currentWeekStart]);
+    }, [currentWeekStart, toast]);
 
     useEffect(() => {
         fetchAvailabilities();
@@ -117,129 +126,166 @@ export default function AvailabilityPage() {
         }
     };
 
-    // Transform slots to "events" for CalendarColumn
-    const calendarEvents = useMemo(() => {
-        if (!slots) return [];
-        return slots.map(slot => {
-            let dateStr = '';
+    // Helper to generate time slots for a day
+    const getDaySlots = (date: Date) => {
+        const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const dayKey = dayKeys[date.getDay()];
+        const dayConfig = settings.weeklySchedule?.[dayKey] || { start: settings.dayStart, end: settings.dayEnd, isOpen: true };
 
-            if (slot.date) {
-                dateStr = format(new Date(slot.date), 'yyyy-MM-dd');
-            } else if (slot.weekday) {
-                const dayOffset = parseInt(slot.weekday) - 1;
-                const date = addDays(currentWeekStart, dayOffset);
-                dateStr = format(date, 'yyyy-MM-dd');
-            }
+        if (!dayConfig.isOpen) return [];
 
-            return {
-                id: slot.id,
-                title: 'Disponible',
-                day: dateStr,
-                startTime: slot.startTime,
-                endTime: slot.endTime,
-                isAvailability: true
-            };
-        });
-    }, [slots, currentWeekStart]);
+        const timeSlots = [];
+        let currentMinutes = dayConfig.start * 60;
+        const endMinutes = dayConfig.end * 60;
 
-    const handleSlotClick = (date: Date, hour: number, minute: number) => {
+        while (currentMinutes < endMinutes) {
+            const h = Math.floor(currentMinutes / 60);
+            const m = currentMinutes % 60;
+            const startStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            
+            const nextMinutes = currentMinutes + slotDuration;
+            const eH = Math.floor(nextMinutes / 60);
+            const eM = nextMinutes % 60;
+            const endStr = `${eH.toString().padStart(2, '0')}:${eM.toString().padStart(2, '0')}`;
+
+            timeSlots.push({ start: startStr, end: endStr });
+            currentMinutes = nextMinutes;
+        }
+
+        return timeSlots;
+    };
+
+    const toggleSlot = (date: Date, startTime: string, endTime: string) => {
         if (!saisieOuverte) {
-            toast('La saisie des disponibilités est terminée. Vous etes en mode lecture seule.', 'error');
+            toast('Saisie clôturée. Lecture seule.', 'error');
             return;
         }
 
-        // Calculate weekday from date (1=Mon)
-        let weekday = date.getDay(); // 0=Sun
+        const dateStr = format(date, 'yyyy-MM-dd');
+        let weekday = date.getDay(); 
         if (weekday === 0) weekday = 7;
 
-        const dateStr = format(date, 'yyyy-MM-dd');
-
-        // Calculate precise start/end strings based on clicked time and global SlotDuration
-        const startTimeDate = setMinutes(setHours(date, hour), minute);
-        const endTimeDate = addMinutes(startTimeDate, slotDuration);
-
-        const start = format(startTimeDate, 'HH:mm');
-        const end = format(endTimeDate, 'HH:mm');
-
-        // Check if slot exists (exact match for toggle)
+        // Chercher si le créneau existe déjà (pour le décocher)
         const exists = slots.find(s => {
             const slotDateStr = s.date ? format(new Date(s.date), 'yyyy-MM-dd') : null;
-            if (slotDateStr) return slotDateStr === dateStr && s.startTime === start;
-            if (s.weekday) return parseInt(s.weekday) === weekday && s.startTime === start;
+            if (slotDateStr) return slotDateStr === dateStr && s.startTime === startTime;
+            if (s.weekday) return parseInt(s.weekday) === weekday && s.startTime === startTime;
             return false;
         });
 
         if (exists) {
             setSlots(slots.filter(s => s.id !== exists.id));
         } else {
-            // Use noon of the target date to avoid timezone offset issues
             const normalizedDate = new Date(dateStr + 'T12:00:00');
             setSlots([...slots, {
-                id: `local-${Date.now()}`,
+                id: `local-${Date.now()}-${startTime}`,
                 weekday: String(weekday),
                 date: normalizedDate.toISOString(),
-                startTime: start,
-                endTime: end
+                startTime,
+                endTime
             }]);
         }
     };
 
-    const handleEventClick = (event: any) => {
-        if (!saisieOuverte) {
-            toast('Saisie clôturée.', 'error');
-            return;
-        }
-        const slot = slots.find(s => s.id === event.id);
-        if (slot) {
-            setSlots(slots.filter(s => s.id !== slot.id));
-        }
+    const isSlotSelected = (date: Date, startTime: string) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        let weekday = date.getDay(); 
+        if (weekday === 0) weekday = 7;
+
+        return slots.some(s => {
+            const slotDateStr = s.date ? format(new Date(s.date), 'yyyy-MM-dd') : null;
+            if (slotDateStr) return slotDateStr === dateStr && s.startTime === startTime;
+            if (s.weekday) return parseInt(s.weekday) === weekday && s.startTime === startTime;
+            return false;
+        });
     };
 
-    if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin" /></div>;
+    if (loading) return <div className="flex h-96 items-center justify-center flex-col gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
+        <p className="text-gray-500 font-medium">Chargement de votre planning...</p>
+    </div>;
 
     return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
-            <Card className="flex-1 flex flex-col overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between border-b pb-4 shrink-0">
-                    <div>
-                        <CardTitle className="text-2xl flex items-center gap-2">
-                            Mes Disponibilités
-                            {!saisieOuverte && (
-                                <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-full font-semibold border border-red-200">Lecture Seule</span>
-                            )}
-                        </CardTitle>
-                        <p className="text-sm text-gray-500 mt-1">Vos créneaux sont récurrents chaque semaine.</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(weekOffset - 1)} disabled={weekOffset <= 0}>&lt;</Button>
-                            <span className="text-sm font-medium w-32 text-center">
-                                {format(currentWeekStart, 'd MMM', { locale: fr })} - {format(addDays(currentWeekStart, 4), 'd MMM', { locale: fr })}
-                            </span>
-                            <Button variant="ghost" size="sm" onClick={() => setWeekOffset(weekOffset + 1)}>&gt;</Button>
-                        </div>
-                        {saisieOuverte && (
-                            <Button onClick={handleSave} disabled={saving} className="bg-black text-white hover:bg-gray-800 gap-2">
-                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                Enregistrer
-                            </Button>
+        <div className="flex flex-col h-[calc(100vh-4rem)] gap-6 p-4 md:p-8">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shrink-0">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3">
+                        Mes Disponibilités
+                        {!saisieOuverte && (
+                            <span className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded-full font-bold uppercase tracking-wide">Lecture Seule</span>
                         )}
-                    </div>
-                </CardHeader>
-                <CardContent className="flex-1 p-0 overflow-hidden flex flex-col">
-                    <div className="flex-1 overflow-y-auto flex">
-                        {days.map(day => (
-                            <CalendarColumn
-                                key={day.toISOString()}
-                                date={day}
-                                events={calendarEvents}
-                                onTimeSlotClick={handleSlotClick}
-                                onEventClick={handleEventClick}
-                            />
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
+                    </h1>
+                    <p className="text-gray-500 mt-2 font-medium">Cochez simplement les créneaux où vous êtes disponible.</p>
+                </div>
+                
+                <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                    <Button variant="ghost" className="hover:bg-white" onClick={() => setWeekOffset(weekOffset - 1)} disabled={weekOffset <= 0}>&lt;</Button>
+                    <span className="text-sm font-bold text-gray-700 w-36 text-center">
+                        {format(currentWeekStart, 'd MMM', { locale: fr })} - {format(addDays(currentWeekStart, 4), 'd MMM', { locale: fr })}
+                    </span>
+                    <Button variant="ghost" className="hover:bg-white" onClick={() => setWeekOffset(weekOffset + 1)}>&gt;</Button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+                <div className="flex gap-4 min-w-[1000px] h-full">
+                    {days.map(day => {
+                        const daySlots = getDaySlots(day);
+                        return (
+                            <div key={day.toISOString()} className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+                                <div className="p-4 border-b border-gray-100 bg-gray-50/50 text-center shrink-0">
+                                    <div className="text-xs font-black text-gray-400 tracking-widest uppercase">{format(day, 'EEEE', { locale: fr })}</div>
+                                    <div className="text-3xl font-black text-gray-800 mt-1">{format(day, 'd')}</div>
+                                </div>
+                                
+                                <div className="flex-1 p-4 overflow-y-auto space-y-2">
+                                    {daySlots.length === 0 ? (
+                                        <div className="h-full flex items-center justify-center text-sm font-bold text-gray-400 uppercase tracking-widest">
+                                            Fermé
+                                        </div>
+                                    ) : (
+                                        daySlots.map((slot, i) => {
+                                            const selected = isSlotSelected(day, slot.start);
+                                            return (
+                                                <button
+                                                    key={`${slot.start}-${i}`}
+                                                    onClick={() => toggleSlot(day, slot.start, slot.end)}
+                                                    disabled={!saisieOuverte}
+                                                    className={`w-full relative flex items-center justify-center py-4 rounded-xl font-bold text-sm transition-all duration-200 ${
+                                                        selected
+                                                            ? "bg-purple-100 border-2 border-purple-500 text-purple-700 shadow-[0_4px_14px_0_rgba(168,85,247,0.39)] hover:bg-purple-200"
+                                                            : "bg-white border-2 border-gray-100 text-gray-400 hover:border-gray-300 hover:text-gray-600 shadow-sm"
+                                                    } ${!saisieOuverte && "opacity-70 cursor-not-allowed"}`}
+                                                >
+                                                    {slot.start} - {slot.end}
+                                                    {selected && <CheckCircle2 className="absolute right-4 w-5 h-5 text-purple-500" />}
+                                                </button>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {saisieOuverte && (
+                <div className="shrink-0 bg-white border border-gray-100 p-4 rounded-2xl shadow-lg flex justify-between items-center sticky bottom-6 z-50">
+                    <p className="text-sm font-semibold text-gray-500 px-4">
+                        N'oubliez pas d'enregistrer vos modifications une fois terminé.
+                    </p>
+                    <Button 
+                        size="lg"
+                        onClick={handleSave} 
+                        disabled={saving} 
+                        className="bg-black hover:bg-gray-800 text-white font-bold px-8 rounded-xl shadow-xl transition-all active:scale-95 flex items-center gap-3"
+                    >
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        {saving ? "Enregistrement..." : "Enregistrer mes disponibilités"}
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
