@@ -20,7 +20,7 @@ export default function AvailabilityPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    // ... (rest unchanged until handleSlotClick)
+    const [saisieOuverte, setSaisieOuverte] = useState(true);
 
     const [weekOffset, setWeekOffset] = useState(0);
 
@@ -42,6 +42,11 @@ export default function AvailabilityPage() {
     const fetchAvailabilities = async () => {
         setLoading(true);
         try {
+            // Check global settings
+            const settingsRes = await api.get('/settings');
+            const saisieVal = settingsRes.data?.saisie_dispos_ouverte;
+            setSaisieOuverte(saisieVal === 'true' || saisieVal === true);
+
             const startStr = format(currentWeekStart, 'yyyy-MM-dd');
             const endStr = format(addDays(currentWeekStart, 6), 'yyyy-MM-dd');
 
@@ -138,6 +143,11 @@ export default function AvailabilityPage() {
     }, [slots, currentWeekStart]);
 
     const handleSlotClick = (date: Date, hour: number, minute: number) => {
+        if (!saisieOuverte) {
+            toast('La saisie des disponibilités est terminée. Vous etes en mode lecture seule.', 'error');
+            return;
+        }
+
         // Calculate weekday from date (1=Mon)
         let weekday = date.getDay(); // 0=Sun
         if (weekday === 0) weekday = 7;
@@ -175,6 +185,10 @@ export default function AvailabilityPage() {
     };
 
     const handleEventClick = (event: any) => {
+        if (!saisieOuverte) {
+            toast('Saisie clôturée.', 'error');
+            return;
+        }
         const slot = slots.find(s => s.id === event.id);
         if (slot) {
             setSlots(slots.filter(s => s.id !== slot.id));
@@ -188,7 +202,12 @@ export default function AvailabilityPage() {
             <Card className="flex-1 flex flex-col overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between border-b pb-4 shrink-0">
                     <div>
-                        <CardTitle className="text-2xl">Mes Disponibilités</CardTitle>
+                        <CardTitle className="text-2xl flex items-center gap-2">
+                            Mes Disponibilités
+                            {!saisieOuverte && (
+                                <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-full font-semibold border border-red-200">Lecture Seule</span>
+                            )}
+                        </CardTitle>
                         <p className="text-sm text-gray-500 mt-1">Vos créneaux sont récurrents chaque semaine.</p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -199,10 +218,12 @@ export default function AvailabilityPage() {
                             </span>
                             <Button variant="ghost" size="sm" onClick={() => setWeekOffset(weekOffset + 1)}>&gt;</Button>
                         </div>
-                        <Button onClick={handleSave} disabled={saving} className="bg-black text-white hover:bg-gray-800 gap-2">
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            Enregistrer
-                        </Button>
+                        {saisieOuverte && (
+                            <Button onClick={handleSave} disabled={saving} className="bg-black text-white hover:bg-gray-800 gap-2">
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Enregistrer
+                            </Button>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent className="flex-1 p-0 overflow-hidden flex flex-col">

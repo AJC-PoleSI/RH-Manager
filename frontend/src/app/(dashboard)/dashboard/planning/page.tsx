@@ -6,6 +6,8 @@ import api from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import CalendarAdminBuilder from '@/components/calendar/CalendarAdminBuilder';
 import CalendarMemberBuilder from '@/components/calendar/CalendarMemberBuilder';
+import { CalendarColumn } from '@/components/calendar/CalendarColumn';
+import { startOfWeek, addDays } from 'date-fns';
 
 interface Epreuve {
     id: string;
@@ -112,6 +114,11 @@ export default function PlanningPage() {
     const [planningGenerated, setPlanningGenerated] = useState<boolean | null>(null); // null = loading
     const [mySlots, setMySlots] = useState<MySlot[]>([]);
     const [selectedSlot, setSelectedSlot] = useState<MySlot | null>(null); // pour la modale
+
+    // Added visual calendar helpers for Admin
+    const [adminWeekOffset, setAdminWeekOffset] = useState(0);
+    const adminWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const currentAdminWeek = addDays(adminWeekStart, adminWeekOffset * 7);
 
     const fetchEpreuves = useCallback(async () => {
         try {
@@ -499,6 +506,14 @@ export default function PlanningPage() {
     const handleOuvrirInscriptions = async () => {
         if (!selectedEpreuveId) return;
         try {
+            toast('Génération et assignation en cours...', 'info');
+            // Force assign before publishing
+            await api.post('/slots/auto-assign', {
+                epreuveId: selectedEpreuveId,
+                sallesParCreneau: logNbSalles,
+                evalParSalle: logMinEval,
+            });
+
             // Publish all draft slots for this epreuve
             const res = await api.get('/slots/all');
             const draftSlots = (res.data || [])
@@ -509,11 +524,15 @@ export default function PlanningPage() {
                     status: 'published',
                 });
             }
+            // Toggle workflow state
+            await api.put('/settings', { planning_visible_candidats: 'false' });
+            setPlanningVisible(false);
             setInscriptionsOuvertes(true);
-            toast(`${draftSlots.length} creneau(x) ouverts aux inscriptions`, 'success');
+            toast(`${draftSlots.length} créneau(x) générés et publiés avec succès`, 'success');
             fetchSlotData();
-        } catch {
-            toast('Erreur ouverture inscriptions', 'error');
+        } catch (e) {
+            console.error(e);
+            toast('Erreur lors de la publication', 'error');
         }
     };
 
@@ -753,6 +772,47 @@ export default function PlanningPage() {
                             </div>
                         </div>
 
+                        {/* ══════════════════════════════════════════════════════════════════
+                            CALENDRIER ADMINISTRATEUR
+                            ══════════════════════════════════════════════════════════════════ */}
+                        {existingSlots.length > 0 && (
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col h-[600px]">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                        <span className="text-xl">📅</span> Extrait Visuel du Planning
+                                    </h3>
+                                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                                        <button onClick={() => setAdminWeekOffset(adminWeekOffset - 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">◀</button>
+                                        <span className="text-xs font-semibold px-2 text-gray-700 min-w-[120px] text-center">Semaine décalée ({adminWeekOffset})</span>
+                                        <button onClick={() => setAdminWeekOffset(adminWeekOffset + 1)} className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600">▶</button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto flex rounded-lg border border-gray-100 bg-gray-50/30">
+                                    {Array.from({ length: 5 }).map((_, i) => {
+                                        const dayDate = addDays(currentAdminWeek, i);
+                                        // Filter specific to selected epreuve + match schema of CalendarColumn
+                                        const daySlots = existingSlots.filter((slot: any) => slot.epreuve_id === selectedEpreuveId || slot.epreuveId === selectedEpreuveId).map((s: any) => ({
+                                            id: s.id,
+                                            day: s.date,
+                                            startTime: s.startTime || s.start_time,
+                                            endTime: s.endTime || s.end_time,
+                                            title: `Salle ${s.room || '?'}: ${s.enrollments?.length || 0}C / ${s.members?.length || 0}M`,
+                                            isSlot: true
+                                        }));
+
+                                        return (
+                                            <CalendarColumn
+                                                key={dayDate.toISOString()}
+                                                date={dayDate}
+                                                events={daySlots}
+                                                variant="simple-list"
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* TABS DE VUES */}
                         <div className="flex items-center gap-1 bg-gray-100 p-1 mb-2 rounded-lg w-fit">
                             <button
@@ -919,10 +979,10 @@ export default function PlanningPage() {
                                         ) : (
                                             <button
                                                 onClick={handleOuvrirInscriptions}
-                                                disabled={existingSlots.length === 0}
+                                                disabled={!selectedEpreuveId}
                                                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                Publier aux membres
+                                                Générer et Publier
                                             </button>
                                         )}
                                     </div>
