@@ -97,6 +97,7 @@ export default function PlanningPage() {
 
     // ViewMode state
     const [activeTab, setActiveTab] = useState<"creation" | "evaluators" | "candidates">("creation");
+    const [memberAvailsSummary, setMemberAvailsSummary] = useState<{email: string, count: number, details: string}[]>([]);
 
     // Modale modification créneau
     const [editSlot, setEditSlot] = useState<any>(null);
@@ -250,6 +251,46 @@ export default function PlanningPage() {
             setAvailabilityDetails(details);
         }
     }, [isAdmin, selectedEpreuveId]);
+
+    const fetchMemberAvailabilitiesSummary = useCallback(async () => {
+        if (!isAdmin || !selectedEpreuveId || !saisiOuverte) return;
+        const ep: any = epreuves.find(e => (e as any).id === selectedEpreuveId);
+        if (!ep || !ep.dateDebut || !ep.dateFin) return;
+
+        try {
+            const res = await api.get(`/availability/all?start=${ep.dateDebut}&end=${ep.dateFin}`);
+            const data = res.data || [];
+            
+            const grouped: Record<string, any[]> = {};
+            data.forEach((av: any) => {
+                const email = av.member?.email || 'Inconnu';
+                if (!grouped[email]) grouped[email] = [];
+                grouped[email].push(av);
+            });
+
+            const summary = Object.entries(grouped).map(([email, slots]) => {
+                const parts = slots.map(s => {
+                    const d = new Date(s.date).toLocaleDateString("fr-FR", { weekday: 'short', day: 'numeric', month: 'short' });
+                    const st = (s.start_time || s.startTime || "").split(':').slice(0,2).join('h');
+                    const et = (s.end_time || s.endTime || "").split(':').slice(0,2).join('h');
+                    return `${d} ${st}-${et}`;
+                });
+                return {
+                    email,
+                    count: slots.length,
+                    details: parts.join(' | ')
+                };
+            });
+
+            setMemberAvailsSummary(summary.sort((a,b) => b.count - a.count));
+        } catch (e) {
+            console.error('Erreur chargement member summary:', e);
+        }
+    }, [isAdmin, selectedEpreuveId, saisiOuverte, epreuves]);
+
+    useEffect(() => {
+        fetchMemberAvailabilitiesSummary();
+    }, [fetchMemberAvailabilitiesSummary]);
 
     // Fetch slots for inscription data + reconstruct repartition from DB
     const fetchSlotData = useCallback(async () => {
@@ -501,7 +542,8 @@ export default function PlanningPage() {
             await api.put('/settings', { planning_visible_candidats: 'true', planning_generated: 'true' });
             setPlanningVisible(true);
             toast('Planning visible pour les candidats — ils peuvent maintenant s\'inscrire', 'success');
-        } catch {
+        } catch (error) {
+            console.error("Détail de l'erreur dans handlePublierCandidats :", error);
             toast('Erreur publication candidats', 'error');
         }
     };
@@ -511,7 +553,8 @@ export default function PlanningPage() {
             await api.put('/settings', { planning_visible_candidats: 'false' });
             setPlanningVisible(false);
             toast('Planning masque pour les candidats', 'success');
-        } catch {
+        } catch (error) {
+            console.error("Détail de l'erreur dans handleMasquerCandidats :", error);
             toast('Erreur masquage', 'error');
         }
     };
@@ -803,6 +846,48 @@ export default function PlanningPage() {
                                         )}
                                     </div>
                                 </div>
+                                
+                                {saisiOuverte && (
+                                    <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50/50">
+                                        <h4 className="text-sm font-semibold mb-3 text-gray-800">
+                                            Récapitulatif des saisies ({memberAvailsSummary.length} membre{memberAvailsSummary.length > 1 ? 's' : ''})
+                                        </h4>
+                                        <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-100 bg-white">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0 border-b border-gray-100">
+                                                    <tr>
+                                                        <th className="px-4 py-3">Membre (Email)</th>
+                                                        <th className="px-4 py-3 text-center">Créneaux choisis</th>
+                                                        <th className="px-4 py-3">Détail des disponibilités</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {memberAvailsSummary.length > 0 ? (
+                                                        memberAvailsSummary.map((mem, idx) => (
+                                                            <tr key={idx} className="hover:bg-gray-50/50">
+                                                                <td className="px-4 py-3 font-medium text-gray-800">{mem.email}</td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                                                                        {mem.count}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-xs" title={mem.details}>
+                                                                    {mem.details}
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr>
+                                                            <td colSpan={3} className="px-4 py-8 text-center text-gray-400 italic">
+                                                                Aucune disponibilité saisie pour le moment.
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* ÉTAPE 2 — Publier les créneaux aux membres */}
                                 <div className={`flex items-center justify-between p-4 rounded-xl border ${
