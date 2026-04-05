@@ -27,21 +27,32 @@ export default function CalendarMemberBuilder({
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      // Actualisation explicite du State (React) pour supprimer les résidus de la session précédente
+      setAdminSlots([]);
+      setSelectedBlocks(new Set());
+
+      // On s'assure d'outrepasser tout cache potentiel au niveau navigateur / proxy
+      const fetchOptions = {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        params: { t: new Date().getTime() }
+      };
 
       // 1. Fetch tous les slots (creneaux admins)
-      // Ne récupérer que ceux avec le status 'draft', 'ready' ou 'published' ? 
-      // Si l'admin purge, les dispos des membres disparaîtront au prochain enregistrement car on écrase.
-      const resSlots = await api.get('/slots/all');
+      const resSlots = await api.get('/slots/all', fetchOptions);
       
-      // On filtre pour ne garder que les slots des épreuves configurées
+      // On filtre pour ne garder que les slots des épreuves configurées AND parent present
       const validEpreuveIds = epreuvesConfigured.map(e => e.id);
-      const filteredSlots = resSlots.data.filter((s: any) => validEpreuveIds.includes(s.epreuve_id));
+      const filteredSlots = resSlots.data.filter((s: any) => 
+        s.epreuve && validEpreuveIds.includes(s.epreuve_id)
+      );
       setAdminSlots(filteredSlots);
 
       // 2. Fetch les disponibilités du membre
-      const resAvail = await api.get('/availability/my'); // wait, the route is /availability to GET mine.
-      // let's adjust GET to fetch current user's. "GET /api/availability" does exactly this.
-      const resMyAvail = await api.get('/availability');
+      const resMyAvail = await api.get('/availability', fetchOptions);
       
       const initials = new Set<string>();
       resMyAvail.data.forEach((av: any) => {

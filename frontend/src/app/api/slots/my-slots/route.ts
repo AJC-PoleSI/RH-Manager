@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized } from '@/lib/auth';
 import { NextRequest } from 'next/server';
+export const dynamic = 'force-dynamic';
 
 // GET /api/slots/my-slots — member's assigned slots
 export async function GET(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     const slots = (assignments || [])
-      .filter((a: any) => a.slot && ['published', 'closed'].includes(a.slot.status))
+      .filter((a: any) => a.slot && a.slot.epreuve && ['published', 'closed'].includes(a.slot.status))
       .map((a: any) => ({
         ...a.slot,
         myAssignment: true,

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized } from '@/lib/auth';
 import { NextRequest } from 'next/server';
+export const dynamic = 'force-dynamic';
 
 // GET /api/slots/all — get all slots with members & enrollments (with optional filters)
 export async function GET(req: NextRequest) {
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) throw error;
-
-    return Response.json(data);
+    const validData = (data || []).filter((slot: any) => slot.epreuve);
+    return Response.json(validData);
   } catch (error) {
     return Response.json({ error: 'Failed to fetch slots' }, { status: 500 });
   }

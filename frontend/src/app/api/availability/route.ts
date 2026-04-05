@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized } from '@/lib/auth';
 import { NextRequest } from 'next/server';
+export const dynamic = 'force-dynamic';
 
 // GET /api/availability — get my availabilities (with optional ?start=&end= date filters)
 export async function GET(req: NextRequest) {
