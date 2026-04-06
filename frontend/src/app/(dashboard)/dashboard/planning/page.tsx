@@ -1571,7 +1571,7 @@ function GlobalEventsAdmin({ toast }: { toast: (msg: string, type?: any) => void
     const [startTime, setStartTime] = useState('09:00');
     const [endTime, setEndTime] = useState('10:00');
 
-    const fetchEvents = async () => {
+    const fetchEvents = useCallback(async () => {
         try {
             const res = await api.get('/calendar');
             const globals = (res.data || []).filter((ev: any) => ev.is_global === true);
@@ -1581,11 +1581,11 @@ function GlobalEventsAdmin({ toast }: { toast: (msg: string, type?: any) => void
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchEvents();
-    }, []);
+    }, [fetchEvents]);
 
     const handleCreate = async () => {
         if (!title.trim() || !day) {

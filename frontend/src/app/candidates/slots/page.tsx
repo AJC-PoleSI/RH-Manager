@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -53,7 +53,7 @@ export default function CandidateSlotsPage() {
     const [cancelling, setCancelling] = useState<string | null>(null);
     const [planningVisible, setPlanningVisible] = useState<boolean | null>(null);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             // Check if planning is visible for candidates
             const settingsRes = await api.get('/settings');
@@ -76,11 +76,11 @@ export default function CandidateSlotsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fetchData]);
 
     const handleEnroll = async (slotId: string) => {
         setEnrolling(slotId);

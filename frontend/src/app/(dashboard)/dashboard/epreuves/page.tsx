@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Trash2, X, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -34,16 +34,16 @@ export default function EpreuvesPage() {
     const [filterTour, setFilterTour] = useState<string>('all');
     const [filterType, setFilterType] = useState<string>('all');
 
-    useEffect(() => {
-        fetchEpreuves();
-    }, []);
-
-    const fetchEpreuves = async () => {
+    const fetchEpreuves = useCallback(async () => {
         try {
             const res = await api.get('/epreuves');
             setEpreuves(res.data);
         } catch (e) { console.error(e); }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchEpreuves();
+    }, [fetchEpreuves]);
 
     const [viewingEpreuve, setViewingEpreuve] = useState<any>(null);
 
