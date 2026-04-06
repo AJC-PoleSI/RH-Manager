@@ -273,7 +273,7 @@ export default function AvailabilityPage() {
             {saisieOuverte && (
                 <div className="shrink-0 bg-white border border-gray-100 p-4 rounded-2xl shadow-lg flex justify-between items-center sticky bottom-6 z-50">
                     <p className="text-sm font-semibold text-gray-500 px-4">
-                        N'oubliez pas d'enregistrer vos modifications une fois terminé.
+                        N&apos;oubliez pas d&apos;enregistrer vos modifications une fois terminé.
                     </p>
                     <Button 
                         size="lg"

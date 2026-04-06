@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 
 interface SettingsContextType {
@@ -35,7 +35,7 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
     });
     const [loading, setLoading] = useState(true);
 
-    const fetchSettings = async () => {
+    const fetchSettings = useCallback(async () => {
         try {
             const res = await api.get('/settings');
             const data = res.data;
@@ -64,13 +64,13 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchSettings();
-    }, []);
+    }, [fetchSettings]);
 
-    const updateSettings = async (newSettings: Partial<typeof settings>) => {
+    const updateSettings = useCallback(async (newSettings: Partial<typeof settings>) => {
         try {
             await api.put('/settings', newSettings);
             setSettings(prev => ({ ...prev, ...newSettings }));
@@ -78,7 +78,7 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
             console.error('Failed to update settings', error);
             throw error;
         }
-    };
+    }, []);
 
     return (
         <SettingsContext.Provider value={{ settings, updateSettings, refreshSettings: fetchSettings, loading }}>

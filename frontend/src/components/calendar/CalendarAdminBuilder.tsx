@@ -195,7 +195,7 @@ export default function CalendarAdminBuilder({
     if (selectedEpreuveId) fetchSlots();
   }, [selectedEpreuveId, fetchSlots]);
 
-  async function createSlot(date: string, startTime: string, room: string) {
+  const createSlot = useCallback(async (date: string, startTime: string, room: string) => {
     const endTime = addMinutes(startTime, durationMinutes);
     try {
       setLoading(true);
@@ -226,13 +226,13 @@ export default function CalendarAdminBuilder({
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedEpreuveId, durationMinutes, epreuve, toast, fetchSlots, onUpdate]);
 
-  async function moveSlot(
+  const moveSlot = useCallback(async (
     slotId: string,
     newDate: string,
     newStartTime: string
-  ) {
+  ) => {
     const newEndTime = addMinutes(newStartTime, durationMinutes);
     try {
       setLoading(true);
@@ -255,9 +255,9 @@ export default function CalendarAdminBuilder({
     } finally {
       setLoading(false);
     }
-  }
+  }, [durationMinutes, toast, fetchSlots, onUpdate]);
 
-  async function deleteSlot(slotId: string) {
+  const deleteSlot = useCallback(async (slotId: string) => {
     if (!window.confirm("Supprimer ce créneau définitivement ?")) return;
     try {
       setLoading(true);
@@ -270,7 +270,7 @@ export default function CalendarAdminBuilder({
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast, fetchSlots, onUpdate]);
 
   const saveEditedRoom = async () => {
     if (!editingSlot) return;
@@ -397,7 +397,7 @@ export default function CalendarAdminBuilder({
         createSlot(dateStr, startTime, room);
       }
     },
-    [roomList, selectedEpreuveId]
+    [roomList, selectedEpreuveId, viewMode, checkOverlap, durationMinutes, nbSalles, toast, createSlot]
   );
 
   /** Drag event to new time/day → update slot */
@@ -442,7 +442,7 @@ export default function CalendarAdminBuilder({
 
       moveSlot(slotId, newDate, newStartTime);
     },
-    [durationMinutes]
+    [durationMinutes, checkOverlap, viewMode, toast, moveSlot]
   );
 
   /** Click on event → delete */
@@ -463,7 +463,7 @@ export default function CalendarAdminBuilder({
         }
       }
     },
-    [slots, viewMode]
+    [slots, viewMode, deleteSlot]
   );
 
   /** Custom event rendering */
@@ -549,7 +549,7 @@ export default function CalendarAdminBuilder({
         </div>
       );
     },
-    []
+    [viewMode]
   );
 
   /** Week header label update */
