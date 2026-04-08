@@ -39,25 +39,28 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
         try {
             const res = await api.get('/settings');
             const data = res.data;
-            let weeklySchedule = settings.weeklySchedule;
-            if (data.weeklySchedule) {
-                try {
-                    weeklySchedule = JSON.parse(data.weeklySchedule);
-                } catch (e) {
-                    console.error("Error parsing weeklySchedule", e);
+
+            setSettings(prev => {
+                let weeklySchedule = prev.weeklySchedule;
+                if (data.weeklySchedule) {
+                    try {
+                        weeklySchedule = JSON.parse(data.weeklySchedule);
+                    } catch (e) {
+                        console.error("Error parsing weeklySchedule", e);
+                    }
                 }
-            }
 
-            // Compute min/max for backward compatibility
-            const days = Object.values(weeklySchedule).filter(d => d.isOpen);
-            const computedStart = days.length > 0 ? Math.min(...days.map(d => d.start)) : 8;
-            const computedEnd = days.length > 0 ? Math.max(...days.map(d => d.end)) : 19;
+                // Compute min/max for backward compatibility
+                const days = Object.values(weeklySchedule).filter(d => d.isOpen);
+                const computedStart = days.length > 0 ? Math.min(...days.map(d => d.start)) : 8;
+                const computedEnd = days.length > 0 ? Math.max(...days.map(d => d.end)) : 19;
 
-            setSettings({
-                dayStart: computedStart,
-                dayEnd: computedEnd,
-                slotDuration: parseInt(data.slotDuration) || 60,
-                weeklySchedule
+                return {
+                    dayStart: computedStart,
+                    dayEnd: computedEnd,
+                    slotDuration: parseInt(data.slotDuration) || 60,
+                    weeklySchedule
+                };
             });
         } catch (error) {
             console.error('Failed to load settings', error);

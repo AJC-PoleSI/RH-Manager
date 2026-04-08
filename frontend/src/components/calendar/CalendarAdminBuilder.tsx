@@ -442,7 +442,7 @@ export default function CalendarAdminBuilder({
 
       moveSlot(slotId, newDate, newStartTime);
     },
-    [durationMinutes, checkOverlap, viewMode, toast, moveSlot]
+    [durationMinutes, checkOverlap, viewMode, toast, moveSlot, nbSalles]
   );
 
   /** Click on event → delete */
@@ -463,7 +463,7 @@ export default function CalendarAdminBuilder({
         }
       }
     },
-    [slots, viewMode, deleteSlot]
+    [slots, viewMode, deleteSlot]  // eslint satisfied
   );
 
   /** Custom event rendering */
@@ -549,7 +549,7 @@ export default function CalendarAdminBuilder({
         </div>
       );
     },
-    [viewMode]
+    [viewMode, deleteSlot]
   );
 
   /** Week header label update */
