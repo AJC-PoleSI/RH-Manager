@@ -1,8 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
+import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 // PUT /api/evaluations/[id] - Update an evaluation
+// SECURITY: Only the owner (member_id) or admin can update
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -13,13 +14,28 @@ export async function PUT(
   const { id } = params;
 
   try {
+    // SECURITY: Verify ownership before update
+    const { data: existing } = await supabaseAdmin
+      .from('candidate_evaluations')
+      .select('member_id')
+      .eq('id', id)
+      .single();
+
+    if (!existing) {
+      return Response.json({ error: 'Evaluation not found' }, { status: 404 });
+    }
+
+    if (existing.member_id !== user.id && !user.isAdmin) {
+      return forbidden();
+    }
+
     const { scores, comment } = await req.json();
 
     const updateData: Record<string, unknown> = {};
     if (scores !== undefined) {
       updateData.scores = typeof scores === 'string' ? scores : JSON.stringify(scores);
     }
-    if (comment !== undefined) updateData.comment = comment;
+    if (comment !== undefined) updateData.comment = typeof comment === 'string' ? comment.substring(0, 5000) : comment;
 
     const { data, error } = await supabaseAdmin
       .from('candidate_evaluations')
@@ -41,6 +57,7 @@ export async function PUT(
 }
 
 // DELETE /api/evaluations/[id] - Delete an evaluation
+// SECURITY: Only the owner or admin can delete
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -51,7 +68,21 @@ export async function DELETE(
   const { id } = params;
 
   try {
-    // Delete tracking record first
+    // SECURITY: Verify ownership before delete
+    const { data: existing } = await supabaseAdmin
+      .from('candidate_evaluations')
+      .select('member_id')
+      .eq('id', id)
+      .single();
+
+    if (!existing) {
+      return Response.json({ error: 'Evaluation not found' }, { status: 404 });
+    }
+
+    if (existing.member_id !== user.id && !user.isAdmin) {
+      return forbidden();
+    }
+
     await supabaseAdmin
       .from('evaluator_tracking')
       .delete()

@@ -3,7 +3,11 @@ import { getTokenFromRequest, unauthorized } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 // GET /api/chat - Fetch all chat messages
-export async function GET() {
+// SECURITY: Requires authentication
+export async function GET(req: NextRequest) {
+  const user = getTokenFromRequest(req);
+  if (!user) return unauthorized();
+
   try {
     const { data, error } = await supabaseAdmin
       .from('chat_messages')
@@ -42,6 +46,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Message is required' }, { status: 400 });
     }
 
+    // Sanitize: limit length
+    const sanitizedMessage = message.trim().substring(0, 2000);
+
     let role = 'member';
     if (user.role === 'candidate') role = 'candidate';
     else if (user.isAdmin) role = 'admin';
@@ -51,8 +58,8 @@ export async function POST(req: NextRequest) {
       .insert({
         sender_id: user.id,
         sender_role: role,
-        sender_name: senderName || user.email.split('@')[0],
-        message: message.trim(),
+        sender_name: (senderName || user.email.split('@')[0]).substring(0, 100),
+        message: sanitizedMessage,
       })
       .select()
       .single();

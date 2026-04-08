@@ -3,24 +3,38 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set.');
+}
+
+// Password validation: min 8 chars, 1 uppercase, 1 number
+function validatePassword(password: string): string | null {
+    if (!password || password.length < 8) return 'Le mot de passe doit contenir au moins 8 caracteres.';
+    if (!/[A-Z]/.test(password)) return 'Le mot de passe doit contenir au moins une majuscule.';
+    if (!/[0-9]/.test(password)) return 'Le mot de passe doit contenir au moins un chiffre.';
+    return null;
+}
 
 export const register = async (req: Request, res: Response) => {
-    const { email, password, isAdmin } = req.body;
+    const { email, password } = req.body;
+
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
 
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 12);
         const member = await prisma.member.create({
             data: {
                 email,
                 passwordHash: hashedPassword,
-                isAdmin: isAdmin || false,
+                isAdmin: false, // SECURITY: always false on registration
             },
         });
 
         res.status(201).json({ message: 'Member created successfully', member: { id: member.id, email: member.email } });
     } catch (error) {
-        res.status(400).json({ error: 'Error creating member. Email might already exist.', details: error });
+        res.status(400).json({ error: 'Error creating member. Email might already exist.' });
     }
 };
 
@@ -28,20 +42,18 @@ export const registerCandidate = async (req: Request, res: Response) => {
     const { firstName, lastName, email, phone } = req.body;
 
     if (!firstName || !lastName || !email) {
-        return res.status(400).json({ error: 'Les champs Prénom, Nom et Email sont obligatoires.' });
+        return res.status(400).json({ error: 'Les champs Prenom, Nom et Email sont obligatoires.' });
     }
 
     try {
-        // Check if registration is still open (optional deadline check)
         const deadlineSetting = await prisma.systemSetting.findUnique({ where: { key: 'deadline_candidats' } });
         if (deadlineSetting?.value) {
             const deadline = new Date(deadlineSetting.value);
             if (new Date() > deadline) {
-                return res.status(403).json({ error: 'Les inscriptions sont fermées. La date limite est dépassée.' });
+                return res.status(403).json({ error: 'Les inscriptions sont fermees. La date limite est depassee.' });
             }
         }
 
-        // Create the candidate
         const candidate = await prisma.candidate.create({
             data: {
                 firstName,
@@ -51,20 +63,19 @@ export const registerCandidate = async (req: Request, res: Response) => {
             },
         });
 
-        // Generate token immediately
         const token = jwt.sign(
             { candidateId: candidate.id, role: 'candidate' },
             JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '2h' }
         );
 
-        res.status(201).json({ token, candidate });
+        res.status(201).json({ token, candidate: { id: candidate.id, email: candidate.email } });
     } catch (error: any) {
         if (error.code === 'P2002') {
-            return res.status(400).json({ error: 'Un candidat avec cet email existe déjà. Utilisez "Se connecter" à la place.' });
+            return res.status(400).json({ error: 'Un candidat avec cet email existe deja.' });
         }
         console.error('registerCandidate error:', error);
-        res.status(400).json({ error: 'Échec de l\'inscription.', details: String(error) });
+        res.status(400).json({ error: 'Echec de l\'inscription.' });
     }
 };
 
@@ -79,18 +90,18 @@ export const candidateLogin = async (req: Request, res: Response) => {
         const candidate = await prisma.candidate.findUnique({ where: { email } });
 
         if (!candidate || candidate.lastName.toLowerCase() !== lastName.toLowerCase()) {
-            return res.status(401).json({ error: 'Candidat introuvable ou nom incorrect.' });
+            return res.status(401).json({ error: 'Identifiants invalides.' });
         }
 
         const token = jwt.sign(
             { candidateId: candidate.id, role: 'candidate' },
             JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '2h' }
         );
 
-        res.json({ token, candidate });
+        res.json({ token, candidate: { id: candidate.id, email: candidate.email } });
     } catch (error) {
-        res.status(500).json({ error: 'Erreur de connexion candidat.' });
+        res.status(500).json({ error: 'Erreur de connexion.' });
     }
 };
 
@@ -113,7 +124,7 @@ export const login = async (req: Request, res: Response) => {
         const token = jwt.sign(
             { userId: member.id, isAdmin: member.isAdmin },
             JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '2h' }
         );
 
         res.json({ token, member: { id: member.id, email: member.email, isAdmin: member.isAdmin } });

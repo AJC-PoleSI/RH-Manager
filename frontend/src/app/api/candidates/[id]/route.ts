@@ -55,11 +55,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
 }
 
 // PUT /api/candidates/[id]
+// SECURITY: Candidates can only update their own profile; members/admins can update any
 export async function PUT(req: NextRequest, context: RouteContext) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
   const { id } = await context.params;
+
+  // SECURITY: Candidates can only modify their own data
+  if (payload.role === 'candidate' && payload.id !== id) {
+    return forbidden();
+  }
 
   try {
     const body = await req.json();
@@ -70,9 +76,13 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     if (body.lastName !== undefined) updateData.last_name = body.lastName;
     if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone;
-    if (body.comments !== undefined) updateData.comments = body.comments;
     if (body.date_of_birth !== undefined) updateData.date_of_birth = body.date_of_birth;
     if (body.dateOfBirth !== undefined) updateData.date_of_birth = body.dateOfBirth;
+
+    // SECURITY: Only admins can update internal comments
+    if (body.comments !== undefined && payload.isAdmin) {
+      updateData.comments = body.comments;
+    }
 
     const { data, error } = await supabaseAdmin
       .from('candidates')

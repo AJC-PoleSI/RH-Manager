@@ -1,4 +1,15 @@
 node_modules
-# Keep environment variables out of version control
-.env
 .DS_Store
+
+# Environment variables — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+*.env.local.json
+
+# Test files with potential secrets
+test*.js
+
+# Build output
+dist/
+.next/

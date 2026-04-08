@@ -1,13 +1,18 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
 // GET /api/deliberations - Fetch all deliberations with candidate info
+// SECURITY: Requires authentication + admin/member role (no candidates)
 export async function GET(req: NextRequest) {
+  const payload = getTokenFromRequest(req);
+  if (!payload) return unauthorized();
+  if (payload.role === 'candidate') return forbidden();
+
   try {
     const { searchParams } = new URL(req.url);
     const tour = searchParams.get('tour');
 
-    // Fetch candidates with their deliberation and evaluations
     const { data: candidates, error } = await supabaseAdmin
       .from('candidates')
       .select(`
@@ -38,7 +43,6 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    // If tour filter is specified, filter evaluations client-side
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
@@ -49,7 +53,6 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      // Parse scores + map member info
       evaluations = evaluations.map((ev: any) => ({
         id: ev.id,
         scores: typeof ev.scores === 'string' ? JSON.parse(ev.scores) : ev.scores,
@@ -67,7 +70,6 @@ export async function GET(req: NextRequest) {
         } : null,
       }));
 
-      // Map wishes
       const wishes = (c.candidate_wishes || [])
         .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))
         .map((w: any) => ({

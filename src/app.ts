@@ -20,8 +20,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-app.use(express.json());
+// SECURITY: Restrict CORS to allowed origins only
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+app.use(express.json({ limit: '1mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -39,7 +57,7 @@ app.use('/api/wishes', wishRoutes);
 app.use('/api/slots', slotRoutes);
 
 app.get('/', (req, res) => {
-    res.send('RH Manager Backend API is running. API routes are available under /api/auth, /api/candidates, etc.');
+    res.send('RH Manager Backend API is running.');
 });
 
 if (require.main === module) {
