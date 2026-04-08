@@ -1,10 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('FATAL: JWT_SECRET environment variable is not set. Server cannot start.');
-}
+const JWT_SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error('FATAL: JWT_SECRET environment variable is not set.'); })();
 
 export interface TokenPayload {
   id: string;
