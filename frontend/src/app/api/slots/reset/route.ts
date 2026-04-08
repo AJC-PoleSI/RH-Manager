@@ -2,6 +2,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/slots/reset — delete all slots for an epreuve (admin only)
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
@@ -15,19 +17,22 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'epreuveId ou slotIds requis' }, { status: 400 });
     }
 
-    // Determine which slot IDs to delete
-    let idsToDelete: string[] = slotIds || [];
+    // Determine which slot IDs to delete — always query the DB if epreuveId is provided
+    let idsToDelete: string[] = [];
 
-    if (!idsToDelete.length && epreuveId) {
+    if (epreuveId) {
+      // Always query the DB to get ALL slots for this epreuve (not relying on frontend state)
       const { data: slots } = await supabaseAdmin
         .from('evaluation_slots')
         .select('id')
         .eq('epreuve_id', epreuveId);
       idsToDelete = (slots || []).map((s: any) => s.id);
+    } else if (slotIds && slotIds.length > 0) {
+      idsToDelete = slotIds;
     }
 
     if (idsToDelete.length === 0) {
-      return Response.json({ message: 'Aucun creneau a supprimer', deleted: 0 });
+      return Response.json({ message: 'Aucun créneau à supprimer', deleted: 0 });
     }
 
     // 1. Delete enrollments (inscriptions candidats)
@@ -63,13 +68,13 @@ export async function POST(req: NextRequest) {
     if (slotError) throw slotError;
 
     return Response.json({
-      message: `${idsToDelete.length} creneau(x) supprime(s)`,
+      message: `${idsToDelete.length} créneau(x) supprimé(s)`,
       deleted: idsToDelete.length,
     });
   } catch (error) {
     console.error('Reset slots error:', error);
     return Response.json(
-      { error: 'Echec de la reinitialisation des creneaux', details: String(error) },
+      { error: 'Echec de la réinitialisation des créneaux', details: String(error) },
       { status: 500 }
     );
   }

@@ -65,7 +65,10 @@ export default function DashboardPage() {
     // ── Fetchers ──────────────────────────────
     const fetchKPIs = useCallback(async () => {
         try {
-            const res = await api.get('/kpis/global');
+            const res = await api.get('/kpis/global', {
+                headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' },
+                params: { _t: Date.now() }
+            });
             setKpis(res.data);
         } catch (e) {
             console.error(e);
@@ -74,7 +77,10 @@ export default function DashboardPage() {
 
     const fetchEpreuves = useCallback(async () => {
         try {
-            const res = await api.get('/epreuves');
+            const res = await api.get('/epreuves', {
+                headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' },
+                params: { _t: Date.now() }
+            });
             setEpreuves(res.data);
         } catch (e) {
             console.error(e);

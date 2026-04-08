@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
+export const dynamic = 'force-dynamic';
 // GET /api/epreuves
 export async function GET(req: NextRequest) {
   try {

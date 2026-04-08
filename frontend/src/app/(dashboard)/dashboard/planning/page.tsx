@@ -601,23 +601,18 @@ export default function PlanningPage() {
         if (!selectedEpreuveId) return;
         setResetLoading(true);
         try {
-            const slotIds = existingSlots.map((s: any) => s.id);
-            if (slotIds.length === 0) {
-                toast('Aucun creneau a supprimer', 'info');
-                setShowResetConfirm(false);
-                setResetLoading(false);
-                return;
-            }
-            await api.post('/slots/reset', { epreuveId: selectedEpreuveId, slotIds });
+            // Envoyer uniquement l'epreuveId — le serveur se charge de retrouver ET supprimer TOUS les créneaux
+            const res = await api.post('/slots/reset', { epreuveId: selectedEpreuveId });
+            const deleted = res.data?.deleted || 0;
             setRepartitionResult(null);
             setExistingSlots([]);
             setInscriptionData([]);
             setShowResetConfirm(false);
-            toast(`${slotIds.length} creneau(x) supprime(s)`, 'success');
+            toast(`${deleted} créneau(x) supprimé(s) de la base`, 'success');
             fetchSlotData();
         } catch (e) {
             console.error('Erreur reset:', e);
-            toast('Erreur lors de la reinitialisation', 'error');
+            toast('Erreur lors de la réinitialisation', 'error');
         } finally {
             setResetLoading(false);
         }
