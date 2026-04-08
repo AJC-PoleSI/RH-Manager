@@ -397,7 +397,7 @@ export default function CalendarAdminBuilder({
         createSlot(dateStr, startTime, room);
       }
     },
-    [roomList, selectedEpreuveId, viewMode, checkOverlap, durationMinutes, nbSalles, toast, createSlot]
+    [roomList, viewMode, checkOverlap, durationMinutes, nbSalles, toast, createSlot]
   );
 
   /** Drag event to new time/day → update slot */
