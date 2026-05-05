@@ -13,32 +13,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if registration is still open (optional deadline check)
-    const { data: deadlineSetting } = await supabaseAdmin
+    // Check registration window: ouverture = deadline_candidats, fermeture = deadline_membres
+    const { data: windowSettings } = await supabaseAdmin
       .from('system_settings')
-      .select('value')
-      .eq('key', 'deadline_candidats')
-      .single();
+      .select('key, value')
+      .in('key', ['deadline_candidats', 'deadline_membres']);
 
-    if (deadlineSetting?.value && deadlineSetting.value.trim() !== '') {
-      // Normalize: datetime-local inputs produce "YYYY-MM-DDTHH:MM" without timezone.
-      // We treat it as Europe/Paris (UTC+1/+2). To avoid ambiguity we append +00:00
-      // only if the value has no timezone info, then compare against UTC now.
-      let raw = deadlineSetting.value.trim();
-      // If no timezone suffix, treat the stored value as UTC (admin should save in UTC)
-      if (!raw.endsWith('Z') && !raw.match(/[+-]\d{2}:\d{2}$/)) {
-        raw = raw + ':00.000Z'; // treat as UTC
-      }
-      const deadline = new Date(raw);
-      const now = new Date();
-      console.log(`[deadline check] now=${now.toISOString()} deadline=${deadline.toISOString()} raw="${deadlineSetting.value}"`);
-      if (!isNaN(deadline.getTime()) && now > deadline) {
-        const formattedDeadline = deadline.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-        return Response.json(
-          { error: `Les inscriptions sont fermées. La date limite était le ${formattedDeadline}.` },
-          { status: 403 }
-        );
-      }
+    const settingsMap: Record<string, string> = {};
+    for (const row of windowSettings || []) settingsMap[row.key] = row.value;
+
+    const parseDate = (val: string | undefined): Date | null => {
+      if (!val || val.trim() === '') return null;
+      let raw = val.trim();
+      if (!raw.endsWith('Z') && !raw.match(/[+-]\d{2}:\d{2}$/)) raw += 'Z';
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const ouverture = parseDate(settingsMap['deadline_candidats']);
+    const fermeture = parseDate(settingsMap['deadline_membres']);
+    const now = new Date();
+
+    if (ouverture && now < ouverture) {
+      const formatted = ouverture.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+      return Response.json(
+        { error: `Les inscriptions ne sont pas encore ouvertes. Ouverture le ${formatted}.` },
+        { status: 403 }
+      );
+    }
+
+    if (fermeture && now > fermeture) {
+      const formatted = fermeture.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+      return Response.json(
+        { error: `Les inscriptions sont fermées. La date limite était le ${formatted}.` },
+        { status: 403 }
+      );
     }
 
     // Create the candidate
