@@ -61,6 +61,7 @@ interface NewEpreuveForm {
   duree: string;
   roulementMinutes: string;
   pole: string;
+  inscriptionDeadline: string;
   /* shared */
   description: string;
   documents: FileList | null;
@@ -80,6 +81,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   duree: "",
   roulementMinutes: "10",
   pole: "",
+  inscriptionDeadline: "",
   description: "",
   documents: null,
   criteres: [{ name: "", coefficient: 1 }],
@@ -168,11 +170,22 @@ export default function CreationPage() {
     fetchEpreuves();
   }, []);
 
+  // Convert a UTC ISO string from DB to local datetime-local input format
+  const isoToDatetimeLocal = (iso: string): string => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + ':00.000Z');
+      if (isNaN(d.getTime())) return iso;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch { return iso; }
+  };
+
   const fetchSettings = async () => {
     try {
       const res = await api.get("/settings");
-      if (res.data.deadline_candidats) setDeadlineCandidats(res.data.deadline_candidats);
-      if (res.data.deadline_membres) setDeadlineMembres(res.data.deadline_membres);
+      if (res.data.deadline_candidats) setDeadlineCandidats(isoToDatetimeLocal(res.data.deadline_candidats));
+      if (res.data.deadline_membres) setDeadlineMembres(isoToDatetimeLocal(res.data.deadline_membres));
     } catch (e) {
       console.error(e);
     }
@@ -204,12 +217,22 @@ export default function CreationPage() {
   /*  Handlers                                                         */
   /* ================================================================ */
 
+  // Convert datetime-local input (local time) to UTC ISO string for storage
+  const datetimeLocalToISO = (val: string): string => {
+    if (!val) return '';
+    try {
+      const d = new Date(val); // browser parses datetime-local as local time
+      if (isNaN(d.getTime())) return val;
+      return d.toISOString();
+    } catch { return val; }
+  };
+
   const handleSaveDeadlines = async () => {
     setSavingDeadlines(true);
     try {
       await api.put("/settings", {
-        deadline_candidats: deadlineCandidats,
-        deadline_membres: deadlineMembres,
+        deadline_candidats: datetimeLocalToISO(deadlineCandidats),
+        deadline_membres: datetimeLocalToISO(deadlineMembres),
       });
       toast("Fenêtre d\u2019inscription sauvegardée", "success");
     } catch {
@@ -243,6 +266,7 @@ export default function CreationPage() {
       duree: String(ep.durationMinutes || ""),
       roulementMinutes: String(ep.roulementMinutes || "10"),
       pole: ep.pole || "",
+      inscriptionDeadline: ep.inscriptionDeadline ? isoToDatetimeLocal(ep.inscriptionDeadline) : "",
       description: ep.description || "",
       documents: null,
       criteres,
@@ -292,6 +316,7 @@ export default function CreationPage() {
         roulementMinutes: form.roulementMinutes ? parseInt(form.roulementMinutes) : 10,
         dateDebut: form.dateDebut || null,
         dateFin: form.dateFin || null,
+        inscriptionDeadline: form.inscriptionDeadline ? datetimeLocalToISO(form.inscriptionDeadline) : null,
         description: form.description || null,
       };
 
@@ -722,6 +747,29 @@ export default function CreationPage() {
                 </div>
               </div>
             )}
+
+            {/* Inscription deadline */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date limite d&apos;inscription (optionnel)
+                <span className="ml-1 text-xs text-gray-400">— en plus du délai 24h avant l&apos;épreuve</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={form.inscriptionDeadline}
+                onChange={(e) => handleFormChange("inscriptionDeadline", e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {form.inscriptionDeadline && (
+                <button
+                  type="button"
+                  onClick={() => handleFormChange("inscriptionDeadline", "")}
+                  className="mt-1 text-xs text-red-500 hover:underline"
+                >
+                  Supprimer la date limite
+                </button>
+              )}
+            </div>
 
             {/* Description */}
             <div className="mb-4">

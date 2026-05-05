@@ -38,6 +38,31 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Ce créneau n'est plus disponible" }, { status: 400 });
     }
 
+    // Check per-epreuve inscription deadline
+    if (slot.epreuve?.inscription_deadline) {
+      const deadline = new Date(slot.epreuve.inscription_deadline);
+      if (new Date() > deadline) {
+        const formattedDeadline = deadline.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+        return Response.json(
+          { error: `Les inscriptions pour cette épreuve sont fermées depuis le ${formattedDeadline}.` },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Fallback: block enrollment if slot starts in less than 24h
+    if (slot.date && slot.start_time) {
+      const slotDate = slot.date.split('T')[0];
+      const slotStart = new Date(`${slotDate}T${slot.start_time}`);
+      const hoursUntil = (slotStart.getTime() - Date.now()) / (1000 * 60 * 60);
+      if (hoursUntil < 24) {
+        return Response.json(
+          { error: "Les inscriptions sont fermées pour ce créneau (moins de 24h avant l'épreuve)." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Note: min_members check removed — status published/ready is the source of truth
 
     if ((slot.enrollments?.length || 0) >= slot.max_candidates) {

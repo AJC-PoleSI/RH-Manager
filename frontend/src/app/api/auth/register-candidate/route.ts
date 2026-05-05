@@ -20,11 +20,22 @@ export async function POST(req: NextRequest) {
       .eq('key', 'deadline_candidats')
       .single();
 
-    if (deadlineSetting?.value) {
-      const deadline = new Date(deadlineSetting.value);
-      if (new Date() > deadline) {
+    if (deadlineSetting?.value && deadlineSetting.value.trim() !== '') {
+      // Normalize: datetime-local inputs produce "YYYY-MM-DDTHH:MM" without timezone.
+      // We treat it as Europe/Paris (UTC+1/+2). To avoid ambiguity we append +00:00
+      // only if the value has no timezone info, then compare against UTC now.
+      let raw = deadlineSetting.value.trim();
+      // If no timezone suffix, treat the stored value as UTC (admin should save in UTC)
+      if (!raw.endsWith('Z') && !raw.match(/[+-]\d{2}:\d{2}$/)) {
+        raw = raw + ':00.000Z'; // treat as UTC
+      }
+      const deadline = new Date(raw);
+      const now = new Date();
+      console.log(`[deadline check] now=${now.toISOString()} deadline=${deadline.toISOString()} raw="${deadlineSetting.value}"`);
+      if (!isNaN(deadline.getTime()) && now > deadline) {
+        const formattedDeadline = deadline.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
         return Response.json(
-          { error: 'Les inscriptions sont fermées. La date limite est dépassée.' },
+          { error: `Les inscriptions sont fermées. La date limite était le ${formattedDeadline}.` },
           { status: 403 }
         );
       }

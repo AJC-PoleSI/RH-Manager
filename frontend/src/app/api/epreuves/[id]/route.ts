@@ -27,6 +27,7 @@ export async function PUT(
     if (body.minEvaluatorsPerSalle !== undefined) updateData.min_evaluators_per_salle = Number(body.minEvaluatorsPerSalle);
     if (body.dateDebut !== undefined) updateData.date_debut = body.dateDebut ? new Date(body.dateDebut).toISOString() : null;
     if (body.dateFin !== undefined) updateData.date_fin = body.dateFin ? new Date(body.dateFin).toISOString() : null;
+    if (body.inscriptionDeadline !== undefined) updateData.inscription_deadline = body.inscriptionDeadline ? new Date(body.inscriptionDeadline).toISOString() : null;
     if (body.isPoleTest !== undefined) updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
     if (body.description !== undefined) updateData.description = body.description;

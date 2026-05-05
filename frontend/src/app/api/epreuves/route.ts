@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       description: e.description || null,
       dateDebut: e.date_debut ? e.date_debut.split('T')[0] : null,
       dateFin: e.date_fin ? e.date_fin.split('T')[0] : null,
+      inscriptionDeadline: e.inscription_deadline || null,
       isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
       min_evaluators_per_salle: Number(body.minEvaluatorsPerSalle) || 2,
       date_debut: body.dateDebut ? new Date(body.dateDebut).toISOString() : null,
       date_fin: body.dateFin ? new Date(body.dateFin).toISOString() : null,
+      inscription_deadline: body.inscriptionDeadline ? new Date(body.inscriptionDeadline).toISOString() : null,
       description: body.description || null,
       // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };
