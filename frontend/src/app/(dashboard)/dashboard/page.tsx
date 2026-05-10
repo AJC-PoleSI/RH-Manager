@@ -296,7 +296,7 @@ export default function DashboardPage() {
                 {/* Header */}
                 <div className="flex items-end justify-between">
                     <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
+                        <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Dashboard</h1>
                         <p className="text-sm text-gray-500 mt-1 font-medium">Vue d&apos;ensemble du recrutement AJC 2025</p>
                     </div>
                     <div className="text-xs text-gray-400 font-mono bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
@@ -344,7 +344,7 @@ export default function DashboardPage() {
                             <div className="p-5">
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="text-2xl">{card.icon}</span>
-                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white text-sm font-black shadow-lg`}>
+                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white text-sm font-semibold shadow-lg`}>
                                         {card.value}
                                     </div>
                                 </div>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
                         <div key={stat.label} className={`${stat.bg} rounded-xl border border-white/80 p-4 flex items-center gap-4 hover:shadow-sm transition-shadow`}>
                             <span className="text-2xl">{stat.icon}</span>
                             <div>
-                                <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
+                                <p className={`text-2xl font-semibold ${stat.color}`}>{stat.value}</p>
                                 <p className="text-xs text-gray-500 font-medium">{stat.label}</p>
                             </div>
                         </div>
@@ -377,12 +377,12 @@ export default function DashboardPage() {
 
                     {/* Candidate Progression Donut */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                        <h2 className="text-sm font-black text-gray-700 uppercase tracking-wider mb-5">Progression des candidats</h2>
+                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Progression des candidats</h2>
                         <div className="flex items-center gap-8">
                             <div className="relative flex-shrink-0">
                                 <ProgressRing pct={pctAccepted + pctRefused + pctWaiting} color="#6366f1" size={120} stroke={10} />
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-2xl font-black text-gray-800">{totalCandidates}</span>
+                                    <span className="text-2xl font-semibold text-gray-800">{totalCandidates}</span>
                                     <span className="text-[10px] text-gray-400 font-bold uppercase">Total</span>
                                 </div>
                             </div>
@@ -399,7 +399,7 @@ export default function DashboardPage() {
                                                 <div className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
                                                 <span className="text-xs font-semibold text-gray-600">{item.label}</span>
                                             </div>
-                                            <span className="text-xs font-black text-gray-800">{item.value} <span className="text-gray-400 font-medium">({item.pct}%)</span></span>
+                                            <span className="text-xs font-semibold text-gray-800">{item.value} <span className="text-gray-400 font-medium">({item.pct}%)</span></span>
                                         </div>
                                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                             <div className={`h-full rounded-full ${item.color} transition-all duration-700 ease-out`} style={{ width: `${item.pct}%` }} />
@@ -412,7 +412,7 @@ export default function DashboardPage() {
 
                     {/* Upcoming epreuves */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                        <h2 className="text-sm font-black text-gray-700 uppercase tracking-wider mb-5">Prochaines épreuves</h2>
+                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Prochaines épreuves</h2>
                         {epreuves.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-48 text-gray-300">
                                 <span className="text-4xl mb-3">📭</span>
@@ -424,7 +424,7 @@ export default function DashboardPage() {
                                 {epreuves.slice(0, 8).map((ep) => (
                                     <div key={ep.id} className="flex items-center justify-between p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 hover:bg-gray-100/80 transition-colors group">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-100 to-purple-200 flex items-center justify-center text-purple-700 text-xs font-black">
+                                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-100 to-purple-200 flex items-center justify-center text-purple-700 text-xs font-semibold">
                                                 T{ep.tour}
                                             </div>
                                             <div>
@@ -446,7 +446,7 @@ export default function DashboardPage() {
 
                 {/* ── TOUR PROGRESS TIMELINE ────────────── */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h2 className="text-sm font-black text-gray-700 uppercase tracking-wider mb-6">Progression des tours</h2>
+                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-6">Progression des tours</h2>
                     <div className="flex items-center gap-0">
                         {Array.from({ length: Math.max(toursCreated, 3) }).map((_, idx) => {
                             const tourNum = idx + 1;
@@ -482,7 +482,7 @@ export default function DashboardPage() {
 
                 {/* ── QUICK ACCESS ──────────────────────── */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h2 className="text-sm font-black text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h2>
+                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h2>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {quickLinks.map((link) => (
                             <Link
@@ -509,7 +509,7 @@ export default function DashboardPage() {
             <div className="flex-1 flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {/* Week nav header */}
                 <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                    <h2 className="text-lg font-bold text-gray-900 capitalize">
+                    <h1 className="text-lg font-semibold text-gray-900 capitalize">
                         {format(currentDate, 'MMMM yyyy', { locale: fr })}
                     </h2>
                     <div className="flex items-center gap-2">

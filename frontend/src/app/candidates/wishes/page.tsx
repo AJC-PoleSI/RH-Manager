@@ -47,7 +47,9 @@ export default function CandidateWishesPage() {
           // If no tour is en_cours, check for the last completed one
           const termine = tours
             .filter((t) => t.status === "termine")
-            .sort((a, b) => extractTourNumber(b.name) - extractTourNumber(a.name));
+            .sort(
+              (a, b) => extractTourNumber(b.name) - extractTourNumber(a.name),
+            );
           if (termine.length > 0) {
             setActiveTourNumber(extractTourNumber(termine[0].name));
             setActiveTourStatus("termine");
@@ -125,7 +127,10 @@ export default function CandidateWishesPage() {
     if (!user?.id) return;
     setSaving(true);
     try {
-      const wishes = selectedPoles.map((pole, index) => ({ pole, rank: index + 1 }));
+      const wishes = selectedPoles.map((pole, index) => ({
+        pole,
+        rank: index + 1,
+      }));
       await api.put(`/wishes/${user.id}`, { wishes });
       setSaved(true);
     } catch {
@@ -135,7 +140,9 @@ export default function CandidateWishesPage() {
     }
   };
 
-  const availablePoles = DEFAULT_POLES.filter((p) => !selectedPoles.includes(p));
+  const availablePoles = DEFAULT_POLES.filter(
+    (p) => !selectedPoles.includes(p),
+  );
 
   if (loading) {
     return (
@@ -150,27 +157,46 @@ export default function CandidateWishesPage() {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Choix de pôle</h1>
-          <p className="text-sm text-gray-500 mt-1">Tour 1 — Choix à titre indicatif</p>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Choix de pôle
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Tour 1 — Choix à titre indicatif
+          </p>
         </div>
 
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#D97706"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-shrink-0 mt-0.5"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="16" x2="12" y2="12" />
             <line x1="12" y1="8" x2="12.01" y2="8" />
           </svg>
           <div className="text-sm text-amber-800">
-            <p className="font-semibold mb-1">Le choix des pôles n&apos;est pas encore ouvert</p>
+            <p className="font-semibold mb-1">
+              Le choix des pôles n&apos;est pas encore ouvert
+            </p>
             <p>
-              Durant le Tour 1, les choix de pôle sont à titre indicatif uniquement.
-              Le classement de vos préférences sera disponible à partir du Tour 2.
+              Durant le Tour 1, les choix de pôle sont à titre indicatif
+              uniquement. Le classement de vos préférences sera disponible à
+              partir du Tour 2.
             </p>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Pôles disponibles</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">
+            Pôles disponibles
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {DEFAULT_POLES.map((pole) => (
               <div
@@ -192,38 +218,55 @@ export default function CandidateWishesPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Choix de pôle</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Choix de pôle</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Tour {activeTourNumber} — {isDefinitif ? "Choix définitif" : "À titre indicatif"}
+          Tour {activeTourNumber} —{" "}
+          {isDefinitif ? "Choix définitif" : "À titre indicatif"}
         </p>
       </div>
 
       {/* Info banner */}
-      <div className={`flex items-start gap-3 rounded-xl p-4 border ${
-        isDefinitif
-          ? "bg-red-50 border-red-200"
-          : "bg-blue-50 border-blue-200"
-      }`}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={isDefinitif ? "#DC2626" : "#2563EB"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+      <div
+        className={`flex items-start gap-3 rounded-xl p-4 border ${
+          isDefinitif
+            ? "bg-red-50 border-red-200"
+            : "bg-blue-50 border-blue-200"
+        }`}
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={isDefinitif ? "#DC2626" : "#2563EB"}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="flex-shrink-0 mt-0.5"
+        >
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="16" x2="12" y2="12" />
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
-        <div className={`text-sm ${isDefinitif ? "text-red-800" : "text-blue-800"}`}>
+        <div
+          className={`text-sm ${isDefinitif ? "text-red-800" : "text-blue-800"}`}
+        >
           {isDefinitif ? (
             <>
               <p className="font-semibold mb-1">Choix définitif</p>
               <p>
-                Classez vos <strong>3 pôles préférés</strong> par ordre de préférence.
-                Ce classement est <strong>définitif</strong> et sera utilisé pour votre affectation.
+                Classez vos <strong>3 pôles préférés</strong> par ordre de
+                préférence. Ce classement est <strong>définitif</strong> et sera
+                utilisé pour votre affectation.
               </p>
             </>
           ) : (
             <>
               <p className="font-semibold mb-1">Choix à titre indicatif</p>
               <p>
-                Classez vos <strong>3 pôles préférés</strong> par ordre de préférence.
-                Ce classement est encore indicatif et pourra être modifié au Tour 3.
+                Classez vos <strong>3 pôles préférés</strong> par ordre de
+                préférence. Ce classement est encore indicatif et pourra être
+                modifié au Tour 3.
               </p>
             </>
           )}
@@ -253,8 +296,8 @@ export default function CandidateWishesPage() {
                     index === 0
                       ? "bg-yellow-400 text-yellow-900"
                       : index === 1
-                      ? "bg-gray-300 text-gray-700"
-                      : "bg-amber-600 text-white"
+                        ? "bg-gray-300 text-gray-700"
+                        : "bg-amber-600 text-white"
                   }`}
                 >
                   {index + 1}
@@ -274,7 +317,16 @@ export default function CandidateWishesPage() {
                       className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Monter"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="18 15 12 9 6 15" />
                       </svg>
                     </button>
@@ -284,7 +336,16 @@ export default function CandidateWishesPage() {
                       className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Descendre"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
@@ -293,7 +354,16 @@ export default function CandidateWishesPage() {
                       className="w-8 h-8 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
                       aria-label="Retirer"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
@@ -319,7 +389,17 @@ export default function CandidateWishesPage() {
                 onClick={() => addPole(pole)}
                 className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#2563EB"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="flex-shrink-0"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="16" />
                   <line x1="8" y1="12" x2="16" y2="12" />
@@ -332,24 +412,26 @@ export default function CandidateWishesPage() {
       )}
 
       {/* All poles shown when 3 are selected */}
-      {!isTourTermine && selectedPoles.length >= 3 && availablePoles.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">
-            Autres pôles
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {availablePoles.map((pole) => (
-              <div
-                key={pole}
-                className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg text-sm text-gray-400"
-              >
-                <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
-                {pole}
-              </div>
-            ))}
+      {!isTourTermine &&
+        selectedPoles.length >= 3 &&
+        availablePoles.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">
+              Autres pôles
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {availablePoles.map((pole) => (
+                <div
+                  key={pole}
+                  className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg text-sm text-gray-400"
+                >
+                  <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+                  {pole}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Save button */}
       {!isTourTermine && (
@@ -361,17 +443,17 @@ export default function CandidateWishesPage() {
               saved
                 ? "bg-green-600 text-white"
                 : isDefinitif
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
           >
             {saving
               ? "Sauvegarde..."
               : saved
-              ? "Sauvegardé ✓"
-              : isDefinitif
-              ? "Confirmer mes choix définitifs"
-              : "Sauvegarder"}
+                ? "Sauvegardé ✓"
+                : isDefinitif
+                  ? "Confirmer mes choix définitifs"
+                  : "Sauvegarder"}
           </button>
         </div>
       )}
@@ -379,12 +461,23 @@ export default function CandidateWishesPage() {
       {/* Tour terminé message */}
       {isTourTermine && (
         <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl p-4">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#6B7280"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-shrink-0 mt-0.5"
+          >
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
           <p className="text-sm text-gray-600">
-            Ce tour est terminé. Vos choix ont été enregistrés et ne peuvent plus être modifiés.
+            Ce tour est terminé. Vos choix ont été enregistrés et ne peuvent
+            plus être modifiés.
           </p>
         </div>
       )}

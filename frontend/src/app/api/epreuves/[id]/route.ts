@@ -1,11 +1,11 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // PUT /api/epreuves/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
@@ -15,57 +15,79 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    console.log('[PUT /api/epreuves/:id] Request body:', JSON.stringify(body));
+    console.log("[PUT /api/epreuves/:id] Request body:", JSON.stringify(body));
     const updateData: any = {};
 
     if (body.name !== undefined) updateData.name = body.name;
     if (body.tour !== undefined) updateData.tour = body.tour;
     if (body.type !== undefined) updateData.type = body.type;
-    if (body.durationMinutes !== undefined) updateData.duration_minutes = Number(body.durationMinutes);
-    if (body.roulementMinutes !== undefined) updateData.roulement_minutes = Number(body.roulementMinutes);
-    if (body.nbSalles !== undefined) updateData.nb_salles = Number(body.nbSalles);
-    if (body.minEvaluatorsPerSalle !== undefined) updateData.min_evaluators_per_salle = Number(body.minEvaluatorsPerSalle);
-    if (body.dateDebut !== undefined) updateData.date_debut = body.dateDebut ? new Date(body.dateDebut).toISOString() : null;
-    if (body.dateFin !== undefined) updateData.date_fin = body.dateFin ? new Date(body.dateFin).toISOString() : null;
-    if (body.inscriptionDeadline !== undefined) updateData.inscription_deadline = body.inscriptionDeadline ? new Date(body.inscriptionDeadline).toISOString() : null;
-    if (body.isPoleTest !== undefined) updateData.is_pole_test = body.isPoleTest;
+    if (body.durationMinutes !== undefined)
+      updateData.duration_minutes = Number(body.durationMinutes);
+    if (body.roulementMinutes !== undefined)
+      updateData.roulement_minutes = Number(body.roulementMinutes);
+    if (body.nbSalles !== undefined)
+      updateData.nb_salles = Number(body.nbSalles);
+    if (body.minEvaluatorsPerSalle !== undefined)
+      updateData.min_evaluators_per_salle = Number(body.minEvaluatorsPerSalle);
+    if (body.dateDebut !== undefined)
+      updateData.date_debut = body.dateDebut
+        ? new Date(body.dateDebut).toISOString()
+        : null;
+    if (body.dateFin !== undefined)
+      updateData.date_fin = body.dateFin
+        ? new Date(body.dateFin).toISOString()
+        : null;
+    if (body.inscriptionDeadline !== undefined)
+      updateData.inscription_deadline = body.inscriptionDeadline
+        ? new Date(body.inscriptionDeadline).toISOString()
+        : null;
+    if (body.isPoleTest !== undefined)
+      updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
-    if (body.description !== undefined) updateData.description = body.description;
+    if (body.description !== undefined)
+      updateData.description = body.description;
     // if (body.isVisible !== undefined) updateData.is_visible = body.isVisible; // TODO: add to Supabase schema
     if (body.evaluationQuestions !== undefined) {
-      updateData.evaluation_questions = typeof body.evaluationQuestions === 'string'
-        ? body.evaluationQuestions
-        : JSON.stringify(body.evaluationQuestions);
+      updateData.evaluation_questions =
+        typeof body.evaluationQuestions === "string"
+          ? body.evaluationQuestions
+          : JSON.stringify(body.evaluationQuestions);
     }
 
     const { data, error } = await supabaseAdmin
-      .from('epreuves')
+      .from("epreuves")
       .update(updateData)
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 
     if (error) {
-      console.error('Supabase UPDATE error:', error);
-      console.error('Updated fields:', JSON.stringify(updateData));
-      return Response.json({
-        error: error.message || 'Failed to update epreuve',
-        details: error,
-        updatedFields: updateData
-      }, { status: 400 });
+      console.error("Supabase UPDATE error:", error);
+      console.error("Updated fields:", JSON.stringify(updateData));
+      return Response.json(
+        {
+          error: error.message || "Failed to update epreuve",
+          details: error,
+          updatedFields: updateData,
+        },
+        { status: 400 },
+      );
     }
 
     return Response.json(data);
   } catch (error) {
-    console.error('PUT /epreuves/:id catch error:', error);
-    return Response.json({ error: String(error), message: 'Failed to update epreuve' }, { status: 400 });
+    console.error("PUT /epreuves/:id catch error:", error);
+    return Response.json(
+      { error: String(error), message: "Failed to update epreuve" },
+      { status: 400 },
+    );
   }
 }
 
 // DELETE /api/epreuves/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
@@ -75,15 +97,18 @@ export async function DELETE(
 
   try {
     const { error } = await supabaseAdmin
-      .from('epreuves')
+      .from("epreuves")
       .delete()
-      .eq('id', id);
+      .eq("id", id);
 
     if (error) throw error;
 
     return new Response(null, { status: 204 });
   } catch (error) {
-    console.error('DELETE /epreuves/:id error:', error);
-    return Response.json({ error: 'Failed to delete epreuve' }, { status: 400 });
+    console.error("DELETE /epreuves/:id error:", error);
+    return Response.json(
+      { error: "Failed to delete epreuve" },
+      { status: 400 },
+    );
   }
 }

@@ -93,7 +93,14 @@
       "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"email\"\"\"\":\"\"\"\"admin@rhmanager.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"password123\"\"\"\"}')",
       "Bash(npx vercel:*)",
       "Bash(supabase status:*)",
-      "Bash(wc -l echo 'références à Express trouvées \\(devrait être 0\\):' __NEW_LINE_62d880db1525dd43__ echo echo '### Routes utilisant supabaseAdmin.from\\(\\):' grep -l supabaseAdmin.from frontend/src/app/api/**/*.ts)"
+      "Bash(wc -l echo 'références à Express trouvées \\(devrait être 0\\):' __NEW_LINE_62d880db1525dd43__ echo echo '### Routes utilisant supabaseAdmin.from\\(\\):' grep -l supabaseAdmin.from frontend/src/app/api/**/*.ts)",
+      "Bash(grep -n \"process.env\\\\|import.meta.env\" ./frontend/src/lib/*.ts)",
+      "Bash(grep -r \"headers\\\\|CSP\\\\|X-Frame\\\\|HSTS\\\\|X-Content-Type\\\\|Referrer-Policy\" \"/Users/felixpitz/Desktop/RH Manager Anti /frontend\" --include=\"*.js\" --include=\"*.ts\" ! -path \"*/node_modules/*\")",
+      "Bash(xargs ls:*)",
+      "Bash(ls \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/test\"*.js)",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)",
+      "Bash(git push *)"
     ]
   },
   "hooks": {

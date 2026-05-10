@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/slots/my-enrollments — candidate's enrollments
 export async function GET(req: NextRequest) {
@@ -11,15 +11,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const { data: enrollments, error } = await supabaseAdmin
-      .from('slot_enrollments')
-      .select(`
+      .from("slot_enrollments")
+      .select(
+        `
         *,
         slot:evaluation_slots(
           *,
           epreuve:epreuves(name, tour, type, duration_minutes)
         )
-      `)
-      .eq('candidate_id', candidateId);
+      `,
+      )
+      .eq("candidate_id", candidateId);
 
     if (error) throw error;
 
@@ -33,16 +35,21 @@ export async function GET(req: NextRequest) {
       endTime: e.slot?.end_time,
       room: e.slot?.room,
       label: e.slot?.label,
-      epreuve: e.slot?.epreuve ? {
-        name: e.slot.epreuve.name,
-        tour: e.slot.epreuve.tour,
-        type: e.slot.epreuve.type,
-        durationMinutes: e.slot.epreuve.duration_minutes,
-      } : null,
+      epreuve: e.slot?.epreuve
+        ? {
+            name: e.slot.epreuve.name,
+            tour: e.slot.epreuve.tour,
+            type: e.slot.epreuve.type,
+            durationMinutes: e.slot.epreuve.duration_minutes,
+          }
+        : null,
     }));
 
     return Response.json(safe);
   } catch (error) {
-    return Response.json({ error: 'Failed to fetch enrollments' }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch enrollments" },
+      { status: 500 },
+    );
   }
 }

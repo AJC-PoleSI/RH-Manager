@@ -1,7 +1,7 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
-import bcrypt from 'bcryptjs';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
+import bcrypt from "bcryptjs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -14,25 +14,25 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   try {
     const { data, error } = await supabaseAdmin
-      .from('members')
-      .select('id, email, is_admin, first_name, last_name, pole')
-      .eq('id', id)
+      .from("members")
+      .select("id, email, is_admin, first_name, last_name, pole")
+      .eq("id", id)
       .single();
 
     if (error || !data) {
-      return Response.json({ error: 'Member not found' }, { status: 404 });
+      return Response.json({ error: "Member not found" }, { status: 404 });
     }
 
     return Response.json({
       id: data.id,
       email: data.email,
       isAdmin: data.is_admin,
-      firstName: data.first_name || '',
-      lastName: data.last_name || '',
-      pole: data.pole || '',
+      firstName: data.first_name || "",
+      lastName: data.last_name || "",
+      pole: data.pole || "",
     });
   } catch {
-    return Response.json({ error: 'Failed to fetch member' }, { status: 500 });
+    return Response.json({ error: "Failed to fetch member" }, { status: 500 });
   }
 }
 
@@ -59,26 +59,29 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from('members')
+      .from("members")
       .update(updateData)
-      .eq('id', id)
-      .select('id, email, is_admin, first_name, last_name, pole')
+      .eq("id", id)
+      .select("id, email, is_admin, first_name, last_name, pole")
       .single();
 
     if (error) {
-      return Response.json({ error: 'Failed to update member' }, { status: 400 });
+      return Response.json(
+        { error: "Failed to update member" },
+        { status: 400 },
+      );
     }
 
     return Response.json({
       id: data.id,
       email: data.email,
       isAdmin: data.is_admin,
-      firstName: data.first_name || '',
-      lastName: data.last_name || '',
-      pole: data.pole || '',
+      firstName: data.first_name || "",
+      lastName: data.last_name || "",
+      pole: data.pole || "",
     });
   } catch {
-    return Response.json({ error: 'Failed to update member' }, { status: 400 });
+    return Response.json({ error: "Failed to update member" }, { status: 400 });
   }
 }
 
@@ -93,26 +96,29 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
     // SECURITY: Prevent deleting admins
     const { data: memberToDelete } = await supabaseAdmin
-      .from('members')
-      .select('is_admin')
-      .eq('id', id)
+      .from("members")
+      .select("is_admin")
+      .eq("id", id)
       .single();
 
     if (memberToDelete?.is_admin) {
-      return Response.json({ error: 'Cannot delete an administrator account' }, { status: 403 });
+      return Response.json(
+        { error: "Cannot delete an administrator account" },
+        { status: 403 },
+      );
     }
 
-    const { error } = await supabaseAdmin
-      .from('members')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabaseAdmin.from("members").delete().eq("id", id);
 
     if (error) {
-      return Response.json({ error: 'Failed to delete member' }, { status: 400 });
+      return Response.json(
+        { error: "Failed to delete member" },
+        { status: 400 },
+      );
     }
 
     return new Response(null, { status: 204 });
   } catch {
-    return Response.json({ error: 'Failed to delete member' }, { status: 400 });
+    return Response.json({ error: "Failed to delete member" }, { status: 400 });
   }
 }

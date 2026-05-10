@@ -415,7 +415,7 @@ export default function DeliberationsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Soirée Délibération</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Soirée Délibération</h1>
           <p className="text-sm text-gray-500 mt-1">Délibération de fin de tour</p>
         </div>
         {/* View toggle */}
@@ -613,7 +613,7 @@ export default function DeliberationsPage() {
                               <div className="flex flex-col items-center gap-0.5">
                                 {c.wishes && c.wishes.length > 0 ? (
                                   c.wishes.slice(0, 3).map((w, i) => (
-                                    <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500'}`}>
+                                    <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500'}`}>
                                       {w.rank}. {w.pole}
                                     </span>
                                   ))
@@ -660,7 +660,7 @@ export default function DeliberationsPage() {
                   className="w-full flex items-center gap-3 mb-3 group"
                 >
                   <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: poleColor(pole) }} />
-                  <h3 className="font-bold text-lg text-gray-900">{pole}</h3>
+                  <h1 className="font-semibold text-lg text-gray-900">{pole}</h3>
                   <span className="text-sm text-gray-400">{poleCandidates.length}</span>
                   <div className="flex-1 h-px bg-gray-200" />
                   <svg
@@ -728,7 +728,7 @@ export default function DeliberationsPage() {
                               <div className="flex flex-wrap gap-1">
                                 {c.wishes.slice(0, 3).map((w, i) => (
                                   <span
-                                    key={i}
+                                    key={`wish-${w.pole}-${w.rank}`}
                                     className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'bg-gray-50 text-gray-500'}`}
                                   >
                                     {w.rank}. {w.pole}
@@ -847,13 +847,13 @@ export default function DeliberationsPage() {
                             {getInitials(c)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h2 className="text-xl font-bold text-gray-900">{c.firstName} {c.lastName}</h2>
+                            <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h2>
                             <p className="text-sm text-gray-500 mt-0.5">{c.formation || "Formation non renseignee"}</p>
                             {/* Pole wishes */}
                             {c.wishes && c.wishes.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1.5">
                                 {c.wishes.slice(0, 3).map((w, i) => (
-                                  <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
+                                  <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
                                     {w.rank}. {w.pole}
                                   </span>
                                 ))}
@@ -1142,7 +1142,7 @@ export default function DeliberationsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Candidats en reserve ({reserveCandidates.length})</h3>
+              <h1 className="text-lg font-semibold text-gray-900">Candidats en reserve ({reserveCandidates.length})</h3>
               <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
@@ -1184,7 +1184,7 @@ export default function DeliberationsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Valider et Envoyer</h3>
+              <h1 className="text-lg font-semibold text-gray-900">Valider et Envoyer</h3>
               <button onClick={() => setShowValidateModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>

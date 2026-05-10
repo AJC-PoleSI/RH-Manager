@@ -13,6 +13,8 @@ body {
   background: #ffffff;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   color: #111827;
 }

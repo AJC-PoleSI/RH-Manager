@@ -37,14 +37,25 @@ interface SlotData {
   epreuve_id?: string;
   epreuveId?: string;
   label?: string;
-  members?: { member: { email: string; firstName?: string; lastName?: string; first_name?: string; last_name?: string } }[];
+  members?: {
+    member: {
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+  }[];
   enrollments?: { candidate: { first_name: string; last_name: string } }[];
   maxCandidates?: number;
   max_candidates?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
-const ROOM_COLORS: Record<string, { bg: string; border: string; text: string }> = {};
+const ROOM_COLORS: Record<
+  string,
+  { bg: string; border: string; text: string }
+> = {};
 const ROOM_PALETTE = [
   { bg: "#DBEAFE", border: "#3B82F6", text: "#1E40AF" }, // Blue
   { bg: "#E9D5FF", border: "#8B5CF6", text: "#6D28D9" }, // Violet
@@ -130,14 +141,12 @@ export default function CalendarAdminBuilder({
   const roulementMinutes =
     epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
   const totalSlotDuration = durationMinutes + roulementMinutes;
-  const nbSalles = parseInt(
-    epreuve?.nbSalles || epreuve?.nb_salles || "1"
-  );
+  const nbSalles = parseInt(epreuve?.nbSalles || epreuve?.nb_salles || "1");
 
   // Build unique room list from existing slots + expected rooms
   const roomList = useMemo(() => {
     const roomsFromSlots = Array.from(
-      new Set(slots.map((s) => s.room).filter(Boolean))
+      new Set(slots.map((s) => s.room).filter(Boolean)),
     ) as string[];
     // Add expected rooms that might not have slots yet
     for (let i = 1; i <= nbSalles; i++) {
@@ -170,7 +179,6 @@ export default function CalendarAdminBuilder({
     return getMonday(new Date());
   }, [epreuve]);
 
-
   // ─── API ─────────────────────────────────────────────────────────
   const fetchSlots = useCallback(async () => {
     try {
@@ -179,7 +187,7 @@ export default function CalendarAdminBuilder({
       const filtered = (res.data || []).filter(
         (s: any) =>
           s.epreuve_id === selectedEpreuveId ||
-          s.epreuveId === selectedEpreuveId
+          s.epreuveId === selectedEpreuveId,
       );
       setSlots(filtered);
     } catch (e) {
@@ -195,82 +203,82 @@ export default function CalendarAdminBuilder({
     if (selectedEpreuveId) fetchSlots();
   }, [selectedEpreuveId, fetchSlots]);
 
-  const createSlot = useCallback(async (date: string, startTime: string, room: string) => {
-    const endTime = addMinutes(startTime, durationMinutes);
-    try {
-      setLoading(true);
-      await api.post("/slots", {
-        epreuveId: selectedEpreuveId,
-        date,
-        startTime,
-        endTime,
-        durationMinutes,
-        room,
-        tour: epreuve?.tour || 1,
-        maxCandidates: epreuve?.isGroupEpreuve
-          ? epreuve?.groupSize || 1
-          : 1,
-        minMembers:
-          epreuve?.minEvaluatorsPerSalle ||
-          epreuve?.min_evaluators_per_salle ||
-          2,
-      });
-      toast(`Créneau créé : ${startTime} → ${endTime} (${room})`, "success");
-      fetchSlots();
-      onUpdate();
-    } catch (error: any) {
-      toast(
-        error.response?.data?.error || "Erreur création du créneau",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedEpreuveId, durationMinutes, epreuve, toast, fetchSlots, onUpdate]);
+  const createSlot = useCallback(
+    async (date: string, startTime: string, room: string) => {
+      const endTime = addMinutes(startTime, durationMinutes);
+      try {
+        setLoading(true);
+        await api.post("/slots", {
+          epreuveId: selectedEpreuveId,
+          date,
+          startTime,
+          endTime,
+          durationMinutes,
+          room,
+          tour: epreuve?.tour || 1,
+          maxCandidates: epreuve?.isGroupEpreuve ? epreuve?.groupSize || 1 : 1,
+          minMembers:
+            epreuve?.minEvaluatorsPerSalle ||
+            epreuve?.min_evaluators_per_salle ||
+            2,
+        });
+        toast(`Créneau créé : ${startTime} → ${endTime} (${room})`, "success");
+        fetchSlots();
+        onUpdate();
+      } catch (error: any) {
+        toast(
+          error.response?.data?.error || "Erreur création du créneau",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedEpreuveId, durationMinutes, epreuve, toast, fetchSlots, onUpdate],
+  );
 
-  const moveSlot = useCallback(async (
-    slotId: string,
-    newDate: string,
-    newStartTime: string
-  ) => {
-    const newEndTime = addMinutes(newStartTime, durationMinutes);
-    try {
-      setLoading(true);
-      await api.put(`/slots/${slotId}`, {
-        date: newDate,
-        startTime: newStartTime,
-        endTime: newEndTime,
-      });
-      toast(
-        `Créneau déplacé → ${newDate} ${newStartTime} - ${newEndTime}`,
-        "success"
-      );
-      fetchSlots();
-      onUpdate();
-    } catch (error: any) {
-      toast(
-        error.response?.data?.error || "Erreur déplacement",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [durationMinutes, toast, fetchSlots, onUpdate]);
+  const moveSlot = useCallback(
+    async (slotId: string, newDate: string, newStartTime: string) => {
+      const newEndTime = addMinutes(newStartTime, durationMinutes);
+      try {
+        setLoading(true);
+        await api.put(`/slots/${slotId}`, {
+          date: newDate,
+          startTime: newStartTime,
+          endTime: newEndTime,
+        });
+        toast(
+          `Créneau déplacé → ${newDate} ${newStartTime} - ${newEndTime}`,
+          "success",
+        );
+        fetchSlots();
+        onUpdate();
+      } catch (error: any) {
+        toast(error.response?.data?.error || "Erreur déplacement", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [durationMinutes, toast, fetchSlots, onUpdate],
+  );
 
-  const deleteSlot = useCallback(async (slotId: string) => {
-    if (!window.confirm("Supprimer ce créneau définitivement ?")) return;
-    try {
-      setLoading(true);
-      await api.delete(`/slots/${slotId}`);
-      toast("Créneau supprimé", "success");
-      fetchSlots();
-      onUpdate();
-    } catch {
-      toast("Erreur suppression", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [toast, fetchSlots, onUpdate]);
+  const deleteSlot = useCallback(
+    async (slotId: string) => {
+      if (!window.confirm("Supprimer ce créneau définitivement ?")) return;
+      try {
+        setLoading(true);
+        await api.delete(`/slots/${slotId}`);
+        toast("Créneau supprimé", "success");
+        fetchSlots();
+        onUpdate();
+      } catch {
+        toast("Erreur suppression", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [toast, fetchSlots, onUpdate],
+  );
 
   const saveEditedRoom = async () => {
     if (!editingSlot) return;
@@ -289,13 +297,18 @@ export default function CalendarAdminBuilder({
   };
 
   const checkOverlap = useCallback(
-    (targetDateStr: string, targetStart: string, targetDurationMins: number, excludeSlotId?: string) => {
+    (
+      targetDateStr: string,
+      targetStart: string,
+      targetDurationMins: number,
+      excludeSlotId?: string,
+    ) => {
       const targetDaySlots = slots.filter(
         (s) =>
-          ((s.date || "").split("T")[0] === targetDateStr) &&
-          s.id !== excludeSlotId
+          (s.date || "").split("T")[0] === targetDateStr &&
+          s.id !== excludeSlotId,
       );
-      
+
       const toMins = (hhmm: string) => {
         const [h, m] = hhmm.split(":").map(Number);
         return h * 60 + m;
@@ -308,7 +321,8 @@ export default function CalendarAdminBuilder({
       for (let min = startA; min < endA; min++) {
         let count = 0;
         targetDaySlots.forEach((s) => {
-          const sDur = s.duration_minutes || s.durationMinutes || durationMinutes;
+          const sDur =
+            s.duration_minutes || s.durationMinutes || durationMinutes;
           const sStart = toMins(s.start_time || s.startTime || "08:00");
           const sEnd = sStart + sDur;
           if (min >= sStart && min < sEnd) {
@@ -319,7 +333,7 @@ export default function CalendarAdminBuilder({
       }
       return maxOverlap;
     },
-    [slots, durationMinutes]
+    [slots, durationMinutes],
   );
 
   // ─── Build FullCalendar events ────────────────────────────────────
@@ -346,10 +360,11 @@ export default function CalendarAdminBuilder({
           startTime,
           endTime,
           status: slot.status,
-          duration: slot.duration_minutes || slot.durationMinutes || durationMinutes,
+          duration:
+            slot.duration_minutes || slot.durationMinutes || durationMinutes,
           members: slot.members || [],
           enrollments: slot.enrollments || [],
-          maxCandidates: slot.maxCandidates || slot.max_candidates || 1
+          maxCandidates: slot.maxCandidates || slot.max_candidates || 1,
         },
       };
     });
@@ -365,21 +380,18 @@ export default function CalendarAdminBuilder({
       if (clickedDate.getDay() === 0 || clickedDate.getDay() === 6) return;
 
       const dateStr = formatDateISO(clickedDate);
-      const hours = clickedDate
-        .getHours()
-        .toString()
-        .padStart(2, "0");
-      const minutes = clickedDate
-        .getMinutes()
-        .toString()
-        .padStart(2, "0");
+      const hours = clickedDate.getHours().toString().padStart(2, "0");
+      const minutes = clickedDate.getMinutes().toString().padStart(2, "0");
       const startTime = `${hours}:${minutes}`;
 
       if (viewMode !== "creation") return;
 
       const currentOverlap = checkOverlap(dateStr, startTime, durationMinutes);
       if (currentOverlap >= nbSalles) {
-        toast(`Impossible d'ajouter : capacité max (${nbSalles} salles) atteinte sur cette plage horaire.`, "error");
+        toast(
+          `Impossible d'ajouter : capacité max (${nbSalles} salles) atteinte sur cette plage horaire.`,
+          "error",
+        );
         return;
       }
 
@@ -389,7 +401,7 @@ export default function CalendarAdminBuilder({
         // Quick room picker
         const choice = window.prompt(
           `Créer un créneau à ${startTime} le ${new Date(dateStr + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}\n\nChoisissez la salle (numéro) :\n${roomList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}`,
-          "1"
+          "1",
         );
         if (!choice) return;
         const idx = parseInt(choice) - 1;
@@ -397,7 +409,15 @@ export default function CalendarAdminBuilder({
         createSlot(dateStr, startTime, room);
       }
     },
-    [roomList, viewMode, checkOverlap, durationMinutes, nbSalles, toast, createSlot]
+    [
+      roomList,
+      viewMode,
+      checkOverlap,
+      durationMinutes,
+      nbSalles,
+      toast,
+      createSlot,
+    ],
   );
 
   /** Drag event to new time/day → update slot */
@@ -433,16 +453,24 @@ export default function CalendarAdminBuilder({
         return;
       }
 
-      const currentOverlap = checkOverlap(newDate, newStartTime, durationMinutes, slotId);
+      const currentOverlap = checkOverlap(
+        newDate,
+        newStartTime,
+        durationMinutes,
+        slotId,
+      );
       if (currentOverlap >= nbSalles) {
-        toast(`Impossible de déplacer : capacité max (${nbSalles} salles) atteinte.`, "error");
+        toast(
+          `Impossible de déplacer : capacité max (${nbSalles} salles) atteinte.`,
+          "error",
+        );
         info.revert();
         return;
       }
 
       moveSlot(slotId, newDate, newStartTime);
     },
-    [durationMinutes, checkOverlap, viewMode, toast, moveSlot, nbSalles]
+    [durationMinutes, checkOverlap, viewMode, toast, moveSlot, nbSalles],
   );
 
   /** Click on event → delete */
@@ -463,7 +491,7 @@ export default function CalendarAdminBuilder({
         }
       }
     },
-    [slots, viewMode, deleteSlot]  // eslint satisfied
+    [slots, viewMode, deleteSlot], // eslint satisfied
   );
 
   /** Custom event rendering */
@@ -486,38 +514,62 @@ export default function CalendarAdminBuilder({
       const maxCand = eventInfo.event.extendedProps?.maxCandidates || 1;
 
       if (viewMode === "evaluators") {
-         return (
-           <div className="relative w-full h-full p-1 overflow-hidden" style={{ cursor: "default" }}>
-             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">{start} - {room}</div>
-             {members.length > 0 ? (
-               members.map((m: any, i: number) => (
-                 <div key={i} className="text-[9px] font-medium leading-tight truncate text-blue-900 bg-blue-100/90 rounded px-1 mb-0.5" title={`${m.member?.firstName || m.member?.first_name || ""} ${m.member?.lastName || m.member?.last_name || m.member?.email}`}>
-                   {m.member?.firstName || m.member?.first_name || ""} {m.member?.lastName || m.member?.last_name || m.member?.email}
-                 </div>
-               ))
-             ) : (
-               <div className="text-[9px] italic text-red-700 bg-red-100/80 px-1 rounded">0 éval</div>
-             )}
-           </div>
-         );
+        return (
+          <div
+            className="relative w-full h-full p-1 overflow-hidden"
+            style={{ cursor: "default" }}
+          >
+            <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">
+              {start} - {room}
+            </div>
+            {members.length > 0 ? (
+              members.map((m: any, i: number) => (
+                <div
+                  key={i}
+                  className="text-[9px] font-medium leading-tight truncate text-blue-900 bg-blue-100/90 rounded px-1 mb-0.5"
+                  title={`${m.member?.firstName || m.member?.first_name || ""} ${m.member?.lastName || m.member?.last_name || m.member?.email}`}
+                >
+                  {m.member?.firstName || m.member?.first_name || ""}{" "}
+                  {m.member?.lastName || m.member?.last_name || m.member?.email}
+                </div>
+              ))
+            ) : (
+              <div className="text-[9px] italic text-red-700 bg-red-100/80 px-1 rounded">
+                0 éval
+              </div>
+            )}
+          </div>
+        );
       }
 
       if (viewMode === "candidates") {
-         return (
-           <div className="relative w-full h-full p-1 overflow-hidden" style={{ cursor: "default" }}>
-             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">{start} - {room}</div>
-             <div className="text-[9px] font-medium bg-black/10 px-1 rounded inline-block mb-1 opacity-90">{enrollments.length}/{maxCand} inscrit(s)</div>
-             {enrollments.length > 0 ? (
-               enrollments.map((e: any, i: number) => (
-                 <div key={i} className="text-[9px] font-medium leading-tight truncate text-green-900 bg-green-100/90 rounded px-1 flex mb-0.5">
-                   🎓 {e.candidate?.first_name} {e.candidate?.last_name}
-                 </div>
-               ))
-             ) : (
-               <div className="text-[9px] italic text-gray-500 opacity-80 pl-1">Vide</div>
-             )}
-           </div>
-         );
+        return (
+          <div
+            className="relative w-full h-full p-1 overflow-hidden"
+            style={{ cursor: "default" }}
+          >
+            <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">
+              {start} - {room}
+            </div>
+            <div className="text-[9px] font-medium bg-black/10 px-1 rounded inline-block mb-1 opacity-90">
+              {enrollments.length}/{maxCand} inscrit(s)
+            </div>
+            {enrollments.length > 0 ? (
+              enrollments.map((e: any, i: number) => (
+                <div
+                  key={i}
+                  className="text-[9px] font-medium leading-tight truncate text-green-900 bg-green-100/90 rounded px-1 flex mb-0.5"
+                >
+                  🎓 {e.candidate?.first_name} {e.candidate?.last_name}
+                </div>
+              ))
+            ) : (
+              <div className="text-[9px] italic text-gray-500 opacity-80 pl-1">
+                Vide
+              </div>
+            )}
+          </div>
+        );
       }
 
       return (
@@ -528,8 +580,7 @@ export default function CalendarAdminBuilder({
               onClick={(e) => {
                 e.stopPropagation();
                 const slotId =
-                  eventInfo.event.extendedProps?.slotId ||
-                  eventInfo.event.id;
+                  eventInfo.event.extendedProps?.slotId || eventInfo.event.id;
                 deleteSlot(slotId);
               }}
               title="Supprimer"
@@ -543,13 +594,11 @@ export default function CalendarAdminBuilder({
           <div className="text-[10px] leading-tight opacity-80">
             {start} – {end}
           </div>
-          {dur && (
-            <div className="text-[9px] opacity-60">{dur}min</div>
-          )}
+          {dur && <div className="text-[9px] opacity-60">{dur}min</div>}
         </div>
       );
     },
-    [viewMode, deleteSlot]
+    [viewMode, deleteSlot],
   );
 
   /** Week header label update */
@@ -580,8 +629,8 @@ export default function CalendarAdminBuilder({
           Les dates de cette épreuve ne semblent pas configurées.
         </p>
         <p className="text-sm text-gray-400">
-          Veuillez paramétrer l&apos;épreuve dans les Réglages (Date de
-          début et fin).
+          Veuillez paramétrer l&apos;épreuve dans les Réglages (Date de début et
+          fin).
         </p>
       </div>
     );
@@ -661,28 +710,20 @@ export default function CalendarAdminBuilder({
       {showConfig && (
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-600">
-              Début :
-            </label>
+            <label className="text-xs font-medium text-gray-600">Début :</label>
             <input
               type="time"
               value={slotMinTime.slice(0, 5)}
-              onChange={(e) =>
-                setSlotMinTime(e.target.value + ":00")
-              }
+              onChange={(e) => setSlotMinTime(e.target.value + ":00")}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-600">
-              Fin :
-            </label>
+            <label className="text-xs font-medium text-gray-600">Fin :</label>
             <input
               type="time"
               value={slotMaxTime.slice(0, 5)}
-              onChange={(e) =>
-                setSlotMaxTime(e.target.value + ":00")
-              }
+              onChange={(e) => setSlotMaxTime(e.target.value + ":00")}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
@@ -696,9 +737,9 @@ export default function CalendarAdminBuilder({
       <div className="p-4 flex-1 bg-gray-50/30">
         {/* Instructions */}
         <p className="text-xs text-gray-500 mb-3">
-          <strong>Clic</strong> pour créer · <strong>Glissez</strong>{" "}
-          pour déplacer (snap 5min, multi-jours) ·{" "}
-          <strong>✕</strong> au survol pour supprimer
+          <strong>Clic</strong> pour créer · <strong>Glissez</strong> pour
+          déplacer (snap 5min, multi-jours) · <strong>✕</strong> au survol pour
+          supprimer
         </p>
 
         <div className="calendar-week-grid bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -752,7 +793,7 @@ export default function CalendarAdminBuilder({
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Éditer le créneau</h3>
-              <button 
+              <button
                 onClick={() => setEditingSlot(null)}
                 className="text-gray-400 hover:text-gray-600 p-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
@@ -770,7 +811,7 @@ export default function CalendarAdminBuilder({
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 autoFocus
                 onKeyDown={(e) => {
-                   if (e.key === "Enter") saveEditedRoom();
+                  if (e.key === "Enter") saveEditedRoom();
                 }}
               />
             </div>
@@ -873,7 +914,9 @@ export default function CalendarAdminBuilder({
           border-left-width: 3px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
           cursor: grab;
-          transition: box-shadow 0.15s, transform 0.15s;
+          transition:
+            box-shadow 0.15s,
+            transform 0.15s;
           overflow: hidden;
         }
         .calendar-week-grid .fc .fc-timegrid-event:hover {
@@ -929,10 +972,7 @@ export default function CalendarAdminBuilder({
           line-height: 1;
           z-index: 10;
         }
-        .calendar-week-grid
-          .fc
-          .fc-timegrid-event:hover
-          .fc-event-delete-btn {
+        .calendar-week-grid .fc .fc-timegrid-event:hover .fc-event-delete-btn {
           display: flex;
         }
       `}</style>

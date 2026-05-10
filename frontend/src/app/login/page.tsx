@@ -140,7 +140,7 @@ export default function LoginPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-2xl text-center">
-                    <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+                    <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 tracking-tight">
                         Audencia Junior Conseil
                     </h1>
                     <p className="mt-2 text-gray-500 text-base">
@@ -193,7 +193,7 @@ export default function LoginPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-2xl text-center">
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+                    <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
                         Espace Candidat
                     </h1>
                     <p className="mt-2 text-gray-500 text-base">
@@ -251,7 +251,7 @@ export default function LoginPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
                 <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
-                    <h2 className="text-xl font-bold text-gray-900 text-center">Connexion Candidat</h2>
+                    <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Candidat</h2>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez votre email et date de naissance
                     </p>
@@ -329,7 +329,7 @@ export default function LoginPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
                 <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
-                    <h2 className="text-xl font-bold text-gray-900 text-center">Connexion Staff</h2>
+                    <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Staff</h2>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez vos identifiants AJC
                     </p>
@@ -395,7 +395,7 @@ export default function LoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-black/40 px-4 py-8">
             <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-8">
-                <h2 className="text-xl font-bold text-gray-900 text-center">Inscription Candidat</h2>
+                <h1 className="text-xl font-semibold text-gray-900 text-center">Inscription Candidat</h2>
 
                 {/* Progress bar */}
                 <div className="mt-6 flex items-center justify-between">

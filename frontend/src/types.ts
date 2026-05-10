@@ -1,38 +1,38 @@
 export interface Member {
-    id: number;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    isAdmin: boolean;
+  id: number;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  isAdmin: boolean;
 }
 
 export interface Candidate {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
 }
 
 export interface CalendarEvent {
-    id: string;
-    title: string;
-    description?: string;
-    day: string; // ISO Date string
-    startTime: string; // "HH:mm"
-    endTime: string; // "HH:mm"
-    relatedEpreuveId?: string;
-    relatedMemberId?: number;
-    relatedCandidateId?: string;
+  id: string;
+  title: string;
+  description?: string;
+  day: string; // ISO Date string
+  startTime: string; // "HH:mm"
+  endTime: string; // "HH:mm"
+  relatedEpreuveId?: string;
+  relatedMemberId?: number;
+  relatedCandidateId?: string;
 }
 
 export interface Epreuve {
-    id: string;
-    name: string;
-    tour: number;
-    type: string;
-    durationMinutes: number;
-    roulementMinutes: number;
-    nbSalles: number;
-    minEvaluatorsPerSalle: number;
+  id: string;
+  name: string;
+  tour: number;
+  type: string;
+  durationMinutes: number;
+  roulementMinutes: number;
+  nbSalles: number;
+  minEvaluatorsPerSalle: number;
 }

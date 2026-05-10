@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // PUT /api/slots/status/bulk — bulk update slot status (admin)
 export async function PUT(req: NextRequest) {
@@ -13,20 +13,23 @@ export async function PUT(req: NextRequest) {
 
     if (!slotIds || !status) {
       return Response.json(
-        { error: 'slotIds and status required' },
-        { status: 400 }
+        { error: "slotIds and status required" },
+        { status: 400 },
       );
     }
 
     const { error } = await supabaseAdmin
-      .from('evaluation_slots')
+      .from("evaluation_slots")
       .update({ status })
-      .in('id', slotIds);
+      .in("id", slotIds);
 
     if (error) throw error;
 
     return Response.json({ success: true, updated: slotIds.length });
   } catch (error) {
-    return Response.json({ error: 'Failed to update slot status' }, { status: 500 });
+    return Response.json(
+      { error: "Failed to update slot status" },
+      { status: 500 },
+    );
   }
 }

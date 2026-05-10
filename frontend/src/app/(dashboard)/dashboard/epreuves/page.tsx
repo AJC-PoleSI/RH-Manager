@@ -170,7 +170,7 @@ export default function EpreuvesPage() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold">Épreuves</h1>
+                <h1 className="text-2xl font-semibold">Épreuves</h1>
                 <Button onClick={() => { resetForm(); setShowForm(!showForm); }}>
                     {showForm ? 'Annuler' : 'Créer une épreuve'}
                 </Button>
@@ -307,7 +307,7 @@ export default function EpreuvesPage() {
 
                             {/* Planning configuration */}
                             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
-                                <h3 className="text-sm font-bold text-blue-800">Configuration Planning</h3>
+                                <h1 className="text-sm font-semibold text-blue-800">Configuration Planning</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label className="text-xs">Roulement (min)</Label>

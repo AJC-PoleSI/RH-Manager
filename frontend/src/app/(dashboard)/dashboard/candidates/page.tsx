@@ -257,7 +257,7 @@ export default function CandidatesPage() {
             <div className={`space-y-6 transition-all duration-200 ${selectedCandidate ? 'w-[45%] min-w-[400px]' : 'w-full'}`}>
                 <div className="flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Candidats</h1>
+                        <h1 className="text-2xl font-semibold text-gray-900">Candidats</h1>
                         <p className="text-gray-500">Gérez et évaluez vos candidats</p>
                     </div>
                     <div className="flex gap-2">
@@ -439,7 +439,7 @@ export default function CandidatesPage() {
                                         {selectedCandidate.firstName?.[0]}{selectedCandidate.lastName?.[0]}
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-bold text-gray-900">{selectedCandidate.firstName} {selectedCandidate.lastName}</h2>
+                                        <h1 className="text-xl font-semibold text-gray-900">{selectedCandidate.firstName} {selectedCandidate.lastName}</h2>
                                         <p className="text-sm text-gray-500">{selectedCandidate.email}</p>
                                         <div className="flex gap-4 mt-1 text-xs text-gray-400">
                                             {selectedCandidate.phone && <span>{selectedCandidate.phone}</span>}

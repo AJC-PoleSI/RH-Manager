@@ -282,7 +282,7 @@ export default function CandidateCalendarPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Mon calendrier</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Mon calendrier</h1>
         <p className="text-sm text-gray-500 mt-1">Vos épreuves, créneaux d&apos;évaluation et événements</p>
       </div>
 
@@ -549,7 +549,7 @@ export default function CandidateCalendarPage() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">{selectedEvent.title}</h3>
+                  <h1 className="text-xl font-semibold text-gray-900">{selectedEvent.title}</h3>
                   <span
                     className={`inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                       typeStyles[selectedEvent.type]?.bg || ""

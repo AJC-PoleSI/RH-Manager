@@ -1,15 +1,15 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 // GET /api/kpis/global - Fetch global KPIs with real data
 // SECURITY: Requires authentication + admin/member role
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
-  if (payload.role === 'candidate') return forbidden();
+  if (payload.role === "candidate") return forbidden();
 
   try {
     const [
@@ -23,15 +23,27 @@ export async function GET(req: NextRequest) {
       epreuvesDataRes,
       availabilitiesCountRes,
     ] = await Promise.all([
-      supabaseAdmin.from('candidates').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('candidate_evaluations').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('epreuves').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('members').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('candidate_evaluations').select('member_id'),
-      supabaseAdmin.from('evaluation_slots').select('id', { count: 'exact', head: true }),
-      supabaseAdmin.from('deliberations').select('*'),
-      supabaseAdmin.from('epreuves').select('tour'),
-      supabaseAdmin.from('availabilities').select('id', { count: 'exact', head: true }),
+      supabaseAdmin
+        .from("candidates")
+        .select("id", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("candidate_evaluations")
+        .select("id", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("epreuves")
+        .select("id", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("members")
+        .select("id", { count: "exact", head: true }),
+      supabaseAdmin.from("candidate_evaluations").select("member_id"),
+      supabaseAdmin
+        .from("evaluation_slots")
+        .select("id", { count: "exact", head: true }),
+      supabaseAdmin.from("deliberations").select("*"),
+      supabaseAdmin.from("epreuves").select("tour"),
+      supabaseAdmin
+        .from("availabilities")
+        .select("id", { count: "exact", head: true }),
     ]);
 
     const evaluationsPerMember: Record<string, number> = {};
@@ -64,10 +76,10 @@ export async function GET(req: NextRequest) {
     deliberations.forEach((d: any) => {
       const statuses = [d.tour3_status, d.tour2_status, d.tour1_status];
       for (const s of statuses) {
-        if (s && s !== 'pending') {
-          if (s === 'accepted') accepted++;
-          else if (s === 'refused') refused++;
-          else if (s === 'waiting') waiting++;
+        if (s && s !== "pending") {
+          if (s === "accepted") accepted++;
+          else if (s === "refused") refused++;
+          else if (s === "waiting") waiting++;
           break;
         }
       }
@@ -90,7 +102,7 @@ export async function GET(req: NextRequest) {
       waiting,
     });
   } catch (error) {
-    console.error('KPI Error:', error);
-    return Response.json({ error: 'Failed to fetch KPIs' }, { status: 500 });
+    console.error("KPI Error:", error);
+    return Response.json({ error: "Failed to fetch KPIs" }, { status: 500 });
   }
 }

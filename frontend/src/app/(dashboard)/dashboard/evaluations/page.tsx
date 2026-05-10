@@ -189,7 +189,7 @@ function AdminView() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Évaluateurs</h1>
+                    <h1 className="text-2xl font-semibold text-gray-900">Évaluateurs</h1>
                     <p className="text-gray-500 mt-1">Comptes membres JE et notations</p>
                 </div>
                 <button
@@ -468,7 +468,7 @@ function AdminView() {
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-5">
-                            <h3 className="text-lg font-bold text-gray-900">Modifier l&apos;évaluateur</h3>
+                            <h1 className="text-lg font-semibold text-gray-900">Modifier l&apos;évaluateur</h3>
                             <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600">
                                 <X size={20} />
                             </button>
@@ -612,7 +612,7 @@ function MemberView() {
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Mes évaluations</h1>
+                <h1 className="text-2xl font-semibold text-gray-900">Mes évaluations</h1>
                 <p className="text-gray-500 mt-1">Récapitulatif de vos notations</p>
             </div>
 

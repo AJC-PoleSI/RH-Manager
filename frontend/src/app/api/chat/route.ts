@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/chat - Fetch all chat messages
 // SECURITY: Requires authentication
@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const { data, error } = await supabaseAdmin
-      .from('chat_messages')
-      .select('*')
-      .order('created_at', { ascending: true })
+      .from("chat_messages")
+      .select("*")
+      .order("created_at", { ascending: true })
       .limit(200);
 
     if (error) throw error;
@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
       id: m.id,
       name: m.sender_name,
       text: m.message,
-      time: new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date(m.created_at).toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       role: m.sender_role,
       senderId: m.sender_id,
       createdAt: m.created_at,
@@ -29,8 +32,11 @@ export async function GET(req: NextRequest) {
 
     return Response.json(messages);
   } catch (error) {
-    console.error('Chat GET error:', error);
-    return Response.json({ error: 'Failed to fetch chat messages' }, { status: 500 });
+    console.error("Chat GET error:", error);
+    return Response.json(
+      { error: "Failed to fetch chat messages" },
+      { status: 500 },
+    );
   }
 }
 
@@ -43,22 +49,22 @@ export async function POST(req: NextRequest) {
     const { message, senderName } = await req.json();
 
     if (!message?.trim()) {
-      return Response.json({ error: 'Message is required' }, { status: 400 });
+      return Response.json({ error: "Message is required" }, { status: 400 });
     }
 
     // Sanitize: limit length
     const sanitizedMessage = message.trim().substring(0, 2000);
 
-    let role = 'member';
-    if (user.role === 'candidate') role = 'candidate';
-    else if (user.isAdmin) role = 'admin';
+    let role = "member";
+    if (user.role === "candidate") role = "candidate";
+    else if (user.isAdmin) role = "admin";
 
     const { data, error } = await supabaseAdmin
-      .from('chat_messages')
+      .from("chat_messages")
       .insert({
         sender_id: user.id,
         sender_role: role,
-        sender_name: (senderName || user.email.split('@')[0]).substring(0, 100),
+        sender_name: (senderName || user.email.split("@")[0]).substring(0, 100),
         message: sanitizedMessage,
       })
       .select()
@@ -66,17 +72,23 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
-    return Response.json({
-      id: data.id,
-      name: data.sender_name,
-      text: data.message,
-      time: new Date(data.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      role: data.sender_role,
-      senderId: data.sender_id,
-      createdAt: data.created_at,
-    }, { status: 201 });
+    return Response.json(
+      {
+        id: data.id,
+        name: data.sender_name,
+        text: data.message,
+        time: new Date(data.created_at).toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        role: data.sender_role,
+        senderId: data.sender_id,
+        createdAt: data.created_at,
+      },
+      { status: 201 },
+    );
   } catch (error) {
-    console.error('Chat POST error:', error);
-    return Response.json({ error: 'Failed to send message' }, { status: 500 });
+    console.error("Chat POST error:", error);
+    return Response.json({ error: "Failed to send message" }, { status: 500 });
   }
 }

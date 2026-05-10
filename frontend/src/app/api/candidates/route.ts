@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/candidates?search=&limit=&page=
 export async function GET(req: NextRequest) {
@@ -8,34 +8,40 @@ export async function GET(req: NextRequest) {
   if (!payload) return unauthorized();
 
   // ── Permission : candidats ne peuvent pas voir la liste ──
-  if (payload.role === 'candidate') {
-    return Response.json({ error: 'Acces interdit aux candidats' }, { status: 403 });
+  if (payload.role === "candidate") {
+    return Response.json(
+      { error: "Acces interdit aux candidats" },
+      { status: 403 },
+    );
   }
 
   const { searchParams } = req.nextUrl;
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '50');
-  const search = searchParams.get('search') || '';
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "50");
+  const search = searchParams.get("search") || "";
   const offset = (page - 1) * limit;
 
   try {
     // ── Tous les membres (admin ou non) voient tous les candidats ──
     // La restriction se fait au niveau de l'évaluation (seuls les membres assignés peuvent évaluer)
     let query = supabaseAdmin
-      .from('candidates')
-      .select('*, candidate_evaluations(*, members(email))', { count: 'exact' })
+      .from("candidates")
+      .select("*, candidate_evaluations(*, members(email))", { count: "exact" })
       .range(offset, offset + limit - 1);
 
     if (search) {
       query = query.or(
-        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`
+        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`,
       );
     }
 
     const { data, error, count } = await query;
 
     if (error) {
-      return Response.json({ error: 'Failed to fetch candidates' }, { status: 500 });
+      return Response.json(
+        { error: "Failed to fetch candidates" },
+        { status: 500 },
+      );
     }
 
     const total = count ?? 0;
@@ -58,7 +64,10 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch {
-    return Response.json({ error: 'Failed to fetch candidates' }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch candidates" },
+      { status: 500 },
+    );
   }
 }
 
@@ -73,27 +82,27 @@ export async function POST(req: NextRequest) {
 
     if (!firstName || !lastName || !email) {
       return Response.json(
-        { error: 'Les champs Prénom, Nom et Email sont obligatoires.' },
-        { status: 400 }
+        { error: "Les champs Prénom, Nom et Email sont obligatoires." },
+        { status: 400 },
       );
     }
 
     // Check for duplicate email
     const { data: existing } = await supabaseAdmin
-      .from('candidates')
-      .select('id')
-      .eq('email', email)
+      .from("candidates")
+      .select("id")
+      .eq("email", email)
       .maybeSingle();
 
     if (existing) {
       return Response.json(
-        { error: 'Un candidat avec cet email existe déjà.' },
-        { status: 400 }
+        { error: "Un candidat avec cet email existe déjà." },
+        { status: 400 },
       );
     }
 
     const { data, error } = await supabaseAdmin
-      .from('candidates')
+      .from("candidates")
       .insert({
         first_name: firstName,
         last_name: lastName,
@@ -106,16 +115,16 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       return Response.json(
-        { error: 'Échec de la création du candidat.', details: error.message },
-        { status: 400 }
+        { error: "Échec de la création du candidat.", details: error.message },
+        { status: 400 },
       );
     }
 
     return Response.json(data, { status: 201 });
   } catch {
     return Response.json(
-      { error: 'Échec de la création du candidat.' },
-      { status: 400 }
+      { error: "Échec de la création du candidat." },
+      { status: 400 },
     );
   }
 }

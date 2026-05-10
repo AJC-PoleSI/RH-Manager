@@ -1,7 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '@/lib/api';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import api from "@/lib/api";
 
 interface CandidateSettings {
   planningVisible: boolean;
@@ -15,9 +21,15 @@ interface CandidateSettingsContextType {
   refresh: () => Promise<void>;
 }
 
-const CandidateSettingsContext = createContext<CandidateSettingsContextType | undefined>(undefined);
+const CandidateSettingsContext = createContext<
+  CandidateSettingsContextType | undefined
+>(undefined);
 
-export function CandidateSettingsProvider({ children }: { children: React.ReactNode }) {
+export function CandidateSettingsProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [settings, setSettings] = useState<CandidateSettings>({
     planningVisible: false,
     deadlineCandidats: null,
@@ -27,10 +39,10 @@ export function CandidateSettingsProvider({ children }: { children: React.ReactN
 
   const fetch = useCallback(async () => {
     try {
-      const res = await api.get('/settings');
+      const res = await api.get("/settings");
       const data: Record<string, string> = res.data || {};
       setSettings({
-        planningVisible: data.planning_visible_candidats === 'true',
+        planningVisible: data.planning_visible_candidats === "true",
         deadlineCandidats: data.deadline_candidats || null,
         raw: data,
       });
@@ -41,10 +53,14 @@ export function CandidateSettingsProvider({ children }: { children: React.ReactN
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
 
   return (
-    <CandidateSettingsContext.Provider value={{ settings, loading, refresh: fetch }}>
+    <CandidateSettingsContext.Provider
+      value={{ settings, loading, refresh: fetch }}
+    >
       {children}
     </CandidateSettingsContext.Provider>
   );
@@ -52,6 +68,9 @@ export function CandidateSettingsProvider({ children }: { children: React.ReactN
 
 export function useCandidateSettings() {
   const ctx = useContext(CandidateSettingsContext);
-  if (!ctx) throw new Error('useCandidateSettings must be inside CandidateSettingsProvider');
+  if (!ctx)
+    throw new Error(
+      "useCandidateSettings must be inside CandidateSettingsProvider",
+    );
   return ctx;
 }

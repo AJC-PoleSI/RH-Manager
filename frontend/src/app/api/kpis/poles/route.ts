@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/kpis/poles — KPI des voeux de pôles pour la Soirée Délibération
 export async function GET(req: NextRequest) {
@@ -10,31 +10,36 @@ export async function GET(req: NextRequest) {
   try {
     // Fetch all wishes
     const { data: wishes, error: wishError } = await supabaseAdmin
-      .from('candidate_wishes')
-      .select('*, candidate:candidates(id, first_name, last_name)');
+      .from("candidate_wishes")
+      .select("*, candidate:candidates(id, first_name, last_name)");
 
     if (wishError) throw wishError;
 
     // Fetch accepted deliberations (pour compter les places acceptées)
     const { data: deliberations, error: delibError } = await supabaseAdmin
-      .from('deliberations')
-      .select('candidate_id, tour1_status, tour2_status, tour3_status, assigned_pole');
+      .from("deliberations")
+      .select(
+        "candidate_id, tour1_status, tour2_status, tour3_status, assigned_pole",
+      );
 
     if (delibError) throw delibError;
 
     // Agréger par pôle
-    const poleStats: Record<string, {
-      pole: string;
-      totalDemandes: number;       // Nombre total de voeux pour ce pôle (tous rangs)
-      demandesRang1: number;       // Voeux en rang 1 (premier choix)
-      demandesRang2: number;       // Voeux en rang 2
-      demandesRang3: number;       // Voeux en rang 3
-      placesAcceptees: number;     // Candidats assignés à ce pôle (acceptés)
-    }> = {};
+    const poleStats: Record<
+      string,
+      {
+        pole: string;
+        totalDemandes: number; // Nombre total de voeux pour ce pôle (tous rangs)
+        demandesRang1: number; // Voeux en rang 1 (premier choix)
+        demandesRang2: number; // Voeux en rang 2
+        demandesRang3: number; // Voeux en rang 3
+        placesAcceptees: number; // Candidats assignés à ce pôle (acceptés)
+      }
+    > = {};
 
     // Compter les demandes par pôle et rang
     (wishes || []).forEach((w: any) => {
-      const pole = w.pole || 'Non défini';
+      const pole = w.pole || "Non défini";
       if (!poleStats[pole]) {
         poleStats[pole] = {
           pole,
@@ -59,15 +64,22 @@ export async function GET(req: NextRequest) {
     });
 
     // Trier par nombre total de demandes (desc)
-    const result = Object.values(poleStats).sort((a, b) => b.totalDemandes - a.totalDemandes);
+    const result = Object.values(poleStats).sort(
+      (a, b) => b.totalDemandes - a.totalDemandes,
+    );
 
     return Response.json({
       poles: result,
       totalWishes: (wishes || []).length,
-      totalCandidatesWithWishes: new Set((wishes || []).map((w: any) => w.candidate_id)).size,
+      totalCandidatesWithWishes: new Set(
+        (wishes || []).map((w: any) => w.candidate_id),
+      ).size,
     });
   } catch (error) {
-    console.error('KPI poles error:', error);
-    return Response.json({ error: 'Failed to fetch pole KPIs' }, { status: 500 });
+    console.error("KPI poles error:", error);
+    return Response.json(
+      { error: "Failed to fetch pole KPIs" },
+      { status: 500 },
+    );
   }
 }

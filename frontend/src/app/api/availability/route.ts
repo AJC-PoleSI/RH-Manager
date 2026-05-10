@@ -1,7 +1,7 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
-import { NextRequest } from 'next/server';
-export const dynamic = 'force-dynamic';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { NextRequest } from "next/server";
+export const dynamic = "force-dynamic";
 
 // GET /api/availability — get my availabilities (with optional ?start=&end= date filters)
 export async function GET(req: NextRequest) {
@@ -10,14 +10,14 @@ export async function GET(req: NextRequest) {
 
   const memberId = payload.id;
   const { searchParams } = new URL(req.url);
-  const start = searchParams.get('start');
-  const end = searchParams.get('end');
+  const start = searchParams.get("start");
+  const end = searchParams.get("end");
 
   try {
     let query = supabaseAdmin
-      .from('availabilities')
-      .select('*')
-      .eq('member_id', memberId);
+      .from("availabilities")
+      .select("*")
+      .eq("member_id", memberId);
 
     if (start && end) {
       const startDate = new Date(start);
@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
       endDate.setHours(23, 59, 59, 999);
 
       query = query
-        .gte('date', startDate.toISOString())
-        .lte('date', endDate.toISOString());
+        .gte("date", startDate.toISOString())
+        .lte("date", endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
 
     return Response.json(data);
   } catch (error) {
-    return Response.json({ error: 'Failed to fetch availabilities' }, { status: 500 });
+    return Response.json(
+      { error: "Failed to fetch availabilities" },
+      { status: 500 },
+    );
   }
 }
 
@@ -50,15 +53,18 @@ export async function PUT(req: NextRequest) {
     // Check if saisie is open (non-admin members only)
     if (!payload.isAdmin) {
       const { data: settings } = await supabaseAdmin
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'saisie_dispos_ouverte')
+        .from("system_settings")
+        .select("value")
+        .eq("key", "saisie_dispos_ouverte")
         .single();
 
-      if (!settings || settings.value !== 'true') {
+      if (!settings || settings.value !== "true") {
         return Response.json(
-          { error: 'La saisie des disponibilites est fermee. Contactez l\'administrateur.' },
-          { status: 403 }
+          {
+            error:
+              "La saisie des disponibilites est fermee. Contactez l'administrateur.",
+          },
+          { status: 403 },
         );
       }
     }
@@ -74,8 +80,8 @@ export async function PUT(req: NextRequest) {
     if (availabilities && availabilities.length > 0) {
       // Convertit "09h00" ou "09:00" en minutes depuis minuit
       const toMinutes = (t: string): number => {
-        const clean = t.replace('h', ':').replace(/[^0-9:]/g, '');
-        const [h, m] = clean.split(':').map(Number);
+        const clean = t.replace("h", ":").replace(/[^0-9:]/g, "");
+        const [h, m] = clean.split(":").map(Number);
         return (h || 0) * 60 + (m || 0);
       };
 
@@ -93,15 +99,17 @@ export async function PUT(req: NextRequest) {
 
           // Vérification chevauchement : [startA, endA[ ∩ [startB, endB[ ≠ ∅
           const startA = toMinutes(a.startTime);
-          const endA   = toMinutes(a.endTime);
+          const endA = toMinutes(a.endTime);
           const startB = toMinutes(b.startTime);
-          const endB   = toMinutes(b.endTime);
+          const endB = toMinutes(b.endTime);
 
           if (startA < endB && startB < endA) {
-            const dayLabel = a.weekday || a.date || '';
+            const dayLabel = a.weekday || a.date || "";
             return Response.json(
-              { error: `Chevauchement detecte le ${dayLabel} : ${a.startTime}-${a.endTime} et ${b.startTime}-${b.endTime}. Un membre ne peut pas etre a deux endroits en meme temps.` },
-              { status: 400 }
+              {
+                error: `Chevauchement detecte le ${dayLabel} : ${a.startTime}-${a.endTime} et ${b.startTime}-${b.endTime}. Un membre ne peut pas etre a deux endroits en meme temps.`,
+              },
+              { status: 400 },
             );
           }
         }
@@ -116,11 +124,11 @@ export async function PUT(req: NextRequest) {
       end.setHours(23, 59, 59, 999);
 
       const { error: deleteError } = await supabaseAdmin
-        .from('availabilities')
+        .from("availabilities")
         .delete()
-        .eq('member_id', memberId)
-        .gte('date', start.toISOString())
-        .lte('date', end.toISOString());
+        .eq("member_id", memberId)
+        .gte("date", start.toISOString())
+        .lte("date", end.toISOString());
 
       if (deleteError) throw deleteError;
 
@@ -134,7 +142,7 @@ export async function PUT(req: NextRequest) {
         }));
 
         const { error: insertError } = await supabaseAdmin
-          .from('availabilities')
+          .from("availabilities")
           .insert(rows);
 
         if (insertError) throw insertError;
@@ -142,9 +150,9 @@ export async function PUT(req: NextRequest) {
     } else {
       // Overwrite all mode: delete all member's availabilities, then create
       const { error: deleteError } = await supabaseAdmin
-        .from('availabilities')
+        .from("availabilities")
         .delete()
-        .eq('member_id', memberId);
+        .eq("member_id", memberId);
 
       if (deleteError) throw deleteError;
 
@@ -158,19 +166,19 @@ export async function PUT(req: NextRequest) {
         }));
 
         const { error: insertError } = await supabaseAdmin
-          .from('availabilities')
+          .from("availabilities")
           .insert(rows);
 
         if (insertError) throw insertError;
       }
     }
 
-    return Response.json({ message: 'Availabilities updated' });
+    return Response.json({ message: "Availabilities updated" });
   } catch (error) {
-    console.error('Replace Availabilities Error:', error);
+    console.error("Replace Availabilities Error:", error);
     return Response.json(
-      { error: 'Failed to replace availabilities', details: String(error) },
-      { status: 400 }
+      { error: "Failed to replace availabilities", details: String(error) },
+      { status: 400 },
     );
   }
 }
@@ -186,15 +194,18 @@ export async function POST(req: NextRequest) {
     // ── Vérifier que la saisie est ouverte ──
     if (!payload.isAdmin) {
       const { data: settings } = await supabaseAdmin
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'saisie_dispos_ouverte')
+        .from("system_settings")
+        .select("value")
+        .eq("key", "saisie_dispos_ouverte")
         .single();
 
-      if (!settings || settings.value !== 'true') {
+      if (!settings || settings.value !== "true") {
         return Response.json(
-          { error: 'La saisie des disponibilites est fermee. Contactez l\'administrateur.' },
-          { status: 403 }
+          {
+            error:
+              "La saisie des disponibilites est fermee. Contactez l'administrateur.",
+          },
+          { status: 403 },
         );
       }
     }
@@ -203,15 +214,15 @@ export async function POST(req: NextRequest) {
 
     // ── Anti-chevauchement avec les dispos existantes en base ──
     const { data: existing } = await supabaseAdmin
-      .from('availabilities')
-      .select('*')
-      .eq('member_id', memberId)
-      .eq('weekday', weekday);
+      .from("availabilities")
+      .select("*")
+      .eq("member_id", memberId)
+      .eq("weekday", weekday);
 
     if (existing && existing.length > 0) {
       const toMin = (t: string): number => {
-        const clean = t.replace('h', ':').replace(/[^0-9:]/g, '');
-        const [h, m] = clean.split(':').map(Number);
+        const clean = t.replace("h", ":").replace(/[^0-9:]/g, "");
+        const [h, m] = clean.split(":").map(Number);
         return (h || 0) * 60 + (m || 0);
       };
       const newStart = toMin(start_time);
@@ -222,15 +233,17 @@ export async function POST(req: NextRequest) {
         const exEnd = toMin(ex.end_time);
         if (newStart < exEnd && exStart < newEnd) {
           return Response.json(
-            { error: `Chevauchement detecte le ${weekday} : ${start_time}-${end_time} chevauche ${ex.start_time}-${ex.end_time}.` },
-            { status: 400 }
+            {
+              error: `Chevauchement detecte le ${weekday} : ${start_time}-${end_time} chevauche ${ex.start_time}-${ex.end_time}.`,
+            },
+            { status: 400 },
           );
         }
       }
     }
 
     const { data, error } = await supabaseAdmin
-      .from('availabilities')
+      .from("availabilities")
       .insert({
         member_id: memberId,
         weekday,
@@ -244,6 +257,9 @@ export async function POST(req: NextRequest) {
 
     return Response.json(data, { status: 201 });
   } catch (error) {
-    return Response.json({ error: 'Failed to add availability' }, { status: 400 });
+    return Response.json(
+      { error: "Failed to add availability" },
+      { status: 400 },
+    );
   }
 }

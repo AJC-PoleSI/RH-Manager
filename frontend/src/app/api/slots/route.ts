@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // POST /api/slots — create a slot (admin)
 export async function POST(req: NextRequest) {
@@ -10,15 +10,23 @@ export async function POST(req: NextRequest) {
 
   try {
     const {
-      date, startTime, endTime, durationMinutes,
-      label, maxCandidates, minMembers, simultaneousSlots,
-      epreuveId, tour, room,
+      date,
+      startTime,
+      endTime,
+      durationMinutes,
+      label,
+      maxCandidates,
+      minMembers,
+      simultaneousSlots,
+      epreuveId,
+      tour,
+      room,
     } = await req.json();
 
     if (!date || !startTime) {
       return Response.json(
-        { error: 'date et startTime sont requis' },
-        { status: 400 }
+        { error: "date et startTime sont requis" },
+        { status: 400 },
       );
     }
 
@@ -30,28 +38,32 @@ export async function POST(req: NextRequest) {
     let computedEndTime = endTime;
 
     if (epreuveId) {
-      const { data: ep } = await supabaseAdmin.from('epreuves').select('duration_minutes').eq('id', epreuveId).single();
+      const { data: ep } = await supabaseAdmin
+        .from("epreuves")
+        .select("duration_minutes")
+        .eq("id", epreuveId)
+        .single();
       if (ep?.duration_minutes) {
         computedDuration = ep.duration_minutes + BUFFER_MINUTES;
         // Calculer end_time depuis start_time si pas fourni
         if (!endTime) {
-          const [h, m] = startTime.split(':').map(Number);
+          const [h, m] = startTime.split(":").map(Number);
           const totalMin = h * 60 + (m || 0) + computedDuration;
-          computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+          computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
         }
       }
     }
 
     if (!computedEndTime) {
-      const [h, m] = startTime.split(':').map(Number);
+      const [h, m] = startTime.split(":").map(Number);
       const totalMin = h * 60 + (m || 0) + computedDuration;
-      computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+      computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
     }
 
     const { data: slot, error } = await supabaseAdmin
-      .from('evaluation_slots')
+      .from("evaluation_slots")
       .insert({
-        date: new Date(date + 'T12:00:00').toISOString(),
+        date: new Date(date + "T12:00:00").toISOString(),
         start_time: startTime,
         end_time: computedEndTime,
         duration_minutes: computedDuration,
@@ -62,25 +74,27 @@ export async function POST(req: NextRequest) {
         epreuve_id: epreuveId || null,
         tour: tour || 1,
         room: room || null,
-        status: 'open',
+        status: "open",
       })
-      .select(`
+      .select(
+        `
         *,
         epreuve:epreuves(name, tour, type),
         members:slot_member_assignments(*, member:members(id, email)),
         enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
         requests:slot_availability_requests(*, member:members(id, email))
-      `)
+      `,
+      )
       .single();
 
     if (error) throw error;
 
     return Response.json(slot, { status: 201 });
   } catch (error) {
-    console.error('Create slot error:', error);
+    console.error("Create slot error:", error);
     return Response.json(
-      { error: 'Failed to create slot', details: String(error) },
-      { status: 500 }
+      { error: "Failed to create slot", details: String(error) },
+      { status: 500 },
     );
   }
 }

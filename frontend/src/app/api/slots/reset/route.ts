@@ -1,8 +1,8 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 // POST /api/slots/reset — delete all slots for an epreuve (admin only)
 export async function POST(req: NextRequest) {
@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
     const { epreuveId, slotIds } = await req.json();
 
     if (!epreuveId && (!slotIds || slotIds.length === 0)) {
-      return Response.json({ error: 'epreuveId ou slotIds requis' }, { status: 400 });
+      return Response.json(
+        { error: "epreuveId ou slotIds requis" },
+        { status: 400 },
+      );
     }
 
     // Determine which slot IDs to delete — always query the DB if epreuveId is provided
@@ -23,47 +26,50 @@ export async function POST(req: NextRequest) {
     if (epreuveId) {
       // Always query the DB to get ALL slots for this epreuve (not relying on frontend state)
       const { data: slots } = await supabaseAdmin
-        .from('evaluation_slots')
-        .select('id')
-        .eq('epreuve_id', epreuveId);
+        .from("evaluation_slots")
+        .select("id")
+        .eq("epreuve_id", epreuveId);
       idsToDelete = (slots || []).map((s: any) => s.id);
     } else if (slotIds && slotIds.length > 0) {
       idsToDelete = slotIds;
     }
 
     if (idsToDelete.length === 0) {
-      return Response.json({ message: 'Aucun créneau à supprimer', deleted: 0 });
+      return Response.json({
+        message: "Aucun créneau à supprimer",
+        deleted: 0,
+      });
     }
 
     // 1. Delete enrollments (inscriptions candidats)
     const { error: enrollError } = await supabaseAdmin
-      .from('slot_enrollments')
+      .from("slot_enrollments")
       .delete()
-      .in('slot_id', idsToDelete);
-    if (enrollError) console.error('Delete enrollments error:', enrollError);
+      .in("slot_id", idsToDelete);
+    if (enrollError) console.error("Delete enrollments error:", enrollError);
 
     // 2. Delete member assignments
     const { error: assignError } = await supabaseAdmin
-      .from('slot_member_assignments')
+      .from("slot_member_assignments")
       .delete()
-      .in('slot_id', idsToDelete);
-    if (assignError) console.error('Delete assignments error:', assignError);
+      .in("slot_id", idsToDelete);
+    if (assignError) console.error("Delete assignments error:", assignError);
 
     // 3. Delete availability requests if table exists
     try {
       await supabaseAdmin
-        .from('slot_availability_requests')
+        .from("slot_availability_requests")
         .delete()
-        .in('slot_id', idsToDelete);
+        .in("slot_id", idsToDelete);
     } catch {
       // Table may not exist
     }
 
     // 4. Delete the slots themselves
     const { error: slotError } = await supabaseAdmin
-      .from('evaluation_slots')
+      .from("evaluation_slots")
       .delete()
-      .in('id', idsToDelete);
+      .in("id", idsToDelete);
 
     if (slotError) throw slotError;
 
@@ -72,10 +78,13 @@ export async function POST(req: NextRequest) {
       deleted: idsToDelete.length,
     });
   } catch (error) {
-    console.error('Reset slots error:', error);
+    console.error("Reset slots error:", error);
     return Response.json(
-      { error: 'Echec de la réinitialisation des créneaux', details: String(error) },
-      { status: 500 }
+      {
+        error: "Echec de la réinitialisation des créneaux",
+        details: String(error),
+      },
+      { status: 500 },
     );
   }
 }

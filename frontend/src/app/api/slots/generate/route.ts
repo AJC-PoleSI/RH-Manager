@@ -1,11 +1,11 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 function formatDate(date: Date): string {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -21,20 +21,20 @@ export async function POST(req: NextRequest) {
 
     if (!epreuveId || !startDate || !endDate) {
       return Response.json(
-        { error: 'epreuveId, startDate, endDate are required' },
-        { status: 400 }
+        { error: "epreuveId, startDate, endDate are required" },
+        { status: 400 },
       );
     }
 
     // Fetch epreuve
     const { data: epreuve, error: epreuveError } = await supabaseAdmin
-      .from('epreuves')
-      .select('*')
-      .eq('id', epreuveId)
+      .from("epreuves")
+      .select("*")
+      .eq("id", epreuveId)
       .single();
 
     if (epreuveError || !epreuve) {
-      return Response.json({ error: 'Epreuve not found' }, { status: 404 });
+      return Response.json({ error: "Epreuve not found" }, { status: 404 });
     }
 
     const requiredMembers = membersPerSlot || 2;
@@ -49,11 +49,11 @@ export async function POST(req: NextRequest) {
     const slotDuration = epreuveDuration + BUFFER_MINUTES;
 
     const addMinutesToTime = (timeStr: string, minutes: number): string => {
-      const [h, m] = timeStr.split(':').map(Number);
+      const [h, m] = timeStr.split(":").map(Number);
       const totalMin = h * 60 + (m || 0) + minutes;
       const newH = Math.floor(totalMin / 60);
       const newM = totalMin % 60;
-      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+      return `${String(newH).padStart(2, "0")}:${String(newM).padStart(2, "0")}`;
     };
 
     const start = new Date(startDate);
@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
 
     // Fetch all availabilities in range with member info
     const { data: availabilities, error: avError } = await supabaseAdmin
-      .from('availabilities')
-      .select('*, member:members(id, email)')
-      .gte('date', start.toISOString())
-      .lte('date', end.toISOString());
+      .from("availabilities")
+      .select("*, member:members(id, email)")
+      .gte("date", start.toISOString())
+      .lte("date", end.toISOString());
 
     if (avError) throw avError;
 
@@ -112,20 +112,20 @@ export async function POST(req: NextRequest) {
         memberCount: data.members.length,
       }))
       .sort((a, b) =>
-        `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`)
+        `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`),
       );
 
     // Generate rooms per slot
     const generatedSlots = validSlots.map((slot) => {
       const numberOfRooms = Math.floor(
-        slot.availableMembers.length / requiredMembers
+        slot.availableMembers.length / requiredMembers,
       );
       const rooms = [];
 
       for (let r = 0; r < numberOfRooms; r++) {
         const assignedMembers = slot.availableMembers.slice(
           r * requiredMembers,
-          (r + 1) * requiredMembers
+          (r + 1) * requiredMembers,
         );
         rooms.push({
           roomNumber: r + 1,
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
 
     const totalRooms = generatedSlots.reduce(
       (sum, s) => sum + s.rooms.length,
-      0
+      0,
     );
     const totalCapacity = totalRooms * candidateCapacity;
 
@@ -167,10 +167,10 @@ export async function POST(req: NextRequest) {
       slots: generatedSlots,
     });
   } catch (error) {
-    console.error('Generate slots error:', error);
+    console.error("Generate slots error:", error);
     return Response.json(
-      { error: 'Failed to generate slots', details: String(error) },
-      { status: 500 }
+      { error: "Failed to generate slots", details: String(error) },
+      { status: 500 },
     );
   }
 }

@@ -1,6 +1,6 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/availability/all — get all members' availabilities (admin/cross-calendar view)
 export async function GET(req: NextRequest) {
@@ -8,13 +8,13 @@ export async function GET(req: NextRequest) {
   if (!payload) return unauthorized();
 
   const { searchParams } = new URL(req.url);
-  const start = searchParams.get('start');
-  const end = searchParams.get('end');
+  const start = searchParams.get("start");
+  const end = searchParams.get("end");
 
   try {
     let query = supabaseAdmin
-      .from('availabilities')
-      .select('*, member:members(id, email)');
+      .from("availabilities")
+      .select("*, member:members(id, email)");
 
     if (start && end) {
       const startDate = new Date(start);
@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
       endDate.setHours(23, 59, 59, 999);
 
       query = query
-        .gte('date', startDate.toISOString())
-        .lte('date', endDate.toISOString());
+        .gte("date", startDate.toISOString())
+        .lte("date", endDate.toISOString());
     }
 
     const { data, error } = await query;
@@ -32,7 +32,10 @@ export async function GET(req: NextRequest) {
 
     return Response.json(data);
   } catch (error) {
-    console.error('Get all availabilities error:', error);
-    return Response.json({ error: 'Failed to fetch all availabilities' }, { status: 500 });
+    console.error("Get all availabilities error:", error);
+    return Response.json(
+      { error: "Failed to fetch all availabilities" },
+      { status: 500 },
+    );
   }
 }

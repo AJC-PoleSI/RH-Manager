@@ -175,7 +175,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
         return (
             <div className="flex flex-col items-center justify-center h-96 gap-6">
                 <div className="text-6xl">🎉</div>
-                <h2 className="text-2xl font-bold text-gray-800">Tous les candidats ont été passés en revue !</h2>
+                <h1 className="text-2xl font-semibold text-gray-800">Tous les candidats ont été passés en revue !</h2>
                 <p className="text-gray-500">
                     {processedCount} / {candidates.length} candidats délibérés pour le Tour {selectedTour}
                 </p>
@@ -225,13 +225,13 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                 {dragX > 20 && (
                     <div className="absolute inset-0 rounded-2xl border-4 border-green-400 bg-green-400 z-30 pointer-events-none flex items-center justify-center"
                         style={{ opacity: overlayOpacity }}>
-                        <span className="text-white text-5xl font-black rotate-[-15deg]">GARDER ✅</span>
+                        <span className="text-white text-5xl font-semibold rotate-[-15deg]">GARDER ✅</span>
                     </div>
                 )}
                 {dragX < -20 && (
                     <div className="absolute inset-0 rounded-2xl border-4 border-red-400 bg-red-400 z-30 pointer-events-none flex items-center justify-center"
                         style={{ opacity: overlayOpacity }}>
-                        <span className="text-white text-5xl font-black rotate-[15deg]">REFUSER ❌</span>
+                        <span className="text-white text-5xl font-semibold rotate-[15deg]">REFUSER ❌</span>
                     </div>
                 )}
 
@@ -258,7 +258,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                     <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-5 text-white">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h2 className="text-2xl font-black tracking-tight">
+                                <h1 className="text-2xl font-semibold tracking-tight">
                                     {currentCandidate.firstName} {currentCandidate.lastName}
                                 </h2>
                                 <p className="text-slate-300 text-sm mt-1">{currentCandidate.email}</p>
@@ -267,7 +267,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                                 )}
                             </div>
                             <div className="flex flex-col items-center">
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-2xl font-black">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-2xl font-semibold">
                                     {avgScore}
                                 </div>
                                 <span className="text-[10px] text-slate-400 mt-1">MOY. T{selectedTour}</span>
@@ -295,7 +295,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                             <div className="flex items-center gap-2 flex-wrap">
                                 <Star size={14} className="text-amber-500" />
                                 {currentCandidate.wishes.map((w: any, i: number) => (
-                                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full font-medium border border-amber-200">
+                                    <span key={`wish-${w.pole}-${w.rank}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full font-medium border border-amber-200">
                                         #{w.rank} {w.pole}
                                     </span>
                                 ))}
@@ -312,7 +312,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
 
                         {/* Evaluations */}
                         <div>
-                            <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-1.5">
+                            <h1 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1.5">
                                 <Award size={13} />
                                 Évaluations Tour {selectedTour} ({evals.length})
                             </h3>
@@ -324,7 +324,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                                         const details = getScoreDetails(e);
                                         const total = getTotalScore(e);
                                         return (
-                                            <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                            <div key={`wish-${w.pole}-${w.rank}`} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                                                 <div className="flex justify-between items-start mb-1.5">
                                                     <div>
                                                         <span className="font-bold text-gray-800 text-sm">{e.epreuve?.name}</span>
@@ -409,7 +409,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
             {showReserveModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowReserveModal(false)}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <HelpCircle size={20} className="text-orange-500" />
                             Mise sous réserve
                         </h3>

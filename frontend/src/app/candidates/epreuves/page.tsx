@@ -282,7 +282,7 @@ export default function CandidateEpreuvesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Épreuves & Tours</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Épreuves & Tours</h1>
           <p className="text-sm text-gray-500 mt-1">
             Votre parcours de recrutement — consultez et inscrivez-vous aux épreuves
           </p>
@@ -551,7 +551,7 @@ export default function CandidateEpreuvesPage() {
                     const isUpcoming = tour > activeTour;
                     return (
                       <div key={tour}>
-                        <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <h1 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
                           <span
                             className={`inline-block w-3 h-3 rounded-full ${
                               isDone ? "bg-green-500" : isActive ? "bg-blue-600" : "bg-gray-300"
@@ -598,7 +598,7 @@ export default function CandidateEpreuvesPage() {
                                 <div className="p-4">
                                   <div className="flex items-start justify-between mb-3">
                                     <div className="flex-1 min-w-0">
-                                      <h3 className="text-[15px] font-bold text-gray-900 leading-tight">{ep.name}</h3>
+                                      <h1 className="text-[15px] font-semibold text-gray-900 leading-tight">{ep.name}</h3>
                                       {ep.presentedBy && (
                                         <p className="text-xs text-gray-400 mt-0.5">Présenté par {ep.presentedBy}</p>
                                       )}
@@ -755,7 +755,7 @@ export default function CandidateEpreuvesPage() {
                     {/* Close button */}
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{epreuveName}</h3>
+                        <h1 className="text-xl font-semibold text-gray-900">{epreuveName}</h3>
                         {selectedSlot.label && (
                           <p className="text-sm text-gray-500 mt-0.5">{selectedSlot.label}</p>
                         )}

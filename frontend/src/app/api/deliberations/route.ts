@@ -1,21 +1,22 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
 
 // GET /api/deliberations - Fetch all deliberations with candidate info
 // SECURITY: Requires authentication + admin/member role (no candidates)
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
-  if (payload.role === 'candidate') return forbidden();
+  if (payload.role === "candidate") return forbidden();
 
   try {
     const { searchParams } = new URL(req.url);
-    const tour = searchParams.get('tour');
+    const tour = searchParams.get("tour");
 
     const { data: candidates, error } = await supabaseAdmin
-      .from('candidates')
-      .select(`
+      .from("candidates")
+      .select(
+        `
         id,
         first_name,
         last_name,
@@ -38,8 +39,9 @@ export async function GET(req: NextRequest) {
           pole,
           rank
         )
-      `)
-      .order('last_name', { ascending: true });
+      `,
+      )
+      .order("last_name", { ascending: true });
 
     if (error) throw error;
 
@@ -49,25 +51,30 @@ export async function GET(req: NextRequest) {
       if (tour) {
         const tourNum = parseInt(tour);
         evaluations = evaluations.filter(
-          (ev: any) => ev.epreuves?.tour === tourNum
+          (ev: any) => ev.epreuves?.tour === tourNum,
         );
       }
 
       evaluations = evaluations.map((ev: any) => ({
         id: ev.id,
-        scores: typeof ev.scores === 'string' ? JSON.parse(ev.scores) : ev.scores,
+        scores:
+          typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores,
         comment: ev.comment,
         createdAt: ev.created_at,
-        member: ev.members ? {
-          email: ev.members.email,
-          firstName: ev.members.first_name,
-          lastName: ev.members.last_name,
-        } : null,
-        epreuve: ev.epreuves ? {
-          name: ev.epreuves.name,
-          tour: ev.epreuves.tour,
-          type: ev.epreuves.type,
-        } : null,
+        member: ev.members
+          ? {
+              email: ev.members.email,
+              firstName: ev.members.first_name,
+              lastName: ev.members.last_name,
+            }
+          : null,
+        epreuve: ev.epreuves
+          ? {
+              name: ev.epreuves.name,
+              tour: ev.epreuves.tour,
+              type: ev.epreuves.type,
+            }
+          : null,
       }));
 
       const wishes = (c.candidate_wishes || [])
@@ -89,14 +96,16 @@ export async function GET(req: NextRequest) {
         phone: c.phone,
         formation: c.formation,
         comments: c.comments,
-        deliberation: delib ? {
-          tour1Status: delib.tour1_status,
-          tour2Status: delib.tour2_status,
-          tour3Status: delib.tour3_status,
-          prosComment: delib.pros_comment,
-          consComment: delib.cons_comment,
-          assignedPole: delib.assigned_pole,
-        } : null,
+        deliberation: delib
+          ? {
+              tour1Status: delib.tour1_status,
+              tour2Status: delib.tour2_status,
+              tour3Status: delib.tour3_status,
+              prosComment: delib.pros_comment,
+              consComment: delib.cons_comment,
+              assignedPole: delib.assigned_pole,
+            }
+          : null,
         wishes,
         evaluations,
       };
@@ -104,10 +113,10 @@ export async function GET(req: NextRequest) {
 
     return Response.json(result);
   } catch (error) {
-    console.error('getAllDeliberations error:', error);
+    console.error("getAllDeliberations error:", error);
     return Response.json(
-      { error: 'Failed to fetch deliberation data' },
-      { status: 500 }
+      { error: "Failed to fetch deliberation data" },
+      { status: 500 },
     );
   }
 }

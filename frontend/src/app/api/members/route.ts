@@ -1,7 +1,7 @@
-import { supabaseAdmin } from '@/lib/supabase';
-import { getTokenFromRequest, unauthorized, forbidden } from '@/lib/auth';
-import { NextRequest } from 'next/server';
-import bcrypt from 'bcryptjs';
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { NextRequest } from "next/server";
+import bcrypt from "bcryptjs";
 
 // GET /api/members
 export async function GET(req: NextRequest) {
@@ -9,38 +9,41 @@ export async function GET(req: NextRequest) {
   if (!payload) return unauthorized();
 
   // ── Candidats : pas d'accès à la liste des membres ──
-  if (payload.role === 'candidate') {
-    return Response.json({ error: 'Acces interdit' }, { status: 403 });
+  if (payload.role === "candidate") {
+    return Response.json({ error: "Acces interdit" }, { status: 403 });
   }
 
   try {
     // Admin : accès complet avec password hash
     // Membre : infos basiques sans mot de passe
     const selectFields = payload.isAdmin
-      ? 'id, email, password_hash, is_admin, first_name, last_name, pole'
-      : 'id, email, is_admin, first_name, last_name, pole';
+      ? "id, email, password_hash, is_admin, first_name, last_name, pole"
+      : "id, email, is_admin, first_name, last_name, pole";
 
     const { data, error } = await supabaseAdmin
-      .from('members')
+      .from("members")
       .select(selectFields);
 
     if (error) {
-      return Response.json({ error: 'Failed to fetch members' }, { status: 500 });
+      return Response.json(
+        { error: "Failed to fetch members" },
+        { status: 500 },
+      );
     }
 
     const mapped = (data || []).map((m: any) => ({
       id: m.id,
       email: m.email,
-      password: payload.isAdmin ? (m.password_hash ? '••••••' : '') : undefined,
+      password: payload.isAdmin ? (m.password_hash ? "••••••" : "") : undefined,
       isAdmin: m.is_admin,
-      firstName: m.first_name || '',
-      lastName: m.last_name || '',
-      pole: m.pole || '',
+      firstName: m.first_name || "",
+      lastName: m.last_name || "",
+      pole: m.pole || "",
     }));
 
     return Response.json(mapped);
   } catch {
-    return Response.json({ error: 'Failed to fetch members' }, { status: 500 });
+    return Response.json({ error: "Failed to fetch members" }, { status: 500 });
   }
 }
 
@@ -56,25 +59,25 @@ export async function POST(req: NextRequest) {
 
     if (!email || !password) {
       return Response.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
+        { error: "Email and password are required" },
+        { status: 400 },
       );
     }
 
     const { data: existing } = await supabaseAdmin
-      .from('members')
-      .select('id')
-      .eq('email', email)
+      .from("members")
+      .select("id")
+      .eq("email", email)
       .maybeSingle();
 
     if (existing) {
-      return Response.json({ error: 'Email already exists' }, { status: 400 });
+      return Response.json({ error: "Email already exists" }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const { data, error } = await supabaseAdmin
-      .from('members')
+      .from("members")
       .insert({
         email,
         password_hash: passwordHash,
@@ -83,22 +86,28 @@ export async function POST(req: NextRequest) {
         last_name: lastName || null,
         pole: pole || null,
       })
-      .select('id, email, is_admin, first_name, last_name, pole')
+      .select("id, email, is_admin, first_name, last_name, pole")
       .single();
 
     if (error) {
-      return Response.json({ error: 'Failed to create member' }, { status: 400 });
+      return Response.json(
+        { error: "Failed to create member" },
+        { status: 400 },
+      );
     }
 
-    return Response.json({
-      id: data.id,
-      email: data.email,
-      isAdmin: data.is_admin,
-      firstName: data.first_name || '',
-      lastName: data.last_name || '',
-      pole: data.pole || '',
-    }, { status: 201 });
+    return Response.json(
+      {
+        id: data.id,
+        email: data.email,
+        isAdmin: data.is_admin,
+        firstName: data.first_name || "",
+        lastName: data.last_name || "",
+        pole: data.pole || "",
+      },
+      { status: 201 },
+    );
   } catch {
-    return Response.json({ error: 'Failed to create member' }, { status: 400 });
+    return Response.json({ error: "Failed to create member" }, { status: 400 });
   }
 }
