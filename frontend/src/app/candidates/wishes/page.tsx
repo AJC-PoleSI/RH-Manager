@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useReducer } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 
@@ -19,6 +19,86 @@ const DEFAULT_POLES = [
 
 type Tour = { id: string; name: string; status: string };
 
+interface State {
+  selectedPoles: string[];
+  loading: boolean;
+  saving: boolean;
+  saved: boolean;
+  state.activeTourNumber: number;
+  activeTourStatus: string;
+}
+
+type Action =
+  | { type: "SET_POLES"; payload: string[] }
+  | { type: "ADD_POLE"; payload: string }
+  | { type: "REMOVE_POLE"; payload: number }
+  | { type: "MOVE_UP"; payload: number }
+  | { type: "MOVE_DOWN"; payload: number }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_SAVING"; payload: boolean }
+  | { type: "SET_SAVED"; payload: boolean }
+  | { type: "SET_TOUR"; payload: { number: number; status: string } };
+
+const initialState: State = {
+  selectedPoles: [],
+  loading: true,
+  saving: false,
+  saved: false,
+  state.activeTourNumber: 0,
+  activeTourStatus: "",
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "SET_POLES":
+      return { ...state, selectedPoles: action.payload };
+    case "ADD_POLE":
+      if (state.state.selectedPoles.length >= 3 || state.selectedPoles.includes(action.payload))
+        return state;
+      return {
+        ...state,
+        selectedPoles: [...state.selectedPoles, action.payload],
+        saved: false,
+      };
+    case "REMOVE_POLE":
+      return {
+        ...state,
+        selectedPoles: state.state.selectedPoles.filter((_, i) => i !== action.payload),
+        saved: false,
+      };
+    case "MOVE_UP":
+      if (action.payload === 0) return state;
+      const upPoles = [...state.selectedPoles];
+      [upPoles[action.payload - 1], upPoles[action.payload]] = [
+        upPoles[action.payload],
+        upPoles[action.payload - 1],
+      ];
+      return { ...state, selectedPoles: upPoles, saved: false };
+    case "MOVE_DOWN":
+      if (action.payload === state.state.selectedPoles.length - 1) return state;
+      const downPoles = [...state.selectedPoles];
+      [downPoles[action.payload], downPoles[action.payload + 1]] = [
+        downPoles[action.payload + 1],
+        downPoles[action.payload],
+      ];
+      return { ...state, selectedPoles: downPoles, saved: false };
+    case "SET_LOADING":
+      return { ...state, loading: action.payload };
+    case "SET_SAVING":
+      return { ...state, saving: action.payload };
+    case "SET_SAVED":
+      return { ...state, saved: action.payload };
+    case "SET_TOUR":
+      return {
+        ...state,
+        state.activeTourNumber: action.payload.number,
+        activeTourStatus: action.payload.status,
+      };
+    default:
+      return state;
+  }
+}
+
 function extractTourNumber(name: string): number {
   const match = name.match(/(\d+)/);
   return match ? parseInt(match[1], 10) : 0;
@@ -26,12 +106,7 @@ function extractTourNumber(name: string): number {
 
 export default function CandidateWishesPage() {
   const { user } = useAuth();
-  const [selectedPoles, setSelectedPoles] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [activeTourNumber, setActiveTourNumber] = useState<number>(0);
-  const [activeTourStatus, setActiveTourStatus] = useState<string>("");
+  const [state, dispatch] = useReducer(reducer, initialState);
 
   // Determine active tour
   useEffect(() => {
@@ -41,28 +116,27 @@ export default function CandidateWishesPage() {
         const tours: Tour[] = res.data || [];
         const enCours = tours.find((t) => t.status === "en_cours");
         if (enCours) {
-          setActiveTourNumber(extractTourNumber(enCours.name));
-          setActiveTourStatus("en_cours");
+          dispatch({
+            type: "SET_TOUR",
+            payload: { number: extractTourNumber(enCours.name), status: "en_cours" },
+          });
         } else {
-          // If no tour is en_cours, check for the last completed one
           const termine = tours
             .filter((t) => t.status === "termine")
             .sort(
               (a, b) => extractTourNumber(b.name) - extractTourNumber(a.name),
             );
           if (termine.length > 0) {
-            setActiveTourNumber(extractTourNumber(termine[0].name));
-            setActiveTourStatus("termine");
+            dispatch({
+              type: "SET_TOUR",
+              payload: { number: extractTourNumber(termine[0].name), status: "termine" },
+            });
           } else {
-            // All tours are a_venir — default to tour 1
-            setActiveTourNumber(1);
-            setActiveTourStatus("a_venir");
+            dispatch({ type: "SET_TOUR", payload: { number: 1, status: "a_venir" } });
           }
         }
       } catch {
-        // Fallback: no tour info, show tour 1 behavior
-        setActiveTourNumber(1);
-        setActiveTourStatus("a_venir");
+        dispatch({ type: "SET_TOUR", payload: { number: 1, status: "a_venir" } });
       }
     };
     fetchTours();
@@ -71,7 +145,7 @@ export default function CandidateWishesPage() {
   // Fetch existing wishes
   useEffect(() => {
     if (!user?.id) {
-      setLoading(false);
+      dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
     const fetchWishes = async () => {
@@ -81,70 +155,59 @@ export default function CandidateWishesPage() {
           const ordered = res.data
             .sort((a: any, b: any) => a.rank - b.rank)
             .map((w: any) => w.pole);
-          setSelectedPoles(ordered.slice(0, 3)); // Only keep top 3
+          dispatch({ type: "SET_POLES", payload: ordered.slice(0, 3) });
         }
       } catch {
         // No existing wishes
       } finally {
-        setLoading(false);
+        dispatch({ type: "SET_LOADING", payload: false });
       }
     };
     fetchWishes();
   }, [user?.id]);
 
-  const isDefinitif = activeTourNumber >= 3;
-  const canRank = activeTourNumber >= 2;
-  const isTourTermine = activeTourStatus === "termine";
+  const isDefinitif = state.state.activeTourNumber >= 3;
+  const canRank = state.state.activeTourNumber >= 2;
+  const isTourTermine = state.activeTourStatus === "termine";
 
   const addPole = (pole: string) => {
-    if (selectedPoles.length >= 3 || selectedPoles.includes(pole)) return;
-    setSelectedPoles([...selectedPoles, pole]);
-    setSaved(false);
+    dispatch({ type: "ADD_POLE", payload: pole });
   };
 
   const removePole = (index: number) => {
-    setSelectedPoles(selectedPoles.filter((_, i) => i !== index));
-    setSaved(false);
+    dispatch({ type: "REMOVE_POLE", payload: index });
   };
 
   const moveUp = (index: number) => {
-    if (index === 0) return;
-    const updated = [...selectedPoles];
-    [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
-    setSelectedPoles(updated);
-    setSaved(false);
+    dispatch({ type: "MOVE_UP", payload: index });
   };
 
   const moveDown = (index: number) => {
-    if (index === selectedPoles.length - 1) return;
-    const updated = [...selectedPoles];
-    [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
-    setSelectedPoles(updated);
-    setSaved(false);
+    dispatch({ type: "MOVE_DOWN", payload: index });
   };
 
   const handleSave = async () => {
     if (!user?.id) return;
-    setSaving(true);
+    dispatch({ type: "SET_SAVING", payload: true });
     try {
-      const wishes = selectedPoles.map((pole, index) => ({
+      const wishes = state.state.selectedPoles.map((pole, index) => ({
         pole,
         rank: index + 1,
       }));
       await api.put(`/wishes/${user.id}`, { wishes });
-      setSaved(true);
+      dispatch({ type: "SET_SAVED", payload: true });
     } catch {
       // Error
     } finally {
-      setSaving(false);
+      dispatch({ type: "SET_SAVING", payload: false });
     }
   };
 
   const availablePoles = DEFAULT_POLES.filter(
-    (p) => !selectedPoles.includes(p),
+    (p) => !state.selectedPoles.includes(p),
   );
 
-  if (loading) {
+  if (state.loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
@@ -153,7 +216,7 @@ export default function CandidateWishesPage() {
   }
 
   // Tour 1: informational message only, no ranking
-  if (activeTourNumber <= 1) {
+  if (state.state.activeTourNumber <= 1) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
@@ -220,7 +283,7 @@ export default function CandidateWishesPage() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Choix de pôle</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Tour {activeTourNumber} —{" "}
+          Tour {state.activeTourNumber} —{" "}
           {isDefinitif ? "Choix définitif" : "À titre indicatif"}
         </p>
       </div>
@@ -276,16 +339,16 @@ export default function CandidateWishesPage() {
       {/* Selected poles (top 3) */}
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          Vos choix ({selectedPoles.length}/3)
+          Vos choix ({state.selectedPoles.length}/3)
         </h2>
 
-        {selectedPoles.length === 0 ? (
+        {state.selectedPoles.length === 0 ? (
           <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-400">
             Sélectionnez 3 pôles dans la liste ci-dessous
           </div>
         ) : (
           <div className="space-y-2">
-            {selectedPoles.map((pole, index) => (
+            {state.selectedPoles.map((pole, index) => (
               <div
                 key={pole}
                 className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-4"
@@ -332,7 +395,7 @@ export default function CandidateWishesPage() {
                     </button>
                     <button
                       onClick={() => moveDown(index)}
-                      disabled={index === selectedPoles.length - 1}
+                      disabled={index === state.selectedPoles.length - 1}
                       className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Descendre"
                     >
@@ -377,7 +440,7 @@ export default function CandidateWishesPage() {
       </div>
 
       {/* Available poles to select */}
-      {!isTourTermine && selectedPoles.length < 3 && (
+      {!isTourTermine && state.selectedPoles.length < 3 && (
         <div>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Pôles disponibles
@@ -413,7 +476,7 @@ export default function CandidateWishesPage() {
 
       {/* All poles shown when 3 are selected */}
       {!isTourTermine &&
-        selectedPoles.length >= 3 &&
+        state.selectedPoles.length >= 3 &&
         availablePoles.length > 0 && (
           <div>
             <h2 className="text-sm font-semibold text-gray-700 mb-3">
@@ -438,7 +501,7 @@ export default function CandidateWishesPage() {
         <div className="flex justify-end">
           <button
             onClick={handleSave}
-            disabled={saving || selectedPoles.length === 0}
+            disabled={saving || state.selectedPoles.length === 0}
             className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
               saved
                 ? "bg-green-600 text-white"

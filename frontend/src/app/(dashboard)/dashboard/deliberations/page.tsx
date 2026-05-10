@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { ActionButtons } from "./ActionButtons";
 import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw } from "lucide-react";
 
 interface Wish {
@@ -106,8 +107,7 @@ export default function DeliberationsPage() {
 
   // Reset index when tour changes
   useEffect(() => {
-    setCurrentIndex(0);
-    setExpanded(false);
+    setCurrentIndex(0); setExpanded(false);
   }, [selectedTour]);
 
   const getStatus = (c: Candidate) => c.deliberation?.[tourKey] || "";
@@ -118,11 +118,9 @@ export default function DeliberationsPage() {
     const newStatus = currentStatus === decision ? "" : decision;
 
     // Animation de swipe
-    if (viewMode === "tinder") {
-      if (newStatus === "accepted") setSwipeDirection("right");
-      else if (newStatus === "refused") setSwipeDirection("left");
-      else if (newStatus === "waiting") setSwipeDirection("up");
-    }
+      if (viewMode === "tinder") {
+        setSwipeDirection(newStatus === "accepted" ? "right" : newStatus === "refused" ? "left" : newStatus === "waiting" ? "up" : null);
+      }
 
     try {
       const payload: any = { [tourKey]: newStatus || "pending" };
