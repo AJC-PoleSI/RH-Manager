@@ -11,7 +11,7 @@ interface Wish {
   rank: number;
 }
 
-interface Candidate {
+export interface Candidate {
   id: string;
   firstName: string;
   lastName: string;
