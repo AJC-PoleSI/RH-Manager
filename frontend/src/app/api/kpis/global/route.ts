@@ -36,9 +36,12 @@ export async function GET(req: NextRequest) {
         .from("members")
         .select("id", { count: "exact", head: true }),
       supabaseAdmin.from("candidate_evaluations").select("member_id"),
+      // Only count slots linked to a real épreuve — orphan slots (epreuve_id=null)
+      // are bugs/leftovers and must NOT inflate the "Créneaux planifiés" KPI.
       supabaseAdmin
         .from("evaluation_slots")
-        .select("id", { count: "exact", head: true }),
+        .select("id", { count: "exact", head: true })
+        .not("epreuve_id", "is", null),
       supabaseAdmin.from("deliberations").select("*"),
       supabaseAdmin.from("epreuves").select("tour"),
       supabaseAdmin

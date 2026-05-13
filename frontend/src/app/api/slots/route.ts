@@ -31,6 +31,30 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // GUARD: every slot MUST be linked to an épreuve.
+    // Avoids orphan slots polluting KPIs/planning. See "créneaux fantômes".
+    // ══════════════════════════════════════════════════════════════════
+    if (!epreuveId) {
+      return Response.json(
+        { error: "epreuveId est requis : un créneau doit être lié à une épreuve" },
+        { status: 400 },
+      );
+    }
+
+    // Verify the épreuve actually exists (prevents stale UUIDs)
+    const { data: epreuveExists } = await supabaseAdmin
+      .from("epreuves")
+      .select("id")
+      .eq("id", epreuveId)
+      .maybeSingle();
+    if (!epreuveExists) {
+      return Response.json(
+        { error: "Épreuve introuvable" },
+        { status: 404 },
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // Si une épreuve est liée, calculer la durée : épreuve + 10min buffer
     // ══════════════════════════════════════════════════════════════════
     const BUFFER_MINUTES = 10;
@@ -71,7 +95,7 @@ export async function POST(req: NextRequest) {
         max_candidates: maxCandidates || 1,
         min_members: minMembers || 1,
         simultaneous_slots: simultaneousSlots ?? 1,
-        epreuve_id: epreuveId || null,
+        epreuve_id: epreuveId,
         tour: tour || 1,
         room: room || null,
         status: "open",
