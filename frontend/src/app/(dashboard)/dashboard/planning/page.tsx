@@ -158,7 +158,7 @@ export default function PlanningPage() {
     } catch (e) {
       console.error("Erreur chargement epreuves:", e);
     } finally {
-      loadingRef.current = false;
+      setLoading(false);
     }
   }, [selectedEpreuveId]);
 
@@ -714,7 +714,7 @@ export default function PlanningPage() {
   // ══════════════════════════════════════════════════════════════════
   const handleResetSlots = async () => {
     if (!selectedEpreuveId) return;
-    setReloadingRef.current = true;
+    setResetLoading(true);
     try {
       // Envoyer uniquement l'epreuveId — le serveur se charge de retrouver ET supprimer TOUS les créneaux
       const res = await api.post("/slots/reset", {
@@ -731,7 +731,7 @@ export default function PlanningPage() {
       console.error("Erreur reset:", e);
       toast("Erreur lors de la réinitialisation", "error");
     } finally {
-      setReloadingRef.current = false;
+      setResetLoading(false);
     }
   };
 
@@ -1954,7 +1954,7 @@ function GlobalEventsAdmin({
     } catch {
       setEvents([]);
     } finally {
-      loadingRef.current = false;
+      setLoading(false);
     }
   }, []);
 
