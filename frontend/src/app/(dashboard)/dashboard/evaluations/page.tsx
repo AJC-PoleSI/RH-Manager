@@ -141,7 +141,8 @@ function AdminView() {
                 lastName: editForm.lastName,
                 email: editForm.email,
                 pole: editForm.pole,
-                isAdmin: editForm.isAdmin,
+                // Never send isAdmin:false for an admin — protected at API level too
+                isAdmin: editingMember.isAdmin ? true : editForm.isAdmin,
             };
             if (editForm.password) {
                 payload.password = editForm.password;
@@ -534,9 +535,17 @@ function AdminView() {
                                     id="editIsAdmin"
                                     checked={editForm.isAdmin}
                                     onChange={e => setEditForm({ ...editForm, isAdmin: e.target.checked })}
-                                    className="rounded border-gray-300"
+                                    disabled={editingMember?.isAdmin}
+                                    className="rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
-                                <label htmlFor="editIsAdmin" className="text-sm text-gray-700">Administrateur</label>
+                                <label htmlFor="editIsAdmin" className="text-sm text-gray-700">
+                                    Administrateur
+                                    {editingMember?.isAdmin && (
+                                        <span className="ml-2 text-xs text-gray-500 italic">
+                                            (verrouillé — un admin reste admin)
+                                        </span>
+                                    )}
+                                </label>
                             </div>
                         </div>
 

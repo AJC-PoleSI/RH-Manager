@@ -48,6 +48,28 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const body = await req.json();
     const { email, password, isAdmin, firstName, lastName, pole } = body;
 
+    // ══════════════════════════════════════════════════════════════════
+    // SECURITY: An admin account must remain admin.
+    // If the caller tries to set isAdmin=false on a current admin → 403.
+    // Same protection model as DELETE (admins are immutable from below).
+    // ══════════════════════════════════════════════════════════════════
+    if (isAdmin === false) {
+      const { data: targetMember } = await supabaseAdmin
+        .from("members")
+        .select("is_admin")
+        .eq("id", id)
+        .single();
+      if (targetMember?.is_admin) {
+        return Response.json(
+          {
+            error:
+              "Impossible de retirer le rôle administrateur à un compte admin",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (email !== undefined) updateData.email = email;
     if (isAdmin !== undefined) updateData.is_admin = isAdmin;
