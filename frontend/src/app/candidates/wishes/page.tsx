@@ -24,7 +24,7 @@ interface State {
   loading: boolean;
   saving: boolean;
   saved: boolean;
-  state.activeTourNumber: number;
+  activeTourNumber: number;
   activeTourStatus: string;
 }
 
@@ -44,7 +44,7 @@ const initialState: State = {
   loading: true,
   saving: false,
   saved: false,
-  state.activeTourNumber: 0,
+  activeTourNumber: 0,
   activeTourStatus: "",
 };
 
@@ -53,7 +53,7 @@ function reducer(state: State, action: Action): State {
     case "SET_POLES":
       return { ...state, selectedPoles: action.payload };
     case "ADD_POLE":
-      if (state.state.selectedPoles.length >= 3 || state.selectedPoles.includes(action.payload))
+      if (state.selectedPoles.length >= 3 || state.selectedPoles.includes(action.payload))
         return state;
       return {
         ...state,
@@ -63,7 +63,7 @@ function reducer(state: State, action: Action): State {
     case "REMOVE_POLE":
       return {
         ...state,
-        selectedPoles: state.state.selectedPoles.filter((_, i) => i !== action.payload),
+        selectedPoles: state.selectedPoles.filter((_, i) => i !== action.payload),
         saved: false,
       };
     case "MOVE_UP":
@@ -75,7 +75,7 @@ function reducer(state: State, action: Action): State {
       ];
       return { ...state, selectedPoles: upPoles, saved: false };
     case "MOVE_DOWN":
-      if (action.payload === state.state.selectedPoles.length - 1) return state;
+      if (action.payload === state.selectedPoles.length - 1) return state;
       const downPoles = [...state.selectedPoles];
       [downPoles[action.payload], downPoles[action.payload + 1]] = [
         downPoles[action.payload + 1],
@@ -91,7 +91,7 @@ function reducer(state: State, action: Action): State {
     case "SET_TOUR":
       return {
         ...state,
-        state.activeTourNumber: action.payload.number,
+        activeTourNumber: action.payload.number,
         activeTourStatus: action.payload.status,
       };
     default:
@@ -166,8 +166,8 @@ export default function CandidateWishesPage() {
     fetchWishes();
   }, [user?.id]);
 
-  const isDefinitif = state.state.activeTourNumber >= 3;
-  const canRank = state.state.activeTourNumber >= 2;
+  const isDefinitif = state.activeTourNumber >= 3;
+  const canRank = state.activeTourNumber >= 2;
   const isTourTermine = state.activeTourStatus === "termine";
 
   const addPole = (pole: string) => {
@@ -190,7 +190,7 @@ export default function CandidateWishesPage() {
     if (!user?.id) return;
     dispatch({ type: "SET_SAVING", payload: true });
     try {
-      const wishes = state.state.selectedPoles.map((pole, index) => ({
+      const wishes = state.selectedPoles.map((pole, index) => ({
         pole,
         rank: index + 1,
       }));
@@ -216,7 +216,7 @@ export default function CandidateWishesPage() {
   }
 
   // Tour 1: informational message only, no ranking
-  if (state.state.activeTourNumber <= 1) {
+  if (state.activeTourNumber <= 1) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
