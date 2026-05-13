@@ -468,7 +468,7 @@ function AdminView() {
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-5">
-                            <h1 className="text-lg font-semibold text-gray-900">Modifier l&apos;évaluateur</h3>
+                            <h1 className="text-lg font-semibold text-gray-900">Modifier l&apos;évaluateur</h1>
                             <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600">
                                 <X size={20} />
                             </button>

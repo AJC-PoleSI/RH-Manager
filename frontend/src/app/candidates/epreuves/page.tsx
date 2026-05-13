@@ -573,7 +573,7 @@ export default function CandidateEpreuvesPage() {
                               À venir
                             </span>
                           )}
-                        </h2>
+                        </h1>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {items.map((ep) => {
@@ -598,7 +598,7 @@ export default function CandidateEpreuvesPage() {
                                 <div className="p-4">
                                   <div className="flex items-start justify-between mb-3">
                                     <div className="flex-1 min-w-0">
-                                      <h1 className="text-[15px] font-semibold text-gray-900 leading-tight">{ep.name}</h3>
+                                      <h1 className="text-[15px] font-semibold text-gray-900 leading-tight">{ep.name}</h1>
                                       {ep.presentedBy && (
                                         <p className="text-xs text-gray-400 mt-0.5">Présenté par {ep.presentedBy}</p>
                                       )}
@@ -755,7 +755,7 @@ export default function CandidateEpreuvesPage() {
                     {/* Close button */}
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h1 className="text-xl font-semibold text-gray-900">{epreuveName}</h3>
+                        <h1 className="text-xl font-semibold text-gray-900">{epreuveName}</h1>
                         {selectedSlot.label && (
                           <p className="text-sm text-gray-500 mt-0.5">{selectedSlot.label}</p>
                         )}

@@ -307,7 +307,7 @@ export default function EpreuvesPage() {
 
                             {/* Planning configuration */}
                             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
-                                <h1 className="text-sm font-semibold text-blue-800">Configuration Planning</h3>
+                                <h1 className="text-sm font-semibold text-blue-800">Configuration Planning</h1>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <Label className="text-xs">Roulement (min)</Label>

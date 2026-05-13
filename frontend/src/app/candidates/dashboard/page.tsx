@@ -549,7 +549,7 @@ export default function CandidateCalendarPage() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">{selectedEvent.title}</h3>
+                  <h1 className="text-xl font-semibold text-gray-900">{selectedEvent.title}</h1>
                   <span
                     className={`inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                       typeStyles[selectedEvent.type]?.bg || ""

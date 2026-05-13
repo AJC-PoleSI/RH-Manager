@@ -175,7 +175,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
         return (
             <div className="flex flex-col items-center justify-center h-96 gap-6">
                 <div className="text-6xl">🎉</div>
-                <h1 className="text-2xl font-semibold text-gray-800">Tous les candidats ont été passés en revue !</h2>
+                <h1 className="text-2xl font-semibold text-gray-800">Tous les candidats ont été passés en revue !</h1>
                 <p className="text-gray-500">
                     {processedCount} / {candidates.length} candidats délibérés pour le Tour {selectedTour}
                 </p>
@@ -260,7 +260,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                             <div>
                                 <h1 className="text-2xl font-semibold tracking-tight">
                                     {currentCandidate.firstName} {currentCandidate.lastName}
-                                </h2>
+                                </h1>
                                 <p className="text-slate-300 text-sm mt-1">{currentCandidate.email}</p>
                                 {currentCandidate.phone && (
                                     <p className="text-slate-400 text-xs mt-0.5">{currentCandidate.phone}</p>
@@ -315,7 +315,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                             <h1 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1.5">
                                 <Award size={13} />
                                 Évaluations Tour {selectedTour} ({evals.length})
-                            </h3>
+                            </h1>
                             {evals.length === 0 ? (
                                 <p className="text-sm text-gray-400 italic">Aucune évaluation pour ce tour</p>
                             ) : (
@@ -412,7 +412,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                         <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <HelpCircle size={20} className="text-orange-500" />
                             Mise sous réserve
-                        </h3>
+                        </h1>
                         <p className="text-sm text-gray-500">
                             Renseignez les points + et - pour <strong>{currentCandidate?.firstName} {currentCandidate?.lastName}</strong>
                         </p>

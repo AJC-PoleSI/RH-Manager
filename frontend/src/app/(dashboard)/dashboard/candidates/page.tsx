@@ -439,7 +439,7 @@ export default function CandidatesPage() {
                                         {selectedCandidate.firstName?.[0]}{selectedCandidate.lastName?.[0]}
                                     </div>
                                     <div>
-                                        <h1 className="text-xl font-semibold text-gray-900">{selectedCandidate.firstName} {selectedCandidate.lastName}</h2>
+                                        <h1 className="text-xl font-semibold text-gray-900">{selectedCandidate.firstName} {selectedCandidate.lastName}</h1>
                                         <p className="text-sm text-gray-500">{selectedCandidate.email}</p>
                                         <div className="flex gap-4 mt-1 text-xs text-gray-400">
                                             {selectedCandidate.phone && <span>{selectedCandidate.phone}</span>}

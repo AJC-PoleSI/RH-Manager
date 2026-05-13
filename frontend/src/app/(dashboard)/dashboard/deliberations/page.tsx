@@ -658,7 +658,7 @@ export default function DeliberationsPage() {
                   className="w-full flex items-center gap-3 mb-3 group"
                 >
                   <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: poleColor(pole) }} />
-                  <h1 className="font-semibold text-lg text-gray-900">{pole}</h3>
+                  <h1 className="font-semibold text-lg text-gray-900">{pole}</h1>
                   <span className="text-sm text-gray-400">{poleCandidates.length}</span>
                   <div className="flex-1 h-px bg-gray-200" />
                   <svg
@@ -845,7 +845,7 @@ export default function DeliberationsPage() {
                             {getInitials(c)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h2>
+                            <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h1>
                             <p className="text-sm text-gray-500 mt-0.5">{c.formation || "Formation non renseignee"}</p>
                             {/* Pole wishes */}
                             {c.wishes && c.wishes.length > 0 && (
@@ -1140,7 +1140,7 @@ export default function DeliberationsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h1 className="text-lg font-semibold text-gray-900">Candidats en reserve ({reserveCandidates.length})</h3>
+              <h1 className="text-lg font-semibold text-gray-900">Candidats en reserve ({reserveCandidates.length})</h1>
               <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
@@ -1182,7 +1182,7 @@ export default function DeliberationsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h1 className="text-lg font-semibold text-gray-900">Valider et Envoyer</h3>
+              <h1 className="text-lg font-semibold text-gray-900">Valider et Envoyer</h1>
               <button onClick={() => setShowValidateModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>

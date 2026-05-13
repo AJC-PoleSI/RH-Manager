@@ -377,7 +377,7 @@ export default function DashboardPage() {
 
                     {/* Candidate Progression Donut */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Progression des candidats</h2>
+                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Progression des candidats</h1>
                         <div className="flex items-center gap-8">
                             <div className="relative flex-shrink-0">
                                 <ProgressRing pct={pctAccepted + pctRefused + pctWaiting} color="#6366f1" size={120} stroke={10} />
@@ -412,7 +412,7 @@ export default function DashboardPage() {
 
                     {/* Upcoming epreuves */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Prochaines épreuves</h2>
+                        <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Prochaines épreuves</h1>
                         {epreuves.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-48 text-gray-300">
                                 <span className="text-4xl mb-3">📭</span>
@@ -446,7 +446,7 @@ export default function DashboardPage() {
 
                 {/* ── TOUR PROGRESS TIMELINE ────────────── */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-6">Progression des tours</h2>
+                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-6">Progression des tours</h1>
                     <div className="flex items-center gap-0">
                         {Array.from({ length: Math.max(toursCreated, 3) }).map((_, idx) => {
                             const tourNum = idx + 1;
@@ -482,7 +482,7 @@ export default function DashboardPage() {
 
                 {/* ── QUICK ACCESS ──────────────────────── */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h2>
+                    <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h1>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {quickLinks.map((link) => (
                             <Link
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
                     <h1 className="text-lg font-semibold text-gray-900 capitalize">
                         {format(currentDate, 'MMMM yyyy', { locale: fr })}
-                    </h2>
+                    </h1>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setCurrentDate(addDays(currentDate, -7))}

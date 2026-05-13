@@ -44,7 +44,7 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
         return (
             <div className="flex flex-col items-center justify-center h-96 gap-4">
                 <div className="text-5xl">✨</div>
-                <h1 className="text-xl font-semibold text-gray-700">Aucun candidat sous-réserve</h2>
+                <h1 className="text-xl font-semibold text-gray-700">Aucun candidat sous-réserve</h1>
                 <p className="text-gray-500 text-sm">Tous les candidats ont été tranchés pour le Tour {selectedTour}</p>
                 <button onClick={onBack} className="mt-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <ArrowLeft size={16} /> Retour
@@ -61,7 +61,7 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
                         <ArrowLeft size={20} />
                     </button>
                     <div>
-                        <h1 className="text-xl font-semibold text-gray-800">Candidats sous-réserve — Tour {selectedTour}</h2>
+                        <h1 className="text-xl font-semibold text-gray-800">Candidats sous-réserve — Tour {selectedTour}</h1>
                         <p className="text-sm text-gray-500">{reserveCandidates.length} candidat{reserveCandidates.length > 1 ? 's' : ''} à trancher</p>
                     </div>
                 </div>
@@ -83,7 +83,7 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
                             <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-5 py-4 border-b border-orange-100">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <h1 className="text-lg font-semibold text-gray-800">{c.firstName} {c.lastName}</h3>
+                                        <h1 className="text-lg font-semibold text-gray-800">{c.firstName} {c.lastName}</h1>
                                         <p className="text-sm text-gray-500">{c.email}</p>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -115,7 +115,7 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
                                 <div>
                                     <h1 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                                         <Award size={12} /> Évaluations ({evals.length})
-                                    </h4>
+                                    </h1>
                                     {evals.length === 0 ? (
                                         <p className="text-xs text-gray-400 italic">Aucune évaluation</p>
                                     ) : (
