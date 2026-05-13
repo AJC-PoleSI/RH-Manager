@@ -64,8 +64,10 @@ export function decryptData(encrypted: EncryptedData): string {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  let decrypted = decipher.update(ciphertext, "hex", "utf-8");
-  decrypted += decipher.final("utf-8");
+  const decrypted = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
 
-  return decrypted;
+  return decrypted.toString("utf-8");
 }

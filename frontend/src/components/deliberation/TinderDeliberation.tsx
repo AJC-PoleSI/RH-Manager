@@ -324,7 +324,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                                         const details = getScoreDetails(e);
                                         const total = getTotalScore(e);
                                         return (
-                                            <div key={`wish-${w.pole}-${w.rank}`} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                                            <div key={e.id || i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                                                 <div className="flex justify-between items-start mb-1.5">
                                                     <div>
                                                         <span className="font-bold text-gray-800 text-sm">{e.epreuve?.name}</span>

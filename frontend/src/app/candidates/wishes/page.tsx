@@ -501,18 +501,18 @@ export default function CandidateWishesPage() {
         <div className="flex justify-end">
           <button
             onClick={handleSave}
-            disabled={saving || state.selectedPoles.length === 0}
+            disabled={state.saving || state.selectedPoles.length === 0}
             className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
-              saved
+              state.saved
                 ? "bg-green-600 text-white"
                 : isDefinitif
                   ? "bg-red-600 hover:bg-red-700 text-white"
                   : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
           >
-            {saving
+            {state.saving
               ? "Sauvegarde..."
-              : saved
+              : state.saved
                 ? "Sauvegardé ✓"
                 : isDefinitif
                   ? "Confirmer mes choix définitifs"
