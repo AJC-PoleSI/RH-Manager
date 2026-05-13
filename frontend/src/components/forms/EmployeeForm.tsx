@@ -211,7 +211,7 @@ export function EmployeeForm({
             htmlFor="hire_date"
             className="block text-sm font-medium text-gray-700"
           >
-            Date d'embauche
+            Date d&apos;embauche
           </label>
           <input
             type="date"

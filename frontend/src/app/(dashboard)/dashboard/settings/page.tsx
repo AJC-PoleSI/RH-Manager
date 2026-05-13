@@ -168,6 +168,7 @@ export default function CreationPage() {
     fetchSettings();
     fetchTours();
     fetchEpreuves();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Convert a UTC ISO string from DB to local datetime-local input format

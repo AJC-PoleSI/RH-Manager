@@ -134,7 +134,7 @@ export default async function EmployeeDetailPage({
             </div>
             <div>
               <dt className="text-sm font-medium text-gray-500">
-                Date d'embauche
+                Date d&apos;embauche
               </dt>
               <dd className="mt-1 text-sm text-gray-900">
                 {decrypted.hire_date || "-"}

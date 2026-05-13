@@ -100,7 +100,7 @@ export default async function EditEmployeePage({
           Modifier {decrypted.first_name} {decrypted.last_name}
         </h1>
         <p className="mt-2 text-gray-600">
-          Mettez à jour les informations de l'employé
+          Mettez à jour les informations de l&apos;employé
         </p>
       </div>
 
