@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { runAutoAllocate } from "@/lib/auto-allocate";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -156,6 +157,15 @@ export async function PUT(req: NextRequest) {
 
         if (insertError) throw insertError;
       }
+    }
+
+    // Background : re-run the auto-allocation so the assignments stay in sync
+    // with the member's new availabilities. Errors are swallowed because
+    // the availability save itself succeeded.
+    try {
+      await runAutoAllocate();
+    } catch (e) {
+      console.error("Auto-allocate after availability change failed:", e);
     }
 
     return Response.json({ message: "Availabilities updated" });

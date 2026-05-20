@@ -610,37 +610,31 @@ export default function PlanningPage() {
     }
   };
 
+  // Publier aux examinateurs : met les créneaux en "open" (visibles)
+  // L'allocation auto tourne en arrière-plan à chaque changement de dispo.
   const handleOuvrirInscriptions = async () => {
     if (!selectedEpreuveId) return;
     try {
-      toast("Génération et assignation en cours...", "info");
-      // Force assign before publishing
-      await api.post("/slots/auto-assign", {
-        epreuveId: selectedEpreuveId,
-        sallesParCreneau: logNbSalles,
-        evalParSalle: logMinEval,
-      });
-
-      // Publish all draft slots for this epreuve
+      // Publier tous les créneaux draft/open de l'épreuve
       const res = await api.get("/slots/all");
-      const draftSlots = (res.data || []).filter(
+      const toPublish = (res.data || []).filter(
         (s: any) =>
-          (s.epreuve_id === selectedEpreuveId ||
-            s.epreuveId === selectedEpreuveId) &&
-          s.status === "draft",
+          (s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId) &&
+          (s.status === "draft" || s.status === "open" || s.status === "ready"),
       );
-      if (draftSlots.length > 0) {
+      if (toPublish.length > 0) {
         await api.put("/slots/status/bulk", {
-          slotIds: draftSlots.map((s: any) => s.id),
-          status: "published",
+          slotIds: toPublish.map((s: any) => s.id),
+          status: "open",
         });
       }
-      // Toggle workflow state
-      await api.put("/settings", { planning_visible_candidats: "false" });
-      setPlanningVisible(false);
+      // Déclencher l'allocation auto en arrière-plan (sans bloquer l'UX)
+      api.post("/slots/auto-allocate", { epreuveId: selectedEpreuveId }).catch(
+        (e) => console.warn("auto-allocate background error:", e),
+      );
       setInscriptionsOuvertes(true);
       toast(
-        `${draftSlots.length} créneau(x) générés et publiés avec succès`,
+        `${toPublish.length} créneau(x) publiés aux examinateurs ✅ — l'algo s'exécute en arrière-plan`,
         "success",
       );
       fetchSlotData();
@@ -1100,70 +1094,98 @@ export default function PlanningPage() {
             {/* ══════════════════════════════════════════════════════════════════
                             PANNEAU DE CONTRÔLE DU WORKFLOW
                             ══════════════════════════════════════════════════════════════════ */}
+            {/* ═══ ALERTE CRITIQUE : créneaux publiés sans examinateur ═══ */}
+            {(() => {
+              const criticalSlots = inscriptionData.filter(
+                (s: any) =>
+                  (s.status === "open" || s.status === "ready" || s.status === "published") &&
+                  (!s.members || s.members.length === 0),
+              );
+              if (criticalSlots.length === 0) return null;
+              return (
+                <div className="bg-red-50 border-2 border-red-400 rounded-xl p-4 flex items-start gap-3">
+                  <span className="text-2xl flex-shrink-0">🚨</span>
+                  <div>
+                    <p className="text-sm font-bold text-red-800">
+                      Alerte critique — {criticalSlots.length} créneau(x) sans aucun examinateur
+                    </p>
+                    <p className="text-xs text-red-600 mt-1">
+                      Ces créneaux sont publiés mais aucun examinateur n&apos;est affecté. Des candidats pourraient s&apos;y inscrire sans jury.
+                    </p>
+                    <ul className="mt-2 space-y-0.5">
+                      {criticalSlots.slice(0, 5).map((s: any) => (
+                        <li key={s.id} className="text-xs text-red-700 font-medium">
+                          · {s.date ? new Date(s.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) : "—"} {String(s.start_time || "").slice(0,5)} — {s.room || "?"}
+                        </li>
+                      ))}
+                      {criticalSlots.length > 5 && (
+                        <li className="text-xs text-red-500 italic">...et {criticalSlots.length - 5} autres</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-4">
                 🚦 Gestion du workflow
               </h3>
               <p className="text-xs text-gray-500 mb-5">
-                Gérez les étapes de publication du planning pour cette épreuve.
+                Créez les créneaux, publiez-les aux examinateurs, puis aux candidats.
               </p>
 
               {/* Workflow steps */}
               <div className="space-y-4">
-                {/* Saisie toujours ouverte — info, pas de verrou */}
-                <div className="flex items-center justify-between p-4 rounded-xl border bg-green-50 border-green-200">
+                {/* BOUTON 1 — Publier aux examinateurs */}
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${inscriptionsOuvertes ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-green-200 text-green-800">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${inscriptionsOuvertes ? "bg-blue-200 text-blue-800" : "bg-gray-200 text-gray-600"}`}>
                       1
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        Inscription des examinateurs
-                      </p>
+                      <p className="text-sm font-semibold text-gray-800">Publier aux examinateurs</p>
                       <p className="text-xs text-gray-500">
-                        ✅ Toujours ouverte — les examinateurs peuvent
-                        s&apos;inscrire et se désinscrire des créneaux à tout
-                        moment jusqu&apos;à l&apos;épreuve.
+                        {inscriptionsOuvertes
+                          ? `✅ Publiés — examinateurs inscrivent leurs dispos · l'algo sélectionne ${logMinEval} par créneau automatiquement`
+                          : "⏸️ Créneaux non publiés — les examinateurs ne voient rien"}
                       </p>
                     </div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <button
+                      onClick={handleOuvrirInscriptions}
+                      disabled={!selectedEpreuveId || existingSlots.length === 0}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {inscriptionsOuvertes ? "Republier aux examinateurs" : "Publier aux examinateurs"}
+                    </button>
                   </div>
                 </div>
 
                 {/* Récapitulatif des inscriptions */}
                 {memberAvailsSummary.length > 0 && (
-                  <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50/50">
+                  <div className="p-4 border border-gray-200 rounded-xl bg-gray-50/50">
                     <h4 className="text-sm font-semibold mb-3 text-gray-800">
-                      Récapitulatif des inscriptions ({memberAvailsSummary.length}{" "}
-                      membre{memberAvailsSummary.length > 1 ? "s" : ""})
+                      Récapitulatif des disponibilités ({memberAvailsSummary.length} membre{memberAvailsSummary.length > 1 ? "s" : ""})
                     </h4>
-                    <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-100 bg-white">
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-100 bg-white">
                       <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0 border-b border-gray-100">
                           <tr>
-                            <th className="px-4 py-3">Membre (Email)</th>
-                            <th className="px-4 py-3 text-center">
-                              Créneaux choisis
-                            </th>
-                            <th className="px-4 py-3">Détail</th>
+                            <th className="px-4 py-2">Membre</th>
+                            <th className="px-4 py-2 text-center">Créneaux</th>
+                            <th className="px-4 py-2">Détail</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {memberAvailsSummary.map((mem, idx) => (
                             <tr key={idx} className="hover:bg-gray-50/50">
-                              <td className="px-4 py-3 font-medium text-gray-800">
-                                {mem.email}
+                              <td className="px-4 py-2 font-medium text-gray-800">{mem.email}</td>
+                              <td className="px-4 py-2 text-center">
+                                <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">{mem.count}</span>
                               </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">
-                                  {mem.count}
-                                </span>
-                              </td>
-                              <td
-                                className="px-4 py-3 text-gray-500 text-xs truncate max-w-xs"
-                                title={mem.details}
-                              >
-                                {mem.details}
-                              </td>
+                              <td className="px-4 py-2 text-gray-500 text-xs truncate max-w-xs" title={mem.details}>{mem.details}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1172,88 +1194,28 @@ export default function PlanningPage() {
                   </div>
                 )}
 
-                {/* ÉTAPE 2 — Lancer l'allocation auto */}
-                <div
-                  className={`flex items-center justify-between p-4 rounded-xl border ${
-                    inscriptionsOuvertes
-                      ? "bg-blue-50 border-blue-200"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
+                {/* BOUTON 2 — Publier aux candidats */}
+                <div className={`flex items-center justify-between p-4 rounded-xl border ${planningVisible ? "bg-purple-50 border-purple-200" : "bg-gray-50 border-gray-200"}`}>
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        inscriptionsOuvertes
-                          ? "bg-blue-200 text-blue-800"
-                          : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${planningVisible ? "bg-purple-200 text-purple-800" : "bg-gray-200 text-gray-600"}`}>
                       2
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        Allocation automatique
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {inscriptionsOuvertes
-                          ? "✅ Allocation effectuée — l'algo a sélectionné les examinateurs selon le quota"
-                          : `⏸️ Pas encore lancée — l'algo choisira ${logMinEval} évaluateur(s) par créneau (min. configuré)`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button
-                      onClick={handleOuvrirInscriptions}
-                      disabled={!selectedEpreuveId}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {inscriptionsOuvertes ? "Relancer l'allocation" : "Lancer l'allocation"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* ÉTAPE 3 — Publier pour les candidats */}
-                <div
-                  className={`flex items-center justify-between p-4 rounded-xl border ${
-                    planningVisible
-                      ? "bg-purple-50 border-purple-200"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        planningVisible
-                          ? "bg-purple-200 text-purple-800"
-                          : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
-                      3
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">
-                        Visible pour les candidats
-                      </p>
+                      <p className="text-sm font-semibold text-gray-800">Publier aux candidats</p>
                       <p className="text-xs text-gray-500">
                         {planningVisible
-                          ? "✅ Visible — les candidats peuvent voir le planning et s'inscrire aux créneaux"
-                          : "⏸️ Masqué — les candidats ne voient pas le planning"}
+                          ? "✅ Publié — les candidats peuvent voir les créneaux et s'inscrire"
+                          : "⏸️ Masqué — les candidats ne voient pas encore le planning"}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     {planningVisible ? (
-                      <button
-                        onClick={handleMasquerCandidats}
-                        className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-200 rounded-lg hover:bg-red-200 transition-colors"
-                      >
+                      <button onClick={handleMasquerCandidats} className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-200 rounded-lg hover:bg-red-200 transition-colors">
                         Masquer le planning
                       </button>
                     ) : (
-                      <button
-                        onClick={handlePublierCandidats}
-                        className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-                      >
+                      <button onClick={handlePublierCandidats} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors">
                         Publier aux candidats
                       </button>
                     )}

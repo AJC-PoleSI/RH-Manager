@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { broadcastReplacementRequest } from "@/lib/auto-allocate";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/toggle-member — toggle member assignment on a slot
@@ -105,6 +106,44 @@ export async function POST(req: NextRequest) {
             .from("evaluation_slots")
             .update({ status: "open" })
             .eq("id", slotId);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // NOTIFICATION DE REMPLACEMENT — règles métier :
+        //   1. Le planning est publié aux candidats (slot.status === 'published')
+        //   2. Il y avait initialement assez d'examinateurs sur ce créneau
+        //   3. L'un d'eux s'est désinscrit (on est dans la branche remove)
+        //   4. PERSONNE n'a pris sa place (promotedMemberId === null)
+        // → broadcast à tous les membres non encore affectés sur ce créneau
+        //   pour demander un remplaçant.
+        // ────────────────────────────────────────────────────────────────
+        if (
+          slot.status === "published" &&
+          !promotedMemberId &&
+          newCount < (slot.min_members || 0)
+        ) {
+          const { data: allMembers } = await supabaseAdmin
+            .from("members")
+            .select("id");
+
+          const targets = (allMembers || [])
+            .map((m: any) => m.id)
+            .filter((id: string) => id !== memberId);
+
+          const dateStr = slot.date
+            ? new Date(slot.date).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })
+            : "";
+          const startTime = String(slot.start_time || "").substring(0, 5);
+          const room = slot.room || "—";
+
+          await broadcastReplacementRequest(
+            targets,
+            `🆘 Besoin d'un remplaçant — ${dateStr} ${startTime} (${room}). Un examinateur s'est désinscrit et personne en file d'attente. Merci de vous porter volontaire si disponible.`,
+          );
         }
       }
 
