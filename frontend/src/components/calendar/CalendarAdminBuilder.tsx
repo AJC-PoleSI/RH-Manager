@@ -140,6 +140,7 @@ export default function CalendarAdminBuilder({
   const [bulkGenEnd, setBulkGenEnd] = useState("18:00");
   const [bulkGenCount, setBulkGenCount] = useState(10); // nombre direct de créneaux/jour
   const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [bulkNbSalles, setBulkNbSalles] = useState<number | null>(null); // null = utiliser la valeur de l'épreuve
 
   // Refs
   const calendarRef = useRef<FullCalendar>(null);
@@ -151,6 +152,8 @@ export default function CalendarAdminBuilder({
     epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
   const totalSlotDuration = durationMinutes + roulementMinutes;
   const nbSalles = parseInt(epreuve?.nbSalles || epreuve?.nb_salles || "1");
+  // Nombre de salles effectif pour la génération en masse (override si bulkNbSalles est défini)
+  const effectiveBulkNbSalles = bulkNbSalles !== null ? bulkNbSalles : nbSalles;
 
   // Build unique room list from existing slots + expected rooms
   const roomList = useMemo(() => {
@@ -652,7 +655,7 @@ export default function CalendarAdminBuilder({
 
   // Total slots to create = count per day × selected days × rooms
   const bulkSlotCount = bulkGenDays.size > 0
-    ? bulkGenCount * bulkGenDays.size * Math.max(1, roomList.length)
+    ? bulkGenCount * bulkGenDays.size * Math.max(1, effectiveBulkNbSalles)
     : 0;
 
   // Nombre max de créneaux qui rentrent dans la plage horaire (info)
@@ -685,7 +688,7 @@ export default function CalendarAdminBuilder({
       toast("Sélectionnez au moins un jour", "error");
       return;
     }
-    const rooms = Array.from({ length: Math.max(1, roomList.length) }, (_, i) => i + 1);
+    const rooms = Array.from({ length: Math.max(1, effectiveBulkNbSalles) }, (_, i) => i + 1);
     setBulkGenerating(true);
     let totalCreated = 0;
     const sortedDays = Array.from(bulkGenDays).sort();
@@ -865,8 +868,44 @@ export default function CalendarAdminBuilder({
               ⚡ Génération rapide
             </p>
             <span className="text-[11px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-              {durationMinutes}min épreuve + {roulementMinutes}min roulement = {totalSlotDuration}min/créneau · {roomList.length} salle(s)
+              {durationMinutes}min épreuve + {roulementMinutes}min roulement = {totalSlotDuration}min/créneau · {effectiveBulkNbSalles} salle(s)
             </span>
+          </div>
+
+          {/* Nombre de salles pour cette génération */}
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">Nombre de salles :</label>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setBulkNbSalles(n === effectiveBulkNbSalles && bulkNbSalles !== null ? null : n)}
+                  className={`w-8 h-8 rounded-lg text-sm font-bold border transition-colors ${
+                    effectiveBulkNbSalles === n
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={effectiveBulkNbSalles}
+                onChange={(e) => setBulkNbSalles(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center"
+              />
+              {bulkNbSalles !== null && (
+                <button
+                  onClick={() => setBulkNbSalles(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Réinitialiser ({nbSalles})
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Plage horaire (FIXE) */}
@@ -908,7 +947,7 @@ export default function CalendarAdminBuilder({
                   : "border-blue-400 bg-white text-blue-700"
               }`}
             />
-            <span className="text-xs text-gray-500">× {Math.max(1, roomList.length)} salle(s)</span>
+            <span className="text-xs text-gray-500">× {Math.max(1, effectiveBulkNbSalles)} salle(s)</span>
             {bulkGenCount > maxSlotsInRange && (
               <span className="text-xs text-red-600 font-medium">
                 ⚠ Trop pour cette plage (max {maxSlotsInRange})

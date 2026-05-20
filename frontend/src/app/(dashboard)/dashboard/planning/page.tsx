@@ -100,6 +100,7 @@ export default function PlanningPage() {
   const [saisiOuverte, setSaisiOuverte] = useState(false);
   const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
   const [existingSlots, setExistingSlots] = useState<any[]>([]);
+  const [allSlotsGlobal, setAllSlotsGlobal] = useState<any[]>([]); // Tous les créneaux de toutes les épreuves pour la vue globale
   const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
   const [repartitionLoading, setRepartitionLoading] = useState(false);
   const [repartitionResult, setRepartitionResult] = useState<any>(null);
@@ -174,10 +175,22 @@ export default function PlanningPage() {
     }
   }, []);
 
+  // Fetch ALL slots (all épreuves) for the global admin overview calendar
+  const fetchAllSlotsGlobal = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get("/slots/all");
+      setAllSlotsGlobal(res.data || []);
+    } catch (e) {
+      console.error("Erreur chargement créneaux globaux:", e);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     fetchEpreuves();
     fetchGlobalCalendarEvents();
-  }, [fetchEpreuves, fetchGlobalCalendarEvents]);
+    fetchAllSlotsGlobal();
+  }, [fetchEpreuves, fetchGlobalCalendarEvents, fetchAllSlotsGlobal]);
 
   // ══════════════════════════════════════════════════════════════════
   // PERSISTANCE : Charger l'état admin depuis les settings au montage
@@ -495,16 +508,13 @@ export default function PlanningPage() {
     fetchSaisieStatus();
   }, [fetchSaisieStatus]);
 
-  // Quand saisie fermée + planning généré → charger les créneaux du membre
+  // Charger les créneaux assignés au membre dès le montage (sans condition sur la saisie)
+  // Ainsi, dès qu'un examinateur s'inscrit ou est assigné, ses créneaux apparaissent
   useEffect(() => {
-    if (
-      !isAdmin &&
-      saisieOuverteMember === false &&
-      planningGenerated === true
-    ) {
+    if (!isAdmin) {
       fetchMySlots();
     }
-  }, [isAdmin, saisieOuverteMember, planningGenerated, fetchMySlots]);
+  }, [isAdmin, fetchMySlots]);
 
   // Helper: get all selected slots across other épreuves (for anti-doublon)
   const getConflictingSlots = (currentEpreuveId: string): Set<string> => {
@@ -902,7 +912,7 @@ export default function PlanningPage() {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-200 border border-purple-400"></span>Aucun examinateur</span>
           </div>
 
-          {existingSlots.length === 0 && globalEvents.length === 0 ? (
+          {allSlotsGlobal.length === 0 && globalEvents.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
               <p className="text-sm">Aucun événement ou créneau généré.</p>
             </div>
@@ -912,8 +922,8 @@ export default function PlanningPage() {
                 const dayDate = addDays(currentAdminWeek, i);
                 const dateString = dayDate.toISOString().split("T")[0];
 
-                // TOUS les slots du jour (pas de filtre d'epreuve)
-                const daySlots = existingSlots
+                // TOUS les slots du jour (toutes épreuves, sans filtre)
+                const daySlots = allSlotsGlobal
                   .filter((slot: any) => {
                     if (!slot.date) return false;
                     return slot.date.split("T")[0] === dateString;
@@ -1121,6 +1131,7 @@ export default function PlanningPage() {
               toast={toast}
               onUpdate={() => {
                 fetchSlotData();
+                fetchAllSlotsGlobal(); // Refresh vue globale aussi
               }}
               viewMode={activeTab}
             />
