@@ -1,15 +1,18 @@
+"use client";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function MentionsLegalesPage() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <Link
-          href="/"
+        <button
+          onClick={() => router.back()}
           className="text-sm text-blue-600 hover:underline mb-8 inline-block"
         >
-          &larr; Retour a l&apos;accueil
-        </Link>
+          &larr; Retour
+        </button>
 
         <h1 className="text-3xl font-semibold text-gray-900 mb-8">
           Mentions legales

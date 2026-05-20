@@ -1381,93 +1381,44 @@ export default function PlanningPage() {
     return epreuveColors[Math.abs(hash) % epreuveColors.length];
   };
 
-  // ── ÉTAT 0 : chargement ──
-  if (planningGenerated === null) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Mon planning</h1>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4" />
-            <p className="text-sm text-gray-500">
-              Chargement de votre planning...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Saisie toujours ouverte : afficher la grille de créneaux ──
-  // Les examinateurs peuvent s'inscrire / se désinscrire à tout moment.
-  // Si le planning a déjà été généré, on affiche en plus l'emploi du temps en bas.
-  if (!planningGenerated) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <CalendarMemberBuilder
-          memberId={user?.id || ""}
-          toast={toast}
-          epreuvesConfigured={epreuves}
-        />
-      </div>
-    );
-  }
-
-
-  // ── ÉTAT 3 : Saisie fermée + planning généré → EMPLOI DU TEMPS ──
+  // ── TOUJOURS : grille d'inscription + emploi du temps si assigné ──
+  // La saisie est permanente : l'examinateur voit les créneaux et
+  // peut s'inscrire / se désinscrire à tout moment.
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Mon emploi du temps
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {mySlots.length} creneau{mySlots.length > 1 ? "x" : ""}{" "}
-            d&apos;evaluation assigne{mySlots.length > 1 ? "s" : ""}
-          </p>
-        </div>
-        <button
-          onClick={fetchMySlots}
-          className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition-colors border border-gray-200"
-        >
-          Actualiser
-        </button>
-      </div>
 
-      {/* Bannière info */}
-      <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-        <span className="text-base mt-0.5">📅</span>
-        <p className="text-sm text-blue-800">
-          Cliquez sur un creneau pour voir les details : epreuve, salle,
-          candidat et co-evaluateurs.
-        </p>
-      </div>
+      {/* ─── Grille d'inscription (toujours visible) ─── */}
+      <CalendarMemberBuilder
+        memberId={user?.id || ""}
+        toast={toast}
+        epreuvesConfigured={epreuves}
+      />
 
-      {/* Emploi du temps par date */}
-      {mySlots.length === 0 ? (
-        <div className="text-center py-16">
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#F3F4F6",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 16px",
-            }}
-          >
-            <span style={{ fontSize: 28 }}>📭</span>
+      {/* ─── Emploi du temps (créneaux déjà assignés) ─── */}
+      {mySlots.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Mon emploi du temps ({mySlots.length} créneau{mySlots.length > 1 ? "x" : ""} assigné{mySlots.length > 1 ? "s" : ""})
+            </h2>
+            <button
+              onClick={fetchMySlots}
+              className="px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition-colors border border-gray-200"
+            >
+              Actualiser
+            </button>
           </div>
-          <p className="text-sm text-gray-500">
-            Aucun creneau ne vous a ete assigne pour le moment.
-          </p>
-        </div>
+          <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <span className="text-base mt-0.5">📅</span>
+            <p className="text-sm text-blue-800">
+              Créneaux où vous avez été sélectionné(e) comme évaluateur.
+            </p>
+          </div>
+        </>
+      )}
+
+      {mySlots.length === 0 ? (
+        <div className="hidden" />
       ) : (
         <div className="space-y-4">
           {sortedDates.map((dateKey) => {
