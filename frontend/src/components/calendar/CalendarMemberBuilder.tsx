@@ -62,14 +62,24 @@ export default function CalendarMemberBuilder({
           return false;
         }
 
-        // Filter 2: Vérifier que le jour est ouvert selon weeklySchedule
-        if (s.date && resSettings.data?.weeklySchedule) {
+        // Filter 2: Vérifier que le jour est ouvert
+        // weeklySchedule peut être un JSON string (API) ou un objet (contexte)
+        if (s.date) {
           const dateObj = new Date(s.date);
-          const dayKey = daysOfWeek[dateObj.getDay()];
-          const dayConfig = resSettings.data.weeklySchedule[dayKey];
+          const dayIndex = dateObj.getDay(); // 0=dim, 6=sam
+          const dayKey = daysOfWeek[dayIndex];
 
-          if (dayConfig && !dayConfig.isOpen) {
-            return false; // Jour fermé, exclure ce créneau
+          // Sécurité : exclure weekends par défaut (sam/dim)
+          if (dayIndex === 0 || dayIndex === 6) return false;
+
+          // Filtrage fin via weeklySchedule si disponible
+          const rawSchedule = resSettings.data?.weeklySchedule;
+          if (rawSchedule) {
+            const schedule = typeof rawSchedule === "string"
+              ? (() => { try { return JSON.parse(rawSchedule); } catch { return null; } })()
+              : rawSchedule;
+            const dayConfig = schedule?.[dayKey];
+            if (dayConfig && !dayConfig.isOpen) return false;
           }
         }
 

@@ -135,7 +135,14 @@ export default function CrossCalendarPage() {
       const res = await api.get("/availability/all", {
         params: { start: startStr, end: endStr },
       });
-      setAvailabilities(res.data);
+      // Normaliser snake_case → camelCase (l'API retourne start_time, end_time, member_id)
+      const normalized = (res.data || []).map((a: any) => ({
+        ...a,
+        startTime: a.startTime ?? a.start_time,
+        endTime: a.endTime ?? a.end_time,
+        memberId: a.memberId ?? a.member_id,
+      }));
+      setAvailabilities(normalized);
     } catch (e) {
       console.error(e);
     } finally {
