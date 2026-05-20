@@ -45,6 +45,7 @@ const Sidebar = () => {
           icon: "🌙",
         },
         { href: "/dashboard/planning", label: "Planning", icon: "📅" },
+        { href: "/dashboard/epreuves", label: "Allocation", icon: "⚡" },
       ],
     },
     {
@@ -69,6 +70,7 @@ const Sidebar = () => {
           label: "Mes disponibilités",
           icon: "✅",
         },
+        { href: "/dashboard/epreuves", label: "Mes allocations", icon: "⚡" },
       ],
     },
     {

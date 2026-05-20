@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Trash2, X, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
 
 export default function EpreuvesPage() {
+    const router = useRouter();
     const [epreuves, setEpreuves] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -435,6 +437,7 @@ export default function EpreuvesPage() {
                             </p>
                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(epreuve); }}>Modifier</Button>
+                                <Button size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/epreuves/${epreuve.id}/allocation`); }} className="bg-purple-600 hover:bg-purple-700 text-white">⚡ Allocation</Button>
                             </div>
                         </CardContent>
                     </Card>
