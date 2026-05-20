@@ -725,7 +725,11 @@ export default function PlanningPage() {
       setExistingSlots([]);
       setInscriptionData([]);
       setShowResetConfirm(false);
-      toast(`${deleted} créneau(x) supprimé(s) de la base`, "success");
+      // Vider le récapitulatif des saisies + fermer la saisie
+      setMemberAvailsSummary([]);
+      setSaisiOuverte(false);
+      await api.put("/settings", { saisie_dispos_ouverte: "false" });
+      toast(`${deleted} créneau(x) supprimé(s) — saisie réinitialisée`, "success");
       fetchSlotData();
     } catch (e) {
       console.error("Erreur reset:", e);

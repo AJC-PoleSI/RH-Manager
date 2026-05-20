@@ -73,6 +73,27 @@ export async function POST(req: NextRequest) {
 
     if (slotError) throw slotError;
 
+    // 5. Delete member availabilities for this épreuve's date range
+    if (epreuveId) {
+      try {
+        const { data: epreuve } = await supabaseAdmin
+          .from("epreuves")
+          .select("date_debut, date_fin")
+          .eq("id", epreuveId)
+          .single();
+
+        if (epreuve?.date_debut && epreuve?.date_fin) {
+          await supabaseAdmin
+            .from("availabilities")
+            .delete()
+            .gte("date", epreuve.date_debut)
+            .lte("date", epreuve.date_fin);
+        }
+      } catch {
+        // Ignore — availabilities cleanup is best-effort
+      }
+    }
+
     return Response.json({
       message: `${idsToDelete.length} créneau(x) supprimé(s)`,
       deleted: idsToDelete.length,
