@@ -1197,7 +1197,7 @@ export default function PlanningPage() {
                       <p className="text-xs text-gray-500">
                         {inscriptionsOuvertes
                           ? "✅ Allocation effectuée — l'algo a sélectionné les examinateurs selon le quota"
-                          : "⏸️ Pas encore lancée — l'algo choisira N évaluateurs par créneau"}
+                          : `⏸️ Pas encore lancée — l'algo choisira ${logMinEval} évaluateur(s) par créneau (min. configuré)`}
                       </p>
                     </div>
                   </div>

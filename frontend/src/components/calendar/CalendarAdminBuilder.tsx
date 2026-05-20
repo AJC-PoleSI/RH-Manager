@@ -664,11 +664,13 @@ export default function CalendarAdminBuilder({
       toast("Sélectionnez au moins un jour", "error");
       return;
     }
-    const rooms = roomList.map((_, i) => i + 1);
+    // Pass room numbers 1..N so bulk-create creates "Salle 1", "Salle 2"...
+    const rooms = Array.from({ length: Math.max(1, roomList.length) }, (_, i) => i + 1);
     setBulkGenerating(true);
     let totalCreated = 0;
+    const sortedDays = Array.from(bulkGenDays).sort();
     try {
-      for (const dateIso of Array.from(bulkGenDays)) {
+      for (const dateIso of sortedDays) {
         const res = await api.post("/slots/bulk-create", {
           epreuveId: selectedEpreuveId,
           date: dateIso,
@@ -681,8 +683,13 @@ export default function CalendarAdminBuilder({
       toast(`${totalCreated} créneau(x) générés ✅`, "success");
       setBulkGenDays(new Set());
       setShowBulkGen(false);
-      fetchSlots();
+      // Recharger les créneaux PUIS naviguer vers le premier jour généré
+      await fetchSlots();
       onUpdate();
+      // Naviguer le calendrier vers la semaine du premier jour généré
+      if (sortedDays.length > 0 && calendarRef.current) {
+        calendarRef.current.getApi().gotoDate(sortedDays[0]);
+      }
     } catch (err: any) {
       toast(err.response?.data?.error || "Erreur génération", "error");
     } finally {
@@ -832,74 +839,108 @@ export default function CalendarAdminBuilder({
 
       {/* Bulk generation panel */}
       {viewMode === "creation" && showBulkGen && (
-        <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/60">
-          <p className="text-xs font-semibold text-blue-800 mb-3">
-            ⚡ Génération rapide — {durationMinutes}min + {roulementMinutes}min roulement · {roomList.length} salle(s)
-          </p>
-
-          {/* Day selector */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {bulkWeekDays.length === 0 ? (
-              <span className="text-xs text-gray-400 italic">
-                Naviguez vers la semaine souhaitée pour sélectionner les jours.
-              </span>
-            ) : (
-              bulkWeekDays.map((day) => {
-                const selected = bulkGenDays.has(day.iso);
-                return (
-                  <button
-                    key={day.iso}
-                    onClick={() => {
-                      setBulkGenDays((prev) => {
-                        const next = new Set(prev);
-                        selected ? next.delete(day.iso) : next.add(day.iso);
-                        return next;
-                      });
-                    }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      selected
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                );
-              })
-            )}
+        <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/60 space-y-3">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-blue-800">
+              ⚡ Génération rapide
+            </p>
+            <span className="text-[11px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+              {durationMinutes}min épreuve + {roulementMinutes}min roulement = {totalSlotDuration}min/créneau · {roomList.length} salle(s)
+            </span>
           </div>
 
-          {/* Time range */}
-          <div className="flex items-center gap-4 flex-wrap">
+          {/* Time range — modifiable */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-gray-600 font-medium">Plage horaire :</span>
             <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-600">De :</label>
+              <label className="text-xs text-gray-500">De</label>
               <input
                 type="time"
                 value={bulkGenStart}
                 onChange={(e) => e.target.value && setBulkGenStart(e.target.value)}
-                className="border border-gray-300 rounded-md px-2 py-1 text-xs"
+                className="border border-gray-300 bg-white rounded-md px-2 py-1.5 text-sm font-medium"
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-600">À :</label>
+              <label className="text-xs text-gray-500">à</label>
               <input
                 type="time"
                 value={bulkGenEnd}
                 onChange={(e) => e.target.value && setBulkGenEnd(e.target.value)}
-                className="border border-gray-300 rounded-md px-2 py-1 text-xs"
+                className="border border-gray-300 bg-white rounded-md px-2 py-1.5 text-sm font-medium"
               />
             </div>
-            {bulkSlotCount > 0 && (
-              <span className="text-xs text-blue-700 font-medium">
+            {bulkGenStart && bulkGenEnd && totalSlotDuration > 0 && (() => {
+              const [sh, sm] = bulkGenStart.split(":").map(Number);
+              const [eh, em] = bulkGenEnd.split(":").map(Number);
+              const perDay = Math.floor(((eh * 60 + em) - (sh * 60 + sm)) / totalSlotDuration);
+              return perDay > 0 ? (
+                <span className="text-xs text-blue-700 font-medium">
+                  = {perDay} créneau(x)/jour × {roomList.length} salle(s)
+                </span>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Day selector */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Jours à générer (semaine visible) :</p>
+            <div className="flex flex-wrap gap-2">
+              {bulkWeekDays.length === 0 ? (
+                <span className="text-xs text-gray-400 italic">
+                  Naviguez vers la semaine souhaitée dans le calendrier.
+                </span>
+              ) : (
+                <>
+                  {bulkWeekDays.map((day) => {
+                    const selected = bulkGenDays.has(day.iso);
+                    return (
+                      <button
+                        key={day.iso}
+                        onClick={() => {
+                          setBulkGenDays((prev) => {
+                            const next = new Set(prev);
+                            selected ? next.delete(day.iso) : next.add(day.iso);
+                            return next;
+                          });
+                        }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                          selected
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setBulkGenDays(new Set(bulkWeekDays.map(d => d.iso)))}
+                    className="px-3 py-1.5 text-xs text-blue-600 rounded-lg border border-blue-300 hover:bg-blue-50 transition-colors"
+                  >
+                    Tous
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Action */}
+          <div className="flex items-center justify-between pt-1">
+            {bulkSlotCount > 0 ? (
+              <span className="text-sm font-semibold text-blue-800">
                 → {bulkSlotCount} créneau(x) à créer
               </span>
+            ) : (
+              <span className="text-xs text-gray-400">Sélectionnez au moins un jour</span>
             )}
             <button
               onClick={handleBulkGenerate}
               disabled={bulkGenerating || bulkGenDays.size === 0}
-              className="ml-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
             >
-              {bulkGenerating ? "Génération…" : "Générer les créneaux"}
+              {bulkGenerating ? "Génération…" : `Générer ${bulkSlotCount > 0 ? bulkSlotCount : ""} créneau(x)`}
             </button>
           </div>
         </div>
