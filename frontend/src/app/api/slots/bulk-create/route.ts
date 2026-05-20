@@ -109,8 +109,12 @@ export async function POST(req: NextRequest) {
     // ────────────────────────────────────────────────────────────────
     const existingSlotsByRoom: { [roomId: string]: Array<{ startMin: number; endMin: number }> } = {};
 
-    for (const room of rooms) {
-      const roomLabel = `Salle ${room}`;
+    // rooms peut contenir des strings (noms) ou des numbers (indices → "Salle N")
+    const roomLabels: string[] = rooms.map((room: string | number) =>
+      typeof room === "string" ? room : `Salle ${room}`
+    );
+
+    for (const roomLabel of roomLabels) {
       const { data: existingSlots } = await supabaseAdmin
         .from("evaluation_slots")
         .select("start_time, end_time")
@@ -132,8 +136,7 @@ export async function POST(req: NextRequest) {
       const slotStart = minutesToTime(slotStartMin);
       const slotEnd = minutesToTime(slotEndMin);
 
-      for (const room of rooms) {
-        const roomLabel = `Salle ${room}`;
+      for (const roomLabel of roomLabels) {
         const existingSlots = existingSlotsByRoom[roomLabel] || [];
 
         // Check if this generated slot overlaps with any existing slot in this room

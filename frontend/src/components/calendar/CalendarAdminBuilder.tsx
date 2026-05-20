@@ -140,7 +140,7 @@ export default function CalendarAdminBuilder({
   const [bulkGenEnd, setBulkGenEnd] = useState("18:00");
   const [bulkGenCount, setBulkGenCount] = useState(10); // nombre direct de créneaux/jour
   const [bulkGenerating, setBulkGenerating] = useState(false);
-  const [bulkNbSalles, setBulkNbSalles] = useState<number | null>(null); // null = utiliser la valeur de l'épreuve
+  const [bulkRoomNames, setBulkRoomNames] = useState<string[]>([]); // noms de salles personnalisés
 
   // Refs
   const calendarRef = useRef<FullCalendar>(null);
@@ -152,8 +152,20 @@ export default function CalendarAdminBuilder({
     epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
   const totalSlotDuration = durationMinutes + roulementMinutes;
   const nbSalles = parseInt(epreuve?.nbSalles || epreuve?.nb_salles || "1");
-  // Nombre de salles effectif pour la génération en masse (override si bulkNbSalles est défini)
-  const effectiveBulkNbSalles = bulkNbSalles !== null ? bulkNbSalles : nbSalles;
+
+  // Initialiser bulkRoomNames quand l'épreuve change
+  useEffect(() => {
+    setBulkRoomNames(
+      Array.from({ length: Math.max(1, nbSalles) }, (_, i) => `Salle ${i + 1}`)
+    );
+  }, [nbSalles, selectedEpreuveId]);
+
+  // Helpers pour gérer les noms
+  const effectiveBulkNbSalles = bulkRoomNames.length || nbSalles;
+  const addRoom = () => setBulkRoomNames((prev) => [...prev, `Salle ${prev.length + 1}`]);
+  const removeRoom = (idx: number) => setBulkRoomNames((prev) => prev.filter((_, i) => i !== idx));
+  const renameRoom = (idx: number, name: string) =>
+    setBulkRoomNames((prev) => prev.map((n, i) => (i === idx ? name : n)));
 
   // Build unique room list from existing slots + expected rooms
   const roomList = useMemo(() => {
@@ -688,7 +700,7 @@ export default function CalendarAdminBuilder({
       toast("Sélectionnez au moins un jour", "error");
       return;
     }
-    const rooms = Array.from({ length: Math.max(1, effectiveBulkNbSalles) }, (_, i) => i + 1);
+    const rooms = bulkRoomNames.length > 0 ? bulkRoomNames : Array.from({ length: Math.max(1, nbSalles) }, (_, i) => `Salle ${i + 1}`);
     setBulkGenerating(true);
     let totalCreated = 0;
     const sortedDays = Array.from(bulkGenDays).sort();
@@ -872,39 +884,38 @@ export default function CalendarAdminBuilder({
             </span>
           </div>
 
-          {/* Nombre de salles pour cette génération */}
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">Nombre de salles :</label>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setBulkNbSalles(n === effectiveBulkNbSalles && bulkNbSalles !== null ? null : n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-bold border transition-colors ${
-                    effectiveBulkNbSalles === n
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-                  }`}
-                >
-                  {n}
-                </button>
+          {/* Noms des salles */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-700">Salles :</label>
+              <button
+                onClick={addRoom}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors"
+              >
+                + Ajouter une salle
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {bulkRoomNames.map((name, idx) => (
+                <div key={idx} className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => renameRoom(idx, e.target.value)}
+                    className="border border-gray-300 rounded-md px-2 py-1 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    placeholder={`Salle ${idx + 1}`}
+                  />
+                  {bulkRoomNames.length > 1 && (
+                    <button
+                      onClick={() => removeRoom(idx)}
+                      className="text-gray-400 hover:text-red-500 text-sm leading-none"
+                      title="Supprimer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               ))}
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={effectiveBulkNbSalles}
-                onChange={(e) => setBulkNbSalles(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center"
-              />
-              {bulkNbSalles !== null && (
-                <button
-                  onClick={() => setBulkNbSalles(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 underline"
-                >
-                  Réinitialiser ({nbSalles})
-                </button>
-              )}
             </div>
           </div>
 
