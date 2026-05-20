@@ -37,10 +37,10 @@ export async function PUT(
       updateData.date_fin = body.dateFin
         ? new Date(body.dateFin).toISOString()
         : null;
-    if (body.inscriptionDeadline !== undefined)
-      updateData.inscription_deadline = body.inscriptionDeadline
-        ? new Date(body.inscriptionDeadline).toISOString()
-        : null;
+    // Only set inscription_deadline if a non-empty value is provided (column may not exist yet)
+    if (body.inscriptionDeadline) {
+      updateData.inscription_deadline = new Date(body.inscriptionDeadline).toISOString();
+    }
     if (body.isPoleTest !== undefined)
       updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
