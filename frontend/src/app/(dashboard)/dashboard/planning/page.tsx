@@ -872,7 +872,7 @@ export default function PlanningPage() {
                     CALENDRIER ADMINISTRATEUR GLOBAL (TOUT LE RECRUTEMENT)
                     ══════════════════════════════════════════════════════════════════ */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col h-[600px]">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
               <span className="text-xl">🗺️</span> Vue Globale du Recrutement
             </h3>
@@ -894,6 +894,13 @@ export default function PlanningPage() {
               </button>
             </div>
           </div>
+          {/* Légende couleurs */}
+          <div className="flex items-center gap-3 mb-3 text-[11px] text-gray-500 flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 border border-green-400"></span>Tout OK</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-200 border border-orange-400"></span>Examinateurs &lt; min</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-400"></span>Manque candidat(s)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-200 border border-purple-400"></span>Aucun examinateur</span>
+          </div>
 
           {existingSlots.length === 0 && globalEvents.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
@@ -912,21 +919,48 @@ export default function PlanningPage() {
                     return slot.date.split("T")[0] === dateString;
                   })
                   .map((s: any) => {
-                    // Build evaluator string
+                    const memberCount = s.members?.length || 0;
+                    const candCount = s.enrollments?.length || 0;
+                    const minMembers = s.min_members || s.minMembers || 2;
+                    const maxCands = s.max_candidates || s.maxCandidates || 1;
                     const evalNames =
                       s.members
                         ?.map((m: any) => m.member?.email?.split("@")[0])
-                        .join(", ") || "0M";
-                    const candCount = s.enrollments?.length || 0;
+                        .filter(Boolean)
+                        .join(", ") || "—";
                     const epName = s.epreuve?.name ? `[${s.epreuve.name}]` : "";
+                    const isPublishedCandidates = s.status === "published";
+
+                    // ─── Color coding logic ─────────────────────
+                    // 🟣 violet : aucun examinateur
+                    // 🔴 rouge  : publié aux candidats sans candidat OU manque candidats
+                    // 🟠 orange : examinateurs < min mais >= 1
+                    // 🟢 vert   : tout est OK
+                    let statusClass = "bg-green-50 border-green-300 text-green-900";
+                    let statusLabel = "OK";
+
+                    if (memberCount === 0) {
+                      statusClass = "bg-purple-100 border-purple-400 text-purple-900 font-semibold";
+                      statusLabel = "🟣 0 exam.";
+                    } else if (memberCount < minMembers) {
+                      statusClass = "bg-orange-50 border-orange-300 text-orange-900";
+                      statusLabel = `🟠 ${memberCount}/${minMembers} exam.`;
+                    } else if (isPublishedCandidates && candCount < maxCands) {
+                      statusClass = "bg-red-50 border-red-300 text-red-900";
+                      statusLabel = `🔴 ${candCount}/${maxCands} cand.`;
+                    } else {
+                      statusLabel = `🟢 ${memberCount} exam · ${candCount} cand`;
+                    }
 
                     return {
                       id: s.id,
                       day: s.date,
                       startTime: s.startTime || s.start_time,
                       endTime: s.endTime || s.end_time,
-                      title: `${epName} Salle ${s.room || "?"}: ${candCount}C | Par: ${evalNames}`,
+                      title: `${epName} ${s.room || "Salle ?"} — ${evalNames}`,
                       isSlot: true,
+                      statusClass,
+                      statusLabel,
                     };
                   });
 

@@ -95,7 +95,9 @@ export const CalendarColumn = ({
               onClick={() => onEventClick?.(event)}
               className={cn(
                 "w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm",
-                event.isDeadline
+                event.statusClass /* status-driven coloring takes priority */
+                  ? event.statusClass
+                  : event.isDeadline
                   ? "bg-red-50 border-red-300 text-red-900 font-bold"
                   : event.isSlot
                     ? "bg-purple-50 border-purple-300 text-purple-900"
@@ -109,6 +111,9 @@ export const CalendarColumn = ({
               </div>
               <div className="text-xs mt-1 opacity-70 flex items-center gap-1">
                 {event.startTime} - {event.endTime}
+                {event.statusLabel && (
+                  <span className="ml-auto font-semibold">{event.statusLabel}</span>
+                )}
               </div>
             </button>
           ))}

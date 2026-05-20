@@ -1,10 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { getTokenFromRequest, forbidden } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 function timeToMinutes(timeStr: string): number {
   const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + m;
+  return h * 60 + (m || 0);
 }
 
 function minutesToTime(minutes: number): string {
@@ -14,28 +14,31 @@ function minutesToTime(minutes: number): string {
 }
 
 // POST /api/slots/bulk-create — Admin only
+// Accepts either :
+//   { epreuveId, date, startTime, count, rooms }    → packs N slots starting at startTime
+//   { epreuveId, date, startTime, endTime, rooms }  → fills the range (back-compat)
+//
+// Rules :
+//   - Time range is FIXED — never auto-shrunk
+//   - First slot starts exactly at startTime
+//   - Slots are spaced by (duration + roulement) start-to-start
+//   - end_time stored = start + duration ONLY (roulement is implicit spacing)
+//   - If count × spacing exceeds the range → 400 error
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload || !payload.isAdmin) return forbidden();
 
   try {
-    const { epreuveId, date, startTime, endTime, rooms } = await req.json();
+    const body = await req.json();
+    const { epreuveId, date, startTime, endTime, count, rooms } = body;
 
-    if (
-      !epreuveId ||
-      !date ||
-      !startTime ||
-      !endTime ||
-      !rooms ||
-      rooms.length === 0
-    ) {
+    if (!epreuveId || !date || !startTime || !rooms || rooms.length === 0) {
       return Response.json(
-        { error: "Missing required fields" },
+        { error: "epreuveId, date, startTime, rooms requis" },
         { status: 400 },
       );
     }
 
-    // Fetch Epreuve configuration — use select('*') to avoid errors on missing columns
     const { data: epreuve, error: epreuveError } = await supabaseAdmin
       .from("epreuves")
       .select("*")
@@ -43,35 +46,66 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (epreuveError || !epreuve) {
-      return Response.json({ error: "Epreuve not found" }, { status: 404 });
+      return Response.json({ error: "Épreuve introuvable" }, { status: 404 });
     }
 
     const duration = epreuve.duration_minutes || 30;
     const roulement = epreuve.roulement_minutes ?? 10;
+    const spacing = duration + roulement;
     const minMembers = epreuve.min_evaluators_per_salle ?? 2;
     const tour = epreuve.tour || 1;
 
-    let currentMin = timeToMinutes(startTime);
-    const endMin = timeToMinutes(endTime);
+    const startMin = timeToMinutes(startTime);
 
-    const slotsToInsert: any[] = [];
-    const dateFormatted = new Date(date + "T12:00:00").toISOString();
+    // Mode determination
+    let nSlots: number;
+    let rangeEndMin: number | null = null;
 
-    while (currentMin + duration <= endMin) {
-      const slotStart = minutesToTime(currentMin);
+    if (typeof count === "number" && count > 0) {
+      nSlots = count;
+      rangeEndMin = endTime ? timeToMinutes(endTime) : null;
+    } else if (endTime) {
+      rangeEndMin = timeToMinutes(endTime);
+      // Max N such that start + (N-1)*spacing + duration <= rangeEndMin
+      nSlots = Math.max(
+        0,
+        Math.floor((rangeEndMin - startMin - duration) / spacing) + 1,
+      );
+    } else {
+      return Response.json(
+        { error: "Préciser count ou endTime" },
+        { status: 400 },
+      );
+    }
 
-      // La découpe gère le reste s'il ne permet pas le plein roulement.
-      // Mais l'épreuve MUST tenir entièrement.
-      let slotEndMin = currentMin + duration;
+    if (nSlots <= 0) {
+      return Response.json({ error: "Aucun créneau possible" }, { status: 400 });
+    }
 
-      // Si on peut ajouter le roulement en entier sans dépasser la plage de fin, on le fait.
-      if (slotEndMin + roulement <= endMin) {
-        slotEndMin += roulement;
-      } else {
-        // Ajustement algorithmique sur le roulement.
-        slotEndMin = endMin;
+    // Range fit check
+    if (rangeEndMin !== null) {
+      const lastSlotEnd = startMin + (nSlots - 1) * spacing + duration;
+      if (lastSlotEnd > rangeEndMin) {
+        const maxFit = Math.max(
+          0,
+          Math.floor((rangeEndMin - startMin - duration) / spacing) + 1,
+        );
+        return Response.json(
+          {
+            error: `Trop de créneaux pour la plage ${startTime}–${endTime} : ${nSlots} demandés, ${maxFit} max (${duration}+${roulement}min/créneau).`,
+          },
+          { status: 400 },
+        );
       }
+    }
 
+    const dateFormatted = new Date(date + "T12:00:00").toISOString();
+    const slotsToInsert: any[] = [];
+
+    for (let i = 0; i < nSlots; i++) {
+      const slotStartMin = startMin + i * spacing;
+      const slotEndMin = slotStartMin + duration; // end = start + duration
+      const slotStart = minutesToTime(slotStartMin);
       const slotEnd = minutesToTime(slotEndMin);
 
       for (const room of rooms) {
@@ -79,29 +113,17 @@ export async function POST(req: NextRequest) {
           date: dateFormatted,
           start_time: slotStart,
           end_time: slotEnd,
-          duration_minutes: duration, // L'épreuve en elle-même est conservée pure pour l'affichage/logique candidates
+          duration_minutes: duration,
           label: null,
-          max_candidates: 1,
+          max_candidates: epreuve.is_group_epreuve ? epreuve.group_size || 1 : 1,
           min_members: minMembers,
           simultaneous_slots: 1,
           epreuve_id: epreuveId,
-          tour: tour,
+          tour,
           room: `Salle ${room}`,
-          status: "draft", // Par sécurité : la phase 4 publiera l'ensemble.
+          status: "draft",
         });
       }
-
-      currentMin = slotEndMin;
-    }
-
-    if (slotsToInsert.length === 0) {
-      return Response.json(
-        {
-          error:
-            "La plage est trop courte pour accueillir ne serait-ce qu'une épreuve.",
-        },
-        { status: 400 },
-      );
     }
 
     const { data: createdSlots, error: insertError } = await supabaseAdmin
@@ -112,13 +134,18 @@ export async function POST(req: NextRequest) {
     if (insertError) throw insertError;
 
     return Response.json(
-      { message: "Success", count: createdSlots.length, slots: createdSlots },
+      {
+        message: "Success",
+        count: createdSlots.length,
+        per_day: nSlots,
+        slots: createdSlots,
+      },
       { status: 201 },
     );
   } catch (error) {
-    console.error("Bulk generate error:", error);
+    console.error("Bulk create error:", error);
     return Response.json(
-      { error: "Failed to generate bulk slots", details: String(error) },
+      { error: "Échec génération", details: String(error) },
       { status: 500 },
     );
   }

@@ -655,41 +655,29 @@ export default function CalendarAdminBuilder({
     ? bulkGenCount * bulkGenDays.size * Math.max(1, roomList.length)
     : 0;
 
-  // Sync: when user changes the count, update bulkGenEnd accordingly
+  // Nombre max de créneaux qui rentrent dans la plage horaire (info)
+  const maxSlotsInRange = useMemo(() => {
+    if (totalSlotDuration <= 0) return 0;
+    const [sh, sm] = bulkGenStart.split(":").map(Number);
+    const [eh, em] = bulkGenEnd.split(":").map(Number);
+    const dur = parseInt(String(epreuve?.durationMinutes || epreuve?.duration_minutes || 30));
+    const range = (eh * 60 + em) - (sh * 60 + sm);
+    if (range < dur) return 0;
+    // start + (n-1)*spacing + duration <= rangeEnd
+    return Math.max(0, Math.floor((range - dur) / totalSlotDuration) + 1);
+  }, [bulkGenStart, bulkGenEnd, totalSlotDuration, epreuve]);
+
+  // Handler nombre : on clamp simplement à [1, maxSlotsInRange]
   const handleBulkCountChange = (n: number) => {
-    const count = Math.max(1, n);
-    setBulkGenCount(count);
-    if (totalSlotDuration > 0) {
-      const endMin =
-        (parseInt(bulkGenStart.split(":")[0]) * 60 + parseInt(bulkGenStart.split(":")[1] || "0")) +
-        count * totalSlotDuration;
-      const h = Math.floor(endMin / 60);
-      const m = endMin % 60;
-      setBulkGenEnd(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
-    }
+    setBulkGenCount(Math.max(1, n));
   };
 
-  // Sync: when user changes De or À, recompute the count
+  // Handlers de plage : NE TOUCHENT PAS au nombre de créneaux
   const handleBulkStartChange = (val: string) => {
-    if (!val) return;
-    setBulkGenStart(val);
-    if (totalSlotDuration > 0) {
-      const [sh, sm] = val.split(":").map(Number);
-      const [eh, em] = bulkGenEnd.split(":").map(Number);
-      const rangeMin = (eh * 60 + em) - (sh * 60 + sm);
-      if (rangeMin > 0) setBulkGenCount(Math.max(1, Math.floor(rangeMin / totalSlotDuration)));
-    }
+    if (val) setBulkGenStart(val);
   };
-
   const handleBulkEndChange = (val: string) => {
-    if (!val) return;
-    setBulkGenEnd(val);
-    if (totalSlotDuration > 0) {
-      const [sh, sm] = bulkGenStart.split(":").map(Number);
-      const [eh, em] = val.split(":").map(Number);
-      const rangeMin = (eh * 60 + em) - (sh * 60 + sm);
-      if (rangeMin > 0) setBulkGenCount(Math.max(1, Math.floor(rangeMin / totalSlotDuration)));
-    }
+    if (val) setBulkGenEnd(val);
   };
 
   const handleBulkGenerate = async () => {
@@ -697,7 +685,6 @@ export default function CalendarAdminBuilder({
       toast("Sélectionnez au moins un jour", "error");
       return;
     }
-    // Pass room numbers 1..N so bulk-create creates "Salle 1", "Salle 2"...
     const rooms = Array.from({ length: Math.max(1, roomList.length) }, (_, i) => i + 1);
     setBulkGenerating(true);
     let totalCreated = 0;
@@ -708,7 +695,8 @@ export default function CalendarAdminBuilder({
           epreuveId: selectedEpreuveId,
           date: dateIso,
           startTime: bulkGenStart,
-          endTime: bulkGenEnd,
+          endTime: bulkGenEnd, // utilisé comme borne haute uniquement
+          count: bulkGenCount, // ← nombre exact demandé (plage fixe)
           rooms,
         });
         totalCreated += res.data?.count || 0;
@@ -716,10 +704,8 @@ export default function CalendarAdminBuilder({
       toast(`${totalCreated} créneau(x) générés ✅`, "success");
       setBulkGenDays(new Set());
       setShowBulkGen(false);
-      // Recharger les créneaux PUIS naviguer vers le premier jour généré
       await fetchSlots();
       onUpdate();
-      // Naviguer le calendrier vers la semaine du premier jour généré
       if (sortedDays.length > 0 && calendarRef.current) {
         calendarRef.current.getApi().gotoDate(sortedDays[0]);
       }
@@ -883,25 +869,9 @@ export default function CalendarAdminBuilder({
             </span>
           </div>
 
-          {/* Nombre de créneaux + plage horaire */}
-          <div className="flex items-center gap-4 flex-wrap">
-            {/* ← champ principal : nombre de créneaux */}
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-gray-700">Créneaux / jour :</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={bulkGenCount}
-                onChange={(e) => handleBulkCountChange(parseInt(e.target.value) || 1)}
-                className="w-16 border-2 border-blue-400 bg-white rounded-md px-2 py-1.5 text-sm font-bold text-center"
-              />
-              <span className="text-xs text-gray-500">× {Math.max(1,roomList.length)} salle(s)</span>
-            </div>
-
-            <span className="text-xs text-gray-400">|</span>
-
-            {/* Plage horaire (se recalcule quand on change le nombre) */}
+          {/* Plage horaire (FIXE) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-gray-600 font-medium">Plage horaire :</span>
             <div className="flex items-center gap-2">
               <label className="text-xs text-gray-500">De</label>
               <input
@@ -918,6 +888,32 @@ export default function CalendarAdminBuilder({
                 className="border border-gray-300 bg-white rounded-md px-2 py-1.5 text-sm"
               />
             </div>
+            <span className="text-[11px] text-gray-400">
+              (max {maxSlotsInRange} créneaux possibles dans cette plage)
+            </span>
+          </div>
+
+          {/* Nombre de créneaux par jour */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-xs font-semibold text-gray-700">Créneaux / jour :</label>
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, maxSlotsInRange)}
+              value={bulkGenCount}
+              onChange={(e) => handleBulkCountChange(parseInt(e.target.value) || 1)}
+              className={`w-20 border-2 rounded-md px-2 py-1.5 text-sm font-bold text-center ${
+                bulkGenCount > maxSlotsInRange
+                  ? "border-red-400 bg-red-50 text-red-700"
+                  : "border-blue-400 bg-white text-blue-700"
+              }`}
+            />
+            <span className="text-xs text-gray-500">× {Math.max(1, roomList.length)} salle(s)</span>
+            {bulkGenCount > maxSlotsInRange && (
+              <span className="text-xs text-red-600 font-medium">
+                ⚠ Trop pour cette plage (max {maxSlotsInRange})
+              </span>
+            )}
           </div>
 
           {/* Day selector */}
@@ -974,7 +970,7 @@ export default function CalendarAdminBuilder({
             )}
             <button
               onClick={handleBulkGenerate}
-              disabled={bulkGenerating || bulkGenDays.size === 0}
+              disabled={bulkGenerating || bulkGenDays.size === 0 || bulkGenCount > maxSlotsInRange}
               className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
             >
               {bulkGenerating ? "Génération…" : `Générer ${bulkSlotCount > 0 ? bulkSlotCount : ""} créneau(x)`}
