@@ -128,9 +128,17 @@ export default function CalendarAdminBuilder({
   const [slotMaxTime, setSlotMaxTime] = useState(DEFAULT_MAX_TIME);
   const [showConfig, setShowConfig] = useState(false);
   const [currentWeekLabel, setCurrentWeekLabel] = useState("");
+  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date | null>(null);
   const [editingSlot, setEditingSlot] = useState<SlotData | null>(null);
   const [editedRoom, setEditedRoom] = useState("");
   const [savingRoom, setSavingRoom] = useState(false);
+
+  // State for bulk generation panel
+  const [showBulkGen, setShowBulkGen] = useState(false);
+  const [bulkGenDays, setBulkGenDays] = useState<Set<string>>(new Set());
+  const [bulkGenStart, setBulkGenStart] = useState("08:00");
+  const [bulkGenEnd, setBulkGenEnd] = useState("18:00");
+  const [bulkGenerating, setBulkGenerating] = useState(false);
 
   // Refs
   const calendarRef = useRef<FullCalendar>(null);
@@ -605,6 +613,8 @@ export default function CalendarAdminBuilder({
   const handleDatesSet = useCallback((info: any) => {
     const monday = getMonday(info.start);
     setCurrentWeekLabel(formatWeekRange(monday));
+    setCurrentWeekMonday(monday);
+    setBulkGenDays(new Set()); // reset day selection on week change
   }, []);
 
   // ─── Navigation ──────────────────────────────────────────────────
@@ -617,6 +627,68 @@ export default function CalendarAdminBuilder({
   function navigateToday() {
     calendarRef.current?.getApi().today();
   }
+
+  // ─── Bulk generation ─────────────────────────────────────────────
+  // Computes visible Mon-Fri dates for the current week, filtered by validRange
+  const bulkWeekDays = useMemo(() => {
+    if (!currentWeekMonday) return [];
+    const days = [];
+    const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+    const start = validRange?.start;
+    const end = validRange?.end;
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(currentWeekMonday);
+      d.setDate(d.getDate() + i);
+      const iso = formatDateISO(d);
+      if ((start && iso < start) || (end && iso >= end)) continue;
+      days.push({
+        iso,
+        label: `${dayLabels[i]} ${d.getDate()}/${d.getMonth() + 1}`,
+      });
+    }
+    return days;
+  }, [currentWeekMonday, validRange]);
+
+  const bulkSlotCount = useMemo(() => {
+    if (!bulkGenStart || !bulkGenEnd || bulkGenDays.size === 0) return 0;
+    const [sh, sm] = bulkGenStart.split(":").map(Number);
+    const [eh, em] = bulkGenEnd.split(":").map(Number);
+    const rangeMin = (eh * 60 + em) - (sh * 60 + sm);
+    if (rangeMin <= 0 || totalSlotDuration <= 0) return 0;
+    const slotsPerDay = Math.floor(rangeMin / totalSlotDuration);
+    return slotsPerDay * bulkGenDays.size * roomList.length;
+  }, [bulkGenStart, bulkGenEnd, bulkGenDays.size, totalSlotDuration, roomList.length]);
+
+  const handleBulkGenerate = async () => {
+    if (bulkGenDays.size === 0) {
+      toast("Sélectionnez au moins un jour", "error");
+      return;
+    }
+    const rooms = roomList.map((_, i) => i + 1);
+    setBulkGenerating(true);
+    let totalCreated = 0;
+    try {
+      for (const dateIso of Array.from(bulkGenDays)) {
+        const res = await api.post("/slots/bulk-create", {
+          epreuveId: selectedEpreuveId,
+          date: dateIso,
+          startTime: bulkGenStart,
+          endTime: bulkGenEnd,
+          rooms,
+        });
+        totalCreated += res.data?.count || 0;
+      }
+      toast(`${totalCreated} créneau(x) générés ✅`, "success");
+      setBulkGenDays(new Set());
+      setShowBulkGen(false);
+      fetchSlots();
+      onUpdate();
+    } catch (err: any) {
+      toast(err.response?.data?.error || "Erreur génération", "error");
+    } finally {
+      setBulkGenerating(false);
+    }
+  };
 
   // ─── Guard ───────────────────────────────────────────────────────
   if (!epreuve) return null;
@@ -657,10 +729,23 @@ export default function CalendarAdminBuilder({
               {durationMinutes}min + {roulementMinutes}min roulement ={" "}
               {totalSlotDuration}min/créneau
             </span>
+            {viewMode === "creation" && (
+              <button
+                onClick={() => { setShowBulkGen(!showBulkGen); setShowConfig(false); }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${
+                  showBulkGen
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+                }`}
+                title="Générer N créneaux automatiquement"
+              >
+                ⚡ Génération rapide
+              </button>
+            )}
             <button
-              onClick={() => setShowConfig(!showConfig)}
+              onClick={() => { setShowConfig(!showConfig); setShowBulkGen(false); }}
               className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              title="Paramètres"
+              title="Paramètres plage horaire"
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
                 <path
@@ -706,7 +791,7 @@ export default function CalendarAdminBuilder({
         </div>
       </div>
 
-      {/* Config panel */}
+      {/* Config panel (plage horaire visible) */}
       {showConfig && (
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
@@ -714,7 +799,13 @@ export default function CalendarAdminBuilder({
             <input
               type="time"
               value={slotMinTime.slice(0, 5)}
-              onChange={(e) => setSlotMinTime(e.target.value + ":00")}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && /^\d{2}:\d{2}$/.test(val)) {
+                  const newMin = val + ":00";
+                  if (newMin < slotMaxTime) setSlotMinTime(newMin);
+                }
+              }}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
@@ -723,13 +814,94 @@ export default function CalendarAdminBuilder({
             <input
               type="time"
               value={slotMaxTime.slice(0, 5)}
-              onChange={(e) => setSlotMaxTime(e.target.value + ":00")}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && /^\d{2}:\d{2}$/.test(val)) {
+                  const newMax = val + ":00";
+                  if (newMax > slotMinTime) setSlotMaxTime(newMax);
+                }
+              }}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
           <span className="text-[10px] text-gray-400">
             Plage horaire visible du calendrier
           </span>
+        </div>
+      )}
+
+      {/* Bulk generation panel */}
+      {viewMode === "creation" && showBulkGen && (
+        <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/60">
+          <p className="text-xs font-semibold text-blue-800 mb-3">
+            ⚡ Génération rapide — {durationMinutes}min + {roulementMinutes}min roulement · {roomList.length} salle(s)
+          </p>
+
+          {/* Day selector */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {bulkWeekDays.length === 0 ? (
+              <span className="text-xs text-gray-400 italic">
+                Naviguez vers la semaine souhaitée pour sélectionner les jours.
+              </span>
+            ) : (
+              bulkWeekDays.map((day) => {
+                const selected = bulkGenDays.has(day.iso);
+                return (
+                  <button
+                    key={day.iso}
+                    onClick={() => {
+                      setBulkGenDays((prev) => {
+                        const next = new Set(prev);
+                        selected ? next.delete(day.iso) : next.add(day.iso);
+                        return next;
+                      });
+                    }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                      selected
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Time range */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-600">De :</label>
+              <input
+                type="time"
+                value={bulkGenStart}
+                onChange={(e) => e.target.value && setBulkGenStart(e.target.value)}
+                className="border border-gray-300 rounded-md px-2 py-1 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-600">À :</label>
+              <input
+                type="time"
+                value={bulkGenEnd}
+                onChange={(e) => e.target.value && setBulkGenEnd(e.target.value)}
+                className="border border-gray-300 rounded-md px-2 py-1 text-xs"
+              />
+            </div>
+            {bulkSlotCount > 0 && (
+              <span className="text-xs text-blue-700 font-medium">
+                → {bulkSlotCount} créneau(x) à créer
+              </span>
+            )}
+            <button
+              onClick={handleBulkGenerate}
+              disabled={bulkGenerating || bulkGenDays.size === 0}
+              className="ml-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {bulkGenerating ? "Génération…" : "Générer les créneaux"}
+            </button>
+          </div>
         </div>
       )}
 
