@@ -103,7 +103,11 @@ function formatWeekRange(monday: Date): string {
 }
 
 function formatDateISO(d: Date): string {
-  return d.toISOString().split("T")[0];
+  // Utiliser les composantes locales (pas UTC) pour éviter le décalage fuseau horaire
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function getRoomColor(room: string, roomIndex: number) {

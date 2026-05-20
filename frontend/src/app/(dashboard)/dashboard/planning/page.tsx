@@ -728,6 +728,7 @@ export default function PlanningPage() {
       const availsDeleted = res.data?.availabilities_deleted || 0;
       setRepartitionResult(null);
       setExistingSlots([]);
+      setAllSlotsGlobal([]);
       setInscriptionData([]);
       setShowResetConfirm(false);
       // Vider le récapitulatif des saisies (la saisie reste toujours ouverte)
@@ -737,6 +738,7 @@ export default function PlanningPage() {
         "success",
       );
       fetchSlotData();
+      fetchAllSlotsGlobal();
       fetchMemberAvailabilitiesSummary();
     } catch (e) {
       console.error("Erreur reset:", e);
