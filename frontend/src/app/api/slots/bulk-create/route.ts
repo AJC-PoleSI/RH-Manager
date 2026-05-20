@@ -100,8 +100,32 @@ export async function POST(req: NextRequest) {
     }
 
     const dateFormatted = new Date(date + "T12:00:00").toISOString();
+    const dateStr = (date + "T12:00:00").split("T")[0]; // YYYY-MM-DD format
     const slotsToInsert: any[] = [];
 
+    // ────────────────────────────────────────────────────────────────
+    // Check for existing slots in each room on the given date
+    // to prevent overlaps when generating new slots
+    // ────────────────────────────────────────────────────────────────
+    const existingSlotsByRoom: { [roomId: string]: Array<{ startMin: number; endMin: number }> } = {};
+
+    for (const room of rooms) {
+      const roomLabel = `Salle ${room}`;
+      const { data: existingSlots } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("start_time, end_time")
+        .eq("room", roomLabel)
+        .like("date", `${dateStr}%`);
+
+      existingSlotsByRoom[roomLabel] = (existingSlots || []).map((slot: any) => ({
+        startMin: timeToMinutes(slot.start_time),
+        endMin: timeToMinutes(slot.end_time),
+      }));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Generate slots and check for overlaps
+    // ────────────────────────────────────────────────────────────────
     for (let i = 0; i < nSlots; i++) {
       const slotStartMin = startMin + i * spacing;
       const slotEndMin = slotStartMin + duration; // end = start + duration
@@ -109,6 +133,23 @@ export async function POST(req: NextRequest) {
       const slotEnd = minutesToTime(slotEndMin);
 
       for (const room of rooms) {
+        const roomLabel = `Salle ${room}`;
+        const existingSlots = existingSlotsByRoom[roomLabel] || [];
+
+        // Check if this generated slot overlaps with any existing slot in this room
+        const hasOverlap = existingSlots.some(
+          (existing) => slotStartMin < existing.endMin && existing.startMin < slotEndMin,
+        );
+
+        if (hasOverlap) {
+          return Response.json(
+            {
+              error: `Chevauchement détecté pour ${roomLabel} : le créneau ${slotStart}–${slotEnd} chevauche un créneau existant.`,
+            },
+            { status: 400 },
+          );
+        }
+
         slotsToInsert.push({
           date: dateFormatted,
           start_time: slotStart,
@@ -120,7 +161,7 @@ export async function POST(req: NextRequest) {
           simultaneous_slots: 1,
           epreuve_id: epreuveId,
           tour,
-          room: `Salle ${room}`,
+          room: roomLabel,
           status: "draft",
         });
       }
