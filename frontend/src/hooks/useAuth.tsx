@@ -31,8 +31,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    // Restore from localStorage
+  const restoreAuthFromStorage = () => {
     const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
     const storedRole = localStorage.getItem("role") as "member" | "candidate";
@@ -41,8 +40,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
       setRole(storedRole);
+    } else {
+      setToken(null);
+      setUser(null);
+      setRole(null);
     }
     setIsInitialized(true);
+  };
+
+  useEffect(() => {
+    // Initial restore from localStorage on mount
+    restoreAuthFromStorage();
+
+    // Handle bfcache restoration (back/forward button)
+    const handlePageShow = () => {
+      restoreAuthFromStorage();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
   const loginMember = (newToken: string, member: any) => {

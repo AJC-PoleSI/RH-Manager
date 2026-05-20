@@ -3,6 +3,10 @@ import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/toggle-member — toggle member assignment on a slot
+// Features :
+// - Anti-double-booking : un membre ne peut pas être affecté à 2 créneaux qui se chevauchent
+// - Auto-remplacement : quand un membre est retiré, on promeut automatiquement
+//   le premier membre en attente (dans slot_availability_requests) pour ce créneau
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -32,7 +36,9 @@ export async function POST(req: NextRequest) {
       action === "add" || (!action && (!existing || existing.length === 0));
 
     if (shouldRemove && existing && existing.length > 0) {
-      // Remove assignment
+      // ──────────────────────────────────────────────────────────────
+      // RETRAIT : Supprimer + tenter une auto-promotion depuis la file
+      // ──────────────────────────────────────────────────────────────
       const { error: deleteError } = await supabaseAdmin
         .from("slot_member_assignments")
         .delete()
@@ -40,33 +46,103 @@ export async function POST(req: NextRequest) {
 
       if (deleteError) throw deleteError;
 
-      // Check if slot needs status downgrade
+      // Refetch slot
       const { data: slot } = await supabaseAdmin
         .from("evaluation_slots")
-        .select("*, members:slot_member_assignments(id)")
+        .select("*, members:slot_member_assignments(member_id)")
         .eq("id", slotId)
         .single();
 
-      if (
-        slot &&
-        slot.status === "ready" &&
-        (slot.members?.length || 0) < slot.min_members
-      ) {
-        await supabaseAdmin
-          .from("evaluation_slots")
-          .update({ status: "open" })
-          .eq("id", slotId);
+      let promotedMemberId: string | null = null;
+
+      if (slot) {
+        // Liste des membres déjà affectés sur ce créneau
+        const assignedIds = new Set(
+          (slot.members || []).map((m: any) => m.member_id),
+        );
+
+        // Chercher un membre en attente (slot_availability_requests) pour ce créneau,
+        // qui n'est pas déjà affecté ET qui n'a pas de conflit horaire
+        const { data: waitlist } = await supabaseAdmin
+          .from("slot_availability_requests")
+          .select("member_id, created_at")
+          .eq("slot_id", slotId)
+          .order("created_at", { ascending: true });
+
+        if (waitlist && waitlist.length > 0) {
+          for (const candidate of waitlist) {
+            if (assignedIds.has(candidate.member_id)) continue;
+
+            // Vérifier qu'il n'a pas un autre créneau au même moment
+            const hasConflict = await memberHasConflict(
+              candidate.member_id,
+              slot,
+              slotId,
+            );
+            if (hasConflict) continue;
+
+            // Promouvoir : ajouter à slot_member_assignments
+            const { error: promoteErr } = await supabaseAdmin
+              .from("slot_member_assignments")
+              .insert({ slot_id: slotId, member_id: candidate.member_id });
+
+            if (!promoteErr) {
+              promotedMemberId = candidate.member_id;
+              break;
+            }
+          }
+        }
+
+        // Status downgrade si toujours en dessous du min après promotion
+        const newCount =
+          (slot.members?.length || 0) - 1 + (promotedMemberId ? 1 : 0);
+
+        if (
+          slot.status === "ready" &&
+          newCount < (slot.min_members || 0)
+        ) {
+          await supabaseAdmin
+            .from("evaluation_slots")
+            .update({ status: "open" })
+            .eq("id", slotId);
+        }
       }
 
-      return Response.json({ action: "removed" });
+      return Response.json({
+        action: "removed",
+        promoted_member_id: promotedMemberId,
+      });
     } else if (shouldAdd) {
+      // ──────────────────────────────────────────────────────────────
+      // AJOUT : Vérifier anti-double-booking d'abord
+      // ──────────────────────────────────────────────────────────────
+      const { data: targetSlot } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("id, date, start_time, end_time")
+        .eq("id", slotId)
+        .single();
+
+      if (!targetSlot) {
+        return Response.json({ error: "Créneau introuvable" }, { status: 404 });
+      }
+
+      const conflict = await memberHasConflict(memberId, targetSlot, slotId);
+      if (conflict) {
+        return Response.json(
+          {
+            error:
+              "Conflit horaire : ce membre est déjà sur un autre créneau au même moment",
+          },
+          { status: 409 },
+        );
+      }
+
       // Add assignment
       const { error: insertError } = await supabaseAdmin
         .from("slot_member_assignments")
         .insert({ slot_id: slotId, member_id: memberId });
 
       if (insertError) {
-        // Unique constraint violation
         if (insertError.code === "23505") {
           return Response.json({ error: "Already assigned" }, { status: 400 });
         }
@@ -102,4 +178,48 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────
+async function memberHasConflict(
+  memberId: string,
+  targetSlot: { id: string; date: string; start_time: string; end_time: string },
+  excludeSlotId: string,
+): Promise<boolean> {
+  // Récupérer toutes les autres affectations du membre à la même date
+  const { data: otherSlots } = await supabaseAdmin
+    .from("slot_member_assignments")
+    .select("slot:evaluation_slots(id, date, start_time, end_time)")
+    .eq("member_id", memberId);
+
+  if (!otherSlots || otherSlots.length === 0) return false;
+
+  const targetDate = (targetSlot.date || "").substring(0, 10);
+  const targetStart = targetSlot.start_time;
+  const targetEnd = targetSlot.end_time;
+
+  for (const row of otherSlots as any[]) {
+    const s = row.slot;
+    if (!s || s.id === excludeSlotId) continue;
+
+    const sDate = (s.date || "").substring(0, 10);
+    if (sDate !== targetDate) continue;
+
+    // Overlap check : start1 < end2 && start2 < end1
+    if (
+      timeLt(targetStart, s.end_time) &&
+      timeLt(s.start_time, targetEnd)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function timeLt(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  return a < b;
 }
