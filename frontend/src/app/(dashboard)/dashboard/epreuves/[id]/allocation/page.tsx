@@ -347,7 +347,7 @@ export default function AllocationPage() {
       {isAdmin && workflowStatus === "creneaux_finalises" && (
         <Panel title="📅 Étape 2 — Créneaux prêts">
           <p className="text-sm text-gray-600 mb-3">
-            {counts.total_slots} créneaux générés. Tu peux publier pour que les évaluateurs s'inscrivent.
+            {counts.total_slots} créneaux générés. Tu peux publier pour que les évaluateurs s&apos;inscrivent.
           </p>
           <div className="flex gap-3">
             <button onClick={() => handleTransition("draft")}
@@ -376,7 +376,7 @@ export default function AllocationPage() {
               </button>
               <button onClick={() => handleAllocate()}
                 className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 font-medium">
-                ⚡ Lancer l'allocation
+                ⚡ Lancer l&apos;allocation
               </button>
             </div>
           </div>
@@ -436,7 +436,7 @@ export default function AllocationPage() {
         <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
           <div className="text-4xl mb-2">🎉</div>
           <h2 className="text-lg font-semibold text-green-800">Créneaux publiés pour les candidats</h2>
-          <p className="text-sm text-green-600 mt-1">Les candidats peuvent maintenant s'inscrire aux créneaux.</p>
+          <p className="text-sm text-green-600 mt-1">Les candidats peuvent maintenant s&apos;inscrire aux créneaux.</p>
           {isAdmin && ranking && <AllocationRanking ranking={ranking} onManualEdit={handleManualEdit} readOnly />}
         </div>
       )}
@@ -771,11 +771,11 @@ function EvaluatorResultView({ myAllocs }: { myAllocs: any }) {
             <div className="text-right">
               {a.statut === "affecte" && <span className="text-xs font-semibold text-green-600">✅ Affecté #{a.rang_dans_creneau}</span>}
               {a.statut === "en_attente" && <span className="text-xs font-semibold text-yellow-600">⏳ Réserviste</span>}
-              {a.statut === "en_attente_allocation" && <span className="text-xs text-gray-400">En attente d'allocation…</span>}
+              {a.statut === "en_attente_allocation" && <span className="text-xs text-gray-400">En attente d&apos;allocation…</span>}
             </div>
           </div>
         ))}
-        {allocations.length === 0 && <div className="text-sm text-gray-400 text-center py-6">Vous n'êtes inscrit à aucun créneau.</div>}
+        {allocations.length === 0 && <div className="text-sm text-gray-400 text-center py-6">Vous n&apos;êtes inscrit à aucun créneau.</div>}
       </div>
     </Panel>
   );
