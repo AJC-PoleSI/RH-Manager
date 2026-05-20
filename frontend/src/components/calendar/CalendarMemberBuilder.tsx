@@ -19,6 +19,8 @@ export default function CalendarMemberBuilder({
 
   // Tous les créneaux créés par l'admin (date, Heure)
   const [adminSlots, setAdminSlots] = useState<any[]>([]);
+  // Settings contenant weeklySchedule pour filtrer les jours ouverts
+  const [settings, setSettings] = useState<any>(null);
 
   // Disponibilités cochées par l'utilisateur: Set is easier for fast toggle. Format "{date}|{start_time}|{end_time}"
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -29,6 +31,7 @@ export default function CalendarMemberBuilder({
       // Actualisation explicite du State (React) pour supprimer les résidus de la session précédente
       setAdminSlots([]);
       setSelectedBlocks(new Set());
+      setSettings(null);
 
       // On s'assure d'outrepasser tout cache potentiel au niveau navigateur / proxy
       const fetchOptions = {
@@ -41,14 +44,38 @@ export default function CalendarMemberBuilder({
         params: { t: new Date().getTime() },
       };
 
+      // 0. Fetch les settings pour la configuration hebdomadaire
+      const resSettings = await api.get("/settings", fetchOptions);
+      setSettings(resSettings.data);
+
       // 1. Fetch tous les slots (creneaux admins)
       const resSlots = await api.get("/slots/all", fetchOptions);
 
       // On filtre pour ne garder que les slots des épreuves configurées AND parent present
+      // ET uniquement les jours ouverts selon weeklySchedule
       const validEpreuveIds = epreuvesConfigured.map((e) => e.id);
-      const filteredSlots = resSlots.data.filter(
-        (s: any) => s.epreuve && validEpreuveIds.includes(s.epreuve_id),
-      );
+      const daysOfWeek = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      const filteredSlots = resSlots.data.filter((s: any) => {
+        // Filter 1: Vérifier que l'épreuve existe et est configurée
+        if (!s.epreuve || !validEpreuveIds.includes(s.epreuve_id)) {
+          return false;
+        }
+
+        // Filter 2: Vérifier que le jour est ouvert selon weeklySchedule
+        if (s.date && resSettings.data?.weeklySchedule) {
+          const dateObj = new Date(s.date);
+          const dayKey = daysOfWeek[dateObj.getDay()];
+          const dayConfig = resSettings.data.weeklySchedule[dayKey];
+
+          if (dayConfig && !dayConfig.isOpen) {
+            return false; // Jour fermé, exclure ce créneau
+          }
+        }
+
+        return true;
+      });
+
       setAdminSlots(filteredSlots);
 
       // 2. Fetch les disponibilités du membre
