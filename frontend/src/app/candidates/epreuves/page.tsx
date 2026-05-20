@@ -272,6 +272,55 @@ export default function CandidateEpreuvesPage() {
     }
   };
 
+  // ═══ Cancel enrollment handler (24h rule applied server-side) ═══
+  const handleCancelEnrollment = async (slot: AvailableSlot) => {
+    const epreuveId = epreuves.find((ep) => ep.name === slot.epreuve?.name)?.id;
+    setEnrolling(slot.id);
+    setErrorMsg(null);
+    try {
+      await api.delete(`/slots/enroll/${slot.id}`);
+      setEnrolledSlotIds((prev) => {
+        const next = new Set(prev);
+        next.delete(slot.id);
+        return next;
+      });
+      if (epreuveId) {
+        setEnrolledEpreuves((prev) => {
+          const next = new Set(prev);
+          next.delete(epreuveId);
+          return next;
+        });
+      }
+      setAllSlots((prev) =>
+        prev.map((s) =>
+          s.id === slot.id
+            ? { ...s, isEnrolled: false, enrolledCount: Math.max(0, s.enrolledCount - 1) }
+            : s
+        )
+      );
+      setSelectedSlot(null);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Erreur lors de la désinscription";
+      setErrorMsg(msg);
+    } finally {
+      setEnrolling(null);
+    }
+  };
+
+  // Helper: peut-on encore se désinscrire (>= 24h avant) ?
+  const canCancel = (slot: AvailableSlot): boolean => {
+    if (!slot.date || !slot.startTime) return false;
+    try {
+      const dateOnly = slot.date.split("T")[0];
+      const [h, m] = (slot.startTime || "00:00").split(":");
+      const startDt = new Date(`${dateOnly}T${(h || "00").padStart(2, "0")}:${(m || "00").padStart(2, "0")}:00`);
+      const hoursLeft = (startDt.getTime() - Date.now()) / (1000 * 60 * 60);
+      return hoursLeft >= 24;
+    } catch {
+      return false;
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   };
@@ -815,8 +864,30 @@ export default function CandidateEpreuvesPage() {
                     {/* Action button */}
                     <div className="mt-6">
                       {isSlotEnrolled ? (
-                        <div className="w-full py-3 text-sm font-bold text-center text-green-700 bg-green-50 border-2 border-green-200 rounded-xl">
-                          Vous êtes inscrit(e) à ce créneau &#10003;
+                        <div className="space-y-2">
+                          <div className="w-full py-3 text-sm font-bold text-center text-green-700 bg-green-50 border-2 border-green-200 rounded-xl">
+                            Vous êtes inscrit(e) à ce créneau &#10003;
+                          </div>
+                          {canCancel(selectedSlot) ? (
+                            <button
+                              onClick={() => handleCancelEnrollment(selectedSlot)}
+                              disabled={enrolling === selectedSlot.id}
+                              className="w-full py-2.5 text-sm font-medium text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {enrolling === selectedSlot.id ? (
+                                <>
+                                  <Loader2 className="animate-spin" size={14} />
+                                  Désinscription...
+                                </>
+                              ) : (
+                                "Se désinscrire de ce créneau"
+                              )}
+                            </button>
+                          ) : (
+                            <p className="text-xs text-gray-400 text-center italic px-2">
+                              La désinscription n&apos;est plus possible (moins de 24h avant le créneau).
+                            </p>
+                          )}
                         </div>
                       ) : isEpreuveEnrolled ? (
                         <div className="w-full py-3 text-sm font-medium text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-xl">

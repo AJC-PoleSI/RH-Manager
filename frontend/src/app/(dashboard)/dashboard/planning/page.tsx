@@ -321,7 +321,7 @@ export default function PlanningPage() {
   }, [isAdmin, selectedEpreuveId]);
 
   const fetchMemberAvailabilitiesSummary = useCallback(async () => {
-    if (!isAdmin || !selectedEpreuveId || !saisiOuverte) return;
+    if (!isAdmin || !selectedEpreuveId) return;
     const ep: any = epreuves.find((e) => (e as any).id === selectedEpreuveId);
     if (!ep || !ep.dateDebut || !ep.dateFin) return;
 
@@ -366,7 +366,7 @@ export default function PlanningPage() {
     } catch (e) {
       console.error("Erreur chargement member summary:", e);
     }
-  }, [isAdmin, selectedEpreuveId, saisiOuverte, epreuves]);
+  }, [isAdmin, selectedEpreuveId, epreuves]);
 
   useEffect(() => {
     fetchMemberAvailabilitiesSummary();
@@ -725,11 +725,9 @@ export default function PlanningPage() {
       setExistingSlots([]);
       setInscriptionData([]);
       setShowResetConfirm(false);
-      // Vider le récapitulatif des saisies + fermer la saisie
+      // Vider le récapitulatif des saisies (la saisie reste toujours ouverte)
       setMemberAvailsSummary([]);
-      setSaisiOuverte(false);
-      await api.put("/settings", { saisie_dispos_ouverte: "false" });
-      toast(`${deleted} créneau(x) supprimé(s) — saisie réinitialisée`, "success");
+      toast(`${deleted} créneau(x) supprimé(s) — inscriptions réinitialisées`, "success");
       fetchSlotData();
     } catch (e) {
       console.error("Erreur reset:", e);
@@ -1107,58 +1105,30 @@ export default function PlanningPage() {
 
               {/* Workflow steps */}
               <div className="space-y-4">
-                {/* ÉTAPE 1 — Saisie des disponibilités membres */}
-                <div
-                  className={`flex items-center justify-between p-4 rounded-xl border ${
-                    saisiOuverte
-                      ? "bg-green-50 border-green-200"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
+                {/* Saisie toujours ouverte — info, pas de verrou */}
+                <div className="flex items-center justify-between p-4 rounded-xl border bg-green-50 border-green-200">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        saisiOuverte
-                          ? "bg-green-200 text-green-800"
-                          : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-green-200 text-green-800">
                       1
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-800">
-                        Saisie des disponibilités
+                        Inscription des examinateurs
                       </p>
                       <p className="text-xs text-gray-500">
-                        {saisiOuverte
-                          ? "✅ Ouverte — les membres peuvent saisir leurs disponibilités"
-                          : "⏸️ Fermée — les membres ne peuvent pas modifier leurs disponibilités"}
+                        ✅ Toujours ouverte — les examinateurs peuvent
+                        s&apos;inscrire et se désinscrire des créneaux à tout
+                        moment jusqu&apos;à l&apos;épreuve.
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    {saisiOuverte ? (
-                      <button
-                        onClick={handleFermerSaisieDispos}
-                        className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 border border-orange-200 rounded-lg hover:bg-orange-200 transition-colors"
-                      >
-                        Fermer la saisie
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleOuvrirSaisieDispos}
-                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        Ouvrir la saisie
-                      </button>
-                    )}
-                  </div>
                 </div>
 
-                {saisiOuverte && (
+                {/* Récapitulatif des inscriptions */}
+                {memberAvailsSummary.length > 0 && (
                   <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50/50">
                     <h4 className="text-sm font-semibold mb-3 text-gray-800">
-                      Récapitulatif des saisies ({memberAvailsSummary.length}{" "}
+                      Récapitulatif des inscriptions ({memberAvailsSummary.length}{" "}
                       membre{memberAvailsSummary.length > 1 ? "s" : ""})
                     </h4>
                     <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-100 bg-white">
@@ -1169,48 +1139,35 @@ export default function PlanningPage() {
                             <th className="px-4 py-3 text-center">
                               Créneaux choisis
                             </th>
-                            <th className="px-4 py-3">
-                              Détail des disponibilités
-                            </th>
+                            <th className="px-4 py-3">Détail</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {memberAvailsSummary.length > 0 ? (
-                            memberAvailsSummary.map((mem, idx) => (
-                              <tr key={idx} className="hover:bg-gray-50/50">
-                                <td className="px-4 py-3 font-medium text-gray-800">
-                                  {mem.email}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">
-                                    {mem.count}
-                                  </span>
-                                </td>
-                                <td
-                                  className="px-4 py-3 text-gray-500 text-xs truncate max-w-xs"
-                                  title={mem.details}
-                                >
-                                  {mem.details}
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
+                          {memberAvailsSummary.map((mem, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/50">
+                              <td className="px-4 py-3 font-medium text-gray-800">
+                                {mem.email}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                                  {mem.count}
+                                </span>
+                              </td>
                               <td
-                                colSpan={3}
-                                className="px-4 py-8 text-center text-gray-400 italic"
+                                className="px-4 py-3 text-gray-500 text-xs truncate max-w-xs"
+                                title={mem.details}
                               >
-                                Aucune disponibilité saisie pour le moment.
+                                {mem.details}
                               </td>
                             </tr>
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   </div>
                 )}
 
-                {/* ÉTAPE 2 — Publier les créneaux aux membres */}
+                {/* ÉTAPE 2 — Lancer l'allocation auto */}
                 <div
                   className={`flex items-center justify-between p-4 rounded-xl border ${
                     inscriptionsOuvertes
@@ -1230,32 +1187,23 @@ export default function PlanningPage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-800">
-                        Publication aux membres
+                        Allocation automatique
                       </p>
                       <p className="text-xs text-gray-500">
                         {inscriptionsOuvertes
-                          ? "✅ Publiés — les membres peuvent voir et s'inscrire aux créneaux"
-                          : "⏸️ Non publié — les créneaux sont en brouillon"}
+                          ? "✅ Allocation effectuée — l'algo a sélectionné les examinateurs selon le quota"
+                          : "⏸️ Pas encore lancée — l'algo choisira N évaluateurs par créneau"}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    {inscriptionsOuvertes ? (
-                      <button
-                        onClick={handleFermerInscriptions}
-                        className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 border border-orange-200 rounded-lg hover:bg-orange-200 transition-colors"
-                      >
-                        Fermer les inscriptions
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleOuvrirInscriptions}
-                        disabled={!selectedEpreuveId}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Générer et Publier
-                      </button>
-                    )}
+                    <button
+                      onClick={handleOuvrirInscriptions}
+                      disabled={!selectedEpreuveId}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {inscriptionsOuvertes ? "Relancer l'allocation" : "Lancer l'allocation"}
+                    </button>
                   </div>
                 </div>
 
@@ -1372,7 +1320,6 @@ export default function PlanningPage() {
   }
 
   // ===================== MEMBER VIEW =====================
-  const saisieDisabled = saisieOuverteMember !== true;
 
   // Helpers pour l'emploi du temps
   const formatDate = (dateStr: string) => {
@@ -1430,7 +1377,7 @@ export default function PlanningPage() {
   };
 
   // ── ÉTAT 0 : chargement ──
-  if (saisieOuverteMember === null || planningGenerated === null) {
+  if (planningGenerated === null) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <div>
@@ -1448,8 +1395,10 @@ export default function PlanningPage() {
     );
   }
 
-  // ── ÉTAT 1 : Saisie ouverte → grille de disponibilités (Étape 1) ──
-  if (saisieOuverteMember) {
+  // ── Saisie toujours ouverte : afficher la grille de créneaux ──
+  // Les examinateurs peuvent s'inscrire / se désinscrire à tout moment.
+  // Si le planning a déjà été généré, on affiche en plus l'emploi du temps en bas.
+  if (!planningGenerated) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <CalendarMemberBuilder
@@ -1461,64 +1410,6 @@ export default function PlanningPage() {
     );
   }
 
-  // ── ÉTAT 2 : Saisie fermée + planning PAS encore généré → message d'attente ──
-  if (!planningGenerated) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Mon planning</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Emploi du temps de vos evaluations
-          </p>
-        </div>
-
-        <div className="flex items-center justify-center py-16">
-          <div className="text-center max-w-md">
-            <div
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-                border: "2px solid #BFDBFE",
-              }}
-            >
-              <span style={{ fontSize: 36 }}>📋</span>
-            </div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">
-              Planning en cours de creation
-            </h2>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              L&apos;administration est en train de preparer votre planning
-              d&apos;evaluation. Vous recevrez votre emploi du temps des
-              qu&apos;il sera valide et publie.
-            </p>
-            <div className="mt-6 flex items-center justify-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-              <div
-                className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"
-                style={{ animationDelay: "0.2s" }}
-              />
-              <div
-                className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"
-                style={{ animationDelay: "0.4s" }}
-              />
-            </div>
-            <button
-              onClick={fetchSaisieStatus}
-              className="mt-6 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors border border-gray-200"
-            >
-              Actualiser le statut
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ── ÉTAT 3 : Saisie fermée + planning généré → EMPLOI DU TEMPS ──
   return (
