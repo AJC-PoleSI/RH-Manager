@@ -50,24 +50,9 @@ export async function PUT(req: NextRequest) {
   const memberId = payload.id;
 
   try {
-    // Check if saisie is open (non-admin members only)
-    if (!payload.isAdmin) {
-      const { data: settings } = await supabaseAdmin
-        .from("system_settings")
-        .select("value")
-        .eq("key", "saisie_dispos_ouverte")
-        .single();
-
-      if (!settings || settings.value !== "true") {
-        return Response.json(
-          {
-            error:
-              "La saisie des disponibilites est fermee. Contactez l'administrateur.",
-          },
-          { status: 403 },
-        );
-      }
-    }
+    // Note : la saisie est désormais toujours ouverte côté front (les examinateurs
+    // peuvent s'inscrire et se désinscrire à tout moment jusqu'à l'épreuve).
+    // L'ancien verrou "saisie_dispos_ouverte" n'est plus appliqué.
 
     const { availabilities, startDate, endDate } = await req.json();
 

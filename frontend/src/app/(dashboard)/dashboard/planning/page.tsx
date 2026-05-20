@@ -721,14 +721,19 @@ export default function PlanningPage() {
         epreuveId: selectedEpreuveId,
       });
       const deleted = res.data?.deleted || 0;
+      const availsDeleted = res.data?.availabilities_deleted || 0;
       setRepartitionResult(null);
       setExistingSlots([]);
       setInscriptionData([]);
       setShowResetConfirm(false);
       // Vider le récapitulatif des saisies (la saisie reste toujours ouverte)
       setMemberAvailsSummary([]);
-      toast(`${deleted} créneau(x) supprimé(s) — inscriptions réinitialisées`, "success");
+      toast(
+        `${deleted} créneau(x) et ${availsDeleted} disponibilité(s) supprimé(s)`,
+        "success",
+      );
       fetchSlotData();
+      fetchMemberAvailabilitiesSummary();
     } catch (e) {
       console.error("Erreur reset:", e);
       toast("Erreur lors de la réinitialisation", "error");
@@ -1261,12 +1266,12 @@ export default function PlanningPage() {
                 <span>
                   {existingSlots.length} créneau(x) créé(s) pour cette épreuve
                 </span>
-                {existingSlots.length > 0 && (
+                {(existingSlots.length > 0 || memberAvailsSummary.length > 0) && (
                   <button
                     onClick={() => setShowResetConfirm(true)}
                     className="text-red-500 hover:text-red-700 hover:underline transition-colors"
                   >
-                    Réinitialiser tous les créneaux
+                    Réinitialiser créneaux et inscriptions
                   </button>
                 )}
               </div>

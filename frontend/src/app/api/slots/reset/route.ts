@@ -4,7 +4,10 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/slots/reset — delete all slots for an epreuve (admin only)
+// POST /api/slots/reset — admin: clear all evaluation_slots, related assignments
+// AND member availabilities for the épreuve's date range (true reset).
+// Works even when there are 0 slots, so it can be used to flush stale
+// availabilities entered after a previous reset.
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -20,11 +23,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine which slot IDs to delete — always query the DB if epreuveId is provided
+    // 1. Determine which slot IDs to delete
     let idsToDelete: string[] = [];
 
     if (epreuveId) {
-      // Always query the DB to get ALL slots for this epreuve (not relying on frontend state)
       const { data: slots } = await supabaseAdmin
         .from("evaluation_slots")
         .select("id")
@@ -34,46 +36,37 @@ export async function POST(req: NextRequest) {
       idsToDelete = slotIds;
     }
 
-    if (idsToDelete.length === 0) {
-      return Response.json({
-        message: "Aucun créneau à supprimer",
-        deleted: 0,
-      });
-    }
-
-    // 1. Delete enrollments (inscriptions candidats)
-    const { error: enrollError } = await supabaseAdmin
-      .from("slot_enrollments")
-      .delete()
-      .in("slot_id", idsToDelete);
-    if (enrollError) console.error("Delete enrollments error:", enrollError);
-
-    // 2. Delete member assignments
-    const { error: assignError } = await supabaseAdmin
-      .from("slot_member_assignments")
-      .delete()
-      .in("slot_id", idsToDelete);
-    if (assignError) console.error("Delete assignments error:", assignError);
-
-    // 3. Delete availability requests if table exists
-    try {
+    // 2. Delete slot-bound data (only if there ARE slots)
+    if (idsToDelete.length > 0) {
       await supabaseAdmin
-        .from("slot_availability_requests")
+        .from("slot_enrollments")
         .delete()
         .in("slot_id", idsToDelete);
-    } catch {
-      // Table may not exist
+
+      await supabaseAdmin
+        .from("slot_member_assignments")
+        .delete()
+        .in("slot_id", idsToDelete);
+
+      try {
+        await supabaseAdmin
+          .from("slot_availability_requests")
+          .delete()
+          .in("slot_id", idsToDelete);
+      } catch {
+        // table may not exist
+      }
+
+      const { error: slotError } = await supabaseAdmin
+        .from("evaluation_slots")
+        .delete()
+        .in("id", idsToDelete);
+      if (slotError) throw slotError;
     }
 
-    // 4. Delete the slots themselves
-    const { error: slotError } = await supabaseAdmin
-      .from("evaluation_slots")
-      .delete()
-      .in("id", idsToDelete);
-
-    if (slotError) throw slotError;
-
-    // 5. Delete member availabilities for this épreuve's date range
+    // 3. ALWAYS clean member availabilities for this épreuve's date range
+    //    (runs even when 0 slots existed, so stale data gets flushed)
+    let availabilitiesDeleted = 0;
     if (epreuveId) {
       try {
         const { data: epreuve } = await supabaseAdmin
@@ -83,20 +76,61 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (epreuve?.date_debut && epreuve?.date_fin) {
-          await supabaseAdmin
+          // Normalize to plain YYYY-MM-DD bounds so we cover any time-of-day
+          // representation in the availabilities.date column
+          const startStr = String(epreuve.date_debut).substring(0, 10);
+          const endStr = String(epreuve.date_fin).substring(0, 10);
+
+          const { data: deleted, error: delErr } = await supabaseAdmin
             .from("availabilities")
             .delete()
-            .gte("date", epreuve.date_debut)
-            .lte("date", epreuve.date_fin);
+            .gte("date", `${startStr}T00:00:00.000Z`)
+            .lte("date", `${endStr}T23:59:59.999Z`)
+            .select("id");
+
+          if (delErr) {
+            console.error("Delete availabilities (range) error:", delErr);
+          } else {
+            availabilitiesDeleted = (deleted || []).length;
+          }
+
+          // Fallback : si rien supprimé via le filtre date (peut arriver si
+          // la colonne date est null ou format différent), nettoyer aussi
+          // par weekday couvert par la plage de dates.
+          if (availabilitiesDeleted === 0) {
+            const weekdayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+            const startD = new Date(startStr + "T12:00:00Z");
+            const endD = new Date(endStr + "T12:00:00Z");
+            const weekdaysInRange = new Set<string>();
+            for (
+              let d = new Date(startD);
+              d.getTime() <= endD.getTime();
+              d.setUTCDate(d.getUTCDate() + 1)
+            ) {
+              weekdaysInRange.add(weekdayMap[d.getUTCDay()]);
+            }
+            if (weekdaysInRange.size > 0) {
+              const { data: deleted2 } = await supabaseAdmin
+                .from("availabilities")
+                .delete()
+                .in("weekday", Array.from(weekdaysInRange))
+                .select("id");
+              availabilitiesDeleted = (deleted2 || []).length;
+            }
+          }
         }
-      } catch {
-        // Ignore — availabilities cleanup is best-effort
+      } catch (err) {
+        console.error("Availabilities cleanup error:", err);
       }
     }
 
     return Response.json({
-      message: `${idsToDelete.length} créneau(x) supprimé(s)`,
+      message:
+        idsToDelete.length > 0
+          ? `${idsToDelete.length} créneau(x) supprimé(s), ${availabilitiesDeleted} disponibilité(s) effacée(s)`
+          : `Aucun créneau, ${availabilitiesDeleted} disponibilité(s) effacée(s)`,
       deleted: idsToDelete.length,
+      availabilities_deleted: availabilitiesDeleted,
     });
   } catch (error) {
     console.error("Reset slots error:", error);
