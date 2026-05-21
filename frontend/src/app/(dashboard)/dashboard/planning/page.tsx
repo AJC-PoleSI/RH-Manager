@@ -2286,7 +2286,7 @@ function GlobalEventsAdmin({
             {/* Couleur de l'événement */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Couleur de l'événement
+                Couleur de l&apos;événement
               </label>
               <div className="flex gap-2 items-center flex-wrap">
                 {EVENT_COLORS.map((c) => (

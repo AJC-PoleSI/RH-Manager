@@ -46,6 +46,8 @@ export async function PUT(
     if (body.pole !== undefined) updateData.pole = body.pole;
     if (body.description !== undefined)
       updateData.description = body.description;
+    if (body.color !== undefined)
+      updateData.color = body.color;
     // if (body.isVisible !== undefined) updateData.is_visible = body.isVisible; // TODO: add to Supabase schema
     if (body.evaluationQuestions !== undefined) {
       updateData.evaluation_questions =

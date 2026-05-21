@@ -43,6 +43,7 @@ export const createEreuve = async (req: Request, res: Response) => {
         if (body.isVisible !== undefined) data.isVisible = body.isVisible;
         if (body.isGroupEpreuve !== undefined) data.isGroupEpreuve = body.isGroupEpreuve;
         if (body.groupSize !== undefined) data.groupSize = body.groupSize;
+        if (body.color !== undefined) data.color = body.color;
 
         // NOTE: fields like date, time, salle, presentedBy, documentsUrls
         // are NOT in the Prisma Epreuve model and must NOT be passed to prisma.create()
@@ -79,6 +80,7 @@ export const updateEpreuve = async (req: Request, res: Response) => {
                 ? body.evaluationQuestions
                 : JSON.stringify(body.evaluationQuestions);
         }
+        if (body.color !== undefined) data.color = body.color;
 
         const epreuve = await prisma.epreuve.update({
             where: { id },

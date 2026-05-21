@@ -131,7 +131,7 @@ export default function CandidateCalendarPage() {
           type,
           room: ev.epreuve?.salle || ev.room || null,
           description: ev.description || null,
-          color: ev.color || null,
+          color: ev.color || ev.epreuve?.color || null,
         };
 
         // Multi-day: expand into entries for each day
@@ -178,6 +178,7 @@ export default function CandidateCalendarPage() {
           slotId: e.slotId,
           enrolledAt: e.enrolledAt,
           tour: e.epreuve?.tour,
+          color: e.epreuve?.color || null,
           canCancel: canCancelSlot(dateRaw, startTime),
         };
       });

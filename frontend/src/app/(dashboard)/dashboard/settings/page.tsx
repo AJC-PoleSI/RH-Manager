@@ -64,9 +64,20 @@ interface NewEpreuveForm {
   inscriptionDeadline: string;
   /* shared */
   description: string;
+  color: string;
   documents: FileList | null;
   criteres: Critere[];
 }
+
+const EVENT_COLORS = [
+  { value: "#3B82F6", label: "Bleu" },
+  { value: "#10B981", label: "Vert" },
+  { value: "#F59E0B", label: "Jaune" },
+  { value: "#EF4444", label: "Rouge" },
+  { value: "#8B5CF6", label: "Violet" },
+  { value: "#EC4899", label: "Rose" },
+  { value: "#64748B", label: "Gris" },
+];
 
 const EMPTY_FORM: NewEpreuveForm = {
   name: "",
@@ -83,6 +94,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   pole: "",
   inscriptionDeadline: "",
   description: "",
+  color: "#3B82F6",
   documents: null,
   criteres: [{ name: "", coefficient: 1 }],
 };
@@ -282,6 +294,7 @@ export default function CreationPage() {
         ? isoToDatetimeLocal(ep.inscriptionDeadline)
         : "",
       description: ep.description || "",
+      color: ep.color || "#3B82F6",
       documents: null,
       criteres,
     });
@@ -339,6 +352,7 @@ export default function CreationPage() {
           ? datetimeLocalToISO(form.inscriptionDeadline)
           : null,
         description: form.description || null,
+        color: form.color || "#3B82F6",
       };
 
       if (editingEpreuveId) {
@@ -906,6 +920,27 @@ export default function CreationPage() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Décrivez le contenu et les attentes de cette épreuve..."
               />
+            </div>
+
+            {/* Couleur de l'épreuve */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Couleur de l&apos;épreuve (affichage calendrier)
+              </label>
+              <div className="flex gap-2 items-center flex-wrap">
+                {EVENT_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => handleFormChange("color", c.value)}
+                    title={c.label}
+                    className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                      form.color === c.value ? "border-gray-900 scale-110 shadow-sm" : "border-transparent hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: c.value }}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Documents */}

@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
       dateDebut: e.date_debut ? e.date_debut.split("T")[0] : null,
       dateFin: e.date_fin ? e.date_fin.split("T")[0] : null,
       inscriptionDeadline: e.inscription_deadline ?? null,
+      color: e.color || "#3B82F6",
       isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
         ? { inscription_deadline: new Date(body.inscriptionDeadline).toISOString() }
         : {}),
       description: body.description || null,
+      color: body.color || "#3B82F6",
       // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };
 
