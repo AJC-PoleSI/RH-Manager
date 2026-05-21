@@ -1006,8 +1006,8 @@ export default function PlanningPage() {
                         start: dStr,
                         end: endExclusive,
                         allDay: true,
-                        backgroundColor: isHidden ? "#94A3B8" : "#3B82F6",
-                        borderColor: isHidden ? "#64748B" : "#1D4ED8",
+                        backgroundColor: isHidden ? "#94A3B8" : (ev.color || "#3B82F6"),
+                        borderColor: isHidden ? "#64748B" : (ev.color || "#1D4ED8"),
                         textColor: "#FFFFFF",
                         extendedProps: { kind: "global", raw: ev },
                       };
@@ -1019,8 +1019,8 @@ export default function PlanningPage() {
                       title: `📌 ${ev.title}${isHidden ? " (masqué)" : ""}`,
                       start: `${dStr}T${ev.start_time || ev.startTime || "09:00"}`,
                       end: `${dStr}T${ev.end_time || ev.endTime || "10:00"}`,
-                      backgroundColor: isHidden ? "#94A3B8" : "#3B82F6",
-                      borderColor: isHidden ? "#64748B" : "#1D4ED8",
+                      backgroundColor: isHidden ? "#94A3B8" : (ev.color || "#3B82F6"),
+                      borderColor: isHidden ? "#64748B" : (ev.color || "#1D4ED8"),
                       textColor: "#FFFFFF",
                       extendedProps: { kind: "global", raw: ev },
                     };
@@ -1591,6 +1591,7 @@ export default function PlanningPage() {
         memberId={user?.id || ""}
         toast={toast}
         epreuvesConfigured={epreuves}
+        onSlotsChange={fetchMySlots}
       />
 
       {/* ─── Emploi du temps (créneaux déjà assignés) ─── */}
@@ -1998,6 +1999,17 @@ function GlobalEventsAdmin({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [visibleToCandidates, setVisibleToCandidates] = useState(true);
+  const [color, setColor] = useState("#3B82F6");
+
+  const EVENT_COLORS = [
+    { value: "#3B82F6", label: "Bleu" },
+    { value: "#10B981", label: "Vert" },
+    { value: "#F59E0B", label: "Jaune" },
+    { value: "#EF4444", label: "Rouge" },
+    { value: "#8B5CF6", label: "Violet" },
+    { value: "#EC4899", label: "Rose" },
+    { value: "#64748B", label: "Gris" },
+  ];
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -2026,6 +2038,7 @@ function GlobalEventsAdmin({
     setStartTime("09:00");
     setEndTime("10:00");
     setVisibleToCandidates(true);
+    setColor("#3B82F6");
   };
 
   const openCreateForm = () => {
@@ -2046,6 +2059,7 @@ function GlobalEventsAdmin({
     setStartTime((ev.start_time || ev.startTime || "09:00").slice(0, 5));
     setEndTime((ev.end_time || ev.endTime || "10:00").slice(0, 5));
     setVisibleToCandidates(ev.visible_to_candidates !== false);
+    setColor(ev.color || "#3B82F6");
     setShowForm(true);
   };
 
@@ -2066,6 +2080,7 @@ function GlobalEventsAdmin({
           start_time: startTime,
           end_time: endTime,
           visible_to_candidates: visibleToCandidates,
+          color,
         });
         toast("Événement mis à jour", "success");
       } else {
@@ -2079,6 +2094,7 @@ function GlobalEventsAdmin({
           end_time: endTime,
           is_global: true,
           visible_to_candidates: visibleToCandidates,
+          color,
         });
         toast(
           "Événement global créé" +
@@ -2267,6 +2283,26 @@ function GlobalEventsAdmin({
               </div>
             </div>
 
+            {/* Couleur de l'événement */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Couleur de l'événement
+              </label>
+              <div className="flex gap-2 items-center flex-wrap">
+                {EVENT_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    onClick={() => setColor(c.value)}
+                    title={c.label}
+                    className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                      color === c.value ? "border-gray-900 scale-110 shadow-sm" : "border-transparent hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: c.value }}
+                  />
+                ))}
+              </div>
+            </div>
+
             {/* Visibility toggle for candidates */}
             <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
               <label className="relative inline-flex items-center cursor-pointer">
@@ -2342,7 +2378,10 @@ function GlobalEventsAdmin({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: ev.color || "#3B82F6" }}
+                      />
                       <span className="text-sm font-semibold text-gray-900 truncate">
                         {ev.title}
                       </span>

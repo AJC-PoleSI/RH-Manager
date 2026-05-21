@@ -23,6 +23,7 @@ export async function PUT(
       startTime,
       endTime,
       visible_to_candidates,
+      color,
       related_epreuve_id,
       related_member_id,
       related_candidate_id,
@@ -36,6 +37,7 @@ export async function PUT(
     if (start_time || startTime) data.start_time = start_time || startTime;
     if (end_time || endTime) data.end_time = end_time || endTime;
     if (visible_to_candidates !== undefined) data.visible_to_candidates = visible_to_candidates;
+    if (color !== undefined) data.color = color;
     if (related_epreuve_id !== undefined)
       data.related_epreuve_id = related_epreuve_id;
     if (related_member_id !== undefined)
@@ -54,8 +56,8 @@ export async function PUT(
 
     return Response.json(event);
   } catch (error) {
-    console.error("Update event error:", error);
-    return Response.json({ error: "Failed to update event" }, { status: 400 });
+    console.error("Update event error details:", error);
+    return Response.json({ error: "Failed to update event", details: String(error) }, { status: 400 });
   }
 }
 

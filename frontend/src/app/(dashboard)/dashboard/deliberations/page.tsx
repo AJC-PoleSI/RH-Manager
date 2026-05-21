@@ -60,6 +60,10 @@ export default function DeliberationsPage() {
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>("tinder");
 
+  // Filters
+  const [filterPole, setFilterPole] = useState<string>("Tous");
+  const [filterFirstChoiceOnly, setFilterFirstChoiceOnly] = useState<boolean>(false);
+
   // Tinder card state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -105,10 +109,10 @@ export default function DeliberationsPage() {
     loadData();
   }, [loadData]);
 
-  // Reset index when tour changes
+  // Reset index when tour or filters change
   useEffect(() => {
     setCurrentIndex(0); setExpanded(false);
-  }, [selectedTour]);
+  }, [selectedTour, filterPole, filterFirstChoiceOnly]);
 
   const getStatus = (c: Candidate) => c.deliberation?.[tourKey] || "";
 
@@ -246,19 +250,54 @@ export default function DeliberationsPage() {
   };
 
   // Filter candidates based on selected tour
-  const filteredCandidates = candidates.filter((c) => {
-    if (selectedTour === 1) return true;
-    if (selectedTour === 2) {
-      const t1 = c.deliberation?.tour1Status;
-      return t1 === "accepted" || t1 === "waiting";
-    }
-    if (selectedTour === 3) {
-      const t1 = c.deliberation?.tour1Status;
-      const t2 = c.deliberation?.tour2Status;
-      return t1 === "accepted" && (t2 === "accepted" || t2 === "waiting");
-    }
-    return true;
-  });
+  const tourCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      if (selectedTour === 1) return true;
+      if (selectedTour === 2) {
+        const t1 = c.deliberation?.tour1Status;
+        return t1 === "accepted" || t1 === "waiting";
+      }
+      if (selectedTour === 3) {
+        const t1 = c.deliberation?.tour1Status;
+        const t2 = c.deliberation?.tour2Status;
+        return t1 === "accepted" && (t2 === "accepted" || t2 === "waiting");
+      }
+      return true;
+    });
+  }, [candidates, selectedTour]);
+
+  // Compute pole counts for the filter dropdown
+  const poleCounts = useMemo(() => {
+    const counts: Record<string, { total: number, firstChoice: number }> = {};
+    tourCandidates.forEach(c => {
+      const requestedPoles = Array.from(new Set(c.wishes?.map(w => w.pole) || []));
+      requestedPoles.forEach(pole => {
+        if (!counts[pole]) counts[pole] = { total: 0, firstChoice: 0 };
+        counts[pole].total++;
+        if (c.wishes?.find(w => w.rank === 1)?.pole === pole) {
+           counts[pole].firstChoice++;
+        }
+      });
+    });
+    return counts;
+  }, [tourCandidates]);
+
+  const allPoles = useMemo(() => Object.keys(poleCounts).sort(), [poleCounts]);
+
+  const filteredCandidates = useMemo(() => {
+    return tourCandidates.filter(c => {
+      if (filterPole !== "Tous") {
+        if (filterFirstChoiceOnly) {
+          const firstWish = c.wishes?.find(w => w.rank === 1);
+          if (!firstWish || firstWish.pole !== filterPole) return false;
+        } else {
+          const hasWish = c.wishes?.some(w => w.pole === filterPole);
+          if (!hasWish) return false;
+        }
+      }
+      return true;
+    });
+  }, [tourCandidates, filterPole, filterFirstChoiceOnly]);
 
   // Group candidates by pole (first wish)
   const candidatesByPole = useMemo(() => {
@@ -442,22 +481,61 @@ export default function DeliberationsPage() {
         </div>
       </div>
 
-      {/* Tour Selector */}
-      <div className="flex items-center gap-3">
-        {[1, 2, 3].map((t) => (
-          <button
-            key={t}
-            onClick={() => setSelectedTour(t)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              selectedTour === t
-                ? "bg-white border-2 text-blue-600 shadow-sm"
-                : "bg-white border border-gray-200 text-gray-500 hover:border-gray-300"
-            }`}
-            style={selectedTour === t ? { borderColor: "#2563EB" } : undefined}
+      {/* Filters (Tour + Pole) */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        {/* Tour Selector */}
+        <div className="flex items-center gap-3 bg-gray-50 p-1.5 rounded-xl border border-gray-100 shrink-0">
+          {[1, 2, 3].map((t) => (
+            <button
+              key={t}
+              onClick={() => setSelectedTour(t)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                selectedTour === t
+                  ? "bg-white text-blue-600 shadow-sm border border-gray-200"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Tour {t}
+            </button>
+          ))}
+        </div>
+        
+        {/* Separator */}
+        <div className="hidden sm:block w-px h-8 bg-gray-200" />
+
+        {/* Pole Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={filterPole}
+            onChange={(e) => {
+              setFilterPole(e.target.value);
+              if (e.target.value === "Tous") setFilterFirstChoiceOnly(false);
+            }}
+            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
           >
-            Tour {t}
-          </button>
-        ))}
+            <option value="Tous">Tous les pôles</option>
+            {allPoles.map(pole => {
+              const counts = poleCounts[pole];
+              return (
+                <option key={pole} value={pole}>
+                  {pole} ({filterFirstChoiceOnly ? counts.firstChoice : counts.total} demandes)
+                </option>
+              );
+            })}
+          </select>
+
+          {filterPole !== "Tous" && (
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer bg-white px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={filterFirstChoiceOnly}
+                onChange={(e) => setFilterFirstChoiceOnly(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+              />
+              Filtre 1er voeu uniquement
+            </label>
+          )}
+        </div>
       </div>
 
       {/* Stats bar */}

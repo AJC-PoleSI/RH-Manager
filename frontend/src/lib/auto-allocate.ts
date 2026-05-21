@@ -148,14 +148,37 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
       .insert(assignmentsToInsert);
   }
 
-  // Update statuses based on quota
+  // Vérifier si le planning est globalement publié aux candidats
+  // (pour déterminer si on auto-publish les slots avec >= 1 examinateur)
+  let planningVisibleToCandidates = false;
+  try {
+    const { data: row } = await supabaseAdmin
+      .from("system_settings")
+      .select("value")
+      .eq("key", "planning_visible_candidats")
+      .single();
+    planningVisibleToCandidates = row?.value === "true" || row?.value === true;
+  } catch {
+    planningVisibleToCandidates = false;
+  }
+
+  // Update statuses based on quota et auto-publish si planning visible
   for (const slot of sortedSlots) {
     if (slot.status === "published") continue;
     const assignedCount = assignmentsToInsert.filter(
       (a) => a.slot_id === slot.id,
     ).length;
-    const newStatus =
-      assignedCount >= (slot.min_members || 2) ? "ready" : "open";
+
+    let newStatus: string;
+    if (planningVisibleToCandidates && assignedCount >= 1) {
+      // Règle métier: planning publié + au moins 1 examinateur → visible aux candidats
+      newStatus = "published";
+    } else if (assignedCount >= (slot.min_members || 2)) {
+      newStatus = "ready";
+    } else {
+      newStatus = "open";
+    }
+
     if (slot.status !== newStatus) {
       await supabaseAdmin
         .from("evaluation_slots")

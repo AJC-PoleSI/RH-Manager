@@ -21,6 +21,7 @@ interface CalendarEvent {
   type: "commune" | "individuelle" | "global";
   room?: string;
   description?: string;
+  color?: string; // Custom color for global events
   // Enrollment-specific fields
   slotId?: string;
   enrolledAt?: string;
@@ -130,6 +131,7 @@ export default function CandidateCalendarPage() {
           type,
           room: ev.epreuve?.salle || ev.room || null,
           description: ev.description || null,
+          color: ev.color || null,
         };
 
         // Multi-day: expand into entries for each day
@@ -459,11 +461,14 @@ export default function CandidateCalendarPage() {
                           <div className="space-y-0.5">
                             {dayEvents.map((ev) => {
                               const style = typeStyles[ev.type] || typeStyles.individuelle;
+                              const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff" } : {};
+                              const classes = ev.color ? "" : `${style.bg} ${style.text}`;
                               return (
                                 <button
                                   key={ev.id}
                                   onClick={() => { setCancelError(null); setSelectedEvent(ev); }}
-                                  className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${style.bg} ${style.text}`}
+                                  className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${classes}`}
+                                  style={customStyle}
                                   title={`${ev.title}${ev.room ? ` — Salle: ${ev.room}` : ""}${ev.startTime ? ` ${ev.startTime.slice(0, 5)}` : ""}`}
                                 >
                                   {ev.startTime && (
@@ -515,12 +520,14 @@ export default function CandidateCalendarPage() {
                         )}
                         {dateEvents.map((ev) => {
                           const style = typeStyles[ev.type] || typeStyles.individuelle;
+                          const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff", borderColor: "transparent" } : { borderColor: "transparent" };
+                          const classes = ev.color ? "" : `${style.bg} ${style.text}`;
                           return (
                             <button
                               key={ev.id}
                               onClick={() => { setCancelError(null); setSelectedEvent(ev); }}
-                              className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${style.bg} ${style.text}`}
-                              style={{ borderColor: "transparent" }}
+                              className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${classes}`}
+                              style={customStyle}
                             >
                               <p className="font-semibold truncate">{ev.title}</p>
                               {ev.startTime && (
@@ -580,9 +587,8 @@ export default function CandidateCalendarPage() {
                 <div>
                   <h1 className="text-xl font-semibold text-gray-900">{selectedEvent.title}</h1>
                   <span
-                    className={`inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      typeStyles[selectedEvent.type]?.bg || ""
-                    } ${typeStyles[selectedEvent.type]?.text || ""}`}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${selectedEvent.color ? "" : typeStyles[selectedEvent.type]?.bg} ${selectedEvent.color ? "" : typeStyles[selectedEvent.type]?.text}`}
+                    style={selectedEvent.color ? { backgroundColor: selectedEvent.color, color: "#fff" } : {}}
                   >
                     {typeStyles[selectedEvent.type]?.label || "Événement"}
                   </span>

@@ -143,6 +143,7 @@ model CalendarEvent {
   endTime               String   @map("end_time")
   isGlobal              Boolean  @default(false) @map("is_global")
   visibleToCandidates   Boolean  @default(true) @map("visible_to_candidates")
+  color                 String?  @default("#3B82F6")
   relatedEpreuveId      String?  @map("related_epreuve_id")
   relatedMemberId       String?  @map("related_member_id")
   relatedCandidateId    String?  @map("related_candidate_id")

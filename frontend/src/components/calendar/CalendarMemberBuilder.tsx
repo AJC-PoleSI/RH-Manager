@@ -7,12 +7,14 @@ interface CalendarMemberBuilderProps {
   memberId: string;
   toast: any;
   epreuvesConfigured: any[];
+  onSlotsChange?: () => void; // appelé après sauvegarde pour refresh des slots assignés
 }
 
 export default function CalendarMemberBuilder({
   memberId,
   toast,
   epreuvesConfigured,
+  onSlotsChange,
 }: CalendarMemberBuilderProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -178,6 +180,8 @@ export default function CalendarMemberBuilder({
 
       await api.put("/availability", { availabilities: payload });
       toast("Disponibilités synchronisées globales 🎉", "success");
+      // Refresh des slots assignés côté parent (l'auto-allocate a tourné côté serveur)
+      onSlotsChange?.();
     } catch (error: any) {
       console.error(error);
       toast(error.response?.data?.error || "Erreur de sauvegarde", "error");

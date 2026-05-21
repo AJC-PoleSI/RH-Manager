@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       related_candidate_id,
       is_global,
       visible_to_candidates,
+      color,
       type,
     } = body;
 
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
       related_candidate_id: isGlobal ? null : related_candidate_id || null,
       is_global: isGlobal,
       visible_to_candidates: visible_to_candidates !== false,
+      color: color || "#3B82F6",
     };
 
     // max_candidates only for non-global events
