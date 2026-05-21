@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 // In-memory cache: avoid hammering Supabase on every page navigation
 let settingsCache: Record<string, string> | null = null;
 let settingsCacheAt = 0;
-const SETTINGS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SETTINGS_TTL_MS = 5 * 1000; // 5 secondes — réactif aux changements admin
 
 function invalidateSettingsCache() {
   settingsCache = null;

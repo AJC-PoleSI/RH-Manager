@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import {
@@ -130,58 +130,82 @@ export default function CandidateEpreuvesPage() {
 
   // Error toast
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Planning visibility (masqué côté admin = page candidate cachée)
+  const [planningVisible, setPlanningVisible] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [epRes, enrollRes, slotsRes] = await Promise.all([
-          api.get("/epreuves"),
-          api.get("/slots/my-enrollments").catch(() => ({ data: [] })),
-          api.get("/slots/available").catch(() => ({ data: [] })),
-        ]);
+  const fetchData = useCallback(async () => {
+    try {
+      // 0. Vérifier la visibilité du planning (toggle admin)
+      const settingsRes = await api.get("/settings").catch(() => ({ data: {} }));
+      const visible = settingsRes.data?.planning_visible_candidats;
+      const isVisible = visible === "true" || visible === true;
+      setPlanningVisible(isVisible);
 
-        if (epRes.data && Array.isArray(epRes.data)) {
-          // Phase 4: Only show visible epreuves to candidates
-          setEpreuves(epRes.data.filter((e: any) => e.isVisible !== false));
-        }
-
-        // Track enrolled épreuves + slot IDs + slot DATES par épreuve
-        const enrolled = new Set<string>();
-        const enrolledIds = new Set<string>();
-        const slotByEpreuve = new Map<string, { date: string; startTime: string; endTime: string; room?: string }>();
-        (enrollRes.data || []).forEach((e: any) => {
-          if (e.slotId) enrolledIds.add(e.slotId);
-          if (e.epreuve?.name) {
-            const matchedEp = (epRes.data || []).find((ep: any) => ep.name === e.epreuve.name);
-            if (matchedEp) {
-              enrolled.add(matchedEp.id);
-              // Stocker la VRAIE date du créneau d'inscription
-              if (e.date) {
-                slotByEpreuve.set(matchedEp.id, {
-                  date: e.date.split("T")[0],
-                  startTime: e.startTime || e.start_time || "",
-                  endTime: e.endTime || e.end_time || "",
-                  room: e.room,
-                });
-              }
-            }
-          }
-        });
-        setEnrolledEpreuves(enrolled);
-        setEnrolledSlotIds(enrolledIds);
-        setEnrolledSlotByEpreuve(slotByEpreuve);
-
-        // Set all available slots
-        setAllSlots(slotsRes.data || []);
-      } catch (err) {
-        console.error("Erreur chargement épreuves:", err);
-      } finally {
+      // Si masqué, on n'a même pas besoin de charger le reste
+      if (!isVisible) {
         setLoading(false);
         setSlotsLoading(false);
+        return;
       }
-    };
-    fetchData();
+
+      const [epRes, enrollRes, slotsRes] = await Promise.all([
+        api.get("/epreuves"),
+        api.get("/slots/my-enrollments").catch(() => ({ data: [] })),
+        api.get("/slots/available").catch(() => ({ data: [] })),
+      ]);
+
+      if (epRes.data && Array.isArray(epRes.data)) {
+        // Phase 4: Only show visible epreuves to candidates
+        setEpreuves(epRes.data.filter((e: any) => e.isVisible !== false));
+      }
+
+      // Track enrolled épreuves + slot IDs + slot DATES par épreuve
+      const enrolled = new Set<string>();
+      const enrolledIds = new Set<string>();
+      const slotByEpreuve = new Map<string, { date: string; startTime: string; endTime: string; room?: string }>();
+      (enrollRes.data || []).forEach((e: any) => {
+        if (e.slotId) enrolledIds.add(e.slotId);
+        if (e.epreuve?.name) {
+          const matchedEp = (epRes.data || []).find((ep: any) => ep.name === e.epreuve.name);
+          if (matchedEp) {
+            enrolled.add(matchedEp.id);
+            // Stocker la VRAIE date du créneau d'inscription
+            if (e.date) {
+              slotByEpreuve.set(matchedEp.id, {
+                date: e.date.split("T")[0],
+                startTime: e.startTime || e.start_time || "",
+                endTime: e.endTime || e.end_time || "",
+                room: e.room,
+              });
+            }
+          }
+        }
+      });
+      setEnrolledEpreuves(enrolled);
+      setEnrolledSlotIds(enrolledIds);
+      setEnrolledSlotByEpreuve(slotByEpreuve);
+
+      // Set all available slots
+      setAllSlots(slotsRes.data || []);
+    } catch (err) {
+      console.error("Erreur chargement épreuves:", err);
+    } finally {
+      setLoading(false);
+      setSlotsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    // Polling toutes les 15s pour détecter changement visibilité admin
+    const interval = setInterval(fetchData, 15000);
+    const onFocus = () => fetchData();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchData]);
 
   // Active tour
   const activeTour = useMemo(() => {
@@ -343,6 +367,30 @@ export default function CandidateEpreuvesPage() {
   };
 
   // ═══ RENDER ═══
+  // Planning masqué par l'admin → écran d'attente
+  if (planningVisible === false) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 text-center">
+        <div className="w-20 h-20 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center mx-auto mb-5">
+          <Calendar size={36} className="text-blue-400" />
+        </div>
+        <h1 className="text-xl font-semibold text-gray-800 mb-2">
+          Planning en cours de préparation
+        </h1>
+        <p className="text-sm text-gray-500 leading-relaxed max-w-md mx-auto">
+          Les épreuves et créneaux ne sont pas encore visibles. Vous serez
+          informé(e) dès qu&apos;ils seront publiés. La page se mettra à jour
+          automatiquement.
+        </p>
+        <div className="mt-5 flex items-center justify-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+          <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "0.2s" }} />
+          <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "0.4s" }} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}

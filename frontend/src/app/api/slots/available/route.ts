@@ -2,7 +2,17 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
-// GET /api/slots/available — published/ready slots for candidate enrollment
+// GET /api/slots/available — créneaux que le candidat peut voir
+//
+// Règles d'affichage (priorité):
+//   1. Le candidat voit TOUJOURS les créneaux où il est inscrit
+//      (même si "full" ou si l'examinateur s'est désinscrit après coup),
+//      sinon il ne pourrait plus se désinscrire.
+//   2. Sinon, filtrer par status "published"/"ready"/"full"
+//      ET au moins 1 examinateur affecté (members.length >= 1).
+//      → Les créneaux sans examinateur ne sont pas exposés aux candidats.
+//      → Quand un examinateur s'inscrit, le créneau apparaît automatiquement.
+//   3. Les status "draft"/"open" restent invisibles (pas encore publiés).
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -20,14 +30,31 @@ export async function GET(req: NextRequest) {
         members:slot_member_assignments(id)
       `,
       )
-      .in("status", ["published", "ready"])
+      .in("status", ["published", "ready", "full"])
       .order("date", { ascending: true })
       .order("start_time", { ascending: true });
 
     if (error) throw error;
 
-    // Map slots — published/ready status already guarantees visibility
-    const available = (slots || []).map((slot: any) => {
+    // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
+    // Pour les admins/membres: aucun filtre, ils voient tout.
+    const isCandidate = payload.role === "candidate";
+
+    const filtered = (slots || []).filter((slot: any) => {
+      const memberCount = slot.members?.length || 0;
+      const isEnrolled = isCandidate
+        ? slot.enrollments?.some((e: any) => e.candidate_id === candidateId)
+        : false;
+
+      // Si admin/membre: tout passe
+      if (!isCandidate) return true;
+      // Candidat inscrit: toujours visible (pour pouvoir se désinscrire)
+      if (isEnrolled) return true;
+      // Sinon: seulement si au moins 1 examinateur
+      return memberCount >= 1;
+    });
+
+    const available = filtered.map((slot: any) => {
       const enrolledCount = slot.enrollments?.length || 0;
       const isFull = enrolledCount >= slot.max_candidates;
       const isEnrolled =
@@ -62,6 +89,7 @@ export async function GET(req: NextRequest) {
 
     return Response.json(available);
   } catch (error) {
+    console.error("Available slots error:", error);
     return Response.json(
       { error: "Failed to fetch available slots" },
       { status: 500 },

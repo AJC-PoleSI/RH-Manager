@@ -20,20 +20,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Trouver tous les créneaux non publiés pour cette épreuve
+    // ET qui ont AU MOINS 1 examinateur assigné
     const { data: pending, error: fetchErr } = await supabaseAdmin
       .from("evaluation_slots")
-      .select("id, status")
+      .select("id, status, members:slot_member_assignments(id)")
       .eq("epreuve_id", epreuveId)
       .in("status", ["draft", "open", "ready"]);
 
     if (fetchErr) throw fetchErr;
 
-    const ids = (pending || []).map((s: any) => s.id);
+    // Filtrer ceux qui ont au moins 1 examinateur
+    const ids = (pending || [])
+      .filter((s: any) => (s.members?.length || 0) >= 1)
+      .map((s: any) => s.id);
+
+    const skipped = (pending || []).length - ids.length;
 
     if (ids.length === 0) {
       return Response.json({
-        message: "Aucun nouveau créneau à publier",
+        message:
+          skipped > 0
+            ? `${skipped} créneau(x) ignoré(s) — pas d'examinateur. Ils seront publiés automatiquement dès qu'un examinateur s'inscrira.`
+            : "Aucun nouveau créneau à publier",
         published: 0,
+        skipped_no_examiner: skipped,
       });
     }
 
@@ -57,8 +67,12 @@ export async function POST(req: NextRequest) {
     );
 
     return Response.json({
-      message: `${updated?.length || 0} créneau(x) publié(s) aux candidats`,
+      message:
+        skipped > 0
+          ? `${updated?.length || 0} créneau(x) publié(s) · ${skipped} en attente d'examinateur`
+          : `${updated?.length || 0} créneau(x) publié(s) aux candidats`,
       published: updated?.length || 0,
+      skipped_no_examiner: skipped,
     });
   } catch (error) {
     console.error("Publish pending slots error:", error);

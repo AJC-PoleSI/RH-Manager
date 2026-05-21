@@ -195,18 +195,46 @@ export async function POST(req: NextRequest) {
         .eq("id", slotId)
         .single();
 
-      if (
-        slot &&
-        slot.status === "open" &&
-        (slot.members?.length || 0) >= slot.min_members
-      ) {
-        await supabaseAdmin
-          .from("evaluation_slots")
-          .update({ status: "ready" })
-          .eq("id", slotId);
+      const memberCount = slot?.members?.length || 0;
+
+      // ──────────────────────────────────────────────────────────────
+      // AUTO-PUBLICATION : si le planning est déjà visible aux candidats
+      // ET qu'on vient d'atteindre >= 1 examinateur sur ce créneau non
+      // encore publié, on le passe automatiquement à "published".
+      // Règle métier : "si des examinateurs s'inscrivent par la suite,
+      // le créneau s'ouvre et se publie automatiquement".
+      // ──────────────────────────────────────────────────────────────
+      if (slot && ["open", "draft", "ready"].includes(slot.status)) {
+        // Vérifier la visibilité globale du planning
+        const { data: settingRow } = await supabaseAdmin
+          .from("system_settings")
+          .select("value")
+          .eq("key", "planning_visible_candidats")
+          .single();
+        const planningVisible =
+          settingRow?.value === "true" || settingRow?.value === true;
+
+        let newStatus: string | null = null;
+        if (planningVisible && memberCount >= 1) {
+          // Au moins 1 examinateur + planning publié → published
+          newStatus = "published";
+        } else if (
+          slot.status === "open" &&
+          memberCount >= (slot.min_members || 0)
+        ) {
+          // Comportement legacy : open → ready quand minMembers atteint
+          newStatus = "ready";
+        }
+
+        if (newStatus && newStatus !== slot.status) {
+          await supabaseAdmin
+            .from("evaluation_slots")
+            .update({ status: newStatus })
+            .eq("id", slotId);
+        }
       }
 
-      return Response.json({ action: "added" });
+      return Response.json({ action: "added", memberCount });
     } else {
       return Response.json({ action: "no_change" });
     }
