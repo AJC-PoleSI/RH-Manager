@@ -134,16 +134,19 @@ model Availability {
 }
 
 model CalendarEvent {
-  id                 String   @id @default(uuid())
-  title              String
-  description        String?
-  day                DateTime
-  startTime          String   @map("start_time")
-  endTime            String   @map("end_time")
-  relatedEpreuveId   String?  @map("related_epreuve_id")
-  relatedMemberId    String?  @map("related_member_id")
-  relatedCandidateId String?  @map("related_candidate_id")
-  maxCandidates     Int      @default(1) @map("max_candidates")
+  id                    String   @id @default(uuid())
+  title                 String
+  description           String?
+  day                   DateTime
+  dayEnd                DateTime?  @map("day_end") // Multi-day: end date (null = single day)
+  startTime             String   @map("start_time")
+  endTime               String   @map("end_time")
+  isGlobal              Boolean  @default(false) @map("is_global")
+  visibleToCandidates   Boolean  @default(true) @map("visible_to_candidates")
+  relatedEpreuveId      String?  @map("related_epreuve_id")
+  relatedMemberId       String?  @map("related_member_id")
+  relatedCandidateId    String?  @map("related_candidate_id")
+  maxCandidates         Int      @default(1) @map("max_candidates")
 
   epreuve   Epreuve?   @relation(fields: [relatedEpreuveId], references: [id], onDelete: Cascade)
   member    Member?    @relation(fields: [relatedMemberId], references: [id])

@@ -516,11 +516,18 @@ export default function PlanningPage() {
   }, [fetchSaisieStatus]);
 
   // Charger les créneaux assignés au membre dès le montage (sans condition sur la saisie)
-  // Ainsi, dès qu'un examinateur s'inscrit ou est assigné, ses créneaux apparaissent
+  // Ainsi, dès qu'un examinateur s'inscrit ou est assigné, ses créneaux apparaissent.
+  // Polling 15s + refresh sur focus pour garder la liste à jour.
   useEffect(() => {
-    if (!isAdmin) {
-      fetchMySlots();
-    }
+    if (isAdmin) return;
+    fetchMySlots();
+    const interval = setInterval(fetchMySlots, 15000);
+    const onFocus = () => fetchMySlots();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [isAdmin, fetchMySlots]);
 
   // Helper: get all selected slots across other épreuves (for anti-doublon)
@@ -938,7 +945,7 @@ export default function PlanningPage() {
                 initialView="timeGridWeek"
                 locale={frLocale}
                 weekends={false}
-                allDaySlot={false}
+                allDaySlot={true}
                 slotMinTime="07:00:00"
                 slotMaxTime="20:00:00"
                 height={620}
@@ -980,16 +987,40 @@ export default function PlanningPage() {
                       extendedProps: { kind: "slot", raw: s, memberCount, candCount, minMembers, maxCands },
                     };
                   }),
-                  // Événements globaux (📌 bleu)
+                  // Événements globaux (📌 bleu) — avec support multi-jours
                   ...globalEvents.map((ev: any) => {
                     const dStr = typeof ev.day === "string" ? ev.day.split("T")[0] : "";
+                    const isHidden = ev.visible_to_candidates === false;
+                    const hasEndDay = !!ev.day_end;
+
+                    // Multi-day: use allDay spanning from day to day_end+1 day
+                    if (hasEndDay) {
+                      const endDStr = typeof ev.day_end === "string" ? ev.day_end.split("T")[0] : dStr;
+                      // FullCalendar exclusive end: add 1 day
+                      const endDate = new Date(endDStr);
+                      endDate.setDate(endDate.getDate() + 1);
+                      const endExclusive = endDate.toISOString().split("T")[0];
+                      return {
+                        id: `evt-${ev.id}`,
+                        title: `📌 ${ev.title}${isHidden ? " (masqué)" : ""}`,
+                        start: dStr,
+                        end: endExclusive,
+                        allDay: true,
+                        backgroundColor: isHidden ? "#94A3B8" : "#3B82F6",
+                        borderColor: isHidden ? "#64748B" : "#1D4ED8",
+                        textColor: "#FFFFFF",
+                        extendedProps: { kind: "global", raw: ev },
+                      };
+                    }
+
+                    // Single-day event
                     return {
                       id: `evt-${ev.id}`,
-                      title: `📌 ${ev.title}`,
+                      title: `📌 ${ev.title}${isHidden ? " (masqué)" : ""}`,
                       start: `${dStr}T${ev.start_time || ev.startTime || "09:00"}`,
                       end: `${dStr}T${ev.end_time || ev.endTime || "10:00"}`,
-                      backgroundColor: "#3B82F6",
-                      borderColor: "#1D4ED8",
+                      backgroundColor: isHidden ? "#94A3B8" : "#3B82F6",
+                      borderColor: isHidden ? "#64748B" : "#1D4ED8",
                       textColor: "#FFFFFF",
                       extendedProps: { kind: "global", raw: ev },
                     };
@@ -1014,21 +1045,50 @@ export default function PlanningPage() {
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              {globalDetailSlot.kind === "global" ? (
-                <div className="p-5 border-b border-gray-100 bg-blue-50">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
-                    <button onClick={() => setGlobalDetailSlot(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+              {globalDetailSlot.kind === "global" ? (() => {
+                const raw = globalDetailSlot.raw;
+                const isVisible = raw.visible_to_candidates !== false;
+                const hasEndDay = !!raw.day_end;
+                return (
+                  <div className="p-5 border-b border-gray-100 bg-blue-50">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
+                      <button onClick={() => setGlobalDetailSlot(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800 mt-3">{raw.title}</p>
+                    {raw.description && (
+                      <p className="text-xs text-gray-600 mt-2">{raw.description}</p>
+                    )}
+                    {/* Date range */}
+                    <p className="text-xs text-blue-700 mt-3">
+                      {hasEndDay ? (
+                        <>
+                          {new Date(raw.day).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                          {" → "}
+                          {new Date(raw.day_end).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                        </>
+                      ) : (
+                        globalDetailSlot.event.start?.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+                      )}
+                    </p>
+                    {hasEndDay && (raw.start_time || raw.startTime) && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Horaire quotidien : {(raw.start_time || raw.startTime || "").slice(0, 5)} - {(raw.end_time || raw.endTime || "").slice(0, 5)}
+                      </p>
+                    )}
+                    {/* Visibility badge */}
+                    <div className="mt-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isVisible
+                          ? "bg-green-100 text-green-700 border border-green-200"
+                          : "bg-red-100 text-red-700 border border-red-200"
+                      }`}>
+                        {isVisible ? "👁️ Visible par les candidats" : "🙈 Masqué pour les candidats"}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold text-gray-800 mt-3">{globalDetailSlot.raw.title}</p>
-                  {globalDetailSlot.raw.description && (
-                    <p className="text-xs text-gray-600 mt-2">{globalDetailSlot.raw.description}</p>
-                  )}
-                  <p className="text-xs text-blue-700 mt-3">
-                    {globalDetailSlot.event.start?.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              ) : (() => {
+                );
+              })() : (() => {
                 const s = globalDetailSlot.raw;
                 const memberCount = globalDetailSlot.memberCount;
                 const candCount = globalDetailSlot.candCount;
@@ -1914,7 +1974,7 @@ export default function PlanningPage() {
 
 /* ══════════════════════════════════════════════════════════════════════
    COMPOSANT : Événements globaux Admin (RÈGLE 5)
-   Permet de créer des événements visibles par TOUS les candidats
+   Permet de créer / modifier / supprimer des événements visibles par TOUS les candidats
    ══════════════════════════════════════════════════════════════════════ */
 function GlobalEventsAdmin({
   toast,
@@ -1929,12 +1989,15 @@ function GlobalEventsAdmin({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  // Form state
+  // Form state (shared for create & edit)
+  const [editingId, setEditingId] = useState<string | null>(null); // null = create mode
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [day, setDay] = useState("");
+  const [dayEnd, setDayEnd] = useState(""); // Multi-day: end date
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
+  const [visibleToCandidates, setVisibleToCandidates] = useState(true);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -1954,35 +2017,83 @@ function GlobalEventsAdmin({
     fetchEvents();
   }, [fetchEvents]);
 
-  const handleCreate = async () => {
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle("");
+    setDescription("");
+    setDay("");
+    setDayEnd("");
+    setStartTime("09:00");
+    setEndTime("10:00");
+    setVisibleToCandidates(true);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const openEditForm = (ev: any) => {
+    setEditingId(ev.id);
+    setTitle(ev.title || "");
+    setDescription(ev.description || "");
+    // Parse day
+    const dayStr = ev.day ? new Date(ev.day).toISOString().split("T")[0] : "";
+    setDay(dayStr);
+    // Parse day_end
+    const dayEndStr = ev.day_end ? new Date(ev.day_end).toISOString().split("T")[0] : "";
+    setDayEnd(dayEndStr);
+    setStartTime((ev.start_time || ev.startTime || "09:00").slice(0, 5));
+    setEndTime((ev.end_time || ev.endTime || "10:00").slice(0, 5));
+    setVisibleToCandidates(ev.visible_to_candidates !== false);
+    setShowForm(true);
+  };
+
+  const handleCreateOrUpdate = async () => {
     if (!title.trim() || !day) {
-      toast("Titre et date requis", "error");
+      toast("Titre et date de début requis", "error");
       return;
     }
     setSaving(true);
     try {
-      await api.post("/calendar", {
-        title: title.trim(),
-        description: description.trim() || null,
-        day,
-        start_time: startTime,
-        end_time: endTime,
-        is_global: true,
-      });
-      toast(
-        "Événement global créé et visible par tous les candidats",
-        "success",
-      );
-      setTitle("");
-      setDescription("");
-      setDay("");
-      setStartTime("09:00");
-      setEndTime("10:00");
+      if (editingId) {
+        // UPDATE
+        await api.put(`/calendar/${editingId}`, {
+          title: title.trim(),
+          description: description.trim() || null,
+          day,
+          day_end: dayEnd || null,
+          start_time: startTime,
+          end_time: endTime,
+          visible_to_candidates: visibleToCandidates,
+        });
+        toast("Événement mis à jour", "success");
+      } else {
+        // CREATE
+        await api.post("/calendar", {
+          title: title.trim(),
+          description: description.trim() || null,
+          day,
+          day_end: dayEnd || null,
+          start_time: startTime,
+          end_time: endTime,
+          is_global: true,
+          visible_to_candidates: visibleToCandidates,
+        });
+        toast(
+          "Événement global créé" +
+            (visibleToCandidates
+              ? " et visible par tous les candidats"
+              : " (masqué pour les candidats)"),
+          "success",
+        );
+      }
+      resetForm();
       setShowForm(false);
       fetchEvents();
       onUpdate?.();
     } catch (err: any) {
-      toast(err?.response?.data?.error || "Erreur création événement", "error");
+      toast(err?.response?.data?.error || "Erreur sauvegarde événement", "error");
     } finally {
       setSaving(false);
     }
@@ -2002,6 +2113,25 @@ function GlobalEventsAdmin({
     }
   };
 
+  const handleToggleVisibility = async (ev: any) => {
+    const newVal = ev.visible_to_candidates === false ? true : false;
+    try {
+      await api.put(`/calendar/${ev.id}`, {
+        visible_to_candidates: newVal,
+      });
+      toast(
+        newVal
+          ? "Événement visible pour les candidats"
+          : "Événement masqué pour les candidats",
+        "success",
+      );
+      fetchEvents();
+      onUpdate?.();
+    } catch {
+      toast("Erreur changement visibilité", "error");
+    }
+  };
+
   const formatDateFr = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -2016,6 +2146,16 @@ function GlobalEventsAdmin({
     }
   };
 
+  const formatDateRange = (ev: any) => {
+    const start = formatDateFr(ev.day);
+    if (ev.day_end) {
+      const end = formatDateFr(ev.day_end);
+      if (start === end) return start;
+      return `${start} → ${end}`;
+    }
+    return start;
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -2028,7 +2168,14 @@ function GlobalEventsAdmin({
           </p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              resetForm();
+            } else {
+              openCreateForm();
+            }
+          }}
           className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           {showForm ? "Annuler" : "+ Nouvel événement"}
@@ -2036,9 +2183,14 @@ function GlobalEventsAdmin({
       </div>
 
       <div className="p-5">
-        {/* Formulaire création */}
+        {/* Formulaire création / modification */}
         {showForm && (
           <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-semibold text-blue-900">
+                {editingId ? "✏️ Modifier l'événement" : "➕ Nouvel événement"}
+              </span>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Titre *
@@ -2063,10 +2215,10 @@ function GlobalEventsAdmin({
                 placeholder="Détails de l'événement (optionnel)"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date *
+                  Date début *
                 </label>
                 <input
                   type="date"
@@ -2077,7 +2229,23 @@ function GlobalEventsAdmin({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Début
+                  Date fin
+                </label>
+                <input
+                  type="date"
+                  value={dayEnd}
+                  onChange={(e) => setDayEnd(e.target.value)}
+                  min={day || undefined}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Laisser vide = 1 jour"
+                />
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Vide = événement sur une journée
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Heure début
                 </label>
                 <input
                   type="time"
@@ -2088,7 +2256,7 @@ function GlobalEventsAdmin({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fin
+                  Heure fin
                 </label>
                 <input
                   type="time"
@@ -2098,13 +2266,52 @@ function GlobalEventsAdmin({
                 />
               </div>
             </div>
-            <div className="flex justify-end">
+
+            {/* Visibility toggle for candidates */}
+            <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleToCandidates}
+                  onChange={(e) => setVisibleToCandidates(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+              </label>
+              <div>
+                <p className="text-sm font-medium text-gray-800">
+                  {visibleToCandidates ? "👁️ Visible" : "🙈 Masqué"} pour les candidats
+                </p>
+                <p className="text-xs text-gray-500">
+                  {visibleToCandidates
+                    ? "Les candidats verront cet événement dans leur calendrier"
+                    : "Cet événement ne sera pas visible par les candidats"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              {editingId && (
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setShowForm(false);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+              )}
               <button
-                onClick={handleCreate}
+                onClick={handleCreateOrUpdate}
                 disabled={saving}
                 className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {saving ? "Création..." : "Publier l'événement"}
+                {saving
+                  ? "Sauvegarde..."
+                  : editingId
+                    ? "Mettre à jour"
+                    : "Publier l'événement"}
               </button>
             </div>
           </div>
@@ -2121,41 +2328,88 @@ function GlobalEventsAdmin({
           </div>
         ) : (
           <div className="space-y-2">
-            {events.map((ev: any) => (
-              <div
-                key={ev.id}
-                className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
-                    <span className="text-sm font-semibold text-gray-900 truncate">
-                      {ev.title}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5 ml-5">
-                    {formatDateFr(ev.day)}
-                    {ev.start_time && ` — ${ev.start_time.slice(0, 5)}`}
-                    {ev.end_time && ` - ${ev.end_time.slice(0, 5)}`}
-                  </p>
-                  {ev.description && (
-                    <p className="text-xs text-gray-400 mt-0.5 ml-5 truncate">
-                      {ev.description}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleDelete(ev.id)}
-                  disabled={deleting === ev.id}
-                  className="ml-3 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+            {events.map((ev: any) => {
+              const isVisible = ev.visible_to_candidates !== false;
+              const isMultiDay = !!ev.day_end;
+              return (
+                <div
+                  key={ev.id}
+                  className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
+                    isVisible
+                      ? "bg-gray-50 border-gray-200"
+                      : "bg-gray-100/60 border-gray-300 opacity-75"
+                  }`}
                 >
-                  {deleting === ev.id ? "..." : "Supprimer"}
-                </button>
-              </div>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-gray-900 truncate">
+                        {ev.title}
+                      </span>
+                      {/* Visibility badge */}
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                          isVisible
+                            ? "bg-green-100 text-green-700 border border-green-200"
+                            : "bg-red-100 text-red-700 border border-red-200"
+                        }`}
+                      >
+                        {isVisible ? "👁️ Visible" : "🙈 Masqué"}
+                      </span>
+                      {/* Multi-day badge */}
+                      {isMultiDay && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0">
+                          📅 Multi-jours
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5 ml-5">
+                      {formatDateRange(ev)}
+                      {ev.start_time && ` — ${ev.start_time.slice(0, 5)}`}
+                      {ev.end_time && ` - ${ev.end_time.slice(0, 5)}`}
+                    </p>
+                    {ev.description && (
+                      <p className="text-xs text-gray-400 mt-0.5 ml-5 truncate">
+                        {ev.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                    {/* Visibility toggle */}
+                    <button
+                      onClick={() => handleToggleVisibility(ev)}
+                      title={isVisible ? "Masquer pour les candidats" : "Rendre visible aux candidats"}
+                      className={`text-xs px-2 py-1 rounded transition-colors ${
+                        isVisible
+                          ? "text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                          : "text-green-600 hover:text-green-800 hover:bg-green-50"
+                      }`}
+                    >
+                      {isVisible ? "🙈 Masquer" : "👁️ Afficher"}
+                    </button>
+                    {/* Edit */}
+                    <button
+                      onClick={() => openEditForm(ev)}
+                      className="text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                    >
+                      ✏️ Modifier
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDelete(ev.id)}
+                      disabled={deleting === ev.id}
+                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                    >
+                      {deleting === ev.id ? "..." : "🗑️ Supprimer"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
     </div>
   );
 }
+

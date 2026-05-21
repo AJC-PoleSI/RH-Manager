@@ -15,6 +15,7 @@ interface CalendarEvent {
   id: string;
   title: string;
   date: string; // YYYY-MM-DD
+  dateEnd?: string; // YYYY-MM-DD (multi-day events)
   startTime?: string;
   endTime?: string;
   type: "commune" | "individuelle" | "global";
@@ -101,7 +102,8 @@ export default function CandidateCalendarPage() {
         api.get("/slots/my-enrollments").catch(() => ({ data: [] })),
       ]);
 
-      const calEvents: CalendarEvent[] = (calRes.data || []).map((ev: any) => {
+      const calEvents: CalendarEvent[] = [];
+      (calRes.data || []).forEach((ev: any) => {
         let dateStr = "";
         if (ev.day) {
           const d = new Date(ev.day);
@@ -112,16 +114,43 @@ export default function CandidateCalendarPage() {
         if (ev.is_global) type = "global";
         else if (ev.epreuve?.type === "commune") type = "commune";
 
-        return {
+        let dateEndStr = "";
+        if (ev.day_end) {
+          const de = new Date(ev.day_end);
+          dateEndStr = `${de.getFullYear()}-${String(de.getMonth() + 1).padStart(2, "0")}-${String(de.getDate()).padStart(2, "0")}`;
+        }
+
+        const baseEvent = {
           id: ev.id,
           title: ev.title || ev.epreuve?.name || "Événement",
           date: dateStr,
+          dateEnd: dateEndStr || undefined,
           startTime: ev.start_time || null,
           endTime: ev.end_time || null,
           type,
           room: ev.epreuve?.salle || ev.room || null,
           description: ev.description || null,
         };
+
+        // Multi-day: expand into entries for each day
+        if (dateEndStr && dateEndStr !== dateStr) {
+          const start = new Date(dateStr + "T00:00:00");
+          const end = new Date(dateEndStr + "T00:00:00");
+          let current = new Date(start);
+          let dayIdx = 0;
+          while (current <= end) {
+            const curStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
+            calEvents.push({
+              ...baseEvent,
+              id: `${ev.id}-day${dayIdx}`,
+              date: curStr,
+            });
+            current.setDate(current.getDate() + 1);
+            dayIdx++;
+          }
+        } else {
+          calEvents.push(baseEvent);
+        }
       });
 
       // Map enrolled slots as calendar events
@@ -574,9 +603,21 @@ export default function CandidateCalendarPage() {
                     <div>
                       <p className="text-xs text-gray-400 font-medium">Date</p>
                       <p className="text-sm font-semibold text-gray-900 capitalize">
-                        {new Date(selectedEvent.date + "T12:00:00").toLocaleDateString("fr-FR", {
-                          weekday: "long", day: "numeric", month: "long", year: "numeric",
-                        })}
+                        {selectedEvent.dateEnd && selectedEvent.dateEnd !== selectedEvent.date ? (
+                          <>
+                            {new Date(selectedEvent.date + "T12:00:00").toLocaleDateString("fr-FR", {
+                              weekday: "long", day: "numeric", month: "long",
+                            })}
+                            {" → "}
+                            {new Date(selectedEvent.dateEnd + "T12:00:00").toLocaleDateString("fr-FR", {
+                              weekday: "long", day: "numeric", month: "long", year: "numeric",
+                            })}
+                          </>
+                        ) : (
+                          new Date(selectedEvent.date + "T12:00:00").toLocaleDateString("fr-FR", {
+                            weekday: "long", day: "numeric", month: "long", year: "numeric",
+                          })
+                        )}
                       </p>
                     </div>
                   </div>

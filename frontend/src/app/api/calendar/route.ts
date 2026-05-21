@@ -33,14 +33,20 @@ export async function GET(req: NextRequest) {
 
     // Filtrer : retourner les événements globaux + ceux assignés à l'utilisateur
     const userId = payload.id;
+    const isCandidate = payload.role === "candidate";
+
     const filtered = (data || []).filter((event: any) => {
-      // Événement global → visible par tous
-      if (event.is_global) return true;
+      // Événement global → visible par tous (sauf si masqué pour les candidats)
+      if (event.is_global) {
+        // Si candidat, vérifier la visibilité
+        if (isCandidate && event.visible_to_candidates === false) return false;
+        return true;
+      }
       if (!event.related_member_id && !event.related_candidate_id) return true;
       // Événement assigné à cet utilisateur
       if (payload.role === "member" && event.related_member_id === userId)
         return true;
-      if (payload.role === "candidate" && event.related_candidate_id === userId)
+      if (isCandidate && event.related_candidate_id === userId)
         return true;
       // Admin voit tout
       if (payload.isAdmin) return true;
@@ -64,6 +70,7 @@ export async function POST(req: NextRequest) {
       title,
       description,
       day,
+      day_end,
       start_time,
       end_time,
       startTime,
@@ -72,6 +79,7 @@ export async function POST(req: NextRequest) {
       related_member_id,
       related_candidate_id,
       is_global,
+      visible_to_candidates,
       type,
     } = body;
 
@@ -85,12 +93,14 @@ export async function POST(req: NextRequest) {
       title,
       description: description || null,
       day: new Date(day).toISOString(),
+      day_end: day_end ? new Date(day_end).toISOString() : null,
       start_time: start_time || startTime || "09:00",
       end_time: end_time || endTime || "10:00",
-      related_epreuve_id: related_epreuve_id || null,
+      related_epreuve_id: isGlobal ? null : related_epreuve_id || null,
       related_member_id: isGlobal ? null : related_member_id || null,
       related_candidate_id: isGlobal ? null : related_candidate_id || null,
       is_global: isGlobal,
+      visible_to_candidates: visible_to_candidates !== false,
     };
 
     // max_candidates only for non-global events
