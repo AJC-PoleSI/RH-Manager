@@ -285,8 +285,7 @@ export default function DashboardPage() {
 
         const quickLinks = [
             { label: '📋 Gestion candidats', href: '/dashboard/candidates', desc: 'Voir, modifier, évaluer' },
-            { label: '🎯 Épreuves', href: '/dashboard/epreuves', desc: 'Créer et gérer les épreuves' },
-            { label: '📅 Planning', href: '/dashboard/planning', desc: 'Calendrier global admin' },
+            { label: '📅 Planning & Épreuves', href: '/dashboard/planning', desc: 'Créer épreuves, créneaux, publier' },
             { label: '🗳️ Délibération', href: '/dashboard/deliberations', desc: 'Soirée de délibération' },
             { label: '⚙️ Paramètres', href: '/dashboard/settings', desc: 'Réglages du recrutement' },
         ];
@@ -417,7 +416,7 @@ export default function DashboardPage() {
                             <div className="flex flex-col items-center justify-center h-48 text-gray-300">
                                 <span className="text-4xl mb-3">📭</span>
                                 <p className="text-sm font-semibold">Aucune épreuve configurée</p>
-                                <Link href="/dashboard/epreuves" className="text-xs text-blue-500 underline mt-2 hover:text-blue-700">Créer une épreuve</Link>
+                                <Link href="/dashboard/planning" className="text-xs text-blue-500 underline mt-2 hover:text-blue-700">Créer une épreuve</Link>
                             </div>
                         ) : (
                             <div className="space-y-2.5 max-h-[280px] overflow-y-auto">
@@ -483,7 +482,7 @@ export default function DashboardPage() {
                 {/* ── QUICK ACCESS ──────────────────────── */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h1>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {quickLinks.map((link) => (
                             <Link
                                 key={link.href}
