@@ -922,7 +922,8 @@ export default function PlanningPage() {
             <div className="flex-1 overflow-y-auto flex rounded-lg border border-gray-100 bg-gray-50/30">
               {Array.from({ length: 5 }).map((_, i) => {
                 const dayDate = addDays(currentAdminWeek, i);
-                const dateString = dayDate.toISOString().split("T")[0];
+                // Composantes locales (pas UTC) pour éviter le décalage timezone
+                const dateString = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, "0")}-${String(dayDate.getDate()).padStart(2, "0")}`;
 
                 // TOUS les slots du jour (toutes épreuves, sans filtre)
                 const daySlots = allSlotsGlobal
@@ -978,11 +979,22 @@ export default function PlanningPage() {
 
                 // TOUS les événements globaux du jour
                 const globalsForDay = globalEvents
-                  .filter((ev: any) => ev.day === dateString)
+                  .filter((ev: any) => {
+                    if (!ev.day) return false;
+                    // ev.day peut être un timestamp ISO ou YYYY-MM-DD
+                    const evDay = typeof ev.day === "string"
+                      ? ev.day.split("T")[0]
+                      : "";
+                    return evDay === dateString;
+                  })
                   .map((g: any) => ({
                     ...g,
                     isGlobal: true,
                     title: `📌 ${g.title}`,
+                    // Normalisation snake_case → camelCase pour CalendarColumn
+                    startTime: g.startTime || g.start_time || "",
+                    endTime: g.endTime || g.end_time || "",
+                    day: g.day,
                   }));
 
                 const combinedEvents = [...daySlots, ...globalsForDay].sort(
@@ -1328,7 +1340,7 @@ export default function PlanningPage() {
         {/* ══════════════════════════════════════════════════════════════════
                     RÈGLE 5 : Événements globaux (visibles par tous les candidats)
                     ══════════════════════════════════════════════════════════════════ */}
-        <GlobalEventsAdmin toast={toast} />
+        <GlobalEventsAdmin toast={toast} onUpdate={fetchGlobalCalendarEvents} />
       </div>
     );
   }
@@ -1788,8 +1800,10 @@ export default function PlanningPage() {
    ══════════════════════════════════════════════════════════════════════ */
 function GlobalEventsAdmin({
   toast,
+  onUpdate,
 }: {
   toast: (msg: string, type?: any) => void;
+  onUpdate?: () => void;
 }) {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1848,6 +1862,7 @@ function GlobalEventsAdmin({
       setEndTime("10:00");
       setShowForm(false);
       fetchEvents();
+      onUpdate?.();
     } catch (err: any) {
       toast(err?.response?.data?.error || "Erreur création événement", "error");
     } finally {
@@ -1861,6 +1876,7 @@ function GlobalEventsAdmin({
       await api.delete(`/calendar/${id}`);
       toast("Événement supprimé", "success");
       fetchEvents();
+      onUpdate?.();
     } catch {
       toast("Erreur suppression", "error");
     } finally {
