@@ -37,7 +37,45 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Delete slot-bound data (only if there ARE slots)
+    let notifiedCandidates = 0;
     if (idsToDelete.length > 0) {
+      // 2a. Notifier les candidats inscrits AVANT de tout supprimer
+      try {
+        const { data: enrollments } = await supabaseAdmin
+          .from("slot_enrollments")
+          .select(
+            `candidate_id, slot:evaluation_slots(date, start_time, room, epreuve:epreuves(name))`,
+          )
+          .in("slot_id", idsToDelete);
+
+        if (enrollments && enrollments.length > 0) {
+          const rows = enrollments.map((e: any) => {
+            const s = e.slot || {};
+            const dateStr = s.date
+              ? new Date(s.date).toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })
+              : "";
+            const startTime = String(s.start_time || "").substring(0, 5);
+            const epName = s.epreuve?.name || "Épreuve";
+            return {
+              sender_id: null,
+              sender_role: "admin",
+              sender_name: "Système",
+              recipient_id: e.candidate_id,
+              recipient_role: "candidate",
+              message: `⚠️ Votre créneau "${epName}" du ${dateStr} à ${startTime} a été annulé suite à une réinitialisation. Merci de vous réinscrire dès que de nouveaux créneaux seront publiés.`,
+            };
+          });
+          await supabaseAdmin.from("private_messages").insert(rows);
+          notifiedCandidates = rows.length;
+        }
+      } catch (e) {
+        console.error("Reset notifications échec:", e);
+      }
+
       await supabaseAdmin
         .from("slot_enrollments")
         .delete()
@@ -127,10 +165,11 @@ export async function POST(req: NextRequest) {
     return Response.json({
       message:
         idsToDelete.length > 0
-          ? `${idsToDelete.length} créneau(x) supprimé(s), ${availabilitiesDeleted} disponibilité(s) effacée(s)`
+          ? `${idsToDelete.length} créneau(x) supprimé(s), ${availabilitiesDeleted} disponibilité(s) effacée(s), ${notifiedCandidates} candidat(s) notifié(s)`
           : `Aucun créneau, ${availabilitiesDeleted} disponibilité(s) effacée(s)`,
       deleted: idsToDelete.length,
       availabilities_deleted: availabilitiesDeleted,
+      notified_candidates: notifiedCandidates,
     });
   } catch (error) {
     console.error("Reset slots error:", error);

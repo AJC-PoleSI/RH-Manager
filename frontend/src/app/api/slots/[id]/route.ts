@@ -67,6 +67,7 @@ export async function PUT(
 }
 
 // DELETE /api/slots/[id] — delete a slot (admin)
+// Notifie les candidats inscrits avant suppression.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -78,6 +79,50 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    // 1. Récupérer les infos du créneau + ses candidats inscrits AVANT suppression
+    const { data: slot } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select(
+        `
+        id, date, start_time, end_time, room,
+        epreuve:epreuves(name),
+        enrollments:slot_enrollments(candidate_id, candidate:candidates(id, first_name, last_name))
+        `,
+      )
+      .eq("id", id)
+      .single();
+
+    // 2. Notifier les candidats inscrits via private_messages
+    const enrollments = (slot as any)?.enrollments || [];
+    if (enrollments.length > 0) {
+      const dateStr = slot?.date
+        ? new Date(slot.date).toLocaleDateString("fr-FR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })
+        : "";
+      const startTime = String(slot?.start_time || "").substring(0, 5);
+      const epName = (slot as any)?.epreuve?.name || "Épreuve";
+      const room = slot?.room || "—";
+
+      const rows = enrollments.map((e: any) => ({
+        sender_id: null,
+        sender_role: "admin",
+        sender_name: "Système",
+        recipient_id: e.candidate_id,
+        recipient_role: "candidate",
+        message: `⚠️ Votre créneau "${epName}" du ${dateStr} à ${startTime} (salle ${room}) a été annulé par l'administration. Merci de vous réinscrire à un autre créneau disponible.`,
+      }));
+
+      try {
+        await supabaseAdmin.from("private_messages").insert(rows);
+      } catch (e) {
+        console.error("Notification candidats échec:", e);
+      }
+    }
+
+    // 3. Supprimer le créneau (cascade sur enrollments/assignments via FK)
     const { error } = await supabaseAdmin
       .from("evaluation_slots")
       .delete()
@@ -85,8 +130,12 @@ export async function DELETE(
 
     if (error) throw error;
 
-    return Response.json({ success: true });
+    return Response.json({
+      success: true,
+      notified_candidates: enrollments.length,
+    });
   } catch (error) {
+    console.error("Delete slot error:", error);
     return Response.json({ error: "Failed to delete slot" }, { status: 500 });
   }
 }

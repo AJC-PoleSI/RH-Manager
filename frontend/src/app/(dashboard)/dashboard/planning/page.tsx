@@ -678,31 +678,53 @@ export default function PlanningPage() {
     }
   };
 
-  const handlePublierCandidats = async () => {
+  // Toggle visibilité du planning aux candidats (masquer / afficher)
+  const handleToggleVisibilite = async () => {
+    const next = !planningVisible;
     try {
       await api.put("/settings", {
-        planning_visible_candidats: "true",
-        planning_generated: "true",
+        planning_visible_candidats: next ? "true" : "false",
+        ...(next ? { planning_generated: "true" } : {}),
       });
-      setPlanningVisible(true);
+      setPlanningVisible(next);
       toast(
-        "Planning visible pour les candidats — ils peuvent maintenant s'inscrire",
+        next
+          ? "Planning visible pour les candidats"
+          : "Planning masqué — les candidats déjà inscrits restent inscrits",
         "success",
       );
     } catch (error) {
-      console.error("Détail de l'erreur dans handlePublierCandidats :", error);
-      toast("Erreur publication candidats", "error");
+      console.error("Erreur toggle visibilité :", error);
+      toast("Erreur lors du basculement", "error");
     }
   };
 
-  const handleMasquerCandidats = async () => {
+  // Publier les nouveaux créneaux non encore publiés (status open/draft/ready → published)
+  // Ne touche PAS aux créneaux déjà publiés ni à leurs inscriptions existantes.
+  const handlePublierNouveaux = async () => {
+    if (!selectedEpreuveId) {
+      toast("Sélectionnez une épreuve d'abord", "error");
+      return;
+    }
     try {
-      await api.put("/settings", { planning_visible_candidats: "false" });
-      setPlanningVisible(false);
-      toast("Planning masque pour les candidats", "success");
-    } catch (error) {
-      console.error("Détail de l'erreur dans handleMasquerCandidats :", error);
-      toast("Erreur masquage", "error");
+      const res = await api.post("/slots/publish-pending", {
+        epreuveId: selectedEpreuveId,
+      });
+      const count = res.data?.published || 0;
+      if (count === 0) {
+        toast("Aucun nouveau créneau à publier", "info");
+      } else {
+        toast(
+          `${count} nouveau(x) créneau(x) publié(s) — les inscriptions existantes sont préservées`,
+          "success",
+        );
+        setPlanningVisible(true);
+      }
+      fetchSlotData();
+      fetchAllSlotsGlobal();
+    } catch (error: any) {
+      console.error("Erreur publication créneaux :", error);
+      toast(error?.response?.data?.error || "Erreur publication", "error");
     }
   };
 
@@ -1253,31 +1275,59 @@ export default function PlanningPage() {
                   </div>
                 )}
 
-                {/* BOUTON 2 — Publier aux candidats */}
-                <div className={`flex items-center justify-between p-4 rounded-xl border ${planningVisible ? "bg-purple-50 border-purple-200" : "bg-gray-50 border-gray-200"}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${planningVisible ? "bg-purple-200 text-purple-800" : "bg-gray-200 text-gray-600"}`}>
-                      2
+                {/* BOUTON 2 — Publier les nouveaux créneaux aux candidats */}
+                <div className="p-4 rounded-xl border bg-purple-50/40 border-purple-200">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold bg-purple-200 text-purple-800">
+                        2
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Publier les nouveaux créneaux</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Publie les créneaux non encore publiés. Les candidats déjà inscrits ne sont pas affectés.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">Publier aux candidats</p>
-                      <p className="text-xs text-gray-500">
-                        {planningVisible
-                          ? "✅ Publié — les candidats peuvent voir les créneaux et s'inscrire"
-                          : "⏸️ Masqué — les candidats ne voient pas encore le planning"}
-                      </p>
-                    </div>
+                    <button
+                      onClick={handlePublierNouveaux}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex-shrink-0"
+                    >
+                      Publier
+                    </button>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    {planningVisible ? (
-                      <button onClick={handleMasquerCandidats} className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-200 rounded-lg hover:bg-red-200 transition-colors">
-                        Masquer le planning
-                      </button>
-                    ) : (
-                      <button onClick={handlePublierCandidats} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors">
-                        Publier aux candidats
-                      </button>
-                    )}
+
+                  {/* Toggle visibilité du planning */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{planningVisible ? "👁️" : "🙈"}</span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">
+                          Planning {planningVisible ? "visible" : "masqué"} aux candidats
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {planningVisible
+                            ? "Les candidats voient et peuvent s'inscrire"
+                            : "Les inscriptions existantes sont préservées"}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Toggle switch */}
+                    <button
+                      onClick={handleToggleVisibilite}
+                      role="switch"
+                      aria-checked={planningVisible}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                        planningVisible ? "bg-purple-600" : "bg-gray-300"
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          planningVisible ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>
