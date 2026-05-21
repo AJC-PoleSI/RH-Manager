@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
@@ -8,6 +8,11 @@ import CalendarAdminBuilder from "@/components/calendar/CalendarAdminBuilder";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
+import FullCalendar from "@fullcalendar/react";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import frLocale from "@fullcalendar/core/locales/fr";
 
 interface Epreuve {
   id: string;
@@ -102,6 +107,8 @@ export default function PlanningPage() {
   const [existingSlots, setExistingSlots] = useState<any[]>([]);
   const [allSlotsGlobal, setAllSlotsGlobal] = useState<any[]>([]); // Tous les créneaux de toutes les épreuves pour la vue globale
   const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
+  // Modal détail créneau cliqué dans la vue calendrier globale
+  const [globalDetailSlot, setGlobalDetailSlot] = useState<any | null>(null);
   const [repartitionLoading, setRepartitionLoading] = useState(false);
   const [repartitionResult, setRepartitionResult] = useState<any>(null);
   const [resetLoading, setResetLoading] = useState(false);
@@ -903,141 +910,202 @@ export default function PlanningPage() {
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-                    CALENDRIER ADMINISTRATEUR GLOBAL (TOUT LE RECRUTEMENT)
+                    CALENDRIER ADMINISTRATEUR GLOBAL (FullCalendar)
                     ══════════════════════════════════════════════════════════════════ */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col h-[600px]">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
               <span className="text-xl">🗺️</span> Vue Globale du Recrutement
             </h3>
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setAdminWeekOffset(adminWeekOffset - 1)}
-                className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600"
-              >
-                ◀
-              </button>
-              <span className="text-xs font-semibold px-2 text-gray-700 min-w-[120px] text-center">
-                Semaine décalée ({adminWeekOffset})
-              </span>
-              <button
-                onClick={() => setAdminWeekOffset(adminWeekOffset + 1)}
-                className="px-2 py-1 hover:bg-white rounded text-sm text-gray-600"
-              >
-                ▶
-              </button>
-            </div>
+            <p className="text-xs text-gray-400">Clic sur un créneau pour voir les détails (examinateurs · candidats · salle · heure)</p>
           </div>
-          {/* Légende couleurs */}
+          {/* Légende couleurs (priorité stricte: violet > rouge > orange > vert) */}
           <div className="flex items-center gap-3 mb-3 text-[11px] text-gray-500 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 border border-green-400"></span>Tout OK</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-200 border border-orange-400"></span>Examinateurs &lt; min</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-400"></span>Manque candidat(s)</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-200 border border-purple-400"></span>Aucun examinateur</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-300 border border-purple-500"></span>🟣 Aucun examinateur</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-300 border border-red-500"></span>🔴 Pas assez de candidats</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-300 border border-orange-500"></span>🟠 Examinateurs &lt; min</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-300 border border-green-500"></span>🟢 Tout OK</span>
           </div>
 
           {allSlotsGlobal.length === 0 && globalEvents.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
+            <div className="h-[400px] flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
               <p className="text-sm">Aucun événement ou créneau généré.</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto flex rounded-lg border border-gray-100 bg-gray-50/30">
-              {Array.from({ length: 5 }).map((_, i) => {
-                const dayDate = addDays(currentAdminWeek, i);
-                // Composantes locales (pas UTC) pour éviter le décalage timezone
-                const dateString = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, "0")}-${String(dayDate.getDate()).padStart(2, "0")}`;
-
-                // TOUS les slots du jour (toutes épreuves, sans filtre)
-                const daySlots = allSlotsGlobal
-                  .filter((slot: any) => {
-                    if (!slot.date) return false;
-                    return slot.date.split("T")[0] === dateString;
-                  })
-                  .map((s: any) => {
+            <div className="global-calendar-wrap">
+              <FullCalendar
+                plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                locale={frLocale}
+                weekends={false}
+                allDaySlot={false}
+                slotMinTime="07:00:00"
+                slotMaxTime="20:00:00"
+                height={620}
+                headerToolbar={{
+                  left: "prev,next today",
+                  center: "title",
+                  right: "timeGridWeek,timeGridDay,dayGridMonth",
+                }}
+                slotEventOverlap={true}
+                events={[
+                  // Tous les créneaux : couleur selon priorité stricte
+                  ...allSlotsGlobal.map((s: any) => {
                     const memberCount = s.members?.length || 0;
                     const candCount = s.enrollments?.length || 0;
                     const minMembers = s.min_members || s.minMembers || 2;
                     const maxCands = s.max_candidates || s.maxCandidates || 1;
-                    const evalNames =
-                      s.members
-                        ?.map((m: any) => m.member?.email?.split("@")[0])
-                        .filter(Boolean)
-                        .join(", ") || "—";
-                    const epName = s.epreuve?.name ? `[${s.epreuve.name}]` : "";
-                    const isPublishedCandidates = s.status === "published";
 
-                    // ─── Color coding logic ─────────────────────
-                    // 🟣 violet : aucun examinateur
-                    // 🔴 rouge  : publié aux candidats sans candidat OU manque candidats
-                    // 🟠 orange : examinateurs < min mais >= 1
-                    // 🟢 vert   : tout est OK
-                    let statusClass = "bg-green-50 border-green-300 text-green-900";
-                    let statusLabel = "OK";
-
+                    let bg = "#22C55E"; let border = "#16A34A"; let txt = "#052E16"; let icon = "🟢";
                     if (memberCount === 0) {
-                      statusClass = "bg-purple-100 border-purple-400 text-purple-900 font-semibold";
-                      statusLabel = "🟣 0 exam.";
+                      bg = "#A855F7"; border = "#7E22CE"; txt = "#FAF5FF"; icon = "🟣";
+                    } else if (candCount < maxCands) {
+                      bg = "#EF4444"; border = "#B91C1C"; txt = "#FFFFFF"; icon = "🔴";
                     } else if (memberCount < minMembers) {
-                      statusClass = "bg-orange-50 border-orange-300 text-orange-900";
-                      statusLabel = `🟠 ${memberCount}/${minMembers} exam.`;
-                    } else if (isPublishedCandidates && candCount < maxCands) {
-                      statusClass = "bg-red-50 border-red-300 text-red-900";
-                      statusLabel = `🔴 ${candCount}/${maxCands} cand.`;
-                    } else {
-                      statusLabel = `🟢 ${memberCount} exam · ${candCount} cand`;
+                      bg = "#F59E0B"; border = "#B45309"; txt = "#1C1917"; icon = "🟠";
                     }
 
+                    const dateStr = (s.date || "").split("T")[0];
+                    const room = s.room || "Salle ?";
+                    const epName = s.epreuve?.name || "Épreuve";
+
                     return {
-                      id: s.id,
-                      day: s.date,
-                      startTime: s.startTime || s.start_time,
-                      endTime: s.endTime || s.end_time,
-                      title: `${epName} ${s.room || "Salle ?"} — ${evalNames}`,
-                      isSlot: true,
-                      statusClass,
-                      statusLabel,
+                      id: `slot-${s.id}`,
+                      title: `${icon} ${epName} · ${room}`,
+                      start: `${dateStr}T${s.start_time || "08:00"}`,
+                      end: `${dateStr}T${s.end_time || "08:30"}`,
+                      backgroundColor: bg,
+                      borderColor: border,
+                      textColor: txt,
+                      extendedProps: { kind: "slot", raw: s, memberCount, candCount, minMembers, maxCands },
                     };
-                  });
-
-                // TOUS les événements globaux du jour
-                const globalsForDay = globalEvents
-                  .filter((ev: any) => {
-                    if (!ev.day) return false;
-                    // ev.day peut être un timestamp ISO ou YYYY-MM-DD
-                    const evDay = typeof ev.day === "string"
-                      ? ev.day.split("T")[0]
-                      : "";
-                    return evDay === dateString;
-                  })
-                  .map((g: any) => ({
-                    ...g,
-                    isGlobal: true,
-                    title: `📌 ${g.title}`,
-                    // Normalisation snake_case → camelCase pour CalendarColumn
-                    startTime: g.startTime || g.start_time || "",
-                    endTime: g.endTime || g.end_time || "",
-                    day: g.day,
-                  }));
-
-                const combinedEvents = [...daySlots, ...globalsForDay].sort(
-                  (a, b) =>
-                    (a.startTime || a.start_time || "").localeCompare(
-                      b.startTime || b.start_time || "",
-                    ),
-                );
-
-                return (
-                  <CalendarColumn
-                    key={dayDate.toISOString()}
-                    date={dayDate}
-                    events={combinedEvents}
-                    variant="simple-list"
-                  />
-                );
-              })}
+                  }),
+                  // Événements globaux (📌 bleu)
+                  ...globalEvents.map((ev: any) => {
+                    const dStr = typeof ev.day === "string" ? ev.day.split("T")[0] : "";
+                    return {
+                      id: `evt-${ev.id}`,
+                      title: `📌 ${ev.title}`,
+                      start: `${dStr}T${ev.start_time || ev.startTime || "09:00"}`,
+                      end: `${dStr}T${ev.end_time || ev.endTime || "10:00"}`,
+                      backgroundColor: "#3B82F6",
+                      borderColor: "#1D4ED8",
+                      textColor: "#FFFFFF",
+                      extendedProps: { kind: "global", raw: ev },
+                    };
+                  }),
+                ]}
+                eventClick={(arg) => {
+                  const props: any = arg.event.extendedProps;
+                  setGlobalDetailSlot({ ...props, event: arg.event });
+                }}
+              />
             </div>
           )}
         </div>
+
+        {/* Modal détail créneau (vue globale admin) */}
+        {globalDetailSlot && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setGlobalDetailSlot(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {globalDetailSlot.kind === "global" ? (
+                <div className="p-5 border-b border-gray-100 bg-blue-50">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
+                    <button onClick={() => setGlobalDetailSlot(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-800 mt-3">{globalDetailSlot.raw.title}</p>
+                  {globalDetailSlot.raw.description && (
+                    <p className="text-xs text-gray-600 mt-2">{globalDetailSlot.raw.description}</p>
+                  )}
+                  <p className="text-xs text-blue-700 mt-3">
+                    {globalDetailSlot.event.start?.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              ) : (() => {
+                const s = globalDetailSlot.raw;
+                const memberCount = globalDetailSlot.memberCount;
+                const candCount = globalDetailSlot.candCount;
+                const minMembers = globalDetailSlot.minMembers;
+                const maxCands = globalDetailSlot.maxCands;
+                let headerColor = "bg-green-50 text-green-900"; let icon = "🟢"; let label = "Tout OK";
+                if (memberCount === 0) { headerColor = "bg-purple-100 text-purple-900"; icon = "🟣"; label = "Aucun examinateur"; }
+                else if (candCount < maxCands) { headerColor = "bg-red-50 text-red-900"; icon = "🔴"; label = "Manque candidat(s)"; }
+                else if (memberCount < minMembers) { headerColor = "bg-orange-50 text-orange-900"; icon = "🟠"; label = "Examinateurs insuffisants"; }
+                return (
+                  <>
+                    <div className={`p-5 border-b border-gray-100 ${headerColor}`}>
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-base font-semibold flex items-center gap-2">
+                          {icon} {s.epreuve?.name || "Créneau"}
+                        </h2>
+                        <button onClick={() => setGlobalDetailSlot(null)} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
+                      </div>
+                      <p className="text-xs mt-1 opacity-80">{label}</p>
+                    </div>
+                    <div className="p-5 space-y-3 text-sm">
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Date</span>
+                        <span className="font-medium text-gray-800 capitalize">
+                          {new Date(s.date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Horaire</span>
+                        <span className="font-medium text-gray-800">{(s.start_time || "").substring(0, 5)} – {(s.end_time || "").substring(0, 5)}</span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Salle</span>
+                        <span className="font-medium text-gray-800">{s.room || "—"}</span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Tour</span>
+                        <span className="font-medium text-gray-800">Tour {s.tour || s.epreuve?.tour || "?"}</span>
+                      </div>
+                      <hr className="my-2" />
+                      <div>
+                        <p className="text-xs uppercase text-gray-400 mb-1.5">Examinateurs ({memberCount}/{minMembers}+)</p>
+                        {memberCount === 0 ? (
+                          <p className="text-purple-700 text-sm italic">Aucun examinateur assigné</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {(s.members || []).map((m: any, idx: number) => {
+                              const mem = m.member || {};
+                              const name = mem.firstName || mem.first_name
+                                ? `${mem.firstName || mem.first_name} ${mem.lastName || mem.last_name || ""}`.trim()
+                                : mem.email?.split("@")[0] || "Inconnu";
+                              return <li key={idx} className="flex items-center gap-2 text-gray-800"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />{name} <span className="text-xs text-gray-400">{mem.email}</span></li>;
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-gray-400 mb-1.5">Candidats ({candCount}/{maxCands})</p>
+                        {candCount === 0 ? (
+                          <p className="text-red-700 text-sm italic">Aucun candidat inscrit</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {(s.enrollments || []).map((e: any, idx: number) => {
+                              const c = e.candidate || {};
+                              const name = `${c.first_name || c.firstName || ""} ${c.last_name || c.lastName || ""}`.trim() || "Candidat";
+                              return <li key={idx} className="flex items-center gap-2 text-gray-800"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />{name}</li>;
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         <hr className="my-2 border-gray-200" />
 

@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import {
   Loader2, Calendar, MapPin, FileText, Clock,
-  ChevronDown, ChevronUp, Users, BookOpen, X,
+  ChevronDown, ChevronUp, Users, BookOpen, X, Check,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════
@@ -113,6 +113,10 @@ export default function CandidateEpreuvesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [enrolledEpreuves, setEnrolledEpreuves] = useState<Set<string>>(new Set());
   const [enrolledSlotIds, setEnrolledSlotIds] = useState<Set<string>>(new Set());
+  // Map epreuveId → infos du créneau d'inscription (date, heure, salle)
+  const [enrolledSlotByEpreuve, setEnrolledSlotByEpreuve] = useState<
+    Map<string, { date: string; startTime: string; endTime: string; room?: string }>
+  >(new Map());
 
   // Calendar data
   const [allSlots, setAllSlots] = useState<AvailableSlot[]>([]);
@@ -141,18 +145,31 @@ export default function CandidateEpreuvesPage() {
           setEpreuves(epRes.data.filter((e: any) => e.isVisible !== false));
         }
 
-        // Track enrolled épreuves + slot IDs
+        // Track enrolled épreuves + slot IDs + slot DATES par épreuve
         const enrolled = new Set<string>();
         const enrolledIds = new Set<string>();
+        const slotByEpreuve = new Map<string, { date: string; startTime: string; endTime: string; room?: string }>();
         (enrollRes.data || []).forEach((e: any) => {
           if (e.slotId) enrolledIds.add(e.slotId);
           if (e.epreuve?.name) {
             const matchedEp = (epRes.data || []).find((ep: any) => ep.name === e.epreuve.name);
-            if (matchedEp) enrolled.add(matchedEp.id);
+            if (matchedEp) {
+              enrolled.add(matchedEp.id);
+              // Stocker la VRAIE date du créneau d'inscription
+              if (e.date) {
+                slotByEpreuve.set(matchedEp.id, {
+                  date: e.date.split("T")[0],
+                  startTime: e.startTime || e.start_time || "",
+                  endTime: e.endTime || e.end_time || "",
+                  room: e.room,
+                });
+              }
+            }
           }
         });
         setEnrolledEpreuves(enrolled);
         setEnrolledSlotIds(enrolledIds);
+        setEnrolledSlotByEpreuve(slotByEpreuve);
 
         // Set all available slots
         setAllSlots(slotsRes.data || []);
@@ -633,9 +650,13 @@ export default function CandidateEpreuvesPage() {
                             const hasDetails = hasDescription || hasDocs;
                             const isEnrolled = enrolledEpreuves.has(ep.id);
 
-                            const displayDate = ep.date || ep.dateDebut;
-                            const displayTime = ep.time;
-                            const displayEndDate = ep.dateFin;
+                            // Si inscrit, afficher la date EXACTE du créneau d'inscription
+                            // Sinon, la plage de l'épreuve
+                            const enrolledSlot = enrolledSlotByEpreuve.get(ep.id);
+                            const displayDate = enrolledSlot?.date || ep.date || ep.dateDebut;
+                            const displayTime = enrolledSlot?.startTime || ep.time;
+                            const displayEndDate = enrolledSlot ? null : ep.dateFin;
+                            const enrolledRoom = enrolledSlot?.room;
 
                             return (
                               <div
@@ -661,14 +682,20 @@ export default function CandidateEpreuvesPage() {
                                   </div>
 
                                   <div className="space-y-2 text-sm text-gray-600">
+                                    {enrolledSlot && (
+                                      <div className="px-2 py-1 rounded-md bg-green-50 border border-green-200 text-green-700 text-xs font-semibold flex items-center gap-1.5">
+                                        <Check size={12} /> Votre créneau d&apos;inscription
+                                      </div>
+                                    )}
                                     {displayDate && (
                                       <div className="flex items-center gap-2">
-                                        <Calendar size={14} className="text-gray-400 flex-shrink-0" />
-                                        <span className="capitalize">{formatDateFr(displayDate)}</span>
+                                        <Calendar size={14} className={enrolledSlot ? "text-green-600 flex-shrink-0" : "text-gray-400 flex-shrink-0"} />
+                                        <span className={`capitalize ${enrolledSlot ? "font-semibold text-gray-800" : ""}`}>{formatDateFr(displayDate)}</span>
                                         {displayTime && (
-                                          <span className="text-gray-400 font-mono text-xs">
+                                          <span className="text-gray-500 font-mono text-xs">
                                             {formatTime(displayTime)}
-                                            {ep.durationMinutes && ` (${ep.durationMinutes}min)`}
+                                            {enrolledSlot?.endTime && ` - ${formatTime(enrolledSlot.endTime)}`}
+                                            {!enrolledSlot && ep.durationMinutes && ` (${ep.durationMinutes}min)`}
                                           </span>
                                         )}
                                       </div>
@@ -679,7 +706,13 @@ export default function CandidateEpreuvesPage() {
                                         <span className="text-xs text-gray-500">Jusqu&apos;au {formatDateFr(displayEndDate)}</span>
                                       </div>
                                     )}
-                                    {ep.salle && (
+                                    {enrolledRoom && (
+                                      <div className="flex items-center gap-2">
+                                        <MapPin size={14} className="text-green-600 flex-shrink-0" />
+                                        <span className="font-semibold text-gray-800">Salle {enrolledRoom}</span>
+                                      </div>
+                                    )}
+                                    {!enrolledRoom && ep.salle && (
                                       <div className="flex items-center gap-2">
                                         <MapPin size={14} className="text-gray-400 flex-shrink-0" />
                                         <span>{ep.salle}</span>
