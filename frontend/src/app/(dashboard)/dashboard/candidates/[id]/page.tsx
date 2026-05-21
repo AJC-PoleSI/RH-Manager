@@ -131,11 +131,11 @@ export default function CandidateDetailPage({
     );
   }
 
-  // Note globale tous tours confondus
+  // Note globale tous tours confondus (Number() en sécurité contre les strings)
   const globalAvg =
     allEvals.length > 0
       ? Math.round(
-          (allEvals.reduce((sum, e) => sum + e.scoreTotal, 0) /
+          (allEvals.reduce((sum, e) => sum + (Number(e.scoreTotal) || 0), 0) /
             allEvals.length) *
             10,
         ) / 10

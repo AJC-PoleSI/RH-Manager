@@ -168,6 +168,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Normalisation des scores : TOUJOURS stocker en nombres ──
+    // Sinon "1" + "1" = "11" lors des calculs côté lecture.
+    const rawScores =
+      typeof scores === "string" ? JSON.parse(scores) : scores || {};
+    const normalizedScores: Record<string, number> = {};
+    for (const [k, v] of Object.entries(rawScores)) {
+      const num = Number(v);
+      normalizedScores[k] = Number.isFinite(num) ? num : 0;
+    }
+
     // ── Création de l'évaluation ──
     const { data: evaluation, error: evalError } = await supabaseAdmin
       .from("candidate_evaluations")
@@ -175,7 +185,7 @@ export async function POST(req: NextRequest) {
         candidate_id: candidateId,
         epreuve_id: epreuveId,
         member_id: memberId,
-        scores: typeof scores === "string" ? scores : JSON.stringify(scores),
+        scores: JSON.stringify(normalizedScores),
         comment,
       })
       .select()

@@ -33,10 +33,19 @@ export async function GET(
 
     // Parse scores and format each evaluation
     const parsed = (evaluations || []).map((e: any) => {
-      const scores =
+      const rawScores =
         typeof e.scores === "string" ? JSON.parse(e.scores) : e.scores || {};
-      const scoreValues = Object.values(scores) as number[];
-      const total = scoreValues.reduce((sum: number, v: number) => sum + v, 0);
+      // Forcer la conversion en number — Object.values() peut retourner des
+      // strings si scores a été stocké en JSON avec des "1" au lieu de 1.
+      // Sans ça, reduce(sum + v, 0) donne "0" + "1" + "1" + ... = "0111..."
+      const scores: Record<string, number> = {};
+      let total = 0;
+      for (const [k, v] of Object.entries(rawScores)) {
+        const num = Number(v);
+        const safe = Number.isFinite(num) ? num : 0;
+        scores[k] = safe;
+        total += safe;
+      }
 
       return {
         id: e.id,

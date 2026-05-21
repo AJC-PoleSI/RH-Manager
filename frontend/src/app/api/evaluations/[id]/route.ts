@@ -33,8 +33,15 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {};
     if (scores !== undefined) {
-      updateData.scores =
-        typeof scores === "string" ? scores : JSON.stringify(scores);
+      // Normaliser en nombres pour éviter la concaténation de strings
+      const rawScores =
+        typeof scores === "string" ? JSON.parse(scores) : scores || {};
+      const normalized: Record<string, number> = {};
+      for (const [k, v] of Object.entries(rawScores)) {
+        const num = Number(v);
+        normalized[k] = Number.isFinite(num) ? num : 0;
+      }
+      updateData.scores = JSON.stringify(normalized);
     }
     if (comment !== undefined)
       updateData.comment =
