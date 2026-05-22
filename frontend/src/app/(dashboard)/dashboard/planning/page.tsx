@@ -150,7 +150,11 @@ export default function PlanningPage() {
   const [mySlots, setMySlots] = useState<MySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<MySlot | null>(null); // pour la modale
 
-  // Added visual calendar helpers for Admin
+  // Calendrier admin — vue propre (même design que candidat)
+  const [adminCalView, setAdminCalView] = useState<"month" | "week">("month");
+  const [adminCalDate, setAdminCalDate] = useState(new Date());
+
+  // Legacy (conservé pour compatibilité avec le reste du code)
   const [adminWeekOffset, setAdminWeekOffset] = useState(0);
   const adminWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const currentAdminWeek = addDays(adminWeekStart, adminWeekOffset * 7);
@@ -917,123 +921,235 @@ export default function PlanningPage() {
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-                    CALENDRIER ADMINISTRATEUR GLOBAL (FullCalendar)
+                    CALENDRIER ADMINISTRATEUR GLOBAL — design unifié
                     ══════════════════════════════════════════════════════════════════ */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-              <span className="text-xl">🗺️</span> Vue Globale du Recrutement
-            </h3>
-            <p className="text-xs text-gray-400">Clic sur un créneau pour voir les détails (examinateurs · candidats · salle · heure)</p>
-          </div>
-          {/* Légende couleurs (priorité stricte: violet > rouge > orange > vert) */}
-          <div className="flex items-center gap-3 mb-3 text-[11px] text-gray-500 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-300 border border-purple-500"></span>🟣 Aucun examinateur</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-300 border border-red-500"></span>🔴 Pas assez de candidats</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-300 border border-orange-500"></span>🟠 Examinateurs &lt; min</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-300 border border-green-500"></span>🟢 Tout OK</span>
-          </div>
+        {(() => {
+          // ── Helpers calendrier ──────────────────────────────────────────
+          const ADMIN_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+          const ADMIN_MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+          const acYear = adminCalDate.getFullYear();
+          const acMonth = adminCalDate.getMonth();
+          const today = new Date();
 
-          {allSlotsGlobal.length === 0 && globalEvents.length === 0 ? (
-            <div className="h-[400px] flex flex-col items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-lg">
-              <p className="text-sm">Aucun événement ou créneau généré.</p>
+          const prevPeriod = () => {
+            if (adminCalView === "month") setAdminCalDate(new Date(acYear, acMonth - 1, 1));
+            else { const d = new Date(adminCalDate); d.setDate(d.getDate() - 7); setAdminCalDate(d); }
+          };
+          const nextPeriod = () => {
+            if (adminCalView === "month") setAdminCalDate(new Date(acYear, acMonth + 1, 1));
+            else { const d = new Date(adminCalDate); d.setDate(d.getDate() + 7); setAdminCalDate(d); }
+          };
+
+          // Grille mois
+          const daysInMonth = new Date(acYear, acMonth + 1, 0).getDate();
+          const rawFirst = new Date(acYear, acMonth, 1).getDay();
+          const firstDay = rawFirst === 0 ? 6 : rawFirst - 1;
+          const cells: (number | null)[] = [];
+          for (let i = 0; i < firstDay; i++) cells.push(null);
+          for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+          while (cells.length % 7 !== 0) cells.push(null);
+
+          // Semaine courante (lundi → dim)
+          const getWeekDates = () => {
+            const d = new Date(adminCalDate);
+            const dow = d.getDay();
+            const diff = dow === 0 ? -6 : 1 - dow;
+            const mon = new Date(d); mon.setDate(d.getDate() + diff);
+            return Array.from({ length: 7 }, (_, i) => { const w = new Date(mon); w.setDate(mon.getDate() + i); return w; });
+          };
+          const weekDates = getWeekDates();
+
+          // Mapper tous les événements en format unifié
+          const toDateStr = (raw: string | undefined) => {
+            if (!raw) return "";
+            const d = new Date(raw);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          };
+
+          interface AdminEv { id: string; date: string; title: string; startTime?: string; bg: string; textColor: string; dotColor: string; kind: "slot"|"global"; raw: any; }
+          const allAdminEvents: AdminEv[] = [];
+
+          // Slots
+          allSlotsGlobal.forEach((s: any) => {
+            const memberCount = s.members?.length || 0;
+            const candCount = s.enrollments?.length || 0;
+            const minMembers = s.min_members || s.minMembers || 2;
+            const maxCands = s.max_candidates || s.maxCandidates || 1;
+            let bg = "#D1FAE5"; let dot = "#16A34A"; let txt = "#064E3B"; let icon = "🟢";
+            if (memberCount === 0) { bg = "#EDE9FE"; dot = "#7C3AED"; txt = "#3B0764"; icon = "🟣"; }
+            else if (candCount < maxCands) { bg = "#FEE2E2"; dot = "#DC2626"; txt = "#7F1D1D"; icon = "🔴"; }
+            else if (memberCount < minMembers) { bg = "#FEF3C7"; dot = "#D97706"; txt = "#78350F"; icon = "🟠"; }
+            allAdminEvents.push({
+              id: `slot-${s.id}`,
+              date: toDateStr(s.date),
+              title: `${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
+              startTime: (s.start_time || "").substring(0, 5),
+              bg, textColor: txt, dotColor: dot, kind: "slot", raw: s,
+            });
+          });
+
+          // Événements globaux (+ multi-jours étendus)
+          globalEvents.forEach((ev: any) => {
+            const isHidden = ev.visible_to_candidates === false;
+            const bg = isHidden ? "#F1F5F9" : (ev.color || "#DBEAFE");
+            const dot = isHidden ? "#94A3B8" : (ev.color || "#2563EB");
+            const txt = isHidden ? "#64748B" : "#1E3A8A";
+            const startDate = toDateStr(ev.day);
+            const endDate = ev.day_end ? toDateStr(ev.day_end) : startDate;
+
+            if (endDate && endDate !== startDate) {
+              const s = new Date(startDate + "T00:00:00");
+              const e = new Date(endDate + "T00:00:00");
+              let cur = new Date(s);
+              while (cur <= e) {
+                const ds = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
+                allAdminEvents.push({ id: `evt-${ev.id}-${ds}`, date: ds, title: `📌 ${ev.title}${isHidden?" (masqué)":""}`, startTime: (ev.start_time||"").substring(0,5), bg, textColor: txt, dotColor: dot, kind:"global", raw: ev });
+                cur.setDate(cur.getDate() + 1);
+              }
+            } else {
+              allAdminEvents.push({ id:`evt-${ev.id}`, date: startDate, title:`📌 ${ev.title}${isHidden?" (masqué)":""}`, startTime:(ev.start_time||"").substring(0,5), bg, textColor: txt, dotColor: dot, kind:"global", raw: ev });
+            }
+          });
+
+          const getEventsForDay = (dateStr: string) => allAdminEvents.filter(e => e.date === dateStr).sort((a,b) => (a.startTime||"").localeCompare(b.startTime||""));
+          const dateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          const isToday = (d: Date) => d.toDateString() === today.toDateString();
+
+          const weekLabel = `${weekDates[0].toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} — ${weekDates[6].toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}`;
+
+          const handleEvClick = (ev: AdminEv) => {
+            if (ev.kind === "slot") {
+              const s = ev.raw;
+              const mc = s.members?.length||0, cc=s.enrollments?.length||0;
+              const mm=s.min_members||s.minMembers||2, mx=s.max_candidates||s.maxCandidates||1;
+              setGlobalDetailSlot({ kind:"slot", raw:s, memberCount:mc, candCount:cc, minMembers:mm, maxCands:mx, event:{ start: new Date(`${ev.date}T${ev.startTime||"09:00"}`) } });
+            } else {
+              setGlobalDetailSlot({ kind:"global", raw:ev.raw, event:{ start: new Date(`${ev.date}T${ev.startTime||"09:00"}`) } });
+            }
+          };
+
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <span className="text-xl">🗺️</span> Vue Globale du Recrutement
+                  <span className="text-xs font-normal text-gray-400 ml-1">— clic pour détails</span>
+                </h3>
+                <div className="flex bg-gray-100 rounded-full p-0.5">
+                  {(["month","week"] as const).map(m => (
+                    <button key={m} onClick={() => setAdminCalView(m)} className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${adminCalView===m?"bg-white text-gray-900 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>
+                      {m === "month" ? "Mois" : "Semaine"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <div className="flex items-center gap-2">
+                <button onClick={prevPeriod} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">‹</button>
+                <span className="text-base font-semibold text-gray-900 min-w-[200px] text-center">
+                  {adminCalView === "month" ? `${ADMIN_MONTHS[acMonth]} ${acYear}` : weekLabel}
+                </span>
+                <button onClick={nextPeriod} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">›</button>
+                <button onClick={() => setAdminCalDate(new Date())} className="ml-2 px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors">Aujourd&apos;hui</button>
+              </div>
+
+              {/* Légende */}
+              <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" />Aucun examinateur</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Manque candidat(s)</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Examinateurs &lt; min</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Tout OK</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Événement global</span>
+              </div>
+
+              {allSlotsGlobal.length === 0 && globalEvents.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                  <p className="text-sm">Aucun créneau ou événement généré.</p>
+                </div>
+              ) : (
+                <>
+                  {/* VUE MOIS */}
+                  {adminCalView === "month" && (
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-7 border-b border-gray-200">
+                        {ADMIN_DAYS.map(d => (
+                          <div key={d} className="py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">{d}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7">
+                        {cells.map((day, i) => {
+                          const ds = day ? `${acYear}-${String(acMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}` : "";
+                          const dayEvs = day ? getEventsForDay(ds) : [];
+                          const todayDay = day && today.getFullYear()===acYear && today.getMonth()===acMonth && today.getDate()===day;
+                          return (
+                            <div key={i} className={`min-h-[90px] border-b border-r border-gray-100 p-1.5 ${day===null?"bg-gray-50/50":"bg-white"} ${i%7===6?"border-r-0":""}`}>
+                              {day !== null && (
+                                <>
+                                  <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${todayDay?"bg-blue-600 text-white":"text-gray-700"}`}>{day}</div>
+                                  <div className="space-y-0.5">
+                                    {dayEvs.slice(0,3).map(ev => (
+                                      <button key={ev.id} onClick={() => handleEvClick(ev)}
+                                        className="w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded-md truncate font-medium transition-opacity hover:opacity-80"
+                                        style={{ backgroundColor: ev.bg, color: ev.textColor }}
+                                        title={ev.title}
+                                      >
+                                        {ev.startTime && <span className="font-bold">{ev.startTime} </span>}
+                                        {ev.title}
+                                      </button>
+                                    ))}
+                                    {dayEvs.length > 3 && (
+                                      <p className="text-[10px] text-gray-400 px-1">+{dayEvs.length-3} autres</p>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VUE SEMAINE */}
+                  {adminCalView === "week" && (
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="grid grid-cols-7">
+                        {weekDates.map((wd, i) => {
+                          const ds = dateStr(wd);
+                          const dayEvs = getEventsForDay(ds);
+                          const todayWd = isToday(wd);
+                          return (
+                            <div key={i} className="border-r border-gray-100 last:border-r-0">
+                              <div className={`p-3 text-center border-b border-gray-200 ${todayWd?"bg-blue-50":"bg-gray-50"}`}>
+                                <p className="text-xs font-semibold text-gray-500 uppercase">{ADMIN_DAYS[i]}</p>
+                                <p className={`text-xl font-bold mt-0.5 ${todayWd?"text-blue-600":"text-gray-900"}`}>{wd.getDate()}</p>
+                                <p className="text-xs text-gray-400">{wd.toLocaleDateString("fr-FR",{month:"short"})}</p>
+                              </div>
+                              <div className="p-2 min-h-[180px] space-y-1.5">
+                                {dayEvs.length === 0 && <p className="text-xs text-gray-300 text-center mt-4">—</p>}
+                                {dayEvs.map(ev => (
+                                  <button key={ev.id} onClick={() => handleEvClick(ev)}
+                                    className="w-full text-left p-2 rounded-lg text-xs transition-all hover:shadow-sm border border-transparent"
+                                    style={{ backgroundColor: ev.bg, color: ev.textColor }}
+                                  >
+                                    <p className="font-semibold truncate">{ev.title}</p>
+                                    {ev.startTime && <p className="mt-0.5 opacity-80">{ev.startTime}</p>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          ) : (
-            <div className="global-calendar-wrap">
-              <FullCalendar
-                plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
-                initialView="timeGridWeek"
-                locale={frLocale}
-                weekends={false}
-                allDaySlot={true}
-                slotMinTime="07:00:00"
-                slotMaxTime="20:00:00"
-                height={620}
-                headerToolbar={{
-                  left: "prev,next today",
-                  center: "title",
-                  right: "timeGridWeek,timeGridDay,dayGridMonth",
-                }}
-                slotEventOverlap={true}
-                events={[
-                  // Tous les créneaux : couleur selon priorité stricte
-                  ...allSlotsGlobal.map((s: any) => {
-                    const memberCount = s.members?.length || 0;
-                    const candCount = s.enrollments?.length || 0;
-                    const minMembers = s.min_members || s.minMembers || 2;
-                    const maxCands = s.max_candidates || s.maxCandidates || 1;
-
-                    let bg = "#22C55E"; let border = "#16A34A"; let txt = "#052E16"; let icon = "🟢";
-                    if (memberCount === 0) {
-                      bg = "#A855F7"; border = "#7E22CE"; txt = "#FAF5FF"; icon = "🟣";
-                    } else if (candCount < maxCands) {
-                      bg = "#EF4444"; border = "#B91C1C"; txt = "#FFFFFF"; icon = "🔴";
-                    } else if (memberCount < minMembers) {
-                      bg = "#F59E0B"; border = "#B45309"; txt = "#1C1917"; icon = "🟠";
-                    }
-
-                    const dateStr = (s.date || "").split("T")[0];
-                    const room = s.room || "Salle ?";
-                    const epName = s.epreuve?.name || "Épreuve";
-
-                    return {
-                      id: `slot-${s.id}`,
-                      title: `${icon} ${epName} · ${room}`,
-                      start: `${dateStr}T${s.start_time || "08:00"}`,
-                      end: `${dateStr}T${s.end_time || "08:30"}`,
-                      backgroundColor: bg,
-                      borderColor: border,
-                      textColor: txt,
-                      extendedProps: { kind: "slot", raw: s, memberCount, candCount, minMembers, maxCands },
-                    };
-                  }),
-                  // Événements globaux (📌 bleu) — avec support multi-jours
-                  ...globalEvents.map((ev: any) => {
-                    const dStr = typeof ev.day === "string" ? ev.day.split("T")[0] : "";
-                    const isHidden = ev.visible_to_candidates === false;
-                    const hasEndDay = !!ev.day_end;
-
-                    // Multi-day: use allDay spanning from day to day_end+1 day
-                    if (hasEndDay) {
-                      const endDStr = typeof ev.day_end === "string" ? ev.day_end.split("T")[0] : dStr;
-                      // FullCalendar exclusive end: add 1 day
-                      const endDate = new Date(endDStr);
-                      endDate.setDate(endDate.getDate() + 1);
-                      const endExclusive = endDate.toISOString().split("T")[0];
-                      return {
-                        id: `evt-${ev.id}`,
-                        title: `📌 ${ev.title}${isHidden ? " (masqué)" : ""}`,
-                        start: dStr,
-                        end: endExclusive,
-                        allDay: true,
-                        backgroundColor: isHidden ? "#94A3B8" : (ev.color || "#3B82F6"),
-                        borderColor: isHidden ? "#64748B" : (ev.color || "#1D4ED8"),
-                        textColor: "#FFFFFF",
-                        extendedProps: { kind: "global", raw: ev },
-                      };
-                    }
-
-                    // Single-day event
-                    return {
-                      id: `evt-${ev.id}`,
-                      title: `📌 ${ev.title}${isHidden ? " (masqué)" : ""}`,
-                      start: `${dStr}T${ev.start_time || ev.startTime || "09:00"}`,
-                      end: `${dStr}T${ev.end_time || ev.endTime || "10:00"}`,
-                      backgroundColor: isHidden ? "#94A3B8" : (ev.color || "#3B82F6"),
-                      borderColor: isHidden ? "#64748B" : (ev.color || "#1D4ED8"),
-                      textColor: "#FFFFFF",
-                      extendedProps: { kind: "global", raw: ev },
-                    };
-                  }),
-                ]}
-                eventClick={(arg) => {
-                  const props: any = arg.event.extendedProps;
-                  setGlobalDetailSlot({ ...props, event: arg.event });
-                }}
-              />
-            </div>
-          )}
-        </div>
+          );
+        })()}
 
         {/* Modal détail créneau (vue globale admin) */}
         {globalDetailSlot && (
