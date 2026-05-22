@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
-import CalendarAdminBuilder from "@/components/calendar/CalendarAdminBuilder";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
-import FullCalendar from "@fullcalendar/react";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import frLocale from "@fullcalendar/core/locales/fr";
+
+// Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
+// ne pas alourdir le bundle initial de la page planning.
+const CalendarAdminBuilder = dynamic(
+  () => import("@/components/calendar/CalendarAdminBuilder"),
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-gray-400 text-sm">Chargement du calendrier…</div> }
+);
 
 interface Epreuve {
   id: string;
