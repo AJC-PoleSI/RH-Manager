@@ -30,6 +30,7 @@ export default function Tour3Dashboard() {
 
   useEffect(() => {
     fetchSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pole]);
 
   const handleCreateSlot = async (e: React.FormEvent) => {

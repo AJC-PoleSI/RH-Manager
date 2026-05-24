@@ -35,6 +35,7 @@ export default function CandidateTour3Page() {
 
   useEffect(() => {
     fetchSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPole]);
 
   const handleEnroll = async (placeId: string) => {
@@ -117,7 +118,7 @@ export default function CandidateTour3Page() {
                             onClick={() => handleEnroll(place.id)}
                             className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shrink-0"
                           >
-                            S'inscrire
+                            S&apos;inscrire
                           </button>
                         </div>
                       ))}

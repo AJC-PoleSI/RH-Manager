@@ -109,7 +109,8 @@
       "Bash(rm -rf \"/Users/felixpitz/Desktop/RH Manager Anti /frontend/src/app/api/epreuves/[id]/workflow\")",
       "Bash(npx tsc *)",
       "Bash(echo \"Exit: $?\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(cat > *)"
     ]
   },
   "hooks": {
