@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Call the Postgres RPC function
     const { error } = await supabaseAdmin.rpc("liberate_places_for_examiner", {
-      p_examiner_id: payload.userId,
+      p_examiner_id: payload.id,
       p_slot_id: slotId
     });
 
