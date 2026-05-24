@@ -45,7 +45,6 @@ const Sidebar = () => {
           icon: "🌙",
         },
         { href: "/dashboard/planning", label: "Planning", icon: "📅" },
-        { href: "/dashboard/tour3", label: "Tour 3", icon: "🏆" },
       ],
     },
     {
@@ -70,11 +69,6 @@ const Sidebar = () => {
           label: "Mes disponibilités",
           icon: "✅",
         },
-        {
-          href: "/dashboard/tour3",
-          label: "Épreuves Tour 3",
-          icon: "🏆",
-        },
       ],
     },
     {
@@ -90,7 +84,6 @@ const Sidebar = () => {
         { href: "/candidates/dashboard", label: "Mon calendrier", icon: "📅" },
         { href: "/candidates/epreuves", label: "Épreuves & Tours", icon: "📋" },
         { href: "/candidates/wishes", label: "Choix de pôle", icon: "🎯" },
-        { href: "/candidates/tour3", label: "Créneaux Tour 3", icon: "🏆" },
       ],
     },
     {

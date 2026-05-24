@@ -536,6 +536,21 @@ export default function PlanningPage() {
     };
   }, [isAdmin, fetchMySlots]);
 
+  // ── Tour 3 : Obligation de créneaux par pôle ──
+  const [tour3Obligation, setTour3Obligation] = useState<any>(null);
+  useEffect(() => {
+    if (isAdmin) return;
+    const fetchObligation = async () => {
+      try {
+        const res = await api.get("/tour3/obligations");
+        setTour3Obligation(res.data);
+      } catch {
+        // silently ignore
+      }
+    };
+    fetchObligation();
+  }, [isAdmin]);
+
   // Helper: get all selected slots across other épreuves (for anti-doublon)
   const getConflictingSlots = (currentEpreuveId: string): Set<string> => {
     const conflicts = new Set<string>();
@@ -1704,7 +1719,56 @@ export default function PlanningPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
 
-      {/* ─── Grille d'inscription (toujours visible) ─── */}
+      {/* ─── Bannière obligation Tour 3 ─── */}
+      {tour3Obligation?.myObligation && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+            <span className="text-lg">🏆</span>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Obligation Tour 3 — Pôle {tour3Obligation.myObligation.pole}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {tour3Obligation.myObligation.candidatsCount} candidat(s) ont demandé votre pôle
+              </p>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-6 flex-wrap">
+              {/* Jauge visuelle */}
+              <div className="flex-1 min-w-[200px]">
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="text-gray-600 font-medium">Créneaux requis pour le pôle</span>
+                  <span className="font-bold text-gray-900">{tour3Obligation.myObligation.creneauxRequis}</span>
+                </div>
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, (mySlots.filter(s => s.epreuve?.tour === "3").length / Math.max(1, tour3Obligation.myObligation.creneauxParMembre)) * 100)}%`,
+                      backgroundColor: mySlots.filter(s => s.epreuve?.tour === "3").length >= tour3Obligation.myObligation.creneauxParMembre ? '#22C55E' : '#F59E0B'
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Stats */}
+              <div className="flex gap-4 text-center">
+                <div className="px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-xl font-bold text-blue-700">{tour3Obligation.myObligation.creneauxParMembre}</p>
+                  <p className="text-[10px] text-blue-500 font-medium">MIN. par membre</p>
+                </div>
+                <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                  <p className="text-xl font-bold text-gray-700">{tour3Obligation.myObligation.membresCount}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Membre(s) du pôle</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              Cochez vos disponibilités ci-dessous pour couvrir au minimum {tour3Obligation.myObligation.creneauxParMembre} créneau(x).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Grille d&apos;inscription (toujours visible) ─── */}
       <CalendarMemberBuilder
         memberId={user?.id || ""}
         toast={toast}
