@@ -306,7 +306,7 @@ export default function CalendarMemberBuilder({
                         <div
                           onClick={() => toggleBlock(blockKey!)}
                           className={`
-                            cursor-pointer rounded-lg p-2 h-full min-h-[60px] border-2 transition-all flex flex-col items-center justify-center relative
+                            cursor-pointer rounded-lg p-3 h-full min-h-[80px] border-2 transition-all flex flex-col items-center justify-center gap-1.5 relative
                             ${
                               isSelected
                                 ? "bg-blue-50 border-blue-500 shadow-sm"
@@ -315,22 +315,22 @@ export default function CalendarMemberBuilder({
                           `}
                         >
                           {isSelected && (
-                            <div className="absolute top-1 right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-[10px] font-bold">
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow">
+                              <span className="text-white text-xs font-bold">
                                 ✓
                               </span>
                             </div>
                           )}
                           <span
-                            className={`text-[11px] font-bold ${isSelected ? "text-blue-800" : "text-gray-700"}`}
+                            className={`text-xs font-bold tracking-tight ${isSelected ? "text-blue-900" : "text-gray-800"}`}
                           >
-                            jusqu&apos;à {formatTime(blockObj.endTime)}
+                            {formatTime(blockObj.startTime)} → {formatTime(blockObj.endTime)}
                           </span>
-                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                          <div className="flex flex-wrap items-center justify-center gap-1">
                             {epreuvesArr.map((ep, idx) => (
                               <span
                                 key={idx}
-                                className={`text-[9px] px-1.5 py-0.5 rounded leading-none text-center ${isSelected ? "bg-blue-200 text-blue-800" : "bg-gray-100 text-gray-500"}`}
+                                className={`text-[11px] font-medium px-2 py-0.5 rounded-full leading-snug text-center ${isSelected ? "bg-blue-200 text-blue-900" : "bg-gray-100 text-gray-600"}`}
                               >
                                 {ep}
                               </span>
