@@ -94,27 +94,39 @@ export const CalendarColumn = ({
               key={event.id}
               onClick={() => onEventClick?.(event)}
               className={cn(
-                "w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm",
-                event.statusClass /* status-driven coloring takes priority */
+                "w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm hover:scale-[1.01] border-l-4",
+                event.statusClass
                   ? event.statusClass
                   : event.isDeadline
-                  ? "bg-red-50 border-red-300 text-red-900 font-bold"
+                  ? "bg-red-50 border-red-400 text-red-900"
                   : event.isSlot
-                    ? "bg-purple-50 border-purple-300 text-purple-900"
+                    ? "bg-purple-50 border-purple-400 text-purple-900"
                     : event.relatedEpreuveId
-                      ? "bg-blue-50 border-blue-200 text-blue-900"
-                      : "bg-white border-gray-200 text-gray-900",
+                      ? "bg-blue-50 border-blue-400 text-blue-900"
+                      : "bg-white border-gray-300 text-gray-900",
               )}
             >
-              <div className="font-semibold text-sm truncate">
+              <div className="font-semibold text-sm leading-tight">
                 {event.title}
               </div>
-              <div className="text-xs mt-1 opacity-70 flex items-center gap-1">
-                {event.startTime} - {event.endTime}
-                {event.statusLabel && (
-                  <span className="ml-auto font-semibold">{event.statusLabel}</span>
-                )}
-              </div>
+              {(event.startTime || event.endTime) && (
+                <div className="text-xs mt-1.5 font-medium opacity-75 flex items-center gap-1.5">
+                  <span>🕐</span>
+                  <span>
+                    {event.startTime && event.endTime
+                      ? `${event.startTime} – ${event.endTime}`
+                      : event.startTime || event.endTime}
+                  </span>
+                  {event.statusLabel && (
+                    <span className="ml-auto font-semibold">{event.statusLabel}</span>
+                  )}
+                </div>
+              )}
+              {event.room && (
+                <div className="text-xs mt-0.5 opacity-60 flex items-center gap-1">
+                  <span>🏫</span> {event.room}
+                </div>
+              )}
             </button>
           ))}
         </div>

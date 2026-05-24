@@ -133,7 +133,14 @@ export default function DashboardPage() {
                 };
             });
 
-            setEvents([...res.data, ...deadlineEvents, ...slotEvents]);
+            // Normaliser snake_case → camelCase pour les events API
+            const calendarEvents = (res.data || []).map((ev: any) => ({
+                ...ev,
+                startTime: ev.startTime || ev.start_time || "",
+                endTime: ev.endTime || ev.end_time || "",
+            }));
+
+            setEvents([...calendarEvents, ...deadlineEvents, ...slotEvents]);
         } catch (e) {
             console.error(e);
         }
