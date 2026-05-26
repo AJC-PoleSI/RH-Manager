@@ -110,21 +110,99 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if candidate already enrolled in another slot for the same epreuve
+    // ══════════════════════════════════════════════════════════════════
+    // Check if candidate already enrolled in another slot of same épreuve
+    //
+    // Previous version used `.select("...!inner(...)").eq("slot.epreuve_id", ...)`,
+    // which can misbehave with PostgREST (the embedded filter doesn't
+    // always translate to a SQL WHERE clause depending on version), AND
+    // returned false positives for orphan rows (enrollment whose slot
+    // was deleted). Result: candidate gets blocked with "vous êtes déjà
+    // inscrit à un autre créneau" while they're not enrolled in any
+    // visible slot.
+    //
+    // New approach:
+    //   1. List ALL slot IDs of this épreuve in one query.
+    //   2. Find candidate's NON-cancelled enrollments in those slots
+    //      (excluding the current target slot — defensive).
+    //   3. If any orphan enrollment row exists (slot was deleted but
+    //      enrollment row remains), silently purge it instead of
+    //      ghost-locking the candidate.
+    //   4. Include slot date/time in error message so user knows what
+    //      they need to cancel.
+    // ══════════════════════════════════════════════════════════════════
     if (slot.epreuve_id) {
-      const { data: otherEnrollment } = await supabaseAdmin
-        .from("slot_enrollments")
-        .select("id, slot:evaluation_slots!inner(epreuve_id)")
-        .eq("candidate_id", candidateId)
-        .eq("slot.epreuve_id", slot.epreuve_id)
-        .neq("status", "cancelled")
-        .limit(1);
+      const { data: epreuveSlots } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("id, date, start_time, end_time, room")
+        .eq("epreuve_id", slot.epreuve_id);
 
-      if (otherEnrollment && otherEnrollment.length > 0) {
+      const validSlotIds = (epreuveSlots || []).map((s: any) => s.id);
+      const otherSlotIds = validSlotIds.filter((id: string) => id !== slotId);
+      const slotInfoById: Record<string, any> = {};
+      (epreuveSlots || []).forEach((s: any) => {
+        slotInfoById[s.id] = s;
+      });
+
+      // All candidate enrollments matching this épreuve (active, non-cancelled).
+      const { data: candEnrolls } = await supabaseAdmin
+        .from("slot_enrollments")
+        .select("id, slot_id, status")
+        .eq("candidate_id", candidateId);
+
+      const conflicts: any[] = [];
+      const orphansToPurge: string[] = [];
+
+      for (const row of candEnrolls || []) {
+        if (row.status === "cancelled") continue;
+        if (row.slot_id === slotId) continue; // same slot → handled by myExisting above
+        if (!row.slot_id) {
+          orphansToPurge.push(row.id);
+          continue;
+        }
+        // Orphan: enrollment points to a slot that no longer exists or
+        // is not in this épreuve's slot list AND not in any other épreuve
+        // we'd care about for THIS specific check.
+        if (otherSlotIds.includes(row.slot_id)) {
+          conflicts.push({
+            enrollmentId: row.id,
+            slot: slotInfoById[row.slot_id],
+          });
+        }
+      }
+
+      // Purge orphans best-effort so they don't keep ghost-locking.
+      if (orphansToPurge.length > 0) {
+        try {
+          await supabaseAdmin
+            .from("slot_enrollments")
+            .delete()
+            .in("id", orphansToPurge);
+        } catch (e) {
+          console.error("Orphan enrollment purge error:", e);
+        }
+      }
+
+      if (conflicts.length > 0) {
+        const c = conflicts[0];
+        const s = c.slot || {};
+        const dateLabel = s.date
+          ? new Date(s.date).toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })
+          : "date inconnue";
+        const timeLabel = s.start_time
+          ? `${String(s.start_time).substring(0, 5)}${s.end_time ? "-" + String(s.end_time).substring(0, 5) : ""}`
+          : "";
+        const roomLabel = s.room ? ` (salle ${s.room})` : "";
+
         return Response.json(
           {
-            error:
-              "Vous êtes déjà inscrit à un autre créneau pour cette épreuve",
+            error: `Vous êtes déjà inscrit à un autre créneau pour cette épreuve : ${dateLabel} ${timeLabel}${roomLabel}. Veuillez d'abord vous désinscrire de ce créneau.`,
+            code: "ALREADY_ENROLLED_OTHER_SLOT",
+            conflictingSlot: s,
           },
           { status: 400 },
         );

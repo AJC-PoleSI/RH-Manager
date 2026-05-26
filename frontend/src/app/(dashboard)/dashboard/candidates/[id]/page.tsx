@@ -190,19 +190,10 @@ export default function CandidateDetailPage({
             {candidate.comments}
           </div>
         )}
-        {/* Bouton évaluer : visible uniquement pour admin et membres */}
-        {!isCandidate && (
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() =>
-                router.push(`/dashboard/candidates/${params.id}/evaluate`)
-              }
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Evaluer ce candidat
-            </button>
-          </div>
-        )}
+        {/* "Évaluer" was intentionally removed here.
+            Evaluations must be triggered from the slot view by the
+            assigned examinator only. Going through the candidate
+            profile bypassed the slot-assignment check. */}
       </div>
 
       {/* Voeux de pôle */}

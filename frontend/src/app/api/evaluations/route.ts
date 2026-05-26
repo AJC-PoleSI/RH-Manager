@@ -90,6 +90,40 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // SECURITY: only an examinator assigned to a slot of this épreuve
+    // where the candidate is enrolled may evaluate them. Admins bypass.
+    // Closes the path where the candidate UI exposed an "Évaluer" button
+    // (now removed) — even if someone re-adds it, the API will refuse.
+    // ══════════════════════════════════════════════════════════════════
+    if (!user.isAdmin) {
+      const { data: validSlot } = await supabaseAdmin
+        .from("slot_member_assignments")
+        .select(
+          "slot:evaluation_slots!inner(id, epreuve_id, enrollments:slot_enrollments(candidate_id, status))",
+        )
+        .eq("member_id", memberId);
+
+      const isAssigned = (validSlot || []).some((row: any) => {
+        const s = row.slot;
+        if (!s || s.epreuve_id !== epreuveId) return false;
+        return (s.enrollments || [])
+          .filter((e: any) => !e.status || e.status === "active")
+          .some((e: any) => e.candidate_id === candidateId);
+      });
+
+      if (!isAssigned) {
+        return Response.json(
+          {
+            error:
+              "Vous ne pouvez évaluer que les candidats inscrits sur un créneau auquel vous êtes assigné.",
+            code: "NOT_ASSIGNED_TO_SLOT",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // GARDE ABSOLUE : Anti-double évaluation [Candidat + Épreuve]
     // Un candidat ne peut EN AUCUN CAS passer la même épreuve deux fois.
     // On vérifie TOUS les membres, pas seulement le membre courant.
