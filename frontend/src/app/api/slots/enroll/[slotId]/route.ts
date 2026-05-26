@@ -45,7 +45,14 @@ export async function DELETE(
       .single();
 
     if (slotError || !slot) {
-      return Response.json({ error: "Créneau introuvable" }, { status: 404 });
+      // The slot doesn't exist anymore. Just delete the enrollment to clean up orphaned data!
+      const { error: cleanupError } = await supabaseAdmin
+        .from("slot_enrollments")
+        .delete()
+        .eq("id", enrollments[0].id);
+      
+      if (cleanupError) throw cleanupError;
+      return Response.json({ success: true, message: "Inscription obsolète supprimée" });
     }
 
     // Build slot start datetime

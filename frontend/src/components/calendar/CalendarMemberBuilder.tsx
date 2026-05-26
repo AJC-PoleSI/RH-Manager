@@ -26,6 +26,7 @@ export default function CalendarMemberBuilder({
 
   // Disponibilités cochées par l'utilisateur: Set is easier for fast toggle. Format "{date}|{start_time}|{end_time}"
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
+  const [initialBlocks, setInitialBlocks] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     try {
@@ -101,6 +102,7 @@ export default function CalendarMemberBuilder({
         }
       });
       setSelectedBlocks(initials);
+      setInitialBlocks(new Set(initials));
     } catch (e) {
       console.error(e);
       toast("Erreur de synchronisation", "error");
@@ -163,8 +165,53 @@ export default function CalendarMemberBuilder({
 
   const handleSave = async () => {
     try {
+      // 1. Detect withdrawals from ASSIGNED slots
+      const withdrawnSlots: any[] = [];
+      adminSlots.forEach(slot => {
+        if (!slot.date || !slot.start_time || !slot.end_time) return;
+        
+        // Is member assigned to this slot?
+        const isAssigned = slot.members?.some((m: any) => m.member_id === memberId);
+        if (!isAssigned) return;
+
+        const d = slot.date.split("T")[0];
+        const key = `${d}|${slot.start_time}|${slot.end_time}`;
+        
+        // Was it selected initially but now unchecked?
+        if (initialBlocks.has(key) && !selectedBlocks.has(key)) {
+          withdrawnSlots.push(slot);
+        }
+      });
+
+      // 2. Warn if withdrawing from under-staffed slot with candidates
+      const criticalWithdrawals = withdrawnSlots.filter(s => {
+        const hasCandidates = s.enrollments?.length > 0;
+        const willBeUnderStaffed = (s.members?.length || 1) - 1 < (s.min_members || 2);
+        return hasCandidates && willBeUnderStaffed;
+      });
+
+      if (criticalWithdrawals.length > 0) {
+        const confirmMsg = `Attention ! Vous vous retirez de ${criticalWithdrawals.length} créneau(x) assigné(s) où des candidats sont déjà inscrits et qui manqueront d'examinateurs.\n\nÊtes-vous sûr de vouloir vous désinscrire de ces créneaux ?`;
+        if (!window.confirm(confirmMsg)) {
+          return; // Abort save
+        }
+      }
+
       setSaving(true);
 
+      // 3. Process explicit withdrawals from slots to trigger auto-replacement and notifications
+      for (const slot of withdrawnSlots) {
+        try {
+          await api.post("/slots/toggle-member", {
+            slotId: slot.id,
+            action: "remove"
+          });
+        } catch (e) {
+          console.error("Erreur retrait slot", slot.id, e);
+        }
+      }
+
+      // 4. Save new availabilities
       const daysOfWeekMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
       const payload = Array.from(selectedBlocks).map((key) => {
@@ -180,8 +227,15 @@ export default function CalendarMemberBuilder({
 
       await api.put("/availability", { availabilities: payload });
       toast("Disponibilités synchronisées globales 🎉", "success");
-      // Refresh des slots assignés côté parent (l'auto-allocate a tourné côté serveur)
+      
+      // Update initialBlocks to match current
+      setInitialBlocks(new Set(selectedBlocks));
+
+      // Refresh des slots assignés côté parent
       onSlotsChange?.();
+      
+      // Refresh adminSlots in this component to reflect updated members
+      fetchData();
     } catch (error: any) {
       console.error(error);
       toast(error.response?.data?.error || "Erreur de sauvegarde", "error");
