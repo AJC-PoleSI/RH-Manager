@@ -22,15 +22,25 @@ export async function GET(req: NextRequest) {
       const endDate = new Date(end);
       endDate.setHours(23, 59, 59, 999);
 
-      query = query
-        .gte("date", startDate.toISOString())
-        .lte("date", endDate.toISOString());
+      // FIX M1: keep weekday-only (recurring) availabilities visible by
+      // including rows where date IS NULL. Previously these silently
+      // disappeared from the cross-calendar admin view.
+      query = query.or(
+        `and(date.gte.${startDate.toISOString()},date.lte.${endDate.toISOString()}),date.is.null`,
+      );
     }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json(data);
+    // FIX C4: no-store
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     console.error("Get all availabilities error:", error);
     return Response.json(

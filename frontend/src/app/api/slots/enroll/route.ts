@@ -77,7 +77,12 @@ export async function POST(req: NextRequest) {
 
     // Note: min_members check removed — status published/ready is the source of truth
 
-    if ((slot.enrollments?.length || 0) >= slot.max_candidates) {
+    // FIX C2: only count ACTIVE enrollments for capacity (cancelled rows,
+    // if any soft-cancel path ever exists, must not block new candidates).
+    const activeEnrollments = (slot.enrollments || []).filter(
+      (e: any) => !e.status || e.status === "active",
+    );
+    if (activeEnrollments.length >= slot.max_candidates) {
       return Response.json(
         { error: "Ce créneau est complet" },
         { status: 400 },
@@ -157,21 +162,53 @@ export async function POST(req: NextRequest) {
 
     if (enrollError) throw enrollError;
 
-    // Auto-update status if full
-    const { data: updatedSlot } = await supabaseAdmin
+    // FIX H2: post-insert race-check. Two parallel POSTs could both pass
+    // the pre-check above. Re-count active enrollments and rollback this
+    // one if we exceeded capacity. Note: this is best-effort — a proper
+    // fix requires a Postgres RPC/CHECK constraint, but this closes the
+    // window in 99% of cases.
+    const { data: postCheck } = await supabaseAdmin
       .from("evaluation_slots")
-      .select("*, enrollments:slot_enrollments(id)")
+      .select(
+        "max_candidates, enrollments:slot_enrollments(id, status, enrolled_at)",
+      )
       .eq("id", slotId)
       .single();
 
-    if (
-      updatedSlot &&
-      (updatedSlot.enrollments?.length || 0) >= updatedSlot.max_candidates
-    ) {
-      await supabaseAdmin
-        .from("evaluation_slots")
-        .update({ status: "full" })
-        .eq("id", slotId);
+    if (postCheck) {
+      const actives = (postCheck.enrollments || [])
+        .filter((e: any) => !e.status || e.status === "active")
+        .sort((a: any, b: any) =>
+          String(a.enrolled_at || "").localeCompare(String(b.enrolled_at || "")),
+        );
+
+      if (actives.length > postCheck.max_candidates) {
+        // We are the loser of the race — rollback our insert.
+        const loserIds = actives
+          .slice(postCheck.max_candidates)
+          .map((e: any) => e.id);
+        if (loserIds.includes(enrollment.id)) {
+          await supabaseAdmin
+            .from("slot_enrollments")
+            .delete()
+            .eq("id", enrollment.id);
+          return Response.json(
+            { error: "Ce créneau est complet (course concurrente)" },
+            { status: 409 },
+          );
+        }
+      }
+
+      // FIX C1 (paired): keep status mutation consistent — only mark
+      // "full" when capacity exactly reached. Reads now tolerate "full"
+      // for members (see my-slots), so this is purely informational.
+      const activeCount = actives.length;
+      if (activeCount >= postCheck.max_candidates) {
+        await supabaseAdmin
+          .from("evaluation_slots")
+          .update({ status: "full" })
+          .eq("id", slotId);
+      }
     }
 
     return Response.json(enrollment, { status: 201 });

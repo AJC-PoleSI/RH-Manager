@@ -20,13 +20,13 @@ export async function GET(req: NextRequest) {
   const candidateId = payload.id;
 
   try {
-    const { data: slots, error } = await supabaseAdmin
+    const { data: rawSlots, error } = await supabaseAdmin
       .from("evaluation_slots")
       .select(
         `
         *,
         epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size),
-        enrollments:slot_enrollments(candidate_id),
+        enrollments:slot_enrollments(candidate_id, status),
         members:slot_member_assignments(id)
       `,
       )
@@ -35,6 +35,15 @@ export async function GET(req: NextRequest) {
       .order("start_time", { ascending: true });
 
     if (error) throw error;
+
+    // FIX H1: drop cancelled enrollments so capacity counters and
+    // isEnrolled flags reflect only ACTIVE registrations.
+    const slots = (rawSlots || []).map((s: any) => ({
+      ...s,
+      enrollments: (s.enrollments || []).filter(
+        (e: any) => !e.status || e.status === "active",
+      ),
+    }));
 
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
@@ -87,7 +96,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return Response.json(available);
+    // FIX C4: no-store so candidate sees fresh slot state immediately
+    // after enrolling/canceling.
+    return new Response(JSON.stringify(available), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     console.error("Available slots error:", error);
     return Response.json(

@@ -43,8 +43,26 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) throw error;
-    const validData = (data || []).filter((slot: any) => slot.epreuve);
-    return Response.json(validData);
+    // FIX C2 + H5: drop slots without épreuve (orphan guard), and also
+    // strip cancelled enrollments from each slot so capacity / candidate
+    // lists across admin/member views are consistent.
+    const validData = (data || [])
+      .filter((slot: any) => slot.epreuve)
+      .map((slot: any) => ({
+        ...slot,
+        enrollments: (slot.enrollments || []).filter(
+          (e: any) => !e.status || e.status === "active",
+        ),
+      }));
+    // FIX C4: explicit no-store — admin /planning was previously serving
+    // stale lists because the client didn't pass cache-busting params.
+    return new Response(JSON.stringify(validData), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     return Response.json({ error: "Failed to fetch slots" }, { status: 500 });
   }

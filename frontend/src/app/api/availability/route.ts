@@ -34,7 +34,14 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json(data);
+    // FIX C4: no-store
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     return Response.json(
       { error: "Failed to fetch availabilities" },
@@ -119,10 +126,16 @@ export async function PUT(req: NextRequest) {
       if (deleteError) throw deleteError;
 
       if (availabilities && availabilities.length > 0) {
+        // FIX H4: normalize to UTC noon so YYYY-MM-DD matching in
+        // auto-allocate (substring 0..10) stays day-stable across TZs.
         const rows = availabilities.map((a: any) => ({
           member_id: memberId,
           weekday: a.weekday,
-          date: new Date(a.date).toISOString(),
+          date: a.date
+            ? new Date(
+                String(a.date).substring(0, 10) + "T12:00:00.000Z",
+              ).toISOString()
+            : null,
           start_time: a.startTime,
           end_time: a.endTime,
         }));
@@ -143,10 +156,15 @@ export async function PUT(req: NextRequest) {
       if (deleteError) throw deleteError;
 
       if (availabilities && availabilities.length > 0) {
+        // FIX H4: same TZ-stable normalization (see above).
         const rows = availabilities.map((a: any) => ({
           member_id: memberId,
           weekday: a.weekday,
-          date: a.date ? new Date(a.date).toISOString() : null,
+          date: a.date
+            ? new Date(
+                String(a.date).substring(0, 10) + "T12:00:00.000Z",
+              ).toISOString()
+            : null,
           start_time: a.startTime,
           end_time: a.endTime,
         }));

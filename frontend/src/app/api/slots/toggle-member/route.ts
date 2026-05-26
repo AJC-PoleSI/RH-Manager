@@ -205,12 +205,12 @@ export async function POST(req: NextRequest) {
       // le créneau s'ouvre et se publie automatiquement".
       // ──────────────────────────────────────────────────────────────
       if (slot && ["open", "draft", "ready"].includes(slot.status)) {
-        // Vérifier la visibilité globale du planning
+        // FIX M3: maybeSingle so missing row doesn't crash the toggle.
         const { data: settingRow } = await supabaseAdmin
           .from("system_settings")
           .select("value")
           .eq("key", "planning_visible_candidats")
-          .single();
+          .maybeSingle();
         const planningVisible =
           settingRow?.value === "true" || settingRow?.value === true;
 

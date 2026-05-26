@@ -33,10 +33,18 @@ export async function GET(req: NextRequest) {
         (a: any) =>
           a.slot &&
           a.slot.epreuve &&
-          ["published", "closed"].includes(a.slot.status),
+          // FIX C1: include "ready" and "full" — when a slot fills up
+          // (last candidate enrolls) status becomes "full" and members
+          // would otherwise lose visibility on their own assignment.
+          ["published", "closed", "ready", "full"].includes(a.slot.status),
       )
       .map((a: any) => ({
         ...a.slot,
+        // FIX C2: drop cancelled enrollments from member's view so admin
+        // and member see the same active candidate list.
+        enrollments: (a.slot.enrollments || []).filter(
+          (e: any) => !e.status || e.status === "active",
+        ),
         myAssignment: true,
       }))
       .sort((a: any, b: any) => {
@@ -48,7 +56,15 @@ export async function GET(req: NextRequest) {
         );
       });
 
-    return Response.json(slots);
+    // FIX C4: explicit no-store so browsers/Axios don't serve stale data
+    // after a candidate enrolls and the slot transitions to full/ready.
+    return new Response(JSON.stringify(slots), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
     return Response.json(
       { error: "Failed to fetch my slots" },

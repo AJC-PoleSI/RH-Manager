@@ -42,7 +42,12 @@ export async function GET(req: NextRequest) {
         if (isCandidate && event.visible_to_candidates === false) return false;
         return true;
       }
-      if (!event.related_member_id && !event.related_candidate_id) return true;
+      // FIX M2: an event without related_member/related_candidate is
+      // ONLY visible to admins (was previously visible to everyone, which
+      // accidentally leaked orphan events).
+      if (!event.related_member_id && !event.related_candidate_id) {
+        return !!payload.isAdmin;
+      }
       // Événement assigné à cet utilisateur
       if (payload.role === "member" && event.related_member_id === userId)
         return true;
@@ -53,8 +58,107 @@ export async function GET(req: NextRequest) {
       return false;
     });
 
-    return Response.json(filtered);
+    // ═══════════════════════════════════════════════════════════════════
+    // FIX C3: UNION evaluation_slots + slot_enrollments
+    // The candidate's enrollment lives in `slot_enrollments`, not in
+    // `calendar_events`. Without this union, admin/member calendar views
+    // never saw the enrollment. We synthesize calendar_event-shaped rows
+    // on the fly so the client doesn't need to change.
+    // ═══════════════════════════════════════════════════════════════════
+    let slotQ = supabaseAdmin
+      .from("evaluation_slots")
+      .select(
+        `
+        id, date, start_time, end_time, room, label, status, max_candidates,
+        epreuve_id,
+        epreuve:epreuves(id, name, tour, type),
+        members:slot_member_assignments(member_id),
+        enrollments:slot_enrollments(id, candidate_id, status, candidate:candidates(id, first_name, last_name))
+      `,
+      )
+      .in("status", ["published", "ready", "full", "closed"]);
+
+    if (start && end) {
+      const startDate = new Date(start);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate2 = new Date(end);
+      endDate2.setHours(23, 59, 59, 999);
+      slotQ = slotQ
+        .gte("date", startDate.toISOString())
+        .lte("date", endDate2.toISOString());
+    }
+    const { data: slotRows } = await slotQ;
+
+    const slotEvents: any[] = [];
+    for (const slot of (slotRows || []) as any[]) {
+      if (!slot.epreuve) continue;
+      const activeEnrolls = (slot.enrollments || []).filter(
+        (e: any) => !e.status || e.status === "active",
+      );
+      const isMemberOnSlot =
+        payload.role === "member" &&
+        (slot.members || []).some((m: any) => m.member_id === userId);
+      const isCandidateOnSlot =
+        isCandidate &&
+        activeEnrolls.some((e: any) => e.candidate_id === userId);
+
+      // Visibility:
+      //   - admin: always
+      //   - member: only if assigned to the slot
+      //   - candidate: only if enrolled in the slot
+      if (
+        !payload.isAdmin &&
+        !isMemberOnSlot &&
+        !isCandidateOnSlot
+      ) {
+        continue;
+      }
+
+      const titleCandidates = activeEnrolls
+        .map((e: any) =>
+          e.candidate
+            ? `${e.candidate.first_name || ""} ${e.candidate.last_name || ""}`.trim()
+            : "",
+        )
+        .filter(Boolean)
+        .join(", ");
+
+      slotEvents.push({
+        id: `slot:${slot.id}`,
+        title: titleCandidates
+          ? `${slot.epreuve.name} — ${titleCandidates}`
+          : slot.epreuve.name,
+        description: slot.label || null,
+        day: slot.date,
+        start_time: String(slot.start_time || "").substring(0, 5),
+        end_time: String(slot.end_time || "").substring(0, 5),
+        startTime: String(slot.start_time || "").substring(0, 5),
+        endTime: String(slot.end_time || "").substring(0, 5),
+        related_epreuve_id: slot.epreuve_id,
+        related_member_id: null,
+        related_candidate_id: null,
+        is_global: false,
+        visible_to_candidates: true,
+        color: "#8B5CF6",
+        room: slot.room || null,
+        isSlot: true,
+        slotStatus: slot.status,
+        enrolledCount: activeEnrolls.length,
+        maxCandidates: slot.max_candidates,
+        epreuve: slot.epreuve,
+      });
+    }
+
+    // FIX C4: explicit no-store
+    return new Response(JSON.stringify([...filtered, ...slotEvents]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error) {
+    console.error("Calendar GET error:", error);
     return Response.json({ error: "Failed to fetch events" }, { status: 500 });
   }
 }

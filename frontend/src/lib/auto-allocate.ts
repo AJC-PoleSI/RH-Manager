@@ -16,14 +16,33 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
   unfilled: Array<{ slot_id: string; needed: number; got: number }>;
 }> {
   // Fetch slots (optionally filtered by épreuve)
+  // FIX H3: also pull enrollment count so we can preserve jury for any
+  // slot that already has candidates attached — wiping jury after a
+  // candidate enrolled silently desyncs everyone.
   let slotQuery = supabaseAdmin
     .from("evaluation_slots")
-    .select("id, date, start_time, end_time, status, min_members, epreuve_id");
+    .select(
+      "id, date, start_time, end_time, status, min_members, epreuve_id, enrollments:slot_enrollments(id, status)",
+    );
   if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
   const { data: slots, error: slotErr } = await slotQuery;
   if (slotErr) throw slotErr;
 
   if (!slots || slots.length === 0) return { updated: 0, unfilled: [] };
+
+  // FIX H3: helper — a slot is "committed" if any of:
+  //   • status is in {published, ready, full, closed}
+  //   • it has at least one active enrollment
+  // Committed slots keep their existing jury (no wipe, no re-pick).
+  const isCommitted = (s: any): boolean => {
+    if (["published", "ready", "full", "closed"].includes(s.status)) {
+      return true;
+    }
+    const actives = (s.enrollments || []).filter(
+      (e: any) => !e.status || e.status === "active",
+    );
+    return actives.length > 0;
+  };
 
   // Fetch all availabilities
   const { data: availabilities } = await supabaseAdmin
@@ -99,8 +118,11 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
   const unfilled: Array<{ slot_id: string; needed: number; got: number }> = [];
 
   for (const slot of sortedSlots) {
-    if (slot.status === "published") {
-      // Preserve existing jury & their commitments
+    // FIX H3: preserve jury for ANY committed slot (not just published).
+    // Previously only "published" was preserved, which meant a slot in
+    // "ready" or "full" with candidates already enrolled would get its
+    // members rotated when another member edited their availability.
+    if (isCommitted(slot)) {
       const existing = currentBySlot[slot.id] || new Set();
       existing.forEach((memberId) => commit(memberId, slot));
       continue;
@@ -130,16 +152,19 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
     }
   }
 
-  // Replace assignments for non-published slots
-  const nonPublishedSlotIds = sortedSlots
-    .filter((s: any) => s.status !== "published")
+  // FIX H3: only wipe assignments for NON-committed slots. Committed
+  // slots (published/ready/full/closed OR with enrollments) keep their
+  // existing jury — preventing the silent member rotation that broke
+  // sync between admin/member views.
+  const wipeableSlotIds = sortedSlots
+    .filter((s: any) => !isCommitted(s))
     .map((s: any) => s.id);
 
-  if (nonPublishedSlotIds.length > 0) {
+  if (wipeableSlotIds.length > 0) {
     await supabaseAdmin
       .from("slot_member_assignments")
       .delete()
-      .in("slot_id", nonPublishedSlotIds);
+      .in("slot_id", wipeableSlotIds);
   }
 
   if (assignmentsToInsert.length > 0) {
@@ -148,15 +173,14 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
       .insert(assignmentsToInsert);
   }
 
-  // Vérifier si le planning est globalement publié aux candidats
-  // (pour déterminer si on auto-publish les slots avec >= 1 examinateur)
+  // FIX M3: maybeSingle so a missing row doesn't crash auto-allocate.
   let planningVisibleToCandidates = false;
   try {
     const { data: row } = await supabaseAdmin
       .from("system_settings")
       .select("value")
       .eq("key", "planning_visible_candidats")
-      .single();
+      .maybeSingle();
     planningVisibleToCandidates = row?.value === "true" || row?.value === true;
   } catch {
     planningVisibleToCandidates = false;
@@ -164,7 +188,8 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
 
   // Update statuses based on quota et auto-publish si planning visible
   for (const slot of sortedSlots) {
-    if (slot.status === "published") continue;
+    // FIX H3: don't touch status of committed slots either.
+    if (isCommitted(slot)) continue;
     const assignedCount = assignmentsToInsert.filter(
       (a) => a.slot_id === slot.id,
     ).length;
