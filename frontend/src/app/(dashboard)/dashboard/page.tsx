@@ -48,6 +48,7 @@ export default function DashboardPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [deadlines, setDeadlines] = useState<{ deadline_candidats?: string; deadline_membres?: string }>({});
     const [mySlots, setMySlots] = useState<any[]>([]);
+    const [myAvailabilities, setMyAvailabilities] = useState<any[]>([]);
     const [showEventModal, setShowEventModal] = useState(false);
     const [selectedMemberSlot, setSelectedMemberSlot] = useState<any>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -136,6 +137,22 @@ export default function DashboardPage() {
         }
     }, []);
 
+    const fetchMyAvailabilities = useCallback(async () => {
+        try {
+            const startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const endMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            const startStr = format(startMonth, "yyyy-MM-dd");
+            const endStr = format(endMonth, "yyyy-MM-dd");
+            
+            const res = await api.get('/availability', {
+                params: { start: startStr, end: endStr }
+            });
+            setMyAvailabilities(res.data);
+        } catch (e) {
+            console.error(e);
+        }
+    }, [currentDate]);
+
     // ── Effects ───────────────────────────────
     useEffect(() => {
         fetchKPIs();
@@ -149,8 +166,9 @@ export default function DashboardPage() {
             fetchEvents();
             fetchDeadlines();
             fetchMySlots();
+            fetchMyAvailabilities();
         }
-    }, [role, user, currentDate, isAdmin, fetchEvents, fetchDeadlines, fetchMySlots]);
+    }, [isAdmin, fetchEvents, fetchDeadlines, fetchMySlots, fetchMyAvailabilities]);
 
     // ── Calendar event handlers ───────────────
     const openCreateModal = () => {
@@ -475,5 +493,5 @@ export default function DashboardPage() {
         );
     }
 
-    return <MemberDashboardCalendar mySlots={mySlots} events={events} deadlines={deadlines} user={user} currentDate={currentDate} setCurrentDate={setCurrentDate} />;
+    return <MemberDashboardCalendar mySlots={mySlots} events={events} deadlines={deadlines} user={user} currentDate={currentDate} setCurrentDate={setCurrentDate} myAvailabilities={myAvailabilities} />;
 }

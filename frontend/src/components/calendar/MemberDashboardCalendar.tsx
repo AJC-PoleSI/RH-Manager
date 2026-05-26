@@ -8,10 +8,11 @@ interface MemberDashboardCalendarProps {
     user: any;
     currentDate: Date;
     setCurrentDate: (d: Date) => void;
+    myAvailabilities?: any[];
 }
 
 export default function MemberDashboardCalendar({
-    mySlots, events, deadlines, user, currentDate, setCurrentDate
+    mySlots, events, deadlines, user, currentDate, setCurrentDate, myAvailabilities = []
 }: MemberDashboardCalendarProps) {
     const DAYS_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
     const MONTHS_LABELS = [
@@ -58,6 +59,25 @@ export default function MemberDashboardCalendar({
     const memberCalEvents = useMemo(() => {
         const allEvents: any[] = [];
 
+        // 0. Disponibilités (availabilities)
+        myAvailabilities.forEach((avail: any) => {
+            const dateRaw = avail.date || "";
+            let dateStr = "";
+            if (dateRaw) {
+                const d = new Date(dateRaw);
+                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            }
+            allEvents.push({
+                id: `avail-${avail.id}`,
+                title: "Disponibilité",
+                date: dateStr,
+                startTime: avail.startTime || null,
+                endTime: avail.endTime || null,
+                type: "availability",
+                description: "Vous avez indiqué être disponible à cet horaire.",
+            });
+        });
+
         // 1. Slots assignés → événements "slot"
         mySlots.forEach((slot: any) => {
             const dateRaw = slot.date || "";
@@ -74,13 +94,15 @@ export default function MemberDashboardCalendar({
                 .filter((m: any) => m.member?.id !== user?.id)
                 .map((m: any) => m.member?.email || "Membre");
 
+            const hasCandidates = candidates.length > 0;
+
             allEvents.push({
                 id: `slot-${slot.id}`,
                 title: slot.epreuve?.name || "Évaluation",
                 date: dateStr,
                 startTime: slot.start_time || slot.startTime || null,
                 endTime: slot.end_time || slot.endTime || null,
-                type: "slot",
+                type: hasCandidates ? "slot_filled" : "slot_empty",
                 room: slot.room || null,
                 tour: slot.epreuve?.tour,
                 candidates,
@@ -162,7 +184,7 @@ export default function MemberDashboardCalendar({
         }
 
         return allEvents;
-    }, [mySlots, events, deadlines, user?.id]);
+    }, [myAvailabilities, mySlots, events, deadlines, user?.id]);
 
     const getMemberEventsForDay = (day: number) => {
         const dateStr = `${memberYear}-${String(memberMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -174,11 +196,13 @@ export default function MemberDashboardCalendar({
         return memberCalEvents.filter((e) => e.date === dateStr);
     };
 
-    const typeStylesMember: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-        slot: { bg: "bg-purple-50", text: "text-purple-700", dot: "bg-purple-500", label: "Créneau assigné" },
-        global: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Événement global" },
-        event: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Événement" },
-        deadline: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Deadline" },
+    const typeStylesMember: Record<string, { bg: string; text: string; dot: string; label: string; border?: string }> = {
+        slot_filled: { bg: "bg-green-50", text: "text-green-700", dot: "bg-green-500", label: "Créneau validé", border: "border-green-200" },
+        slot_empty: { bg: "bg-gray-100", text: "text-gray-700", dot: "bg-gray-400", label: "Créneau assigné", border: "border-gray-200" },
+        availability: { bg: "bg-gray-50/80", text: "text-gray-500", dot: "bg-gray-300", label: "Disponibilité", border: "border-dashed border-gray-300" },
+        global: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Événement global", border: "border-blue-100" },
+        event: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Événement", border: "border-emerald-100" },
+        deadline: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Deadline", border: "border-red-200" },
     };
 
     // Upcoming events (7 days)
@@ -304,8 +328,16 @@ export default function MemberDashboardCalendar({
             {/* Legend */}
             <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                    Créneau avec candidat(s)
+                </span>
+                <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-400" />
                     Créneau assigné
+                </span>
+                <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-200 border border-gray-300 border-dashed" />
+                    Disponibilité
                 </span>
                 <span className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
@@ -350,7 +382,8 @@ export default function MemberDashboardCalendar({
                                                 {dayEvents.map((ev) => {
                                                     const style = typeStylesMember[ev.type] || typeStylesMember.event;
                                                     const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff" } : {};
-                                                    const classes = ev.color ? "" : `${style.bg} ${style.text}`;
+                                                    const borderClass = style.border ? `border ${style.border}` : "";
+                                                    const classes = ev.color ? "" : `${style.bg} ${style.text} ${borderClass}`;
                                                     return (
                                                         <button
                                                             key={ev.id}
@@ -404,13 +437,14 @@ export default function MemberDashboardCalendar({
                                         )}
                                         {dateEvents.map((ev) => {
                                             const style = typeStylesMember[ev.type] || typeStylesMember.event;
-                                            const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff", borderColor: "transparent" } : { borderColor: "transparent" };
+                                            const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff", borderColor: "transparent" } : {};
+                                            const borderClass = style.border ? style.border : "border-transparent";
                                             const classes = ev.color ? "" : `${style.bg} ${style.text}`;
                                             return (
                                                 <button
                                                     key={ev.id}
                                                     onClick={() => setSelectedMemberSlot(ev)}
-                                                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${classes}`}
+                                                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${classes} ${borderClass}`}
                                                     style={customStyle}
                                                 >
                                                     <p className="font-semibold truncate">{ev.title}</p>
@@ -458,7 +492,7 @@ export default function MemberDashboardCalendar({
                     >
                         {/* Color accent */}
                         {(() => {
-                            const dotColor = selectedMemberSlot.type === "slot" ? "#A855F7" : selectedMemberSlot.type === "global" ? "#3B82F6" : selectedMemberSlot.type === "deadline" ? "#EF4444" : "#10B981";
+                            const dotColor = selectedMemberSlot.type === "slot_filled" ? "#10B981" : selectedMemberSlot.type === "slot_empty" ? "#9CA3AF" : selectedMemberSlot.type === "availability" ? "#D1D5DB" : selectedMemberSlot.type === "global" ? "#3B82F6" : selectedMemberSlot.type === "deadline" ? "#EF4444" : "#10B981";
                             return <div className="h-2" style={{ backgroundColor: dotColor }} />;
                         })()}
 
@@ -557,7 +591,8 @@ export default function MemberDashboardCalendar({
                                     </div>
                                 )}
 
-                                {selectedMemberSlot.candidates && selectedMemberSlot.candidates.length === 0 && selectedMemberSlot.type === "slot" && (
+                                {/* Aucun candidat et c'est un créneau assigné */}
+                                {selectedMemberSlot.candidates && selectedMemberSlot.candidates.length === 0 && (selectedMemberSlot.type === "slot_empty" || selectedMemberSlot.type === "slot_filled") && (
                                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                                         <span className="text-gray-400">👤</span>
                                         <p className="text-sm text-gray-400 italic">Aucun candidat inscrit sur ce créneau</p>
