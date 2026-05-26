@@ -30,7 +30,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     const loadData = async () => {
       try {
         const [candRes, epRes] = await Promise.all([
-          api.get(`/candidates/${params.id}`),
+          api.get(`/candidates/${id}`),
           api.get("/epreuves"),
         ]);
         setCandidate(candRes.data);

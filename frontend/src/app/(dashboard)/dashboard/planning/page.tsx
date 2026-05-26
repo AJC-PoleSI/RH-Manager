@@ -1832,17 +1832,28 @@ export default function PlanningPage() {
                       )
                       .filter(Boolean);
 
+                    const hasCandidates = candidateNames.length > 0;
+                    
+                    // Style matches the Calendar
+                    const cardBg = hasCandidates ? "bg-green-50 border-green-200" : "bg-white border-gray-200";
+                    const sideColor = hasCandidates ? "#22c55e" : "#9ca3af";
+                    const epreuveBg = hasCandidates ? "#dcfce7" : "#f3f4f6";
+                    const epreuveText = hasCandidates ? "#166534" : "#4b5563";
+                    const epreuveBorder = hasCandidates ? "#bbf7d0" : "#e5e7eb";
+
                     return (
                       <div
                         key={slot.id}
                         onClick={() => setSelectedSlot(slot)}
-                        className="flex items-stretch cursor-pointer hover:bg-gray-50 transition-colors"
+                        className={`flex items-stretch cursor-pointer hover:bg-gray-50/50 transition-colors ${
+                          hasCandidates ? "bg-green-50/20" : ""
+                        }`}
                       >
                         {/* Barre latérale colorée */}
                         <div
                           style={{
                             width: 4,
-                            backgroundColor: color,
+                            backgroundColor: sideColor,
                             borderRadius: "0 4px 4px 0",
                             flexShrink: 0,
                           }}
@@ -1853,16 +1864,16 @@ export default function PlanningPage() {
                             <div className="flex-1">
                               {/* Horaire + épreuve */}
                               <div className="flex items-center gap-3 mb-1.5">
-                                <span className="text-sm font-semibold text-gray-900">
+                                <span className={`text-sm font-semibold ${hasCandidates ? "text-green-900" : "text-gray-900"}`}>
                                   {formatTime(slot.start_time)} -{" "}
                                   {formatTime(slot.end_time)}
                                 </span>
                                 <span
                                   className="px-2 py-0.5 rounded-full text-xs font-medium"
                                   style={{
-                                    backgroundColor: `${color}15`,
-                                    color: color,
-                                    border: `1px solid ${color}40`,
+                                    backgroundColor: epreuveBg,
+                                    color: epreuveText,
+                                    border: `1px solid ${epreuveBorder}`,
                                   }}
                                 >
                                   {slot.epreuve?.name || "Epreuve"}
