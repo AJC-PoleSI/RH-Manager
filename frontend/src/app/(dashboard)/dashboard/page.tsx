@@ -92,69 +92,28 @@ export default function DashboardPage() {
         try {
             let params = {};
             if (isAdmin) {
-                const start = daysToShow[0].toISOString();
-                const end = daysToShow[4].toISOString();
+                const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+                const start = addDays(weekStart, 0).toISOString();
+                const end = addDays(weekStart, 4).toISOString();
                 params = { start, end };
             } else {
-                // Pour les membres, on récupère tout le mois
                 const startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
                 const endMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
                 params = { start: startMonth.toISOString(), end: endMonth.toISOString() };
             }
             const res = await api.get('/calendar', { params });
 
-            const deadlineEvents: any[] = [];
-            if (deadlines.deadline_candidats) {
-                deadlineEvents.push({
-                    id: 'deadline-candidats',
-                    title: 'Deadline Candidats',
-                    day: deadlines.deadline_candidats,
-                    startTime: '08:00',
-                    endTime: '08:30',
-                    isDeadline: true
-                });
-            }
-            if (deadlines.deadline_membres) {
-                deadlineEvents.push({
-                    id: 'deadline-membres',
-                    title: 'Deadline Membres',
-                    day: deadlines.deadline_membres,
-                    startTime: '08:00',
-                    endTime: '08:30',
-                    isDeadline: true
-                });
-            }
-
-            const slotEvents = mySlots.map((slot: any) => {
-                const mappedEnrollments = slot.enrollments?.map((e: any) => ({
-                    firstName: e.candidate?.firstName || e.candidate?.first_name || '',
-                    lastName: e.candidate?.lastName || e.candidate?.last_name || '',
-                })) || [];
-                return {
-                    id: `slot-${slot.id}`,
-                    title: `${slot.epreuve?.name || 'Evaluation'}`,
-                    description: mappedEnrollments.map((c: any) => `${c.firstName} ${c.lastName}`).join(', ') || '',
-                    day: slot.date,
-                    startTime: slot.startTime || slot.start_time,
-                    endTime: slot.endTime || slot.end_time,
-                    isSlot: true,
-                    room: slot.room,
-                    rawCandidates: mappedEnrollments
-                };
-            });
-
-            // Normaliser snake_case → camelCase pour les events API
             const calendarEvents = (res.data || []).map((ev: any) => ({
                 ...ev,
                 startTime: ev.startTime || ev.start_time || "",
                 endTime: ev.endTime || ev.end_time || "",
             }));
 
-            setEvents([...calendarEvents, ...deadlineEvents, ...slotEvents]);
+            setEvents(calendarEvents);
         } catch (e) {
             console.error(e);
         }
-    }, [daysToShow, deadlines, mySlots, currentDate, isAdmin]);
+    }, [currentDate, isAdmin]);
 
     const fetchDeadlines = useCallback(async () => {
         try {
