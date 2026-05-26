@@ -18,9 +18,34 @@ export async function GET(req: NextRequest) {
   if (!payload) return unauthorized();
 
   const candidateId = payload.id;
+  const isCandidate = payload.role === "candidate";
 
   try {
-    const { data: rawSlots, error } = await supabaseAdmin
+    // ══════════════════════════════════════════════════════════════════
+    // FIX: pre-fetch the candidate's enrolled slot IDs so we can
+    // INCLUDE those slots in the result even when their status is
+    // outside the visible set (draft / closed / etc).
+    //
+    // Without this, a candidate enrolled in a "closed" or "draft" slot
+    // would see NO slot card for it in the calendar — yet the cross-
+    // épreuve check would block any new inscription. They could not
+    // even click "Se désinscrire" because the slot wasn't in the list.
+    // Exact bug reported: "Vous êtes déjà inscrit à un autre créneau
+    // pour cette épreuve : mercredi 16 sept 08:00…" but the slot never
+    // appeared in the candidate's calendar.
+    // ══════════════════════════════════════════════════════════════════
+    let candidateEnrolledSlotIds: string[] = [];
+    if (isCandidate) {
+      const { data: myEnrolls } = await supabaseAdmin
+        .from("slot_enrollments")
+        .select("slot_id, status")
+        .eq("candidate_id", candidateId);
+      candidateEnrolledSlotIds = (myEnrolls || [])
+        .filter((e: any) => e.status !== "cancelled" && e.slot_id)
+        .map((e: any) => e.slot_id);
+    }
+
+    let query = supabaseAdmin
       .from("evaluation_slots")
       .select(
         `
@@ -29,14 +54,20 @@ export async function GET(req: NextRequest) {
         enrollments:slot_enrollments(candidate_id, status),
         members:slot_member_assignments(id)
       `,
-      )
-      // FIX (audit #5): include "open" so the JS-level isEnrolled guard
-      // below can keep a slot visible to its enrolled candidate even if
-      // a member drop-off pushed the slot back to "open". Without
-      // "open" in this SQL filter, the slot simply never returns and
-      // the candidate loses the ability to see/cancel their own
-      // enrollment.
-      .in("status", ["open", "published", "ready", "full"])
+      );
+
+    if (isCandidate && candidateEnrolledSlotIds.length > 0) {
+      // Include slots matching the visible statuses OR any slot the
+      // candidate is enrolled in (regardless of status).
+      const idList = candidateEnrolledSlotIds.join(",");
+      query = query.or(
+        `status.in.(open,published,ready,full),id.in.(${idList})`,
+      );
+    } else {
+      query = query.in("status", ["open", "published", "ready", "full"]);
+    }
+
+    const { data: rawSlots, error } = await query
       .order("date", { ascending: true })
       .order("start_time", { ascending: true });
 
@@ -53,8 +84,6 @@ export async function GET(req: NextRequest) {
 
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
-    const isCandidate = payload.role === "candidate";
-
     const filtered = (slots || []).filter((slot: any) => {
       const memberCount = slot.members?.length || 0;
       const isEnrolled = isCandidate
@@ -63,9 +92,14 @@ export async function GET(req: NextRequest) {
 
       // Si admin/membre: tout passe
       if (!isCandidate) return true;
-      // Candidat inscrit: toujours visible (pour pouvoir se désinscrire)
+      // Candidat inscrit: TOUJOURS visible (pour pouvoir se désinscrire),
+      // quel que soit le statut du slot (open/closed/draft inclus).
       if (isEnrolled) return true;
-      // Sinon: seulement si au moins 1 examinateur
+      // Sinon: ne montrer que les statuts publiquement-visibles avec
+      // au moins 1 examinateur affecté.
+      if (!["open", "published", "ready", "full"].includes(slot.status)) {
+        return false;
+      }
       return memberCount >= 1;
     });
 
