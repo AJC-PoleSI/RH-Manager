@@ -98,7 +98,9 @@ export default function CalendarMemberBuilder({
       resMyAvail.data.forEach((av: any) => {
         if (av.date) {
           const dateOnly = av.date.split("T")[0];
-          initials.add(`${dateOnly}|${av.start_time}|${av.end_time}`);
+          const st = (av.start_time || "").slice(0, 5);
+          const et = (av.end_time || "").slice(0, 5);
+          initials.add(`${dateOnly}|${st}|${et}`);
         }
       });
       setSelectedBlocks(initials);
@@ -125,15 +127,17 @@ export default function CalendarMemberBuilder({
       if (!slot.date || !slot.start_time || !slot.end_time) return;
 
       const d = slot.date.split("T")[0];
+      const st = (slot.start_time || "").slice(0, 5);
+      const et = (slot.end_time || "").slice(0, 5);
       datesSet.add(d);
-      timesSet.add(slot.start_time);
+      timesSet.add(st);
 
-      const key = `${d}|${slot.start_time}|${slot.end_time}`;
+      const key = `${d}|${st}|${et}`;
       if (!blocksMap.has(key)) {
         blocksMap.set(key, {
           date: d,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
+          startTime: st,
+          endTime: et,
           epreuves: new Set<string>(),
           key,
         });
@@ -175,7 +179,9 @@ export default function CalendarMemberBuilder({
         if (!isAssigned) return;
 
         const d = slot.date.split("T")[0];
-        const key = `${d}|${slot.start_time}|${slot.end_time}`;
+        const st = (slot.start_time || "").slice(0, 5);
+        const et = (slot.end_time || "").slice(0, 5);
+        const key = `${d}|${st}|${et}`;
         
         // Was it selected initially but now unchecked?
         if (initialBlocks.has(key) && !selectedBlocks.has(key)) {
