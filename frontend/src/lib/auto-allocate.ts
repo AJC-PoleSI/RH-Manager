@@ -115,16 +115,45 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
   });
 
   const assignmentsToInsert: Array<{ slot_id: string; member_id: string }> = [];
+  // Tracks members to be added to ALREADY-committed slots (incremental,
+  // no wipe). Separate from `assignmentsToInsert` because committed
+  // slots don't go through the delete-then-insert path.
+  const incrementalAdds: Array<{ slot_id: string; member_id: string }> = [];
   const unfilled: Array<{ slot_id: string; needed: number; got: number }> = [];
 
   for (const slot of sortedSlots) {
-    // FIX H3: preserve jury for ANY committed slot (not just published).
-    // Previously only "published" was preserved, which meant a slot in
-    // "ready" or "full" with candidates already enrolled would get its
-    // members rotated when another member edited their availability.
+    const existing = currentBySlot[slot.id] || new Set<string>();
+
     if (isCommitted(slot)) {
-      const existing = currentBySlot[slot.id] || new Set();
+      // FIX H3: preserve jury — but ALSO add any newly-available member
+      // who is not already on the slot. Previously the loop just
+      // `continue`d, locking new members out of committed slots even
+      // when they declared availability matching the slot's time. That
+      // matched the user's complaint: "je coche le créneau comme dispo
+      // mais il n'apparaît pas côté membre" — they were never added.
       existing.forEach((memberId) => commit(memberId, slot));
+
+      const eligibleForCommitted = matchSlotToMembers(slot).filter(
+        (id) => !existing.has(id),
+      );
+      // Cap the number of additional members per committed slot to
+      // avoid blowing up the jury size unexpectedly. Soft cap = 2x
+      // min_members (so a min=2 slot can hold up to 4 examinators).
+      const quota = slot.min_members || 2;
+      const softCap = Math.max(quota * 2, quota + 2);
+      const headroom = Math.max(0, softCap - existing.size);
+
+      let added = 0;
+      const sortedAdds = [...eligibleForCommitted].sort(
+        (a, b) => (memberLoad[a] || 0) - (memberLoad[b] || 0),
+      );
+      for (const memberId of sortedAdds) {
+        if (added >= headroom) break;
+        if (wouldConflict(memberId, slot)) continue;
+        incrementalAdds.push({ slot_id: slot.id, member_id: memberId });
+        commit(memberId, slot);
+        added++;
+      }
       continue;
     }
 
@@ -171,6 +200,25 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
     await supabaseAdmin
       .from("slot_member_assignments")
       .insert(assignmentsToInsert);
+  }
+
+  // Incremental adds for committed slots — must NOT collide with
+  // existing assignments (unique constraint). Best-effort: ignore
+  // duplicate errors.
+  if (incrementalAdds.length > 0) {
+    for (const row of incrementalAdds) {
+      try {
+        await supabaseAdmin
+          .from("slot_member_assignments")
+          .insert(row)
+          .select()
+          .single();
+      } catch (e: any) {
+        if (e?.code !== "23505") {
+          console.error("Incremental assign error:", e);
+        }
+      }
+    }
   }
 
   // FIX M3: maybeSingle so a missing row doesn't crash auto-allocate.

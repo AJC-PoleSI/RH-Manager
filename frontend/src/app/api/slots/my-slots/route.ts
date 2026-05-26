@@ -33,10 +33,21 @@ export async function GET(req: NextRequest) {
         (a: any) =>
           a.slot &&
           a.slot.epreuve &&
-          // FIX C1: include "ready" and "full" — when a slot fills up
-          // (last candidate enrolls) status becomes "full" and members
-          // would otherwise lose visibility on their own assignment.
-          ["published", "closed", "ready", "full"].includes(a.slot.status),
+          // FIX C1 + (audit #1): include ALL relevant statuses. A member
+          // who declares availability gets auto-assigned even before the
+          // slot reaches min_members (slot stays "open"). Excluding
+          // "open" hid the slot from the very member who just picked it
+          // — the exact complaint "je coche dispo, le slot n'apparaît
+          // pas côté membre". Now: any assigned slot shows up, with
+          // status badge so the member knows it's not yet confirmed.
+          [
+            "draft",
+            "open",
+            "ready",
+            "published",
+            "full",
+            "closed",
+          ].includes(a.slot.status),
       )
       .map((a: any) => ({
         ...a.slot,

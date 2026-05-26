@@ -137,24 +137,66 @@ export async function POST(req: NextRequest) {
     // plus s'inscrire sur un créneau de la même épreuve.
     // ══════════════════════════════════════════════════════════════════
     if (slot.epreuve_id) {
+      // FIX (audit #4): only block if the evaluation is FINALIZED
+      // (scores actually present). A bare row with empty/null scores
+      // would otherwise lock the candidate forever — a "ghost lock".
       const { data: existingEval } = await supabaseAdmin
         .from("candidate_evaluations")
-        .select("id, members(first_name, last_name, email)")
+        .select("id, scores, comment, members(first_name, last_name, email)")
         .eq("candidate_id", candidateId)
         .eq("epreuve_id", slot.epreuve_id)
         .limit(1);
 
       if (existingEval && existingEval.length > 0) {
-        const m = (existingEval[0] as any).members;
-        const evaluerName = m
-          ? `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email
-          : "Un membre";
-        return Response.json(
-          {
-            error: `${evaluerName} a déjà évalué ce candidat pour cette épreuve. Inscription impossible.`,
-          },
-          { status: 400 },
-        );
+        const row: any = existingEval[0];
+        const rawScores = row.scores;
+        let hasRealScores = false;
+        try {
+          const parsed =
+            typeof rawScores === "string"
+              ? JSON.parse(rawScores)
+              : rawScores;
+          if (parsed && typeof parsed === "object") {
+            const values = Object.values(parsed);
+            hasRealScores =
+              values.length > 0 &&
+              values.some(
+                (v) =>
+                  v !== null &&
+                  v !== "" &&
+                  v !== undefined &&
+                  !(typeof v === "number" && isNaN(v)),
+              );
+          }
+        } catch {
+          // unparsable scores — treat as not finalized
+          hasRealScores = false;
+        }
+        const hasComment = !!(row.comment && String(row.comment).trim());
+
+        if (hasRealScores || hasComment) {
+          const m = row.members;
+          const evaluerName = m
+            ? `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email
+            : "Un membre";
+          return Response.json(
+            {
+              error: `${evaluerName} a déjà évalué ce candidat pour cette épreuve. Inscription impossible.`,
+              code: "ALREADY_EVALUATED",
+            },
+            { status: 400 },
+          );
+        }
+        // Else: orphan row (empty scores AND empty comment) — purge it
+        // so the candidate isn't ghost-locked. Best effort.
+        try {
+          await supabaseAdmin
+            .from("candidate_evaluations")
+            .delete()
+            .eq("id", row.id);
+        } catch (e) {
+          console.error("Failed to purge orphan evaluation:", e);
+        }
       }
     }
 

@@ -88,16 +88,36 @@ export async function DELETE(
     const { data: updatedSlot } = await supabaseAdmin
       .from("evaluation_slots")
       .select(
-        "*, enrollments:slot_enrollments(id), members:slot_member_assignments(id)",
+        "*, enrollments:slot_enrollments(id, status), members:slot_member_assignments(id)",
       )
       .eq("id", slotId)
       .single();
 
     if (updatedSlot && updatedSlot.status === "full") {
-      const newStatus =
-        (updatedSlot.members?.length || 0) >= updatedSlot.min_members
-          ? "ready"
-          : "open";
+      const memberCount = updatedSlot.members?.length || 0;
+      const minMembers = updatedSlot.min_members || 0;
+
+      // FIX (audit #7): if planning is globally visible to candidates
+      // and at least one examinator is still assigned, republish to
+      // "published" — otherwise the slot disappears from the candidate
+      // list and the freshly-opened seat goes wasted.
+      const { data: vis } = await supabaseAdmin
+        .from("system_settings")
+        .select("value")
+        .eq("key", "planning_visible_candidats")
+        .maybeSingle();
+      const planningVisible =
+        vis?.value === "true" || vis?.value === true;
+
+      let newStatus: string;
+      if (planningVisible && memberCount >= 1) {
+        newStatus = "published";
+      } else if (memberCount >= minMembers) {
+        newStatus = "ready";
+      } else {
+        newStatus = "open";
+      }
+
       await supabaseAdmin
         .from("evaluation_slots")
         .update({ status: newStatus })

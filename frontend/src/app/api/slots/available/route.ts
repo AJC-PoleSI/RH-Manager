@@ -30,7 +30,13 @@ export async function GET(req: NextRequest) {
         members:slot_member_assignments(id)
       `,
       )
-      .in("status", ["published", "ready", "full"])
+      // FIX (audit #5): include "open" so the JS-level isEnrolled guard
+      // below can keep a slot visible to its enrolled candidate even if
+      // a member drop-off pushed the slot back to "open". Without
+      // "open" in this SQL filter, the slot simply never returns and
+      // the candidate loses the ability to see/cancel their own
+      // enrollment.
+      .in("status", ["open", "published", "ready", "full"])
       .order("date", { ascending: true })
       .order("start_time", { ascending: true });
 
