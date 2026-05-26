@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
-export default function EvaluateCandidatePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+
+function EvaluateCandidateForm({ id }: { id: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialEpreuveId = searchParams?.get("epreuveId") || "";
+
   const [candidate, setCandidate] = useState<any>(null);
   const [epreuves, setEpreuves] = useState<any[]>([]);
-  const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
+  const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>(initialEpreuveId);
   const [formData, setFormData] = useState<{ scores: any; comment: string }>({
     scores: {},
     comment: "",
@@ -43,7 +43,7 @@ export default function EvaluateCandidatePage({
       }
     };
     loadData();
-  }, [params.id, toast]);
+  }, [id, toast]);
 
   const selectedEpreuve = epreuves.find((e) => e.id === selectedEpreuveId);
   let questions = [];
@@ -95,7 +95,7 @@ export default function EvaluateCandidatePage({
     }
     try {
       await api.post("/evaluations", {
-        candidateId: params.id,
+        candidateId: id,
         epreuveId: selectedEpreuveId,
         scores: formData.scores,
         comment: formData.comment,
@@ -233,5 +233,17 @@ export default function EvaluateCandidatePage({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function EvaluateCandidatePage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  return (
+    <Suspense fallback={<div className="p-8">Chargement...</div>}>
+      <EvaluateCandidateForm id={params.id} />
+    </Suspense>
   );
 }

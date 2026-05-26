@@ -704,7 +704,7 @@ function MemberView() {
                                     )}
                                 </div>
                                 <a
-                                    href={`/dashboard/candidates/${c.id}/evaluate`}
+                                    href={`/dashboard/candidates/${c.id}/evaluate${c.epreuve?.id ? `?epreuveId=${c.epreuve.id}` : ''}`}
                                     className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                                 >
                                     Évaluer
