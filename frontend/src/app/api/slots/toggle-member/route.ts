@@ -40,6 +40,53 @@ export async function POST(req: NextRequest) {
       // ──────────────────────────────────────────────────────────────
       // RETRAIT : Supprimer + tenter une auto-promotion depuis la file
       // ──────────────────────────────────────────────────────────────
+
+      // FIX: protect candidates already enrolled.
+      // Block the unenrollment when ALL of:
+      //   • at least 1 active candidate is enrolled on this slot
+      //   • removing this member would drop us below min_members
+      //   • there is no waitlist replacement available
+      // Admins bypass this safety to be able to force-remove.
+      if (!payload.isAdmin) {
+        const { data: slotPreCheck } = await supabaseAdmin
+          .from("evaluation_slots")
+          .select(
+            "id, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id)",
+          )
+          .eq("id", slotId)
+          .single();
+
+        if (slotPreCheck) {
+          const activeEnrolls = (slotPreCheck.enrollments || []).filter(
+            (e: any) => !e.status || e.status === "active",
+          );
+          const memberCountAfter =
+            (slotPreCheck.members || []).length - 1;
+          const minMembers = slotPreCheck.min_members || 0;
+          const assignedIds = new Set(
+            (slotPreCheck.members || []).map((m: any) => m.member_id),
+          );
+          const eligibleWaitlist = (slotPreCheck.waitlist || []).filter(
+            (w: any) => w.member_id && !assignedIds.has(w.member_id),
+          );
+
+          if (
+            activeEnrolls.length > 0 &&
+            memberCountAfter < minMembers &&
+            eligibleWaitlist.length === 0
+          ) {
+            return Response.json(
+              {
+                error:
+                  "Désinscription impossible : un candidat est déjà inscrit sur ce créneau et aucun examinateur n'est en file d'attente pour vous remplacer. Contactez l'administrateur.",
+                code: "CANDIDATE_ENROLLED_NO_REPLACEMENT",
+              },
+              { status: 409 },
+            );
+          }
+        }
+      }
+
       const { error: deleteError } = await supabaseAdmin
         .from("slot_member_assignments")
         .delete()
@@ -117,8 +164,11 @@ export async function POST(req: NextRequest) {
         // → broadcast à tous les membres non encore affectés sur ce créneau
         //   pour demander un remplaçant.
         // ────────────────────────────────────────────────────────────────
+        // FIX: also trigger replacement broadcast on "ready" slots (not
+        // only "published") because those are committed and may already
+        // be visible/relevant for upcoming auto-publication.
         if (
-          slot.status === "published" &&
+          ["published", "ready", "full"].includes(slot.status) &&
           !promotedMemberId &&
           newCount < (slot.min_members || 0)
         ) {

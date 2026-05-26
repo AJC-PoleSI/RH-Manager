@@ -89,14 +89,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if already enrolled in this slot
-    const alreadyEnrolled = slot.enrollments?.some(
+    // FIX (idempotent): if the candidate has an ACTIVE row already, return
+    // success (200) with the existing row instead of 400. This makes
+    // /enroll safe to retry and self-heals frontend state desyncs.
+    // If a CANCELLED row exists, we reactivate it below (instead of
+    // inserting a new one, which would violate the unique constraint).
+    const myExisting = (slot.enrollments || []).find(
       (e: any) => e.candidate_id === candidateId,
     );
-    if (alreadyEnrolled) {
+    if (myExisting && (!myExisting.status || myExisting.status === "active")) {
       return Response.json(
-        { error: "Vous êtes déjà inscrit à ce créneau" },
-        { status: 400 },
+        {
+          id: myExisting.id,
+          slot_id: slotId,
+          candidate_id: candidateId,
+          status: "active",
+          alreadyEnrolled: true,
+        },
+        { status: 200 },
       );
     }
 
@@ -148,17 +158,43 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create enrollment
-    const { data: enrollment, error: enrollError } = await supabaseAdmin
-      .from("slot_enrollments")
-      .insert({ slot_id: slotId, candidate_id: candidateId })
-      .select(
-        `
-        *,
-        slot:evaluation_slots(*, epreuve:epreuves(name))
-      `,
-      )
-      .single();
+    // FIX (cancelled-row reuse): if a cancelled row exists for this
+    // (slot, candidate), reactivate it instead of inserting a new one —
+    // otherwise the unique constraint trips and the candidate is stuck.
+    let enrollment: any = null;
+    let enrollError: any = null;
+    const cancelledRow = (slot.enrollments || []).find(
+      (e: any) => e.candidate_id === candidateId && e.status === "cancelled",
+    );
+
+    if (cancelledRow) {
+      const { data, error } = await supabaseAdmin
+        .from("slot_enrollments")
+        .update({ status: "active", enrolled_at: new Date().toISOString() })
+        .eq("id", cancelledRow.id)
+        .select(
+          `
+          *,
+          slot:evaluation_slots(*, epreuve:epreuves(name))
+        `,
+        )
+        .single();
+      enrollment = data;
+      enrollError = error;
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("slot_enrollments")
+        .insert({ slot_id: slotId, candidate_id: candidateId })
+        .select(
+          `
+          *,
+          slot:evaluation_slots(*, epreuve:epreuves(name))
+        `,
+        )
+        .single();
+      enrollment = data;
+      enrollError = error;
+    }
 
     if (enrollError) throw enrollError;
 
@@ -213,8 +249,26 @@ export async function POST(req: NextRequest) {
 
     return Response.json(enrollment, { status: 201 });
   } catch (error: any) {
-    // Unique constraint violation
+    // FIX (idempotent): unique constraint hit means an enrollment already
+    // exists. Try to recover it and return 200 so the frontend can
+    // refresh its state cleanly instead of looping on "déjà inscrit".
     if (error?.code === "23505") {
+      try {
+        const { data: existing } = await supabaseAdmin
+          .from("slot_enrollments")
+          .select("*")
+          .eq("slot_id", (await req.clone().json()).slotId)
+          .eq("candidate_id", candidateId)
+          .maybeSingle();
+        if (existing) {
+          return Response.json(
+            { ...existing, alreadyEnrolled: true },
+            { status: 200 },
+          );
+        }
+      } catch {
+        /* ignore — fall through to 400 */
+      }
       return Response.json({ error: "Déjà inscrit" }, { status: 400 });
     }
     console.error("Enroll error:", error);

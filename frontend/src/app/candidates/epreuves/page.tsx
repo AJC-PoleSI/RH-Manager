@@ -295,20 +295,47 @@ export default function CandidateEpreuvesPage() {
     setEnrolling(slot.id);
     setErrorMsg(null);
     try {
-      await api.post("/slots/enroll", { slotId: slot.id });
+      const res = await api.post("/slots/enroll", { slotId: slot.id });
+      // Always mark this slot as enrolled (handles both fresh-insert
+      // and idempotent "alreadyEnrolled: true" responses from the API).
       setEnrolledSlotIds((prev) => new Set(prev).add(slot.id));
       if (epreuveId) {
         setEnrolledEpreuves((prev) => new Set(prev).add(epreuveId));
       }
-      // Update slot in allSlots
+      const wasAlreadyEnrolled = res?.data?.alreadyEnrolled === true;
+      // Update slot in allSlots — only bump enrolledCount if this was a
+      // brand-new enrollment, otherwise we'd double-count.
       setAllSlots((prev) =>
         prev.map((s) =>
-          s.id === slot.id ? { ...s, isEnrolled: true, enrolledCount: s.enrolledCount + 1 } : s
-        )
+          s.id === slot.id
+            ? {
+                ...s,
+                isEnrolled: true,
+                enrolledCount: wasAlreadyEnrolled
+                  ? s.enrolledCount
+                  : s.enrolledCount + 1,
+              }
+            : s,
+        ),
       );
       setSelectedSlot(null);
+      // Re-pull authoritative data so any stale state (other slots, full
+      // status, etc.) gets corrected. Best-effort.
+      fetchData();
     } catch (err: any) {
       const msg = err?.response?.data?.error || "Erreur lors de l'inscription";
+      // FIX: if backend says we're already enrolled (legacy 400 path),
+      // refresh data so the UI reflects the truth and the user can
+      // unenroll if they want.
+      if (typeof msg === "string" && msg.toLowerCase().includes("déjà inscrit à ce créneau")) {
+        setEnrolledSlotIds((prev) => new Set(prev).add(slot.id));
+        if (epreuveId) {
+          setEnrolledEpreuves((prev) => new Set(prev).add(epreuveId));
+        }
+        setSelectedSlot(null);
+        fetchData();
+        return;
+      }
       setErrorMsg(msg);
     } finally {
       setEnrolling(null);
