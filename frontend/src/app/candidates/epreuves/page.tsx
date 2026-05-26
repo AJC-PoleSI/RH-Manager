@@ -162,7 +162,7 @@ export default function CandidateEpreuvesPage() {
       // Track enrolled épreuves + slot IDs + slot DATES par épreuve
       const enrolled = new Set<string>();
       const enrolledIds = new Set<string>();
-      const slotByEpreuve = new Map<string, { date: string; startTime: string; endTime: string; room?: string }>();
+      const slotByEpreuve = new Map<string, { slotId: string; date: string; startTime: string; endTime: string; room?: string; fullSlotObj?: any }>();
       (enrollRes.data || []).forEach((e: any) => {
         if (e.slotId) enrolledIds.add(e.slotId);
         if (e.epreuve?.name) {
