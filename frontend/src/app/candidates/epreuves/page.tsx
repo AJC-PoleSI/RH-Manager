@@ -115,7 +115,7 @@ export default function CandidateEpreuvesPage() {
   const [enrolledSlotIds, setEnrolledSlotIds] = useState<Set<string>>(new Set());
   // Map epreuveId → infos du créneau d'inscription (date, heure, salle)
   const [enrolledSlotByEpreuve, setEnrolledSlotByEpreuve] = useState<
-    Map<string, { date: string; startTime: string; endTime: string; room?: string }>
+    Map<string, { slotId: string; date: string; startTime: string; endTime: string; room?: string; fullSlotObj?: any }>
   >(new Map());
 
   // Calendar data
@@ -172,10 +172,12 @@ export default function CandidateEpreuvesPage() {
             // Stocker la VRAIE date du créneau d'inscription
             if (e.date) {
               slotByEpreuve.set(matchedEp.id, {
+                slotId: e.slotId,
                 date: e.date.split("T")[0],
                 startTime: e.startTime || e.start_time || "",
                 endTime: e.endTime || e.end_time || "",
                 room: e.room,
+                fullSlotObj: e, // keep reference to check 24h rule
               });
             }
           }
@@ -823,9 +825,55 @@ export default function CandidateEpreuvesPage() {
                                 {/* Registration status */}
                                 {ep.type !== "commune" && isActive && (
                                   <div className="px-4 pb-4 pt-1">
-                                    {isEnrolled ? (
-                                      <div className="w-full py-2.5 text-sm font-semibold text-center text-green-700 bg-green-50 border border-green-200 rounded-lg">
-                                        Inscrit(e) &#10003;
+                                    {isEnrolled && enrolledSlot ? (
+                                      <div className="space-y-2">
+                                        <div className="w-full py-2.5 text-sm font-semibold text-center text-green-700 bg-green-50 border border-green-200 rounded-lg">
+                                          Inscrit(e) &#10003;
+                                        </div>
+                                        {(() => {
+                                          const dateOnly = enrolledSlot.date;
+                                          const [h, m] = (enrolledSlot.startTime || "00:00").split(":");
+                                          const startDt = new Date(`${dateOnly}T${(h || "00").padStart(2, "0")}:${(m || "00").padStart(2, "0")}:00`);
+                                          const hoursLeft = (startDt.getTime() - Date.now()) / (1000 * 60 * 60);
+                                          const canUnenroll = hoursLeft >= 24;
+
+                                          if (!canUnenroll) {
+                                            return (
+                                              <p className="text-xs text-gray-400 text-center italic px-2">
+                                                La désinscription n&apos;est plus possible (moins de 24h avant le créneau).
+                                              </p>
+                                            );
+                                          }
+
+                                          return (
+                                            <button
+                                              onClick={() => {
+                                                // Create a dummy AvailableSlot to pass to handleCancelEnrollment
+                                                const dummySlot = {
+                                                  id: enrolledSlot.slotId,
+                                                  date: enrolledSlot.date,
+                                                  startTime: enrolledSlot.startTime,
+                                                  endTime: enrolledSlot.endTime,
+                                                  room: enrolledSlot.room,
+                                                  epreuve: { name: ep.name, tour: ep.tour },
+                                                  enrolledCount: 1,
+                                                  maxCandidates: 1,
+                                                  isFull: true,
+                                                  isEnrolled: true
+                                                };
+                                                handleCancelEnrollment(dummySlot as AvailableSlot);
+                                              }}
+                                              disabled={enrolling === enrolledSlot.slotId}
+                                              className="w-full py-2 text-sm font-medium text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                              {enrolling === enrolledSlot.slotId ? (
+                                                <><Loader2 className="animate-spin" size={14} /> Désinscription...</>
+                                              ) : (
+                                                "Se désinscrire du créneau"
+                                              )}
+                                            </button>
+                                          );
+                                        })()}
                                       </div>
                                     ) : (
                                       <button
