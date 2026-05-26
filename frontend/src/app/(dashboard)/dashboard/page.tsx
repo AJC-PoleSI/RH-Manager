@@ -90,9 +90,18 @@ export default function DashboardPage() {
 
     const fetchEvents = useCallback(async () => {
         try {
-            const start = daysToShow[0].toISOString();
-            const end = daysToShow[4].toISOString();
-            const res = await api.get('/calendar', { params: { start, end } });
+            let params = {};
+            if (isAdmin) {
+                const start = daysToShow[0].toISOString();
+                const end = daysToShow[4].toISOString();
+                params = { start, end };
+            } else {
+                // Pour les membres, on récupère tout le mois
+                const startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                const endMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                params = { start: startMonth.toISOString(), end: endMonth.toISOString() };
+            }
+            const res = await api.get('/calendar', { params });
 
             const deadlineEvents: any[] = [];
             if (deadlines.deadline_candidats) {
@@ -145,7 +154,7 @@ export default function DashboardPage() {
         } catch (e) {
             console.error(e);
         }
-    }, [daysToShow, deadlines, mySlots]);
+    }, [daysToShow, deadlines, mySlots, currentDate, isAdmin]);
 
     const fetchDeadlines = useCallback(async () => {
         try {
