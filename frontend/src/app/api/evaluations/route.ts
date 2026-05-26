@@ -70,6 +70,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
+  // SECURITY (audit #3): only members can submit evaluations. A
+  // candidate token would otherwise pollute candidate_evaluations
+  // with member_id = their own candidate id.
+  if (user.role !== "member") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   const memberId = user.id;
 

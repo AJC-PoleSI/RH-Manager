@@ -1,6 +1,8 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { CandidateSettingsProvider } from "@/context/CandidateSettingsContext";
 
+// SECURITY: only candidates can access /candidates/*. A member landing
+// here will be redirected to /dashboard.
 export default function CandidateLayout({
   children,
 }: {
@@ -8,7 +10,7 @@ export default function CandidateLayout({
 }) {
   return (
     <CandidateSettingsProvider>
-      <DashboardLayout>{children}</DashboardLayout>
+      <DashboardLayout allowedRoles={["candidate"]}>{children}</DashboardLayout>
     </CandidateSettingsProvider>
   );
 }

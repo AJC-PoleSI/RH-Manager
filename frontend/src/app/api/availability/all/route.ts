@@ -6,6 +6,10 @@ import { NextRequest } from "next/server";
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #14): candidates must not read all members' dispos.
+  if (payload.role === "candidate") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");

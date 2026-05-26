@@ -6,6 +6,10 @@ import { NextRequest } from "next/server";
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #5): only members can request availability slots.
+  if (payload.role !== "member") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   const memberId = payload.id;
 

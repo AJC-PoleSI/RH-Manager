@@ -25,6 +25,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // SECURITY: only Audencia email addresses can register as candidate.
+    // This is the SERVER-SIDE check — a client-side check alone is
+    // bypassable. Both audencia.com (staff/students) and the legacy
+    // audencia-bs.com domain are accepted.
+    // ══════════════════════════════════════════════════════════════════
+    const emailLower = String(email).trim().toLowerCase();
+    const audenciaDomainRe = /@(audencia\.com|audencia-bs\.com)$/;
+    if (!audenciaDomainRe.test(emailLower)) {
+      return Response.json(
+        {
+          error:
+            "Inscription réservée aux adresses Audencia (@audencia.com). Veuillez utiliser votre email institutionnel.",
+        },
+        { status: 400 },
+      );
+    }
+
     // Check registration window: ouverture = deadline_candidats, fermeture = deadline_membres
     const { data: windowSettings } = await supabaseAdmin
       .from("system_settings")

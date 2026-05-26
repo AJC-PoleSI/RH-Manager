@@ -56,18 +56,42 @@ function TopNav() {
   );
 }
 
-function DashboardContent({ children }: { children: React.ReactNode }) {
-  const { token, isInitialized } = useAuth();
+function DashboardContent({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles?: Array<"member" | "candidate">;
+}) {
+  const { token, role, isInitialized } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (isInitialized && !token) {
-      router.push("/login");
-    }
-  }, [isInitialized, token, router]);
+  // SECURITY: role-based route guard. Without this, a candidate who
+  // pasted an admin URL would land on the dashboard chrome (Topnav,
+  // Sidebar, even if the API blocks data fetching). Now we forcibly
+  // redirect to the correct dashboard for the role.
+  const roleMismatch =
+    !!allowedRoles &&
+    !!role &&
+    !allowedRoles.includes(role);
 
-  // Show loading while initializing or redirecting
-  if (!isInitialized || !token) {
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    if (roleMismatch) {
+      if (role === "candidate") {
+        router.replace("/candidates/dashboard");
+      } else {
+        router.replace("/dashboard");
+      }
+    }
+  }, [isInitialized, token, role, roleMismatch, router]);
+
+  // Show loading while initializing, redirecting, or role-checking.
+  if (!isInitialized || !token || roleMismatch) {
     return (
       <div className="flex items-center justify-center h-screen">
         <p className="text-gray-600">Chargement...</p>
@@ -93,8 +117,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({
   children,
+  allowedRoles,
 }: {
   children: React.ReactNode;
+  allowedRoles?: Array<"member" | "candidate">;
 }) {
-  return <DashboardContent>{children}</DashboardContent>;
+  return (
+    <DashboardContent allowedRoles={allowedRoles}>{children}</DashboardContent>
+  );
 }

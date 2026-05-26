@@ -105,6 +105,13 @@ export default function LoginPage() {
     const handleCandidateRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        // SECURITY: enforce Audencia email at submit time (UX hint).
+        // Server has its own check — this is just to fail fast.
+        const emailLower = (candidateData.email || '').trim().toLowerCase();
+        if (!/@(audencia\.com|audencia-bs\.com)$/.test(emailLower)) {
+            setError('Inscription réservée aux adresses Audencia (@audencia.com).');
+            return;
+        }
         setLoading(true);
         try {
             const res = await api.post('/auth/register-candidate', {

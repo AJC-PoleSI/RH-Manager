@@ -75,6 +75,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #2): only admins can create candidates from this
+  // endpoint. Candidates self-register via /api/auth/register-candidate.
+  if (payload.role === "candidate" || !payload.isAdmin) {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

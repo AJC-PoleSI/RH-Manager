@@ -9,6 +9,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(req: NextRequest, context: RouteContext) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #13): candidates have no business listing members.
+  if (payload.role === "candidate") return forbidden();
 
   const { id } = await context.params;
 

@@ -6,6 +6,9 @@ import { NextRequest } from "next/server";
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #12): candidates must not read pole stats with
+  // candidate names attached — internal KPI for staff only.
+  if (payload.role === "candidate") return forbidden();
 
   try {
     // Fetch all wishes

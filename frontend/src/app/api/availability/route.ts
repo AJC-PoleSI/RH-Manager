@@ -54,6 +54,10 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #17): availabilities are a member feature only.
+  if (payload.role !== "member") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   const memberId = payload.id;
 
@@ -200,6 +204,10 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY: same as PUT — members only.
+  if (payload.role !== "member") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   const memberId = payload.id;
 

@@ -52,6 +52,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
       delete mapped.candidate_evaluations;
       delete mapped.comments;
     }
+    // SECURITY (audit #16): members (non-admin) also must not see
+    // admin-only internal comments.
+    if (payload.role === "member" && !payload.isAdmin) {
+      delete mapped.comments;
+    }
 
     return Response.json(mapped);
   } catch {
@@ -82,16 +87,30 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const updateData: Record<string, unknown> = {};
     if (body.firstName !== undefined) updateData.first_name = body.firstName;
     if (body.lastName !== undefined) updateData.last_name = body.lastName;
-    if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone;
-    if (body.date_of_birth !== undefined)
-      updateData.date_of_birth = body.date_of_birth;
-    if (body.dateOfBirth !== undefined)
-      updateData.date_of_birth = body.dateOfBirth;
+
+    // SECURITY (audit #8): identity fields (email, date_of_birth) are
+    // the login credentials for candidates — letting a candidate change
+    // them = trivial account takeover or impersonation. Only admins
+    // may change those.
+    const isAdmin = !!payload.isAdmin;
+    if (isAdmin) {
+      if (body.email !== undefined) updateData.email = body.email;
+      if (body.date_of_birth !== undefined)
+        updateData.date_of_birth = body.date_of_birth;
+      if (body.dateOfBirth !== undefined)
+        updateData.date_of_birth = body.dateOfBirth;
+    }
 
     // SECURITY: Only admins can update internal comments
-    if (body.comments !== undefined && payload.isAdmin) {
+    if (body.comments !== undefined && isAdmin) {
       updateData.comments = body.comments;
+    }
+
+    // Also: a candidate-self-update with no whitelisted fields should
+    // be a no-op rather than wiping the row.
+    if (Object.keys(updateData).length === 0) {
+      return Response.json({ message: "No changes" });
     }
 
     const { data, error } = await supabaseAdmin

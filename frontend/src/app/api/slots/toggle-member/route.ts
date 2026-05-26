@@ -11,6 +11,12 @@ import { NextRequest } from "next/server";
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit #4): only members (incl. admin) can toggle member
+  // assignments. A candidate token would otherwise inject its own id
+  // as a member on a slot.
+  if (payload.role !== "member") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

@@ -3,7 +3,12 @@ import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 // GET /api/tours - Fetch all tours with candidate count
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // SECURITY (audit #11): require auth + non-candidate to read tours
+  // metadata (was publicly accessible, leaking candidate counts).
+  const payload = getTokenFromRequest(req);
+  if (!payload) return unauthorized();
+  if (payload.role === "candidate" && !payload.isAdmin) return forbidden();
   try {
     const { data: tours, error } = await supabaseAdmin
       .from("tours")
