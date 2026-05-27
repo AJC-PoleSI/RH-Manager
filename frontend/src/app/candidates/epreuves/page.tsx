@@ -130,6 +130,13 @@ export default function CandidateEpreuvesPage() {
 
   // Error toast
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Conflict modal: shown when the candidate is already enrolled in
+  // another slot of this épreuve (zombie/hidden slot, etc.). Lets them
+  // confirm an auto-cancel + re-enroll in one click.
+  const [conflictModal, setConflictModal] = useState<{
+    targetSlot: AvailableSlot;
+    conflictText: string;
+  } | null>(null);
   // Planning visibility (masqué côté admin = page candidate cachée)
   const [planningVisible, setPlanningVisible] = useState<boolean | null>(null);
 
@@ -290,12 +297,18 @@ export default function CandidateEpreuvesPage() {
   }, [allSlots]);
 
   // ═══ Enrollment handler ═══
-  const handleEnrollInSlot = async (slot: AvailableSlot) => {
+  const handleEnrollInSlot = async (
+    slot: AvailableSlot,
+    options?: { force?: boolean },
+  ) => {
     const epreuveId = epreuves.find((ep) => ep.name === slot.epreuve?.name)?.id;
     setEnrolling(slot.id);
     setErrorMsg(null);
     try {
-      const res = await api.post("/slots/enroll", { slotId: slot.id });
+      const res = await api.post("/slots/enroll", {
+        slotId: slot.id,
+        force: options?.force === true ? true : undefined,
+      });
       // Always mark this slot as enrolled (handles both fresh-insert
       // and idempotent "alreadyEnrolled: true" responses from the API).
       setEnrolledSlotIds((prev) => new Set(prev).add(slot.id));
@@ -323,7 +336,8 @@ export default function CandidateEpreuvesPage() {
       // status, etc.) gets corrected. Best-effort.
       fetchData();
     } catch (err: any) {
-      const msg = err?.response?.data?.error || "Erreur lors de l'inscription";
+      const data = err?.response?.data || {};
+      const msg = data.error || "Erreur lors de l'inscription";
       // FIX: if backend says we're already enrolled (legacy 400 path),
       // refresh data so the UI reflects the truth and the user can
       // unenroll if they want.
@@ -336,10 +350,28 @@ export default function CandidateEpreuvesPage() {
         fetchData();
         return;
       }
+      // FIX: cross-épreuve conflict (zombie/hidden slot). Open a modal
+      // letting the candidate auto-cancel the previous enrollment.
+      if (data.code === "ALREADY_ENROLLED_OTHER_SLOT") {
+        setConflictModal({
+          targetSlot: slot,
+          conflictText: msg,
+        });
+        setSelectedSlot(null);
+        return;
+      }
       setErrorMsg(msg);
     } finally {
       setEnrolling(null);
     }
+  };
+
+  // ═══ Confirm conflict → force-enroll (auto-cancels the old slot) ═══
+  const handleConfirmConflictReplace = async () => {
+    if (!conflictModal) return;
+    const target = conflictModal.targetSlot;
+    setConflictModal(null);
+    await handleEnrollInSlot(target, { force: true });
   };
 
   // ═══ Cancel enrollment handler (24h rule applied server-side) ═══
@@ -1077,6 +1109,56 @@ export default function CandidateEpreuvesPage() {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════
+          CONFLICT MODAL: déjà inscrit ailleurs pour cette épreuve.
+          Permet d'auto-désinscrire l'ancien créneau et de
+          confirmer la nouvelle inscription en 1 clic.
+          ═══════════════════════════════════════════════ */}
+      {conflictModal && (
+        <div
+          className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+          onClick={() => setConflictModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 font-bold text-xl">!</div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Vous avez déjà une inscription
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {conflictModal.conflictText}
+                </p>
+              </div>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-900 mb-4">
+              Voulez-vous être <strong>automatiquement désinscrit(e)</strong> de
+              cet ancien créneau et inscrit(e) sur le nouveau ?
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConflictModal(null)}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmConflictReplace}
+                disabled={enrolling === conflictModal.targetSlot.id}
+                className="flex-1 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {enrolling === conflictModal.targetSlot.id
+                  ? "Inscription..."
+                  : "Confirmer le changement"}
+              </button>
+            </div>
           </div>
         </div>
       )}

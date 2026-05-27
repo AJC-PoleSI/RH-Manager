@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { slotId } = await req.json();
+    const body = await req.json();
+    const { slotId, force } = body;
     if (!slotId) {
       return Response.json({ error: "slotId required" }, { status: 400 });
     }
@@ -198,14 +199,45 @@ export async function POST(req: NextRequest) {
           : "";
         const roomLabel = s.room ? ` (salle ${s.room})` : "";
 
-        return Response.json(
-          {
-            error: `Vous êtes déjà inscrit à un autre créneau pour cette épreuve : ${dateLabel} ${timeLabel}${roomLabel}. Veuillez d'abord vous désinscrire de ce créneau.`,
-            code: "ALREADY_ENROLLED_OTHER_SLOT",
-            conflictingSlot: s,
-          },
-          { status: 400 },
-        );
+        // FIX: if the caller asked for `force: true`, auto-cancel
+        // the conflicting enrollment(s) before proceeding. This is
+        // the escape hatch when a candidate is stuck because the
+        // conflicting slot isn't visible in their calendar (slot in
+        // draft/closed status, race condition, stale data, etc.).
+        if (force === true) {
+          const conflictEnrollIds = conflicts
+            .map((cc: any) => cc.enrollmentId)
+            .filter(Boolean);
+          if (conflictEnrollIds.length > 0) {
+            try {
+              await supabaseAdmin
+                .from("slot_enrollments")
+                .delete()
+                .in("id", conflictEnrollIds);
+            } catch (e) {
+              console.error("Force-cancel of conflicting enrolls failed:", e);
+              return Response.json(
+                {
+                  error:
+                    "Impossible de désinscrire automatiquement votre ancien créneau. Réessayez.",
+                },
+                { status: 500 },
+              );
+            }
+          }
+          // fall through to the insert below
+        } else {
+          return Response.json(
+            {
+              error: `Vous êtes déjà inscrit à un autre créneau pour cette épreuve : ${dateLabel} ${timeLabel}${roomLabel}. Veuillez d'abord vous désinscrire de ce créneau.`,
+              code: "ALREADY_ENROLLED_OTHER_SLOT",
+              conflictingSlot: s,
+              conflictingEnrollmentId: c.enrollmentId,
+              conflictingSlotId: s.id,
+            },
+            { status: 400 },
+          );
+        }
       }
     }
 
