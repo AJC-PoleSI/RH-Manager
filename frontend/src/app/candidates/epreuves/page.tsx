@@ -172,21 +172,31 @@ export default function CandidateEpreuvesPage() {
       const slotByEpreuve = new Map<string, { slotId: string; date: string; startTime: string; endTime: string; room?: string; fullSlotObj?: any }>();
       (enrollRes.data || []).forEach((e: any) => {
         if (e.slotId) enrolledIds.add(e.slotId);
-        if (e.epreuve?.name) {
-          const matchedEp = (epRes.data || []).find((ep: any) => ep.name === e.epreuve.name);
-          if (matchedEp) {
-            enrolled.add(matchedEp.id);
-            // Stocker la VRAIE date du créneau d'inscription
-            if (e.date) {
-              slotByEpreuve.set(matchedEp.id, {
-                slotId: e.slotId,
-                date: e.date.split("T")[0],
-                startTime: e.startTime || e.start_time || "",
-                endTime: e.endTime || e.end_time || "",
-                room: e.room,
-                fullSlotObj: e, // keep reference to check 24h rule
-              });
-            }
+        // FIX: match by épreuve ID (robust) first, then fall back to
+        // name (legacy). Name-only matching is fragile — a casing
+        // difference or trailing space breaks it, leaving the candidate
+        // visually unenrolled while DB says enrolled.
+        let matchedEp = null;
+        if (e.epreuve?.id) {
+          matchedEp = (epRes.data || []).find((ep: any) => ep.id === e.epreuve.id);
+        }
+        if (!matchedEp && e.epreuve?.name) {
+          matchedEp = (epRes.data || []).find(
+            (ep: any) => ep.name?.trim().toLowerCase() === e.epreuve.name.trim().toLowerCase(),
+          );
+        }
+        if (matchedEp) {
+          enrolled.add(matchedEp.id);
+          // Stocker la VRAIE date du créneau d'inscription
+          if (e.date) {
+            slotByEpreuve.set(matchedEp.id, {
+              slotId: e.slotId,
+              date: e.date.split("T")[0],
+              startTime: e.startTime || e.start_time || "",
+              endTime: e.endTime || e.end_time || "",
+              room: e.room,
+              fullSlotObj: e, // keep reference to check 24h rule
+            });
           }
         }
       });
@@ -206,8 +216,9 @@ export default function CandidateEpreuvesPage() {
 
   useEffect(() => {
     fetchData();
-    // Polling toutes les 15s pour détecter changement visibilité admin
-    const interval = setInterval(fetchData, 15000);
+    // Polling toutes les 5s pour détecter rapidement les changements
+    // (auto-publication, inscription, status, etc.).
+    const interval = setInterval(fetchData, 5000);
     const onFocus = () => fetchData();
     window.addEventListener("focus", onFocus);
     return () => {
@@ -332,9 +343,11 @@ export default function CandidateEpreuvesPage() {
         ),
       );
       setSelectedSlot(null);
-      // Re-pull authoritative data so any stale state (other slots, full
-      // status, etc.) gets corrected. Best-effort.
-      fetchData();
+      // Force three refreshes to defeat any race / cache / propagation
+      // delay so the UI shows the new enrolled state IMMEDIATELY.
+      await fetchData();
+      setTimeout(() => fetchData(), 600);
+      setTimeout(() => fetchData(), 1800);
     } catch (err: any) {
       const data = err?.response?.data || {};
       const msg = data.error || "Erreur lors de l'inscription";

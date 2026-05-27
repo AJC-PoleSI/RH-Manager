@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Plus, Search, Trash2, Edit, X, ChevronRight, Save, ArrowLeft, Filter } from 'lucide-react';
@@ -36,6 +37,8 @@ interface Evaluation {
 /* ------------------------------------------------------------------ */
 export default function CandidatesPage() {
     const router = useRouter();
+    const { user } = useAuth();
+    const isAdmin = !!user?.isAdmin;
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -448,11 +451,13 @@ export default function CandidatesPage() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    {/* Note: "Évaluer" was removed here intentionally.
-                                        Evaluations must be triggered from the slot view
-                                        by the assigned examinator only — going through
-                                        the candidate panel let any admin bypass that
-                                        constraint. Use the slot detail page instead. */}
+                                    {/* Admin uniquement : peut évaluer depuis l'espace candidats.
+                                        Les members non-admin doivent passer par leur slot. */}
+                                    {isAdmin && (
+                                        <Button size="sm" variant="primary" onClick={() => router.push(`/dashboard/candidates/${selectedCandidate.id}/evaluate`)}>
+                                            <Plus size={14} className="mr-1" /> Évaluer
+                                        </Button>
+                                    )}
                                     <Button size="sm" variant="outline" onClick={() => setCommentCandidate({ ...selectedCandidate, comment: selectedCandidate.comments || '' })}>
                                         Commenter
                                     </Button>
@@ -482,10 +487,16 @@ export default function CandidatesPage() {
                             ) : evaluations.length === 0 ? (
                                 <div className="p-8 text-center text-gray-400">
                                     <p className="mb-2">Aucune évaluation pour ce candidat</p>
-                                    <p className="text-xs italic">
-                                        Les évaluations sont créées par les examinateurs
-                                        assignés depuis la fiche du créneau.
-                                    </p>
+                                    {isAdmin ? (
+                                        <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/candidates/${selectedCandidate.id}/evaluate`)}>
+                                            Créer une évaluation
+                                        </Button>
+                                    ) : (
+                                        <p className="text-xs italic">
+                                            Les évaluations sont créées par les examinateurs
+                                            assignés depuis la fiche du créneau.
+                                        </p>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="divide-y divide-gray-100">

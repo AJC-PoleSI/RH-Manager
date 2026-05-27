@@ -334,9 +334,18 @@ export async function POST(req: NextRequest) {
       enrollment = data;
       enrollError = error;
     } else {
+      // FIX: insert with explicit status="active". Without this, the
+      // row's `status` column defaults to NULL (if no DB default), which
+      // various read filters accept but which has caused inconsistent
+      // states across endpoints. Be explicit.
       const { data, error } = await supabaseAdmin
         .from("slot_enrollments")
-        .insert({ slot_id: slotId, candidate_id: candidateId })
+        .insert({
+          slot_id: slotId,
+          candidate_id: candidateId,
+          status: "active",
+          enrolled_at: new Date().toISOString(),
+        })
         .select(
           `
           *,

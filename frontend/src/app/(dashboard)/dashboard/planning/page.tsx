@@ -489,7 +489,16 @@ export default function PlanningPage() {
   useEffect(() => {
     fetchAvailabilityData();
     fetchSlotData();
-  }, [fetchAvailabilityData, fetchSlotData]);
+    // Polling pour voir en temps réel les inscriptions candidats /
+    // changements de jury. Toutes les 5s.
+    if (isAdmin) {
+      const interval = setInterval(() => {
+        fetchSlotData();
+        fetchAvailabilityData();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchAvailabilityData, fetchSlotData, isAdmin]);
 
   // Fetch saisie status + planning status for members
   const fetchSaisieStatus = useCallback(async () => {
@@ -523,11 +532,11 @@ export default function PlanningPage() {
 
   // Charger les créneaux assignés au membre dès le montage (sans condition sur la saisie)
   // Ainsi, dès qu'un examinateur s'inscrit ou est assigné, ses créneaux apparaissent.
-  // Polling 15s + refresh sur focus pour garder la liste à jour.
+  // Polling 5s + refresh sur focus pour garder la liste à jour.
   useEffect(() => {
     if (isAdmin) return;
     fetchMySlots();
-    const interval = setInterval(fetchMySlots, 15000);
+    const interval = setInterval(fetchMySlots, 5000);
     const onFocus = () => fetchMySlots();
     window.addEventListener("focus", onFocus);
     return () => {
