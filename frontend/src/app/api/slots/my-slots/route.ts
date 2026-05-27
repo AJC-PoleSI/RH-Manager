@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
         // FIX C2: drop cancelled enrollments from member's view so admin
         // and member see the same active candidate list.
         enrollments: (a.slot.enrollments || []).filter(
-          (e: any) => !e.status || e.status === "active",
+          filterActiveEnrollments,
         ),
         myAssignment: true,
       }))

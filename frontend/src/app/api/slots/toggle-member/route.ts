@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { broadcastReplacementRequest } from "@/lib/auto-allocate";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/toggle-member — toggle member assignment on a slot
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
 
         if (slotPreCheck) {
           const activeEnrolls = (slotPreCheck.enrollments || []).filter(
-            (e: any) => !e.status || e.status === "active",
+            filterActiveEnrollments,
           );
           const memberCountAfter =
             (slotPreCheck.members || []).length - 1;

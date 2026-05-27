@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/available — créneaux que le candidat peut voir
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
     const slots = (rawSlots || []).map((s: any) => ({
       ...s,
       enrollments: (s.enrollments || []).filter(
-        (e: any) => !e.status || e.status === "active",
+        filterActiveEnrollments,
       ),
     }));
 

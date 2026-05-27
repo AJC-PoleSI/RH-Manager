@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/my-enrollments — candidate's enrollments
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     // can tell when its slot got cancelled/downgraded and link properly.
     // FIX C2: hide cancelled enrollments from the candidate's own list.
     const safe = (enrollments || [])
-      .filter((e: any) => !e.status || e.status === "active")
+      .filter(filterActiveEnrollments)
       .map((e: any) => ({
         id: e.id,
         slotId: e.slot_id,

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments, isActiveEnrollment } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
@@ -80,9 +81,7 @@ export async function POST(req: NextRequest) {
 
     // FIX C2: only count ACTIVE enrollments for capacity (cancelled rows,
     // if any soft-cancel path ever exists, must not block new candidates).
-    const activeEnrollments = (slot.enrollments || []).filter(
-      (e: any) => !e.status || e.status === "active",
-    );
+    const activeEnrollments = (slot.enrollments || []).filter(filterActiveEnrollments);
     if (activeEnrollments.length >= slot.max_candidates) {
       return Response.json(
         { error: "Ce créneau est complet" },
@@ -98,7 +97,7 @@ export async function POST(req: NextRequest) {
     const myExisting = (slot.enrollments || []).find(
       (e: any) => e.candidate_id === candidateId,
     );
-    if (myExisting && (!myExisting.status || myExisting.status === "active")) {
+    if (myExisting && isActiveEnrollment(myExisting.status)) {
       return Response.json(
         {
           id: myExisting.id,
@@ -374,7 +373,7 @@ export async function POST(req: NextRequest) {
 
     if (postCheck) {
       const actives = (postCheck.enrollments || [])
-        .filter((e: any) => !e.status || e.status === "active")
+        .filter(filterActiveEnrollments)
         .sort((a: any, b: any) =>
           String(a.enrolled_at || "").localeCompare(String(b.enrolled_at || "")),
         );

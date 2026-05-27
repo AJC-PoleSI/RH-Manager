@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
       .map((slot: any) => ({
         ...slot,
         enrollments: (slot.enrollments || []).filter(
-          (e: any) => !e.status || e.status === "active",
+          filterActiveEnrollments,
         ),
       }));
     // FIX C4: explicit no-store — admin /planning was previously serving

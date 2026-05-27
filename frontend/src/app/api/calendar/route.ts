@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
     for (const slot of (slotRows || []) as any[]) {
       if (!slot.epreuve) continue;
       const activeEnrolls = (slot.enrollments || []).filter(
-        (e: any) => !e.status || e.status === "active",
+        filterActiveEnrollments,
       );
       const isMemberOnSlot =
         payload.role === "member" &&
