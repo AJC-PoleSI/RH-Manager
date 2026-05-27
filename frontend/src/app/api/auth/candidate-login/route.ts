@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     const { data: candidate, error } = await supabaseAdmin
       .from("candidates")
-      .select("id, first_name, last_name, email, phone, date_of_birth")
+      .select("id, first_name, last_name, email, phone, date_of_birth, email_verified")
       .eq("email", email)
       .single();
 
@@ -32,6 +32,19 @@ export async function POST(req: NextRequest) {
       return Response.json(
         { error: "Date de naissance incorrecte." },
         { status: 401 },
+      );
+    }
+
+    // Block login if email not verified
+    if (candidate.email_verified === false) {
+      return Response.json(
+        {
+          error:
+            "Veuillez vérifier votre email avant de vous connecter. Consultez votre boîte mail.",
+          code: "EMAIL_NOT_VERIFIED",
+          email: candidate.email,
+        },
+        { status: 403 },
       );
     }
 

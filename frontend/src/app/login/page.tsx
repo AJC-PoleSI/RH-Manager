@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
-type View = 'landing' | 'login' | 'candidate-choice' | 'candidate-login' | 'inscription';
+type View = 'landing' | 'login' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
 
 export default function LoginPage() {
     const [view, setView] = useState<View>('landing');
@@ -34,6 +34,9 @@ export default function LoginPage() {
         anneeIntegration: '',
     });
     const [cvFile, setCvFile] = useState<File | null>(null);
+    const [pendingEmail, setPendingEmail] = useState('');
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendDone, setResendDone] = useState(false);
 
     const resetForms = () => {
         setMemberEmail('');
@@ -94,6 +97,9 @@ export default function LoginPage() {
         } catch (err: any) {
             if (!err.response) {
                 setError("Impossible de contacter le serveur.");
+            } else if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+                setPendingEmail(err.response.data.email || candidateLoginEmail);
+                setView('email-pending');
             } else {
                 setError(err.response?.data?.error || 'Email ou date de naissance incorrect(e)');
             }
@@ -124,7 +130,12 @@ export default function LoginPage() {
                 etablissement: candidateData.etablissement,
                 anneeIntegration: candidateData.anneeIntegration,
             });
-            loginCandidate(res.data.token, res.data.candidate);
+            if (res.data.emailPending) {
+                setPendingEmail(res.data.email);
+                setView('email-pending');
+            } else {
+                loginCandidate(res.data.token, res.data.candidate);
+            }
         } catch (err: any) {
             if (!err.response) {
                 setError("Impossible de contacter le serveur.");
@@ -133,6 +144,20 @@ export default function LoginPage() {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        if (!pendingEmail) return;
+        setResendLoading(true);
+        setResendDone(false);
+        try {
+            await api.post('/auth/resend-verification', { email: pendingEmail });
+            setResendDone(true);
+        } catch {
+            /* silent */
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -391,6 +416,55 @@ export default function LoginPage() {
                             className="text-sm text-gray-500 hover:text-gray-700 transition"
                         >
                             ← Retour
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── EMAIL PENDING ──────────────────────────────────────────────
+    if (view === 'email-pending') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+                <div className="w-full max-w-md text-center">
+                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: '#FFF0F3' }}>
+                        <svg className="h-8 w-8" style={{ color: '#E8446A' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h1 className="text-2xl font-semibold text-gray-900">Vérifiez votre email</h1>
+                    <p className="mt-2 text-gray-500 text-sm leading-relaxed">
+                        Un lien de vérification a été envoyé à<br />
+                        <strong className="text-gray-800">{pendingEmail}</strong>.<br />
+                        Cliquez sur le lien pour activer votre compte.
+                    </p>
+
+                    <div className="mt-6 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                        Vérifiez aussi vos spams si vous ne trouvez pas l'email.
+                    </div>
+
+                    {resendDone ? (
+                        <div className="mt-4 rounded-lg px-4 py-3 text-sm font-medium" style={{ backgroundColor: '#F0FDF4', color: '#16a34a' }}>
+                            Email renvoyé avec succès !
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleResendVerification}
+                            disabled={resendLoading}
+                            className="mt-4 text-sm font-medium underline disabled:opacity-50"
+                            style={{ color: '#E8446A' }}
+                        >
+                            {resendLoading ? 'Envoi…' : "Renvoyer l'email"}
+                        </button>
+                    )}
+
+                    <div className="mt-6">
+                        <button
+                            onClick={goToLanding}
+                            className="text-sm text-gray-500 hover:text-gray-700 transition"
+                        >
+                            ← Retour à l'accueil
                         </button>
                     </div>
                 </div>

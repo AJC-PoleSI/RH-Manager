@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
+import { sendVerificationEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
+import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -88,6 +90,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationTokenExpiresAt = new Date(
+      Date.now() + 24 * 60 * 60 * 1000,
+    ).toISOString();
+
     // Create the candidate
     const { data: candidate, error } = await supabaseAdmin
       .from("candidates")
@@ -100,6 +108,9 @@ export async function POST(req: NextRequest) {
         formation: formation || null,
         etablissement: etablissement || null,
         annee_integration: anneeIntegration || null,
+        email_verified: false,
+        verification_token: verificationToken,
+        verification_token_expires_at: verificationTokenExpiresAt,
       })
       .select("id, first_name, last_name, email, phone, date_of_birth")
       .single();
@@ -120,13 +131,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = signToken({
-      id: candidate.id,
-      email: candidate.email,
-      role: "candidate",
-    });
+    // Send verification email (best-effort — don't fail registration if it fails)
+    try {
+      await sendVerificationEmail(candidate.email, candidate.first_name, verificationToken);
+    } catch (emailErr) {
+      console.error("Failed to send verification email:", emailErr);
+    }
 
-    return Response.json({ token, candidate }, { status: 201 });
+    return Response.json({ emailPending: true, email: candidate.email }, { status: 201 });
   } catch (error) {
     console.error("registerCandidate error:", error);
     return Response.json(
