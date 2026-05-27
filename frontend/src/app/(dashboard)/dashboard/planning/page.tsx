@@ -1296,7 +1296,30 @@ export default function PlanningPage() {
                             {(s.enrollments || []).map((e: any, idx: number) => {
                               const c = e.candidate || {};
                               const name = `${c.first_name || c.firstName || ""} ${c.last_name || c.lastName || ""}`.trim() || "Candidat";
-                              return <li key={idx} className="flex items-center gap-2 text-gray-800"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />{name}</li>;
+                              const cid = c.id || e.candidate_id;
+                              return (
+                                <li key={idx} className="flex items-center gap-2 text-gray-800 group">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                                  <span className="flex-1">{name}</span>
+                                  {isAdmin && cid && (
+                                    <button
+                                      onClick={async () => {
+                                        if (!confirm(`Désinscrire ${name} de ce créneau ?`)) return;
+                                        try {
+                                          await api.delete(`/slots/enroll/${s.id}?candidateId=${cid}`);
+                                          fetchSlotData();
+                                        } catch (err: any) {
+                                          alert(err?.response?.data?.error || "Erreur lors de la désinscription");
+                                        }
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 flex-shrink-0"
+                                      title="Désinscrire ce candidat"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </li>
+                              );
                             })}
                           </ul>
                         )}
@@ -2046,22 +2069,39 @@ export default function PlanningPage() {
                   ) : (
                     <div className="space-y-2">
                       {(selectedSlot.enrollments || []).map(
-                        (enrollment, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-xs font-semibold text-amber-700">
-                              {(
-                                enrollment.candidate?.first_name?.[0] || "?"
-                              ).toUpperCase()}
-                              {(
-                                enrollment.candidate?.last_name?.[0] || ""
-                              ).toUpperCase()}
+                        (enrollment, idx) => {
+                          const cand = enrollment.candidate || {};
+                          const fullName = `${cand.first_name || ""} ${cand.last_name || ""}`.trim() || "Candidat";
+                          const cid = cand.id;
+                          return (
+                            <div key={idx} className="flex items-center gap-2 group">
+                              <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-xs font-semibold text-amber-700 flex-shrink-0">
+                                {(cand.first_name?.[0] || "?").toUpperCase()}
+                                {(cand.last_name?.[0] || "").toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium text-gray-800 flex-1">
+                                {fullName}
+                              </span>
+                              {isAdmin && cid && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`Désinscrire ${fullName} de ce créneau ?`)) return;
+                                    try {
+                                      await api.delete(`/slots/enroll/${selectedSlot.id}?candidateId=${cid}`);
+                                      setSelectedSlot(null);
+                                      fetchSlotData();
+                                    } catch (err: any) {
+                                      alert(err?.response?.data?.error || "Erreur lors de la désinscription");
+                                    }
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-500 hover:text-red-700 px-2 py-0.5 rounded hover:bg-red-50 border border-red-200 flex-shrink-0"
+                                >
+                                  Désinscrire
+                                </button>
+                              )}
                             </div>
-                            <span className="text-sm font-medium text-gray-800">
-                              {enrollment.candidate?.first_name}{" "}
-                              {enrollment.candidate?.last_name}
-                            </span>
-                          </div>
-                        ),
+                          );
+                        },
                       )}
                     </div>
                   )}

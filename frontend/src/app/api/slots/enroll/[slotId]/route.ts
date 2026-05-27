@@ -2,7 +2,10 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
-// DELETE /api/slots/enroll/[slotId] — cancel enrollment (with 24h rule)
+// DELETE /api/slots/enroll/[slotId]
+//   Candidate: cancels their own enrollment (24h rule applies)
+//   Admin:     can unenroll any candidate — pass ?candidateId=<uuid>
+//              to specify who, no 24h restriction.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ slotId: string }> },
@@ -10,12 +13,20 @@ export async function DELETE(
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
 
-  if (payload.role !== "candidate") {
-    return Response.json({ error: "Candidate auth required" }, { status: 401 });
+  const isAdmin = !!payload.isAdmin;
+
+  // Non-admin, non-candidate → refuse
+  if (!isAdmin && payload.role !== "candidate") {
+    return Response.json({ error: "Accès interdit" }, { status: 403 });
   }
 
   const { slotId } = await params;
-  const candidateId = payload.id;
+  const { searchParams } = new URL(req.url);
+
+  // Admin can specify which candidate to unenroll
+  const candidateId = isAdmin && searchParams.get("candidateId")
+    ? searchParams.get("candidateId")!
+    : payload.id;
 
   try {
     // Find enrollment
@@ -65,7 +76,8 @@ export async function DELETE(
     const hoursUntilStart =
       (slotStartDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    if (hoursUntilStart < 24) {
+    // Admin bypass : pas de règle 24h pour les désinscriptions forcées
+    if (!isAdmin && hoursUntilStart < 24) {
       return Response.json(
         {
           error:
