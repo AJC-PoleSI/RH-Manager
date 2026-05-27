@@ -117,6 +117,30 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       if (error.code === "23505") {
+        // Email already exists — check if the account is unverified.
+        // If so, resend a fresh verification link and show the pending page
+        // instead of a cold error message.
+        const { data: existing } = await supabaseAdmin
+          .from("candidates")
+          .select("id, first_name, email, email_verified")
+          .eq("email", emailLower)
+          .maybeSingle();
+
+        if (existing && !existing.email_verified) {
+          const newToken = crypto.randomBytes(32).toString("hex");
+          const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          await supabaseAdmin
+            .from("candidates")
+            .update({ verification_token: newToken, verification_token_expires_at: newExpiry })
+            .eq("id", existing.id);
+          try {
+            await sendVerificationEmail(existing.email, existing.first_name, newToken);
+          } catch (emailErr) {
+            console.error("Failed to resend verification email:", emailErr);
+          }
+          return Response.json({ emailPending: true, email: existing.email }, { status: 200 });
+        }
+
         return Response.json(
           {
             error:
