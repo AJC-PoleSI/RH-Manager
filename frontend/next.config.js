@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Tell Next.js not to bundle resend server-side — use it as a native
+  // require() at runtime. This avoids webpack trying to resolve
+  // @react-email/render (optional peer dep that we don't use).
+  experimental: {
+    serverComponentsExternalPackages: ['resend'],
+  },
   async headers() {
     return [
       {
