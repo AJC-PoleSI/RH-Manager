@@ -13,9 +13,13 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Candidate auth required" }, { status: 401 });
   }
 
+  // Hoist slotId so it's accessible in the catch block (23505 handler).
+  let slotId: string | undefined;
+
   try {
     const body = await req.json();
-    const { slotId, force } = body;
+    ({ slotId } = body as { slotId: string; force?: boolean });
+    const { force } = body as { slotId: string; force?: boolean };
     if (!slotId) {
       return Response.json({ error: "slotId required" }, { status: 400 });
     }
@@ -333,6 +337,23 @@ export async function POST(req: NextRequest) {
       enrollment = data;
       enrollError = error;
     } else {
+      // Extra guard: check directly in DB before inserting to prevent
+      // any duplicate that slipped through the in-memory checks above
+      // (e.g. when slot.enrollments cache was stale or status mismatch).
+      const { data: existingInDb } = await supabaseAdmin
+        .from("slot_enrollments")
+        .select("id, status")
+        .eq("slot_id", slotId)
+        .eq("candidate_id", candidateId)
+        .maybeSingle();
+
+      if (existingInDb && isActiveEnrollment(existingInDb.status as any)) {
+        return Response.json(
+          { ...existingInDb, alreadyEnrolled: true },
+          { status: 200 },
+        );
+      }
+
       // FIX: insert with explicit status="active". Without this, the
       // row's `status` column defaults to NULL (if no DB default), which
       // various read filters accept but which has caused inconsistent
@@ -413,11 +434,13 @@ export async function POST(req: NextRequest) {
     // exists. Try to recover it and return 200 so the frontend can
     // refresh its state cleanly instead of looping on "déjà inscrit".
     if (error?.code === "23505") {
+      // BUG FIX: `req.clone().json()` fails after body is consumed.
+      // Use `slotId` from the outer scope — it's always in scope here.
       try {
         const { data: existing } = await supabaseAdmin
           .from("slot_enrollments")
           .select("*")
-          .eq("slot_id", (await req.clone().json()).slotId)
+          .eq("slot_id", slotId)
           .eq("candidate_id", candidateId)
           .maybeSingle();
         if (existing) {
@@ -427,7 +450,7 @@ export async function POST(req: NextRequest) {
           );
         }
       } catch {
-        /* ignore — fall through to 400 */
+        /* ignore */
       }
       return Response.json({ error: "Déjà inscrit" }, { status: 400 });
     }
