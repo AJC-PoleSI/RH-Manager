@@ -55,33 +55,54 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Si une épreuve est liée, calculer la durée : épreuve + 10min buffer
+    // Durée du créneau : on respecte ce que le client envoie (start→end).
+    // L'éventuelle "roulement" est gérée par l'espacement entre créneaux
+    // (cf bulk-create), pas par la durée stockée d'un créneau individuel.
     // ══════════════════════════════════════════════════════════════════
-    const BUFFER_MINUTES = 10;
-    let computedDuration = durationMinutes || 60;
     let computedEndTime = endTime;
 
-    if (epreuveId) {
-      const { data: ep } = await supabaseAdmin
-        .from("epreuves")
-        .select("duration_minutes")
-        .eq("id", epreuveId)
-        .single();
-      if (ep?.duration_minutes) {
-        computedDuration = ep.duration_minutes + BUFFER_MINUTES;
-        // Calculer end_time depuis start_time si pas fourni
-        if (!endTime) {
-          const [h, m] = startTime.split(":").map(Number);
-          const totalMin = h * 60 + (m || 0) + computedDuration;
-          computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
-        }
-      }
+    if (!computedEndTime) {
+      const fallbackDuration =
+        durationMinutes && durationMinutes > 0 ? durationMinutes : 60;
+      const [h, m] = startTime.split(":").map(Number);
+      const totalMin = h * 60 + (m || 0) + fallbackDuration;
+      computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
     }
 
-    if (!computedEndTime) {
-      const [h, m] = startTime.split(":").map(Number);
-      const totalMin = h * 60 + (m || 0) + computedDuration;
-      computedEndTime = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+    // Durée stockée = différence réelle start → end (en minutes)
+    const timeToMin = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + (m || 0);
+    };
+    const startMinVal = timeToMin(startTime);
+    const endMinVal = timeToMin(computedEndTime);
+    const computedDuration = Math.max(1, endMinVal - startMinVal);
+
+    // ══════════════════════════════════════════════════════════════════
+    // Anti-chevauchement : refuse un créneau qui se superpose à un autre
+    // dans la même salle, le même jour.
+    // ══════════════════════════════════════════════════════════════════
+    if (room) {
+      const dateStr = date.split("T")[0];
+      const { data: sameRoomSlots } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("id, start_time, end_time")
+        .eq("room", room)
+        .like("date", `${dateStr}%`);
+
+      const overlap = (sameRoomSlots || []).find((s: any) => {
+        const sStart = timeToMin(String(s.start_time).slice(0, 5));
+        const sEnd = timeToMin(String(s.end_time).slice(0, 5));
+        return startMinVal < sEnd && sStart < endMinVal;
+      });
+      if (overlap) {
+        return Response.json(
+          {
+            error: `Chevauchement : ${room} a déjà un créneau ${String(overlap.start_time).slice(0, 5)}–${String(overlap.end_time).slice(0, 5)} ce jour-là.`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     const { data: slot, error } = await supabaseAdmin

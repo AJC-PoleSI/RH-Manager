@@ -39,8 +39,71 @@ export async function PUT(
     if (epreuveId !== undefined) data.epreuve_id = epreuveId || null;
     if (startTime !== undefined) data.start_time = startTime;
     if (endTime !== undefined) data.end_time = endTime;
-    if (durationMinutes !== undefined) data.duration_minutes = durationMinutes;
+    // duration_minutes : recalcul depuis start/end pour rester cohérent
+    if (startTime !== undefined && endTime !== undefined) {
+      const t2m = (t: string) => {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + (m || 0);
+      };
+      data.duration_minutes = Math.max(1, t2m(endTime) - t2m(startTime));
+    } else if (durationMinutes !== undefined) {
+      data.duration_minutes = durationMinutes;
+    }
     if (tour !== undefined) data.tour = tour;
+
+    // ══════════════════════════════════════════════════════════════════
+    // Anti-chevauchement (déplacement / changement de salle / d'horaire)
+    // ══════════════════════════════════════════════════════════════════
+    if (
+      startTime !== undefined ||
+      endTime !== undefined ||
+      room !== undefined
+    ) {
+      const { data: current } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("date, start_time, end_time, room")
+        .eq("id", id)
+        .single();
+      if (current) {
+        const effectiveRoom = room !== undefined ? room : current.room;
+        const effectiveStart = String(
+          startTime !== undefined ? startTime : current.start_time,
+        ).slice(0, 5);
+        const effectiveEnd = String(
+          endTime !== undefined ? endTime : current.end_time,
+        ).slice(0, 5);
+        const dateStr = String(current.date).split("T")[0];
+        const t2m = (t: string) => {
+          const [h, m] = t.split(":").map(Number);
+          return h * 60 + (m || 0);
+        };
+        const newStart = t2m(effectiveStart);
+        const newEnd = t2m(effectiveEnd);
+
+        if (effectiveRoom) {
+          const { data: sameRoomSlots } = await supabaseAdmin
+            .from("evaluation_slots")
+            .select("id, start_time, end_time")
+            .eq("room", effectiveRoom)
+            .like("date", `${dateStr}%`)
+            .neq("id", id);
+
+          const overlap = (sameRoomSlots || []).find((s: any) => {
+            const sStart = t2m(String(s.start_time).slice(0, 5));
+            const sEnd = t2m(String(s.end_time).slice(0, 5));
+            return newStart < sEnd && sStart < newEnd;
+          });
+          if (overlap) {
+            return Response.json(
+              {
+                error: `Chevauchement : ${effectiveRoom} a déjà un créneau ${String(overlap.start_time).slice(0, 5)}–${String(overlap.end_time).slice(0, 5)} ce jour-là.`,
+              },
+              { status: 409 },
+            );
+          }
+        }
+      }
+    }
 
     const { data: slot, error } = await supabaseAdmin
       .from("evaluation_slots")

@@ -536,7 +536,20 @@ export default function CalendarAdminBuilder({
           minute: "2-digit",
         }) || "";
       const room = eventInfo.event.extendedProps?.room || "";
-      const dur = eventInfo.event.extendedProps?.duration;
+      // Durée réelle = end - start (en minutes). Évite les incohérences
+      // si la colonne duration_minutes en base ne correspond pas à
+      // l'écart effectif start_time / end_time.
+      const dur =
+        eventInfo.event.start && eventInfo.event.end
+          ? Math.max(
+              0,
+              Math.round(
+                (eventInfo.event.end.getTime() -
+                  eventInfo.event.start.getTime()) /
+                  60000,
+              ),
+            )
+          : eventInfo.event.extendedProps?.duration;
       const members = eventInfo.event.extendedProps?.members || [];
       const enrollments = eventInfo.event.extendedProps?.enrollments || [];
       const maxCand = eventInfo.event.extendedProps?.maxCandidates || 1;

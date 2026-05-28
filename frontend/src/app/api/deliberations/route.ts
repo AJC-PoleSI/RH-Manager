@@ -41,6 +41,10 @@ export async function GET(req: NextRequest) {
         )
       `,
       )
+      // SECURITY: hide candidates whose email is not yet verified — they
+      // haven't completed the inscription flow, so they shouldn't surface
+      // in the deliberation soirée.
+      .eq("email_verified", true)
       .order("last_name", { ascending: true });
 
     if (error) throw error;
