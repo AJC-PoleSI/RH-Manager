@@ -25,29 +25,29 @@ function TopNav() {
         : "bg-blue-50 text-blue-600";
 
   return (
-    <header className="h-14 min-h-[56px] bg-white border-b border-gray-200 sticky top-0 z-50 flex items-center justify-between px-5">
+    <header className="h-14 min-h-[56px] bg-white border-b border-gray-200 sticky top-0 z-50 flex items-center justify-between pl-14 pr-3 md:px-5 gap-2">
       {/* Left: Logo + role chip */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <div className="hidden sm:flex items-center gap-1.5 shrink-0">
           <span className="w-2.5 h-2.5 rounded-full bg-pink-400 inline-block" />
           <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
         </div>
-        <span className="text-[15px] font-semibold text-gray-900 tracking-tight">
+        <span className="text-[13px] md:text-[15px] font-semibold text-gray-900 tracking-tight truncate">
           AJC Recrutement
         </span>
         <span
-          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${chipColor}`}
+          className={`hidden sm:inline-block text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${chipColor}`}
         >
           {roleLabel}
         </span>
       </div>
 
       {/* Right: User name + logout */}
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-700 font-medium">{displayName}</span>
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
+        <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">{displayName}</span>
         <button
           onClick={logout}
-          className="text-sm text-gray-500 border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          className="text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
         >
           Déconnexion
         </button>
@@ -106,7 +106,7 @@ function DashboardContent({
         <div className="flex flex-1 relative">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-y-auto">
-            <main className="flex-1 bg-gray-50 p-[26px_30px]">{children}</main>
+            <main className="flex-1 bg-gray-50 p-4 md:p-[26px_30px]">{children}</main>
             <Footer />
           </div>
         </div>

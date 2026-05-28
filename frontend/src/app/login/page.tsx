@@ -282,7 +282,7 @@ export default function LoginPage() {
     if (view === 'candidate-login') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
                     <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Candidat</h1>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez votre email et date de naissance
@@ -360,7 +360,7 @@ export default function LoginPage() {
     if (view === 'login') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-8">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
                     <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Staff</h1>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez vos identifiants AJC
@@ -475,7 +475,7 @@ export default function LoginPage() {
     // ─── INSCRIPTION MODAL (Candidate) ─────────────────────────────
     return (
         <div className="min-h-screen flex items-center justify-center bg-black/40 px-4 py-8">
-            <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-8">
+            <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
                 <h1 className="text-xl font-semibold text-gray-900 text-center">Inscription Candidat</h1>
 
                 {/* Progress bar */}
@@ -532,7 +532,7 @@ export default function LoginPage() {
                     {/* Step 1: Identity */}
                     {step === 1 && (
                         <>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Prénom

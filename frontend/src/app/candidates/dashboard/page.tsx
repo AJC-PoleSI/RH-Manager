@@ -370,7 +370,7 @@ export default function CandidateCalendarPage() {
           >
             <ChevronLeft size={16} />
           </button>
-          <span className="text-lg font-semibold text-gray-900 min-w-[180px] text-center">
+          <span className="text-sm sm:text-lg font-semibold text-gray-900 min-w-[120px] sm:min-w-[180px] text-center">
             {viewMode === "month"
               ? `${MONTHS[month]} ${year}`
               : `${weekDates[0].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} - ${weekDates[6].toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
@@ -432,15 +432,15 @@ export default function CandidateCalendarPage() {
         <>
           {/* ═══ VUE MOIS ═══ */}
           {viewMode === "month" && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="grid grid-cols-7 border-b border-gray-200">
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <div className="grid grid-cols-7 border-b border-gray-200 min-w-[640px]">
                 {DAYS.map((d) => (
                   <div key={d} className="py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     {d}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7">
+              <div className="grid grid-cols-7 min-w-[640px]">
                 {cells.map((day, i) => {
                   const dayEvents = day ? getEventsForDay(day) : [];
                   return (
@@ -494,8 +494,8 @@ export default function CandidateCalendarPage() {
 
           {/* ═══ VUE SEMAINE ═══ */}
           {viewMode === "week" && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="grid grid-cols-7">
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <div className="grid grid-cols-7 min-w-[640px]">
                 {weekDates.map((wd, i) => {
                   const dateEvents = getEventsForDate(wd);
                   const isTodayDate =

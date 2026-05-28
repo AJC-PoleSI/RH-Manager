@@ -539,7 +539,7 @@ export default function DeliberationsPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
           <p className="text-2xl font-bold text-gray-700">{filteredCandidates.length}</p>
           <p className="text-xs text-gray-400 mt-0.5">Total</p>
@@ -978,7 +978,7 @@ export default function DeliberationsPage() {
 
                       {/* Reserve notes */}
                       {(c.deliberation?.prosComment || c.deliberation?.consComment) && (
-                        <div className="mx-6 mb-3 grid grid-cols-2 gap-2">
+                        <div className="mx-4 sm:mx-6 mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {c.deliberation.prosComment && (
                             <div className="rounded-lg p-2 text-xs bg-green-50">
                               <span className="font-semibold text-green-600">+ </span>
@@ -1000,7 +1000,7 @@ export default function DeliberationsPage() {
                           {/* Contact info */}
                           <div>
                             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Informations</h3>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-400">&#128231;</span>
                                 <span className="text-gray-700">{c.email || "-"}</span>
@@ -1056,7 +1056,7 @@ export default function DeliberationsPage() {
                           {isReserve && (
                             <div>
                               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Notes de reserve</h3>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                   <label className="block text-sm font-semibold mb-1 text-green-600">Points +</label>
                                   <textarea
@@ -1267,7 +1267,7 @@ export default function DeliberationsPage() {
             </div>
             <div className="p-6 space-y-6">
               {/* Summary Stats */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-xl p-4 text-center bg-green-50">
                   <div className="text-3xl font-bold text-green-600">{acceptedCount}</div>
                   <div className="text-sm text-gray-600 mt-1">Admis</div>

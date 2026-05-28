@@ -175,16 +175,132 @@ export default function CandidatesPage() {
     };
 
     /* ---- CRUD candidat ---- */
-    const handleExport = () => {
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + ["Prénom,Nom,Email,Téléphone,Date de naissance", ...candidates.map((c: any) => `${c.firstName},${c.lastName},${c.email},${c.phone},${c.date_of_birth || ''}`)].join("\n");
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "candidats.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleExport = async () => {
+        try {
+            const XLSX = await import('xlsx');
+            const res = await api.get('/candidates/export');
+            const data: any[] = res.data?.data || [];
+
+            const parseScores = (raw: any): Record<string, number> => {
+                try {
+                    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (!obj || typeof obj !== 'object') return {};
+                    const out: Record<string, number> = {};
+                    Object.entries(obj).forEach(([k, v]) => {
+                        const n = Number(v);
+                        if (!isNaN(n)) out[k] = n;
+                    });
+                    return out;
+                } catch { return {}; }
+            };
+
+            const avgOf = (nums: number[]) =>
+                nums.length === 0 ? null : Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
+
+            // ───────── Sheet 1: Synthèse (one row per candidate) ─────────
+            const synthRows = data.map((c: any) => {
+                const evals: any[] = c.candidate_evaluations || [];
+                const evalsByTour: Record<number, any[]> = {};
+                evals.forEach((e) => {
+                    const t = e.epreuves?.tour ?? 0;
+                    if (!evalsByTour[t]) evalsByTour[t] = [];
+                    evalsByTour[t].push(e);
+                });
+
+                const tourAverage = (tour: number) => {
+                    const all = (evalsByTour[tour] || []).flatMap((e) => Object.values(parseScores(e.scores)));
+                    return avgOf(all as number[]);
+                };
+
+                const tourComments = (tour: number) =>
+                    (evalsByTour[tour] || [])
+                        .map((e) => {
+                            const who = e.members?.first_name
+                                ? `${e.members.first_name} ${e.members.last_name || ''}`.trim()
+                                : e.members?.email || 'Évaluateur';
+                            const ep = e.epreuves?.name || '';
+                            return e.comment ? `[${ep} — ${who}] ${e.comment}` : '';
+                        })
+                        .filter(Boolean)
+                        .join('\n');
+
+                const allScores = evals.flatMap((e) => Object.values(parseScores(e.scores))) as number[];
+                const globalAvg = avgOf(allScores);
+
+                const delib = Array.isArray(c.deliberation) ? c.deliberation[0] : c.deliberation;
+
+                return {
+                    Prénom: c.first_name,
+                    Nom: c.last_name,
+                    Email: c.email,
+                    'Note Tour 1': tourAverage(1),
+                    'Note Tour 2': tourAverage(2),
+                    'Note Tour 3': tourAverage(3),
+                    'Note Globale': globalAvg,
+                    'Commentaires Tour 1': tourComments(1),
+                    'Commentaires Tour 2': tourComments(2),
+                    'Commentaires Tour 3': tourComments(3),
+                    'Points forts (délibération)': delib?.pros_comment || '',
+                    'Points faibles (délibération)': delib?.cons_comment || '',
+                    'Commentaire général': delib?.global_comments || c.comments || '',
+                    'Statut Tour 1': delib?.tour1_status || '',
+                    'Statut Tour 2': delib?.tour2_status || '',
+                    'Statut Tour 3': delib?.tour3_status || '',
+                };
+            });
+
+            // ───────── Sheet 2: Détail évaluations (one row per evaluation) ─────────
+            const detailRows: any[] = [];
+            data.forEach((c: any) => {
+                const evals: any[] = c.candidate_evaluations || [];
+                evals.forEach((e) => {
+                    const scores = parseScores(e.scores);
+                    const scoreEntries = Object.entries(scores);
+                    const avg = avgOf(scoreEntries.map(([, v]) => v));
+                    detailRows.push({
+                        Prénom: c.first_name,
+                        Nom: c.last_name,
+                        Tour: e.epreuves?.tour ?? '',
+                        Épreuve: e.epreuves?.name || '',
+                        Type: e.epreuves?.type || '',
+                        Évaluateur: e.members?.first_name
+                            ? `${e.members.first_name} ${e.members.last_name || ''}`.trim()
+                            : e.members?.email || '',
+                        'Détail des notes': scoreEntries.map(([k, v]) => `${k}: ${v}`).join(' | '),
+                        Moyenne: avg,
+                        Commentaire: e.comment || '',
+                        Date: e.created_at ? new Date(e.created_at).toLocaleDateString('fr-FR') : '',
+                    });
+                });
+            });
+
+            const wb = XLSX.utils.book_new();
+
+            const ws1 = XLSX.utils.json_to_sheet(synthRows);
+            ws1['!cols'] = [
+                { wch: 14 }, { wch: 16 }, { wch: 28 },
+                { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 13 },
+                { wch: 40 }, { wch: 40 }, { wch: 40 },
+                { wch: 40 }, { wch: 40 }, { wch: 40 },
+                { wch: 13 }, { wch: 13 }, { wch: 13 },
+            ];
+            XLSX.utils.book_append_sheet(wb, ws1, 'Synthèse');
+
+            const ws2 = XLSX.utils.json_to_sheet(detailRows);
+            ws2['!cols'] = [
+                { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 14 },
+                { wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 60 }, { wch: 12 },
+            ];
+            XLSX.utils.book_append_sheet(wb, ws2, 'Détail évaluations');
+
+            const today = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `candidats_export_${today}.xlsx`);
+
+            toast(`Export généré : ${synthRows.length} candidat(s)`, 'success');
+        } catch (e: any) {
+            console.error(e);
+            toast(e?.response?.data?.error || "Erreur lors de l'export", 'error');
+        }
     };
 
     const handleCreate = async (e: React.FormEvent) => {
@@ -255,15 +371,15 @@ export default function CandidatesPage() {
     /*  Render                                                           */
     /* ================================================================ */
     return (
-        <div className="flex gap-6 h-full">
+        <div className="flex flex-col lg:flex-row gap-6 h-full">
             {/* ---- Left: Candidate List ---- */}
-            <div className={`space-y-6 transition-all duration-200 ${selectedCandidate ? 'w-[45%] min-w-[400px]' : 'w-full'}`}>
-                <div className="flex justify-between items-center">
+            <div className={`space-y-6 transition-all duration-200 ${selectedCandidate ? 'w-full lg:w-[45%] lg:min-w-[400px]' : 'w-full'}`}>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
-                        <h1 className="text-2xl font-semibold text-gray-900">Candidats</h1>
-                        <p className="text-gray-500">Gérez et évaluez vos candidats</p>
+                        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Candidats</h1>
+                        <p className="text-sm text-gray-500">Gérez et évaluez vos candidats</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         <Button variant="secondary" onClick={handleExport}>Exporter</Button>
                         <Button onClick={() => setIsCreating(true)}><Plus size={16} className="mr-2" /> Ajouter</Button>
                     </div>
@@ -355,7 +471,7 @@ export default function CandidatesPage() {
                             <select
                                 value={filterPole}
                                 onChange={e => { setFilterPole(e.target.value); }}
-                                className="pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                                className="pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:min-w-[200px] sm:w-auto"
                             >
                                 <option value="all">Tous les pôles</option>
                                 <option value="Système d'information">SI</option>
@@ -432,7 +548,7 @@ export default function CandidatesPage() {
 
             {/* ---- Right: Detail Panel ---- */}
             {selectedCandidate && (
-                <div className="flex-1 min-w-[420px] space-y-4 overflow-y-auto">
+                <div className="flex-1 w-full lg:min-w-[420px] space-y-4 overflow-y-auto">
                     {/* Candidate header */}
                     <Card>
                         <CardContent className="p-5">

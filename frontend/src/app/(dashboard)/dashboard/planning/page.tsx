@@ -1098,13 +1098,13 @@ export default function PlanningPage() {
                 <>
                   {/* VUE MOIS */}
                   {adminCalView === "month" && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-7 border-b border-gray-200">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+                      <div className="grid grid-cols-7 border-b border-gray-200 min-w-[640px]">
                         {ADMIN_DAYS.map(d => (
                           <div key={d} className="py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">{d}</div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-7">
+                      <div className="grid grid-cols-7 min-w-[640px]">
                         {cells.map((day, i) => {
                           const ds = day ? `${acYear}-${String(acMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}` : "";
                           const dayEvs = day ? getEventsForDay(ds) : [];
@@ -1140,8 +1140,8 @@ export default function PlanningPage() {
 
                   {/* VUE SEMAINE */}
                   {adminCalView === "week" && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-7">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+                      <div className="grid grid-cols-7 min-w-[640px]">
                         {weekDates.map((wd, i) => {
                           const ds = dateStr(wd);
                           const dayEvs = getEventsForDay(ds);
@@ -1367,7 +1367,7 @@ export default function PlanningPage() {
               <h3 className="text-sm font-semibold text-gray-800 mb-4">
                 ⚙️ Logistique des créneaux
               </h3>
-              <div className="grid grid-cols-2 gap-6 max-w-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     Nombre de salles

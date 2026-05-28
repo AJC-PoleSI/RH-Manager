@@ -634,7 +634,7 @@ export default function CrossCalendarPage() {
                           {slot.totalAvailableMembers} membres dispo
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {slot.rooms.map((room: any) => (
                           <div
                             key={room.roomNumber}

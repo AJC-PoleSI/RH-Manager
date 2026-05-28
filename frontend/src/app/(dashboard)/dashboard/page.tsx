@@ -287,18 +287,18 @@ export default function DashboardPage() {
         return (
             <div className="space-y-8 max-w-[1200px] mx-auto pb-10">
                 {/* Header */}
-                <div className="flex items-end justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                     <div>
-                        <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Dashboard</h1>
+                        <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">Dashboard</h1>
                         <p className="text-sm text-gray-500 mt-1 font-medium">Vue d&apos;ensemble du recrutement AJC 2025</p>
                     </div>
-                    <div className="text-xs text-gray-400 font-mono bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                    <div className="text-xs text-gray-400 font-mono bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100 self-start sm:self-auto">
                         Mis à jour en temps réel
                     </div>
                 </div>
 
                 {/* ── TOP KPI ROW ────────────────────────── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
                     {[
                         {
                             label: 'Candidats',
@@ -349,7 +349,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* ── SECONDARY STATS ROW ────────────────── */}
-                <div className="grid grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
                     {[
                         { label: 'Évaluations réalisées', value: totalEvaluations, icon: '📝', color: 'text-amber-700', bg: 'bg-amber-50' },
                         { label: 'Créneaux planifiés', value: totalSlots, icon: '📆', color: 'text-cyan-700', bg: 'bg-cyan-50' },
@@ -369,9 +369,9 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                     {/* Candidate Progression Donut */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
                         <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Progression des candidats</h1>
-                        <div className="flex items-center gap-8">
+                        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
                             <div className="relative flex-shrink-0">
                                 <ProgressRing pct={pctAccepted + pctRefused + pctWaiting} color="#6366f1" size={120} stroke={10} />
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
