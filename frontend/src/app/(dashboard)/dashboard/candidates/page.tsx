@@ -234,12 +234,12 @@ export default function CandidatesPage() {
                     Nom: c.last_name,
                     Email: c.email,
                     'Note Tour 1': tourAverage(1),
-                    'Note Tour 2': tourAverage(2),
-                    'Note Tour 3': tourAverage(3),
-                    'Note Globale': globalAvg,
                     'Commentaires Tour 1': tourComments(1),
+                    'Note Tour 2': tourAverage(2),
                     'Commentaires Tour 2': tourComments(2),
+                    'Note Tour 3': tourAverage(3),
                     'Commentaires Tour 3': tourComments(3),
+                    'Note Globale': globalAvg,
                     'Points forts (délibération)': delib?.pros_comment || '',
                     'Points faibles (délibération)': delib?.cons_comment || '',
                     'Commentaire général': delib?.global_comments || c.comments || '',
@@ -279,8 +279,10 @@ export default function CandidatesPage() {
             const ws1 = XLSX.utils.json_to_sheet(synthRows);
             ws1['!cols'] = [
                 { wch: 14 }, { wch: 16 }, { wch: 28 },
-                { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 13 },
-                { wch: 40 }, { wch: 40 }, { wch: 40 },
+                { wch: 11 }, { wch: 40 },
+                { wch: 11 }, { wch: 40 },
+                { wch: 11 }, { wch: 40 },
+                { wch: 13 },
                 { wch: 40 }, { wch: 40 }, { wch: 40 },
                 { wch: 13 }, { wch: 13 }, { wch: 13 },
             ];
