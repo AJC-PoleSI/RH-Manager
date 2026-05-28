@@ -17,7 +17,7 @@ export async function PUT(
     // SECURITY: Verify ownership before update
     const { data: existing } = await supabaseAdmin
       .from("candidate_evaluations")
-      .select("member_id")
+      .select("member_id, candidate_id, epreuve_id, is_group")
       .eq("id", id)
       .single();
 
@@ -25,13 +25,40 @@ export async function PUT(
       return Response.json({ error: "Evaluation not found" }, { status: 404 });
     }
 
-    if (existing.member_id !== user.id && !user.isAdmin) {
+    // Permission rules:
+    //   • Admins: always
+    //   • Individual eval (is_group=false): only the owner (member_id)
+    //   • Group eval (is_group=true): any member assigned to a slot of
+    //     this épreuve where this candidate is enrolled
+    let canEdit = user.isAdmin || existing.member_id === user.id;
+
+    if (!canEdit && existing.is_group === true) {
+      const { data: validSlot } = await supabaseAdmin
+        .from("slot_member_assignments")
+        .select(
+          "slot:evaluation_slots!inner(id, epreuve_id, enrollments:slot_enrollments(candidate_id, status))",
+        )
+        .eq("member_id", user.id);
+
+      canEdit = (validSlot || []).some((row: any) => {
+        const s = row.slot;
+        if (!s || s.epreuve_id !== existing.epreuve_id) return false;
+        return (s.enrollments || [])
+          .filter((e: any) => !e.status || e.status === "active")
+          .some((e: any) => e.candidate_id === existing.candidate_id);
+      });
+    }
+
+    if (!canEdit) {
       return forbidden();
     }
 
     const { scores, comment } = await req.json();
 
-    const updateData: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = {
+      last_edited_by: user.id,
+      updated_at: new Date().toISOString(),
+    };
     if (scores !== undefined) {
       // Normaliser en nombres pour éviter la concaténation de strings
       const rawScores =

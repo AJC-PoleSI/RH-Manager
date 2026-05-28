@@ -62,14 +62,21 @@ export async function GET(req: NextRequest) {
 
     // 3. Filter out those who have ALREADY been evaluated by THIS member for THIS epreuve
     if (nextCandidates.length > 0) {
+      // Only filter out candidates where THIS member has submitted their
+      // INDIVIDUAL evaluation. Shared/group evaluations are tracked separately
+      // and don't count as "done" for an individual member.
       const { data: existingEvals, error: evalsError } = await supabaseAdmin
-        .from("evaluations")
-        .select("candidate_id, epreuve_id")
+        .from("candidate_evaluations")
+        .select("candidate_id, epreuve_id, is_group")
         .eq("member_id", memberId);
 
       if (!evalsError && existingEvals) {
+        // Only count INDIVIDUAL evals (is_group !== true) as "done" — a member
+        // can still owe an individual eval even if the group eval exists.
         const evaluatedKeys = new Set(
-          existingEvals.map(ev => `${ev.candidate_id}_${ev.epreuve_id}`)
+          existingEvals
+            .filter((ev: any) => ev.is_group !== true)
+            .map(ev => `${ev.candidate_id}_${ev.epreuve_id}`)
         );
         
         const filtered = nextCandidates.filter(

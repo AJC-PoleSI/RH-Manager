@@ -80,7 +80,8 @@ export async function POST(req: NextRequest) {
   const memberId = user.id;
 
   try {
-    const { candidateId, epreuveId, scores, comment } = await req.json();
+    const { candidateId, epreuveId, scores, comment, isGroup } = await req.json();
+    const wantGroupEval = isGroup === true;
 
     if (!candidateId || !epreuveId) {
       return Response.json(
@@ -92,8 +93,6 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════
     // SECURITY: only an examinator assigned to a slot of this épreuve
     // where the candidate is enrolled may evaluate them. Admins bypass.
-    // Closes the path where the candidate UI exposed an "Évaluer" button
-    // (now removed) — even if someone re-adds it, the API will refuse.
     // ══════════════════════════════════════════════════════════════════
     if (!user.isAdmin) {
       const { data: validSlot } = await supabaseAdmin
@@ -124,38 +123,53 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // GARDE ABSOLUE : Anti-double évaluation [Candidat + Épreuve]
-    // Un candidat ne peut EN AUCUN CAS passer la même épreuve deux fois.
-    // On vérifie TOUS les membres, pas seulement le membre courant.
+    // Anti-doublon : selon le type d'évaluation
+    //   • GROUP : au plus UNE évaluation de groupe par (candidate, epreuve)
+    //   • INDIVIDUAL : au plus UNE évaluation par (candidate, epreuve, member)
     // ══════════════════════════════════════════════════════════════════
-    const { data: existingEval } = await supabaseAdmin
-      .from("candidate_evaluations")
-      .select("id, member_id, members(email, first_name, last_name)")
-      .eq("candidate_id", candidateId)
-      .eq("epreuve_id", epreuveId)
-      .limit(1);
+    if (wantGroupEval) {
+      const { data: existingGroup } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .select("id")
+        .eq("candidate_id", candidateId)
+        .eq("epreuve_id", epreuveId)
+        .eq("is_group", true)
+        .limit(1);
 
-    if (existingEval && existingEval.length > 0) {
-      // Récupérer les noms pour le message d'erreur exact
-      const existingMember = (existingEval[0] as any).members;
-      const { data: candidateData } = await supabaseAdmin
-        .from("candidates")
-        .select("first_name, last_name")
-        .eq("id", candidateId)
-        .single();
+      if (existingGroup && existingGroup.length > 0) {
+        return Response.json(
+          {
+            error: "Une évaluation collective existe déjà pour ce candidat.",
+            code: "GROUP_EVAL_EXISTS",
+            id: existingGroup[0].id,
+          },
+          { status: 409 },
+        );
+      }
+    } else {
+      const { data: existingEval } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .select("id, member_id, members(email, first_name, last_name)")
+        .eq("candidate_id", candidateId)
+        .eq("epreuve_id", epreuveId)
+        .eq("is_group", false)
+        .eq("member_id", memberId)
+        .limit(1);
 
-      const memberName = existingMember
-        ? `${existingMember.first_name || ""} ${existingMember.last_name || ""}`.trim() ||
-          existingMember.email
-        : "Un membre";
-      const candidateName = candidateData
-        ? `${candidateData.first_name || ""} ${candidateData.last_name || ""}`.trim()
-        : "ce candidat";
-
-      return Response.json(
-        { error: `${memberName} a déjà évalué ${candidateName}` },
-        { status: 400 },
-      );
+      if (existingEval && existingEval.length > 0) {
+        const { data: candidateData } = await supabaseAdmin
+          .from("candidates")
+          .select("first_name, last_name")
+          .eq("id", candidateId)
+          .single();
+        const candidateName = candidateData
+          ? `${candidateData.first_name || ""} ${candidateData.last_name || ""}`.trim()
+          : "ce candidat";
+        return Response.json(
+          { error: `Vous avez déjà évalué ${candidateName} pour cette épreuve.` },
+          { status: 400 },
+        );
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -227,6 +241,8 @@ export async function POST(req: NextRequest) {
         member_id: memberId,
         scores: JSON.stringify(normalizedScores),
         comment,
+        is_group: wantGroupEval,
+        last_edited_by: memberId,
       })
       .select()
       .single();

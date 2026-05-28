@@ -87,6 +87,7 @@ export default function MemberDashboardCalendar({
                 dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             }
             const candidates = (slot.enrollments || []).map((e: any) => ({
+                id: e.candidate?.id || e.candidate_id || "",
                 firstName: e.candidate?.first_name || e.candidate?.firstName || "",
                 lastName: e.candidate?.last_name || e.candidate?.lastName || "",
             }));
@@ -105,6 +106,8 @@ export default function MemberDashboardCalendar({
                 type: hasCandidates ? "slot_filled" : "slot_empty",
                 room: slot.room || null,
                 tour: slot.epreuve?.tour,
+                epreuveId: slot.epreuve?.id || slot.epreuve_id || null,
+                isGroupEpreuve: slot.epreuve?.is_group_epreuve || slot.epreuve?.isGroupEpreuve || false,
                 candidates,
                 coEvals,
                 status: slot.status,
@@ -578,15 +581,36 @@ export default function MemberDashboardCalendar({
                                         <div className="flex-1">
                                             <p className="text-xs text-amber-600 font-medium mb-1.5">Candidat(s) à évaluer</p>
                                             <div className="space-y-1.5">
-                                                {selectedMemberSlot.candidates.map((c: any, idx: number) => (
-                                                    <div key={idx} className="flex items-center gap-2">
-                                                        <span className="w-6 h-6 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-center">
-                                                            {(c.firstName?.[0] || "?").toUpperCase()}{(c.lastName?.[0] || "").toUpperCase()}
-                                                        </span>
-                                                        <span className="text-sm text-gray-800">{c.firstName} {c.lastName}</span>
-                                                    </div>
-                                                ))}
+                                                {selectedMemberSlot.candidates.map((c: any, idx: number) => {
+                                                    const canEvaluate = !!(c.id && selectedMemberSlot.epreuveId);
+                                                    const evalUrl = canEvaluate
+                                                        ? `/dashboard/candidates/${c.id}/evaluate?epreuveId=${selectedMemberSlot.epreuveId}`
+                                                        : null;
+                                                    return (
+                                                        <div key={idx} className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className="w-6 h-6 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                                                    {(c.firstName?.[0] || "?").toUpperCase()}{(c.lastName?.[0] || "").toUpperCase()}
+                                                                </span>
+                                                                <span className="text-sm text-gray-800 truncate">{c.firstName} {c.lastName}</span>
+                                                            </div>
+                                                            {evalUrl && (
+                                                                <a
+                                                                    href={evalUrl}
+                                                                    className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-md transition-colors flex-shrink-0"
+                                                                >
+                                                                    Évaluer
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
+                                            {selectedMemberSlot.isGroupEpreuve && (
+                                                <p className="text-[11px] text-amber-700 mt-2 italic">
+                                                    Épreuve de groupe : remplissez l&apos;évaluation collective + votre évaluation individuelle.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 )}
