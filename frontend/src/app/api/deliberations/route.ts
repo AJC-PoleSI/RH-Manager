@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
           comment,
           member_id,
           created_at,
-          members(email, first_name, last_name),
+          members!member_id(email, first_name, last_name),
           epreuves(id, name, tour, type)
         ),
         candidate_wishes(

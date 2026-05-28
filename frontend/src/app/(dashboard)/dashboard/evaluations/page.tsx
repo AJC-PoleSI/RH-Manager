@@ -685,32 +685,62 @@ function MemberView() {
 
             {/* Next candidates card */}
             <div className="bg-white border rounded-xl p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Prochains candidats</h2>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Prochains candidats à évaluer</h2>
+                    {nextCandidates.length > 0 && (
+                        <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                            {nextCandidates.length} en attente
+                        </span>
+                    )}
+                </div>
                 {nextCandidates.length === 0 ? (
                     <p className="text-center text-gray-400 py-8">Aucun candidat en attente d&apos;évaluation.</p>
                 ) : (
                     <div className="space-y-3">
-                        {nextCandidates.map((c: any, i: number) => (
-                            <div key={c.id || i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                                <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                    {getInitials(c.firstName, c.lastName)}
+                        {nextCandidates.map((c: any, i: number) => {
+                            const slotDate = c.slotDate ? new Date(c.slotDate) : null;
+                            const dateLabel = slotDate
+                                ? slotDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+                                : null;
+                            const timeLabel = c.slotStartTime
+                                ? `${c.slotStartTime.slice(0, 5)}${c.slotEndTime ? `–${c.slotEndTime.slice(0, 5)}` : ''}`
+                                : null;
+                            return (
+                                <div key={c.id + (c.epreuve?.id || '') + i} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                            {getInitials(c.firstName, c.lastName)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-gray-900 flex items-center gap-2 flex-wrap">
+                                                {c.firstName} {c.lastName}
+                                                {c.epreuve?.isGroupEpreuve && (
+                                                    <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+                                                        👥 Groupe
+                                                    </span>
+                                                )}
+                                            </p>
+                                            {c.epreuve && (
+                                                <p className="text-sm text-gray-500 truncate">
+                                                    {c.epreuve.name} · Tour {c.epreuve.tour}
+                                                </p>
+                                            )}
+                                            <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                                                {dateLabel && <span>📅 {dateLabel}</span>}
+                                                {timeLabel && <span>🕐 {timeLabel}</span>}
+                                                {c.slotRoom && <span>🏫 {c.slotRoom}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href={`/dashboard/candidates/${c.id}/evaluate${c.epreuve?.id ? `?epreuveId=${c.epreuve.id}` : ''}`}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0 text-center"
+                                    >
+                                        Évaluer
+                                    </a>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900">
-                                        {c.firstName} {c.lastName}
-                                    </p>
-                                    {c.epreuve && (
-                                        <p className="text-sm text-gray-500">{c.epreuve.name} &middot; Tour {c.epreuve.tour}</p>
-                                    )}
-                                </div>
-                                <a
-                                    href={`/dashboard/candidates/${c.id}/evaluate${c.epreuve?.id ? `?epreuveId=${c.epreuve.id}` : ''}`}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                                >
-                                    Évaluer
-                                </a>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

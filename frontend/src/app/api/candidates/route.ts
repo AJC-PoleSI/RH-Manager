@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     // La restriction se fait au niveau de l'évaluation (seuls les membres assignés peuvent évaluer)
     let query = supabaseAdmin
       .from("candidates")
-      .select("*, candidate_evaluations(*, members(email))", { count: "exact" })
+      .select("*, candidate_evaluations(*, members!member_id(email))", { count: "exact" })
       .range(offset, offset + limit - 1);
 
     if (search) {

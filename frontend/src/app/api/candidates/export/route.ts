@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
           scores,
           comment,
           created_at,
-          members(email, first_name, last_name),
+          members!member_id(email, first_name, last_name),
           epreuves(id, name, tour, type, evaluation_questions)
         )
       `,

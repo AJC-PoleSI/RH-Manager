@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from("candidate_evaluations")
       .select(
-        "*, epreuves(*), candidates(*), members(id, email, first_name, last_name)",
+        "*, epreuves(*), candidates(*), members!member_id(id, email, first_name, last_name)",
       );
 
     // ── Membres non-admin : uniquement leurs propres évaluations ──
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     } else {
       const { data: existingEval } = await supabaseAdmin
         .from("candidate_evaluations")
-        .select("id, member_id, members(email, first_name, last_name)")
+        .select("id, member_id, members!member_id(email, first_name, last_name)")
         .eq("candidate_id", candidateId)
         .eq("epreuve_id", epreuveId)
         .eq("is_group", false)

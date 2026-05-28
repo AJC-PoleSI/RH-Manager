@@ -24,7 +24,7 @@ export async function GET(
     const { data: evaluations, error } = await supabaseAdmin
       .from("candidate_evaluations")
       .select(
-        "*, epreuves(id, name, tour, type), members(id, email, first_name, last_name)",
+        "*, epreuves(id, name, tour, type), members!member_id(id, email, first_name, last_name)",
       )
       .eq("candidate_id", candidateId)
       .order("created_at", { ascending: true });

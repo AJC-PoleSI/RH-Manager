@@ -78,7 +78,7 @@ export async function PUT(
       .from("candidate_evaluations")
       .update(updateData)
       .eq("id", id)
-      .select("*, epreuves(*), members(email)")
+      .select("*, epreuves(*), members!member_id(email)")
       .single();
 
     if (error) throw error;

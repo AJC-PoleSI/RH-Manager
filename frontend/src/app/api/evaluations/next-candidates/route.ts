@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
           id,
           date,
           start_time,
+          end_time,
+          room,
           status,
-          epreuve:epreuves(id, name, tour, type),
+          epreuve:epreuves(id, name, tour, type, is_group_epreuve),
           enrollments:slot_enrollments(
             candidate:candidates(id, first_name, last_name)
           )
@@ -51,8 +53,14 @@ export async function GET(req: NextRequest) {
             id: candidateId,
             firstName: e.candidate.first_name,
             lastName: e.candidate.last_name,
-            epreuve: slot.epreuve,
-            slotDate: new Date(`${slot.date}T${slot.start_time || "00:00:00"}`)
+            epreuve: {
+              ...slot.epreuve,
+              isGroupEpreuve: slot.epreuve.is_group_epreuve === true,
+            },
+            slotDate: new Date(`${slot.date}T${slot.start_time || "00:00:00"}`),
+            slotStartTime: slot.start_time || null,
+            slotEndTime: slot.end_time || null,
+            slotRoom: slot.room || null,
           });
         }
       }
