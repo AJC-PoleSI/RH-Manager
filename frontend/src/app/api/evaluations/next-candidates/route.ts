@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
           status,
           epreuve:epreuves(id, name, tour, type, is_group_epreuve),
           enrollments:slot_enrollments(
+            status,
             candidate:candidates(id, first_name, last_name)
           )
         )
@@ -37,11 +38,21 @@ export async function GET(req: NextRequest) {
     for (const a of assignments || []) {
       const slot = a.slot as any;
       if (!slot || !slot.epreuve) continue;
-      // Only include active slots where candidates are enrolled
-      if (!["published", "closed"].includes(slot.status)) continue;
+      // Include every status where a candidate may be enrolled.
+      // (matches /api/slots/my-slots which surfaces the same slots in
+      // the member calendar — keeps the two views consistent)
+      if (
+        !["draft", "open", "ready", "published", "full", "closed"].includes(
+          slot.status,
+        )
+      ) {
+        continue;
+      }
 
       for (const e of slot.enrollments || []) {
         if (!e.candidate) continue;
+        // Skip cancelled enrollments
+        if (e.status && e.status !== "active") continue;
         
         const candidateId = e.candidate.id;
         const epreuveId = slot.epreuve.id;
