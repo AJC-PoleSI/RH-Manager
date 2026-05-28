@@ -510,11 +510,26 @@ export default function CandidatesPage() {
                                         onClick={() => openDetail(candidate)}
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm">
-                                                {candidate.firstName?.[0]}{candidate.lastName?.[0]}
+                                            <div className="relative">
+                                                <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm">
+                                                    {candidate.firstName?.[0]}{candidate.lastName?.[0]}
+                                                </div>
+                                                {candidate.email_verified === false && (
+                                                    <span
+                                                        className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white"
+                                                        title="Email non vérifié"
+                                                    />
+                                                )}
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{candidate.firstName} {candidate.lastName}</p>
+                                                <p className="font-semibold text-gray-900 flex items-center gap-2">
+                                                    {candidate.firstName} {candidate.lastName}
+                                                    {candidate.email_verified === false && (
+                                                        <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold border border-red-200">
+                                                            Email non vérifié
+                                                        </span>
+                                                    )}
+                                                </p>
                                                 <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                                                     <span>{candidate.email}</span>
                                                     {candidate.phone && <><span>·</span><span>{candidate.phone}</span></>}
