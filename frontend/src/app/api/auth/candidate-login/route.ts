@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
+import {
+  checkRateLimit,
+  registerFailedAttempt,
+  resetRateLimit,
+} from "@/lib/rate-limit";
 import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -13,13 +18,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // SECURITY (audit SEC-008): email normalisé en minuscules.
+    const emailNorm = String(email).trim().toLowerCase();
+
+    // SECURITY (audit SEC-001 + SEC-003): l'auth candidat repose sur la date
+    // de naissance (faible entropie). Le rate limiting est ESSENTIEL ici :
+    // blocage après 5 échecs / 15 min, sinon brute-force trivial.
+    const rlKey = `candidate-login:${emailNorm}`;
+    const rl = await checkRateLimit(rlKey);
+    if (rl.limited) {
+      return Response.json(
+        {
+          error: `Trop de tentatives de connexion. Réessayez dans ${Math.ceil(
+            rl.retryAfterSeconds / 60,
+          )} minute(s).`,
+        },
+        { status: 429 },
+      );
+    }
+
     const { data: candidate, error } = await supabaseAdmin
       .from("candidates")
       .select("id, first_name, last_name, email, phone, date_of_birth, email_verified")
-      .eq("email", email)
+      .eq("email", emailNorm)
       .single();
 
     if (error || !candidate) {
+      await registerFailedAttempt(rlKey);
       return Response.json(
         { error: "Candidat introuvable. Vérifiez votre email." },
         { status: 401 },
@@ -29,6 +54,7 @@ export async function POST(req: NextRequest) {
     // Compare dates (ignore time)
     const dbDate = candidate.date_of_birth;
     if (!dbDate || dbDate !== dateOfBirth) {
+      await registerFailedAttempt(rlKey);
       return Response.json(
         { error: "Date de naissance incorrecte." },
         { status: 401 },
@@ -47,6 +73,9 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+
+    // Identifiants corrects et email vérifié → reset du compteur.
+    await resetRateLimit(rlKey);
 
     const token = signToken({
       id: candidate.id,

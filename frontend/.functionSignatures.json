@@ -25,6 +25,11 @@
       "encryptData(plaintext: string) -> EncryptedData",
       "decryptData(encrypted: EncryptedData) -> string"
     ],
+    "src/lib/rate-limit.ts": [
+      "checkRateLimit(key: string) -> Promise<RateLimitStatus>",
+      "registerFailedAttempt(key: string, config?: Partial<RateLimitConfig>) -> Promise<RateLimitStatus>",
+      "resetRateLimit(key: string) -> Promise<void>"
+    ],
     "src/lib/auto-allocate.ts": [
       "runAutoAllocate(opts?: { epreuveId?: string }) -> Promise<{ assigned: number; skipped: number }>",
       "broadcastReplacementRequest(slotId: string, memberId: string) -> Promise<void>"

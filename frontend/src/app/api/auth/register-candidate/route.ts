@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       .insert({
         first_name: firstName,
         last_name: lastName,
-        email,
+        email: emailLower, // SECURITY (audit SEC-008): stocker en minuscules
         phone: phone || null,
         date_of_birth: dateOfBirth,
         formation: formation || null,

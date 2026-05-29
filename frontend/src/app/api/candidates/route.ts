@@ -99,11 +99,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // SECURITY (audit SEC-008): email normalisé en minuscules.
+    const emailNorm = String(email).trim().toLowerCase();
+
     // Check for duplicate email
     const { data: existing } = await supabaseAdmin
       .from("candidates")
       .select("id")
-      .eq("email", email)
+      .eq("email", emailNorm)
       .maybeSingle();
 
     if (existing) {
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
       .insert({
         first_name: firstName,
         last_name: lastName,
-        email,
+        email: emailNorm,
         phone: phone || null,
         date_of_birth: dateOfBirth || null,
       })
