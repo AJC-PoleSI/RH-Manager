@@ -1,0 +1,194 @@
+{
+  "lastUpdated": "2026-05-29",
+  "description": "Public function signatures for the RH Manager Anti frontend. Update after every add/remove. Never delete a signature without explicit intent.",
+  "files": {
+    "src/lib/auth.ts": [
+      "signToken(payload: TokenPayload) -> string",
+      "verifyToken(token: string) -> TokenPayload | null",
+      "getTokenFromRequest(req: NextRequest) -> TokenPayload | null",
+      "unauthorized() -> Response",
+      "forbidden() -> Response"
+    ],
+    "src/lib/utils.ts": [
+      "cn(...inputs: ClassValue[]) -> string"
+    ],
+    "src/lib/enrollment.ts": [
+      "isActiveEnrollment(status: EnrollmentStatus) -> boolean",
+      "isCancelledEnrollment(status: EnrollmentStatus) -> boolean",
+      "filterActiveEnrollments(enrollment: any) -> boolean"
+    ],
+    "src/lib/supabase.ts": [
+      "getSupabaseAdmin() -> SupabaseClient",
+      "getSupabase() -> SupabaseClient"
+    ],
+    "src/lib/crypto.ts": [
+      "encryptData(plaintext: string) -> EncryptedData",
+      "decryptData(encrypted: EncryptedData) -> string"
+    ],
+    "src/lib/auto-allocate.ts": [
+      "runAutoAllocate(opts?: { epreuveId?: string }) -> Promise<{ assigned: number; skipped: number }>",
+      "broadcastReplacementRequest(slotId: string, memberId: string) -> Promise<void>"
+    ],
+    "src/hooks/useAuth.tsx": [
+      "AuthProvider({ children: ReactNode }) -> JSX.Element",
+      "useAuth() -> AuthContextType"
+    ],
+    "src/app/api/auth/login/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/auth/candidate-login/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/auth/register-candidate/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/auth/verify-email/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/auth/resend-verification/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/candidates/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/candidates/[id]/route.ts": [
+      "GET(req: NextRequest, context: RouteContext) -> Response",
+      "PUT(req: NextRequest, context: RouteContext) -> Response",
+      "DELETE(req: NextRequest, context: RouteContext) -> Response"
+    ],
+    "src/app/api/candidates/export/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/evaluations/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/evaluations/[id]/route.ts": [
+      "PUT(req: NextRequest, { params }: { params: { id: string } }) -> Promise<Response>",
+      "DELETE(req: NextRequest, { params }: { params: { id: string } }) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/candidate/[candidateId]/route.ts": [
+      "GET(req: NextRequest, { params }: { params: { candidateId: string } }) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/group/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/next-candidates/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/tracking/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/evaluations/my-evaluations/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/deliberations/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/deliberations/[candidateId]/route.ts": [
+      "GET(req: NextRequest, { params }: { params: { candidateId: string } }) -> Promise<Response>",
+      "PUT(req: NextRequest, { params }: { params: { candidateId: string } }) -> Promise<Response>"
+    ],
+    "src/app/api/members/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/members/[id]/route.ts": [
+      "GET(req: NextRequest, context: RouteContext) -> Response",
+      "PUT(req: NextRequest, context: RouteContext) -> Response",
+      "DELETE(req: NextRequest, context: RouteContext) -> Response"
+    ],
+    "src/app/api/epreuves/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/epreuves/[id]/route.ts": [
+      "PUT(req: NextRequest, { params }: ...) -> Promise<Response>",
+      "DELETE(req: NextRequest, { params }: ...) -> Promise<Response>"
+    ],
+    "src/app/api/calendar/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/calendar/[id]/route.ts": [
+      "PUT(req: NextRequest, context: RouteContext) -> Response",
+      "DELETE(req: NextRequest, context: RouteContext) -> Response"
+    ],
+    "src/app/api/availability/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "PUT(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/availability/[id]/route.ts": [
+      "DELETE(req: NextRequest, context: RouteContext) -> Response"
+    ],
+    "src/app/api/availability/all/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/[id]/route.ts": [
+      "PUT(req: NextRequest, { params }: Promise<{ id: string }>) -> Promise<Response>",
+      "DELETE(req: NextRequest, { params }: Promise<{ id: string }>) -> Promise<Response>"
+    ],
+    "src/app/api/slots/bulk-create/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/generate/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/my-slots/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/all/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/auto-allocate/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/auto-assign/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/available/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/enroll/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/my-enrollments/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/slots/publish/route.ts": [
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/kpis/global/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/kpis/poles/route.ts": [
+      "GET(req: NextRequest) -> Response"
+    ],
+    "src/app/api/messages/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/settings/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "PUT(req: NextRequest) -> Response"
+    ],
+    "src/app/api/employees/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ],
+    "src/app/api/employees/[id]/route.ts": [
+      "GET(req: NextRequest, context: RouteContext) -> Response",
+      "PUT(req: NextRequest, context: RouteContext) -> Response",
+      "DELETE(req: NextRequest, context: RouteContext) -> Response"
+    ],
+    "src/app/api/chat/route.ts": [
+      "GET(req: NextRequest) -> Response",
+      "POST(req: NextRequest) -> Response"
+    ]
+  }
+}
