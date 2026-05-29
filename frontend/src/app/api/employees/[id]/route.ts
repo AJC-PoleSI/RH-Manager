@@ -1,26 +1,24 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { encryptData, decryptData } from "@/lib/crypto";
 import { NextRequest, NextResponse } from "next/server";
+
+// SECURITY (audit SEC-002): employees = données sensibles (NSS/IBAN/...).
+// Accès réservé aux admins, via le JWT maison.
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const payload = getTokenFromRequest(request);
+  if (!payload) return unauthorized();
+  if (!payload.isAdmin) return forbidden();
+
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     // Fetch employee from database (encrypted fields included)
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("employees")
       .select("*")
       .eq("id", id)
@@ -128,18 +126,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const payload = getTokenFromRequest(request);
+  if (!payload) return unauthorized();
+  if (!payload.isAdmin) return forbidden();
+
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await request.json();
 
@@ -160,7 +152,7 @@ export async function PUT(
 
     // Build update object
     const updateData: any = {
-      updated_by: user.id,
+      updated_by: payload.id,
     };
 
     // Add public fields if provided
@@ -203,7 +195,7 @@ export async function PUT(
     }
 
     // Update database
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("employees")
       .update(updateData)
       .eq("id", id)

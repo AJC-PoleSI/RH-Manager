@@ -1,20 +1,21 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { encryptData } from "@/lib/crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+// ════════════════════════════════════════════════════════════════════
+// SECURITY (audit SEC-002) : la table employees contient des données
+// ultra-sensibles (NSS, IBAN, adresse, date de naissance chiffrées).
+// L'accès est réservé aux ADMINS, via le même JWT maison que le reste
+// de l'app (et non l'auth Supabase, incohérente avec le client front).
+// ════════════════════════════════════════════════════════════════════
+
 export async function POST(request: NextRequest) {
+  const payload = getTokenFromRequest(request);
+  if (!payload) return unauthorized();
+  if (!payload.isAdmin) return forbidden();
+
   try {
-    const supabase = await createClient();
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
 
     const {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     const encryptedDob = dob ? encryptData(dob) : null;
 
     // Insert into database
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("employees")
       .insert({
         first_name,
@@ -68,8 +69,8 @@ export async function POST(request: NextRequest) {
         dob_encrypted_data: encryptedDob?.encrypted_data,
         dob_iv: encryptedDob?.iv,
         dob_auth_tag: encryptedDob?.auth_tag,
-        created_by: user.id,
-        updated_by: user.id,
+        created_by: payload.id,
+        updated_by: payload.id,
       })
       .select()
       .single();
@@ -93,24 +94,17 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const payload = getTokenFromRequest(request);
+  if (!payload) return unauthorized();
+  if (!payload.isAdmin) return forbidden();
+
   try {
-    const supabase = await createClient();
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     // Get query parameters for filtering
     const searchParams = request.nextUrl.searchParams;
     const department = searchParams.get("department");
     const status = searchParams.get("status") || "active";
 
-    let query = supabase
+    let query = supabaseAdmin
       .from("employees")
       .select(
         `

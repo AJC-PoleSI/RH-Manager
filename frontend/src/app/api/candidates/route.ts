@@ -30,9 +30,16 @@ export async function GET(req: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (search) {
-      query = query.or(
-        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`,
-      );
+      // SECURITY (audit SEC-004): `search` est injecté dans un filtre
+      // PostgREST `.or()`. On retire les caractères de contrôle PostgREST
+      // (virgule, parenthèses, étoile, %) pour empêcher l'injection de
+      // filtres arbitraires / l'exfiltration de données.
+      const safeSearch = search.replace(/[(),*%]/g, "").trim();
+      if (safeSearch) {
+        query = query.or(
+          `first_name.ilike.%${safeSearch}%,last_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%`,
+        );
+      }
     }
 
     const { data, error, count } = await query;
@@ -119,8 +126,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      // SECURITY (audit SEC-007): ne pas divulguer le détail interne au client.
+      console.error("Create candidate error:", error);
       return Response.json(
-        { error: "Échec de la création du candidat.", details: error.message },
+        { error: "Échec de la création du candidat." },
         { status: 400 },
       );
     }

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-29",
+  "lastUpdated": "2026-05-30",
   "description": "Public function signatures for the RH Manager Anti frontend. Update after every add/remove. Never delete a signature without explicit intent.",
   "files": {
     "src/lib/auth.ts": [
