@@ -981,7 +981,7 @@ export default function CandidateEpreuvesPage() {
           onClick={() => setSelectedSlot(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header with color accent */}

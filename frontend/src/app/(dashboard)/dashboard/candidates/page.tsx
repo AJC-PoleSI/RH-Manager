@@ -389,8 +389,8 @@ export default function CandidatesPage() {
 
                 {/* Create Modal */}
                 {isCreating && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <Card className="w-96">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
                             <CardHeader><CardTitle>Nouveau Candidat</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleCreate} className="space-y-4">
@@ -411,8 +411,8 @@ export default function CandidatesPage() {
 
                 {/* Edit Modal */}
                 {editingCandidate && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <Card className="w-96">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
                             <CardHeader><CardTitle>Modifier Candidat</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSaveEdit} className="space-y-4">
@@ -433,8 +433,8 @@ export default function CandidatesPage() {
 
                 {/* Comment Modal */}
                 {commentCandidate && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <Card className="w-96">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
                             <CardHeader><CardTitle>Commentaire pour {commentCandidate.firstName}</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSaveComment} className="space-y-4">

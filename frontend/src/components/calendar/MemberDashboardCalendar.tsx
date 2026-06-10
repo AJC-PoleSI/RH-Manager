@@ -355,6 +355,8 @@ export default function MemberDashboardCalendar({
             {/* ═══ VUE MOIS ═══ */}
             {memberViewMode === "month" && (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[640px]">
                     <div className="grid grid-cols-7 border-b border-gray-200">
                         {DAYS_LABELS.map((d) => (
                             <div key={d} className="py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -410,13 +412,16 @@ export default function MemberDashboardCalendar({
                             );
                         })}
                     </div>
+                    </div>
+                  </div>
                 </div>
             )}
 
             {/* ═══ VUE SEMAINE ═══ */}
             {memberViewMode === "week" && (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-7">
+                  <div className="overflow-x-auto">
+                    <div className="grid grid-cols-7 min-w-[640px]">
                         {memberWeekDates.map((wd, i) => {
                             const dateEvents = getMemberEventsForDate(wd);
                             const isTodayDate =
@@ -473,6 +478,7 @@ export default function MemberDashboardCalendar({
                             );
                         })}
                     </div>
+                  </div>
                 </div>
             )}
 
@@ -490,7 +496,7 @@ export default function MemberDashboardCalendar({
             {selectedMemberSlot && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setSelectedMemberSlot(null)}>
                     <div
-                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Color accent */}

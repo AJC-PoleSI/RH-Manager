@@ -465,7 +465,7 @@ function AdminView() {
             {editingMember && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                     <div
-                        className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6"
+                        className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-5">

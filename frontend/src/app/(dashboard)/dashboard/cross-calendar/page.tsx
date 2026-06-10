@@ -770,7 +770,8 @@ export default function CrossCalendarPage() {
           </Card>
         ) : (
           <div className="border rounded-lg overflow-hidden bg-white">
-            <table className="w-full text-sm text-left">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left min-w-[720px]">
               <thead className="bg-gray-50 text-xs uppercase border-b">
                 <tr>
                   <th className="px-4 py-3">&Eacute;preuve</th>
@@ -876,6 +877,7 @@ export default function CrossCalendarPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
