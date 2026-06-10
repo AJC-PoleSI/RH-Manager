@@ -216,6 +216,18 @@
     ],
     "src/app/api/wishes/access/route.ts": [
       "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/lib/notifications.ts": [
+      "notifyMembers(memberIds: string[], notif: NotificationInput) -> Promise<number>"
+    ],
+    "src/app/api/notifications/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/api/notifications/mark-read/route.ts": [
+      "POST(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/components/layout/NotificationBell.tsx": [
+      "NotificationBell() -> JSX.Element (default export)"
     ]
   }
 }

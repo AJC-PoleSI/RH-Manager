@@ -2,6 +2,7 @@
 
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { useRouter } from "next/navigation";
@@ -42,8 +43,9 @@ function TopNav() {
         </span>
       </div>
 
-      {/* Right: User name + logout */}
+      {/* Right: Notifications + user name + logout */}
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
+        {role === "member" && <NotificationBell />}
         <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">{displayName}</span>
         <button
           onClick={logout}
