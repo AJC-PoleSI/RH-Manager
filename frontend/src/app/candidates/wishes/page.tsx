@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 
@@ -107,6 +107,22 @@ function extractTourNumber(name: string): number {
 export default function CandidateWishesPage() {
   const { user } = useAuth();
   const [state, dispatch] = useReducer(reducer, initialState);
+  // null = en cours de chargement, true/false = réponse de l'API
+  const [admitted, setAdmitted] = useState<boolean | null>(null);
+
+  // Le classement des vœux n'est débloqué que pour les candidats admis
+  // au tour 2 (délibération tour 1 acceptée).
+  useEffect(() => {
+    const fetchAccess = async () => {
+      try {
+        const res = await api.get("/wishes/access");
+        setAdmitted(res.data?.admitted === true);
+      } catch {
+        setAdmitted(false);
+      }
+    };
+    fetchAccess();
+  }, []);
 
   // Determine active tour
   useEffect(() => {
@@ -270,6 +286,49 @@ export default function CandidateWishesPage() {
                 {pole}
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tour 2+ mais candidat non admis : choix verrouillés
+  if (admitted === false) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Choix de pôle
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Tour {state.activeTourNumber}
+          </p>
+        </div>
+
+        <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#6B7280"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-shrink-0 mt-0.5"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <div className="text-sm text-gray-700">
+            <p className="font-semibold mb-1">
+              Le classement des pôles n&apos;est pas débloqué pour votre profil
+            </p>
+            <p>
+              Les choix de pôles sont réservés aux candidats admis au Tour 2.
+              Si vous pensez qu&apos;il s&apos;agit d&apos;une erreur,
+              rapprochez-vous de l&apos;équipe recrutement.
+            </p>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { isCandidateAdmittedTour1 } from "@/lib/admission";
 import { NextRequest } from "next/server";
 
 // SECURITY (audit #6/#7): only the candidate themselves OR a member
@@ -58,6 +59,21 @@ export async function PUT(
   // SECURITY (audit #6): IDOR fix — block cross-candidate writes.
   if (!authorizeWishesAccess(payload as any, candidateId)) {
     return Response.json({ error: "Accès interdit" }, { status: 403 });
+  }
+
+  // TOUR 2 : un candidat ne peut classer ses vœux de pôles qu'une fois
+  // admis au tour 2 (tour1_status = accepted). Membres/admin non concernés.
+  if (payload.role === "candidate") {
+    const admitted = await isCandidateAdmittedTour1(candidateId);
+    if (!admitted) {
+      return Response.json(
+        {
+          error:
+            "Les choix de pôles sont débloqués uniquement pour les candidats admis au tour 2.",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   try {

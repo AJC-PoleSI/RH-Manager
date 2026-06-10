@@ -209,6 +209,12 @@
     "src/app/api/evaluations/targets/route.ts": [
       "GET(req: NextRequest) -> Promise<Response>",
       "POST(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/lib/admission.ts": [
+      "isCandidateAdmittedTour1(candidateId: string) -> Promise<boolean>"
+    ],
+    "src/app/api/wishes/access/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
     ]
   }
 }
