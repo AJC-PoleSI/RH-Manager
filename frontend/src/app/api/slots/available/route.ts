@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { getCandidateWishedPoles } from "@/lib/admission";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/available — créneaux que le candidat peut voir
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
       .select(
         `
         *,
-        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size),
+        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size, is_pole_test, pole),
         enrollments:slot_enrollments(candidate_id, status),
         members:slot_member_assignments(id)
       `,
@@ -83,6 +84,12 @@ export async function GET(req: NextRequest) {
       ),
     }));
 
+    // TOUR 3 : pôles demandés par le candidat — les épreuves de pôle des
+    // autres pôles ne lui sont pas proposées.
+    const wishedPoles = isCandidate
+      ? await getCandidateWishedPoles(candidateId)
+      : [];
+
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
     const filtered = (slots || []).filter((slot: any) => {
@@ -96,6 +103,14 @@ export async function GET(req: NextRequest) {
       // Candidat inscrit: TOUJOURS visible (pour pouvoir se désinscrire),
       // quel que soit le statut du slot (open/closed/draft inclus).
       if (isEnrolled) return true;
+      // TOUR 3 : épreuve de pôle d'un pôle non demandé → invisible.
+      if (
+        slot.epreuve?.is_pole_test &&
+        slot.epreuve?.pole &&
+        !wishedPoles.includes(slot.epreuve.pole)
+      ) {
+        return false;
+      }
       // Sinon: ne montrer que les statuts publiquement-visibles avec
       // au moins 1 examinateur affecté.
       if (!["open", "published", "ready", "full"].includes(slot.status)) {

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments, isActiveEnrollment } from "@/lib/enrollment";
+import { getCandidateWishedPoles } from "@/lib/admission";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
@@ -47,6 +48,21 @@ export async function POST(req: NextRequest) {
         { error: "Ce créneau n'est plus disponible" },
         { status: 400 },
       );
+    }
+
+    // TOUR 3 : une épreuve de pôle n'est ouverte qu'aux candidats ayant
+    // demandé ce pôle dans leurs vœux (défense en profondeur — le slot
+    // est aussi masqué dans /slots/available).
+    if (slot.epreuve?.is_pole_test && slot.epreuve?.pole) {
+      const wishedPoles = await getCandidateWishedPoles(candidateId);
+      if (!wishedPoles.includes(slot.epreuve.pole)) {
+        return Response.json(
+          {
+            error: `Cette épreuve est réservée aux candidats ayant demandé le pôle ${slot.epreuve.pole}.`,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     // Check per-epreuve inscription deadline

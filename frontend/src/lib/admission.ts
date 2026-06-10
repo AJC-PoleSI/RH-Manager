@@ -15,3 +15,21 @@ export async function isCandidateAdmittedTour1(
 
   return !error && data?.tour1_status === "accepted";
 }
+
+/**
+ * Liste (dédupliquée) des pôles demandés par un candidat dans ses vœux.
+ * Sert au filtrage des épreuves de pôle (Tour 3).
+ */
+export async function getCandidateWishedPoles(
+  candidateId: string,
+): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("candidate_wishes")
+    .select("pole")
+    .eq("candidate_id", candidateId);
+
+  if (error || !data) return [];
+  return Array.from(
+    new Set(data.map((w: any) => w.pole).filter(Boolean)),
+  ) as string[];
+}

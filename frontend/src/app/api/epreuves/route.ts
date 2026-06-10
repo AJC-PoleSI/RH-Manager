@@ -1,10 +1,17 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { getCandidateWishedPoles } from "@/lib/admission";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 // GET /api/epreuves
+// SECURITY: requiert une session (la config des épreuves n'est pas publique).
+// TOUR 3 : un candidat ne voit pas les épreuves de pôle des pôles qu'il n'a
+// pas demandés dans ses vœux.
 export async function GET(req: NextRequest) {
+  const payload = getTokenFromRequest(req);
+  if (!payload) return unauthorized();
+
   try {
     const { data, error } = await supabaseAdmin
       .from("epreuves")
@@ -46,7 +53,15 @@ export async function GET(req: NextRequest) {
       isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
-    return Response.json(parsed);
+    let result = parsed;
+    if (payload.role === "candidate") {
+      const wishedPoles = await getCandidateWishedPoles(payload.id);
+      result = parsed.filter(
+        (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
+      );
+    }
+
+    return Response.json(result);
   } catch (error) {
     console.error("GET /epreuves error:", error);
     return Response.json(

@@ -211,7 +211,8 @@
       "POST(req: NextRequest) -> Promise<Response>"
     ],
     "src/lib/admission.ts": [
-      "isCandidateAdmittedTour1(candidateId: string) -> Promise<boolean>"
+      "isCandidateAdmittedTour1(candidateId: string) -> Promise<boolean>",
+      "getCandidateWishedPoles(candidateId: string) -> Promise<string[]>"
     ],
     "src/app/api/wishes/access/route.ts": [
       "GET(req: NextRequest) -> Promise<Response>"
