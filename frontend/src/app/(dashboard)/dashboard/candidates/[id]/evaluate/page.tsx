@@ -99,6 +99,15 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [groupSavedAt, setGroupSavedAt] = useState<string | null>(null);
   const [groupLastEditor, setGroupLastEditor] = useState<any>(null);
   const groupSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  // True tant qu'une édition locale n'a pas été persistée — empêche le
+  // polling d'écraser ce que l'examinateur est en train de taper.
+  const groupDirty = useRef(false);
+
+  // ── Shared collaboration state (peer evals + group comment feed) ──
+  const [peerEvals, setPeerEvals] = useState<any[]>([]);
+  const [groupComments, setGroupComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -134,14 +143,29 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     questions = [];
   }
 
+  // Totaux pour la note collective et les évaluations des pairs
+  const totalOf = (scores: Record<number | string, number | string>) =>
+    Object.values(scores || {})
+      .map(Number)
+      .filter((n) => !isNaN(n))
+      .reduce((a, b) => a + b, 0);
+  const maxTotal = questions.reduce(
+    (sum, q) => sum + Number(q.weight || q.maxScore || q.coefficient || 20),
+    0,
+  );
+  const otherEvals = peerEvals.filter((e) => !e.isMine);
+
   // ── Load group evaluation when épreuve selected ──
   const loadGroupEval = useCallback(async () => {
     if (!selectedEpreuveId || !isGroupEpreuve) return;
+    // Ne pas écraser une saisie locale non sauvegardée
+    if (groupDirty.current || groupSaveTimer.current) return;
     setGroupLoading(true);
     try {
       const res = await api.get(
         `/evaluations/group?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
       );
+      if (groupDirty.current || groupSaveTimer.current) return;
       if (res.data?.exists) {
         setGroupEvalId(res.data.id);
         const sc: Record<number, string> = {};
@@ -166,16 +190,49 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     }
   }, [id, selectedEpreuveId, isGroupEpreuve]);
 
+  // ── Load peer individual evaluations (other examiners) ──
+  const loadPeers = useCallback(async () => {
+    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    try {
+      const res = await api.get(
+        `/evaluations/peers?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
+      );
+      setPeerEvals(res.data?.evaluations || []);
+    } catch {
+      // Section facultative : on n'affiche pas d'erreur bloquante
+    }
+  }, [id, selectedEpreuveId, isGroupEpreuve]);
+
+  // ── Load the shared group comment feed ──
+  const loadGroupComments = useCallback(async () => {
+    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    try {
+      const res = await api.get(
+        `/evaluations/group-comments?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
+      );
+      setGroupComments(res.data?.comments || []);
+    } catch {
+      // Silencieux : la table peut ne pas encore exister (migration)
+    }
+  }, [id, selectedEpreuveId, isGroupEpreuve]);
+
   useEffect(() => {
     loadGroupEval();
-  }, [loadGroupEval]);
+    loadPeers();
+    loadGroupComments();
+  }, [loadGroupEval, loadPeers, loadGroupComments]);
 
-  // Poll the group eval every 10s so collaborators see fresh data
+  // Poll all shared data every 7s so every examiner sees the others' notes,
+  // the collective score and the comment feed evolve live.
   useEffect(() => {
     if (!isGroupEpreuve || !selectedEpreuveId) return;
-    const t = setInterval(loadGroupEval, 10000);
+    const t = setInterval(() => {
+      loadGroupEval();
+      loadPeers();
+      loadGroupComments();
+    }, 7000);
     return () => clearInterval(t);
-  }, [isGroupEpreuve, selectedEpreuveId, loadGroupEval]);
+  }, [isGroupEpreuve, selectedEpreuveId, loadGroupEval, loadPeers, loadGroupComments]);
 
   const validateScore = (
     idx: number,
@@ -215,8 +272,10 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   // Debounced auto-save for group eval (so collaborators see edits within 1s)
   const scheduleGroupSave = (scores: Record<number, string>, comment: string) => {
+    groupDirty.current = true;
     if (groupSaveTimer.current) clearTimeout(groupSaveTimer.current);
     groupSaveTimer.current = setTimeout(() => {
+      groupSaveTimer.current = null;
       saveGroupEval(scores, comment);
     }, 1000);
   };
@@ -239,6 +298,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         setGroupEvalId(res.data.id);
       }
       setGroupSavedAt(new Date().toISOString());
+      // La saisie est persistée : le polling peut de nouveau rafraîchir
+      // (sauf si une nouvelle édition a relancé le timer entre-temps).
+      if (!groupSaveTimer.current) groupDirty.current = false;
     } catch (e: any) {
       // If 409 (already exists), reload to grab the existing id
       if (e?.response?.status === 409 && e.response.data?.id) {
@@ -252,6 +314,28 @@ function EvaluateCandidateForm({ id }: { id: string }) {
           "error",
         );
       }
+    }
+  };
+
+  // Ajoute un commentaire au fil partagé du groupe
+  const handlePostComment = async () => {
+    if (!newComment.trim() || !selectedEpreuveId) return;
+    setPostingComment(true);
+    try {
+      await api.post("/evaluations/group-comments", {
+        candidateId: id,
+        epreuveId: selectedEpreuveId,
+        comment: newComment.trim(),
+      });
+      setNewComment("");
+      await loadGroupComments();
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Erreur lors de l'ajout du commentaire",
+        "error",
+      );
+    } finally {
+      setPostingComment(false);
     }
   };
 
@@ -335,18 +419,27 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                   automatique
                 </p>
               </div>
-              {groupSavedAt && (
-                <div className="text-right">
-                  <p className="text-[11px] text-indigo-600 font-medium">
+              <div className="text-right">
+                <p className="text-lg font-bold text-indigo-700">
+                  {totalOf(groupScores)}
+                  {maxTotal > 0 && (
+                    <span className="text-xs font-medium text-indigo-400">
+                      {" "}/ {maxTotal}
+                    </span>
+                  )}
+                </p>
+                <p className="text-[10px] text-indigo-500 -mt-0.5">Note collective</p>
+                {groupSavedAt && (
+                  <p className="text-[11px] text-indigo-600 font-medium mt-1">
                     Dernière maj : {new Date(groupSavedAt).toLocaleTimeString("fr-FR")}
                   </p>
-                  {groupLastEditor && (
-                    <p className="text-[10px] text-indigo-500">
-                      par {groupLastEditor.firstName || groupLastEditor.email}
-                    </p>
-                  )}
-                </div>
-              )}
+                )}
+                {groupLastEditor && (
+                  <p className="text-[10px] text-indigo-500">
+                    par {groupLastEditor.firstName || groupLastEditor.email}
+                  </p>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 pt-5">
@@ -361,14 +454,76 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                   onChange={handleGroupScore}
                 />
                 <div className="space-y-2 border-t border-indigo-100 pt-4">
-                  <Label>Commentaire collectif</Label>
+                  <Label>Synthèse collective</Label>
                   <textarea
                     className="w-full p-2 border rounded-md"
-                    rows={4}
+                    rows={3}
                     value={groupComment}
                     onChange={(e) => handleGroupComment(e.target.value)}
-                    placeholder="Observations partagées entre examinateurs…"
+                    placeholder="Synthèse partagée, modifiable par tous les examinateurs…"
                   />
+                </div>
+
+                {/* ── Fil de commentaires du groupe ── */}
+                <div className="space-y-2 border-t border-indigo-100 pt-4">
+                  <Label>Commentaires du groupe</Label>
+                  <p className="text-xs text-gray-500">
+                    Visible par tous les examinateurs du créneau — chacun peut
+                    en ajouter.
+                  </p>
+                  {groupComments.length === 0 ? (
+                    <p className="text-sm text-gray-400 italic">
+                      Aucun commentaire pour l&apos;instant.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {groupComments.map((c: any) => (
+                        <div
+                          key={c.id}
+                          className={`p-2.5 rounded-lg text-sm border ${
+                            c.isMine
+                              ? "bg-indigo-50 border-indigo-100"
+                              : "bg-gray-50 border-gray-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className="text-xs font-semibold text-gray-700">
+                              {c.isMine
+                                ? "Vous"
+                                : `${c.author?.firstName || ""} ${c.author?.lastName || ""}`.trim() ||
+                                  c.author?.email ||
+                                  "Examinateur"}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {new Date(c.createdAt).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-gray-800 whitespace-pre-wrap">
+                            {c.comment}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      className="flex-1 p-2 border rounded-md text-sm"
+                      rows={2}
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Ajouter un commentaire sur le groupe…"
+                    />
+                    <Button
+                      type="button"
+                      disabled={postingComment || !newComment.trim()}
+                      onClick={handlePostComment}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
                 </div>
               </>
             )}
@@ -385,7 +540,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
             </CardTitle>
             {isGroupEpreuve && (
               <p className="text-xs text-gray-500 mt-1">
-                Visible uniquement par vous et l&apos;admin
+                Visible par les autres examinateurs du créneau et l&apos;admin
               </p>
             )}
           </CardHeader>
@@ -415,6 +570,63 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 Enregistrer mon évaluation
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ───────── Peer evaluations (other examiners, live) ───────── */}
+      {selectedEpreuve && isGroupEpreuve && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Évaluations des autres examinateurs</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              Notes et commentaires individuels de vos pairs — mise à jour
+              automatique toutes les 7 secondes.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {otherEvals.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                Aucune évaluation d&apos;un autre examinateur pour l&apos;instant.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {otherEvals.map((ev: any) => (
+                  <div
+                    key={ev.id}
+                    className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-800">
+                        {`${ev.author?.firstName || ""} ${ev.author?.lastName || ""}`.trim() ||
+                          ev.author?.email ||
+                          "Examinateur"}
+                      </p>
+                      <p className="text-sm font-bold text-blue-600">
+                        {totalOf(ev.scores)}
+                        {maxTotal > 0 && (
+                          <span className="text-xs font-medium text-gray-400">
+                            {" "}/ {maxTotal}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {ev.comment && (
+                      <p className="text-sm text-gray-600 italic mt-1 whitespace-pre-wrap">
+                        {ev.comment}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Maj :{" "}
+                      {new Date(ev.updatedAt).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

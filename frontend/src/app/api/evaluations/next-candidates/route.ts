@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
               ...slot.epreuve,
               isGroupEpreuve: slot.epreuve.is_group_epreuve === true,
             },
+            slotId: slot.id,
             slotDate: new Date(`${slot.date}T${slot.start_time || "00:00:00"}`),
             slotStartTime: slot.start_time || null,
             slotEndTime: slot.end_time || null,
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const nextCandidates = Array.from(candidatesMap.values());
+    let nextCandidates = Array.from(candidatesMap.values());
 
     // 3. Filter out those who have ALREADY been evaluated by THIS member for THIS epreuve
     if (nextCandidates.length > 0) {
@@ -97,16 +98,44 @@ export async function GET(req: NextRequest) {
             .filter((ev: any) => ev.is_group !== true)
             .map(ev => `${ev.candidate_id}_${ev.epreuve_id}`)
         );
-        
-        const filtered = nextCandidates.filter(
+
+        nextCandidates = nextCandidates.filter(
           c => !evaluatedKeys.has(`${c.id}_${c.epreuve.id}`)
         );
-
-        // Sort by slot date (upcoming first)
-        filtered.sort((a, b) => a.slotDate.getTime() - b.slotDate.getTime());
-
-        return Response.json(filtered);
       }
+    }
+
+    // 4. Attach the "qui examine qui" claims for the remaining slots so the
+    // UI can show who is observing each candidate (group épreuves).
+    const slotIds = Array.from(
+      new Set(nextCandidates.map((c) => c.slotId).filter(Boolean)),
+    );
+    if (slotIds.length > 0) {
+      const { data: targets } = await supabaseAdmin
+        .from("examiner_targets")
+        .select(
+          "slot_id, candidate_id, member_id, member:members!member_id(first_name, last_name)",
+        )
+        .in("slot_id", slotIds);
+
+      const targetsByKey = new Map<string, any[]>();
+      for (const t of (targets as any[]) || []) {
+        const key = `${t.slot_id}_${t.candidate_id}`;
+        if (!targetsByKey.has(key)) targetsByKey.set(key, []);
+        targetsByKey.get(key)!.push({
+          memberId: t.member_id,
+          isMe: t.member_id === memberId,
+          firstName: t.member?.first_name || "",
+          lastName: t.member?.last_name || "",
+        });
+      }
+
+      nextCandidates = nextCandidates.map((c) => ({
+        ...c,
+        targets: targetsByKey.get(`${c.slotId}_${c.id}`) || [],
+      }));
+    } else {
+      nextCandidates = nextCandidates.map((c) => ({ ...c, targets: [] }));
     }
 
     // Sort by slot date (upcoming first)

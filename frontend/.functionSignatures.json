@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-30",
+  "lastUpdated": "2026-06-11",
   "description": "Public function signatures for the RH Manager Anti frontend. Update after every add/remove. Never delete a signature without explicit intent.",
   "files": {
     "src/lib/auth.ts": [
@@ -194,6 +194,21 @@
     "src/app/api/chat/route.ts": [
       "GET(req: NextRequest) -> Response",
       "POST(req: NextRequest) -> Response"
+    ],
+    "src/lib/evaluation-access.ts": [
+      "resolveCandidateSlot(candidateId: string, epreuveId: string) -> Promise<CandidateSlot | null>",
+      "isMemberAssignedToSlot(memberId: string, slotId: string) -> Promise<boolean>"
+    ],
+    "src/app/api/evaluations/group-comments/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>",
+      "POST(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/peers/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/api/evaluations/targets/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>",
+      "POST(req: NextRequest) -> Promise<Response>"
     ]
   }
 }

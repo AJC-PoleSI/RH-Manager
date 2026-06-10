@@ -602,6 +602,18 @@ function MemberView() {
         fetchData();
     }, []);
 
+    // Coche/décoche "j'examine ce candidat" (épreuves de groupe) puis
+    // rafraîchit la liste pour voir qui observe qui.
+    const toggleTarget = async (c: any, on: boolean) => {
+        try {
+            await api.post('/evaluations/targets', { slotId: c.slotId, candidateId: c.id, on });
+            const nextRes = await api.get('/evaluations/next-candidates');
+            setNextCandidates(nextRes.data);
+        } catch (e) {
+            console.error('Erreur cochage examinateur:', e);
+        }
+    };
+
     // Stats — moyenne globale des notes au lieu de moyenne par critère
     const totalEvals = evaluations.length;
     const allTotals = evaluations.map(ev => getScoreTotal(ev.scores)).filter(v => v > 0);
@@ -730,6 +742,24 @@ function MemberView() {
                                                 {timeLabel && <span>🕐 {timeLabel}</span>}
                                                 {c.slotRoom && <span>🏫 {c.slotRoom}</span>}
                                             </div>
+                                            {c.epreuve?.isGroupEpreuve && c.slotId && (
+                                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-700 cursor-pointer select-none">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="rounded border-gray-300"
+                                                            checked={(c.targets || []).some((t: any) => t.isMe)}
+                                                            onChange={(e) => toggleTarget(c, e.target.checked)}
+                                                        />
+                                                        J&apos;examine ce candidat
+                                                    </label>
+                                                    {(c.targets || []).filter((t: any) => !t.isMe).map((t: any, j: number) => (
+                                                        <span key={j} className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">
+                                                            👁 {`${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Examinateur'}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <a
