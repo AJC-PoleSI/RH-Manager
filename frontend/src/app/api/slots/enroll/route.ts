@@ -101,10 +101,27 @@ export async function POST(req: NextRequest) {
 
     // Note: min_members check removed — status published/ready is the source of truth
 
+    // ══════════════════════════════════════════════════════════════════
+    // CAPACITÉ EFFECTIVE : pour une épreuve de groupe, la vraie limite est
+    // group_size. Certains anciens créneaux ont max_candidates=1 (créés
+    // avant la persistance de group_size) → ils passaient "full" dès le
+    // 1er inscrit. On dérive la capacité de l'épreuve et on auto-répare.
+    // ══════════════════════════════════════════════════════════════════
+    const effectiveMax = slot.epreuve?.is_group_epreuve
+      ? Math.max(Number(slot.max_candidates) || 1, Number(slot.epreuve.group_size) || 1)
+      : Number(slot.max_candidates) || 1;
+    if (effectiveMax !== slot.max_candidates) {
+      // Self-heal : aligne le créneau sur la capacité de l'épreuve.
+      await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ max_candidates: effectiveMax })
+        .eq("id", slotId);
+    }
+
     // FIX C2: only count ACTIVE enrollments for capacity (cancelled rows,
     // if any soft-cancel path ever exists, must not block new candidates).
     const activeEnrollments = (slot.enrollments || []).filter(filterActiveEnrollments);
-    if (activeEnrollments.length >= slot.max_candidates) {
+    if (activeEnrollments.length >= effectiveMax) {
       return Response.json(
         { error: "Ce créneau est complet" },
         { status: 400 },
@@ -411,16 +428,22 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (postCheck) {
+      // Capacité effective (idem pré-check) — pas la valeur potentiellement
+      // périmée stockée sur le créneau.
+      const postMax = Math.max(
+        Number(postCheck.max_candidates) || 1,
+        effectiveMax,
+      );
       const actives = (postCheck.enrollments || [])
         .filter(filterActiveEnrollments)
         .sort((a: any, b: any) =>
           String(a.enrolled_at || "").localeCompare(String(b.enrolled_at || "")),
         );
 
-      if (actives.length > postCheck.max_candidates) {
+      if (actives.length > postMax) {
         // We are the loser of the race — rollback our insert.
         const loserIds = actives
-          .slice(postCheck.max_candidates)
+          .slice(postMax)
           .map((e: any) => e.id);
         if (loserIds.includes(enrollment.id)) {
           await supabaseAdmin
@@ -434,11 +457,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // FIX C1 (paired): keep status mutation consistent — only mark
-      // "full" when capacity exactly reached. Reads now tolerate "full"
-      // for members (see my-slots), so this is purely informational.
+      // On ne marque "full" QUE si la capacité effective est atteinte.
       const activeCount = actives.length;
-      if (activeCount >= postCheck.max_candidates) {
+      if (activeCount >= postMax) {
         await supabaseAdmin
           .from("evaluation_slots")
           .update({ status: "full" })

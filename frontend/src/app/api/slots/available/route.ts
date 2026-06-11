@@ -130,7 +130,12 @@ export async function GET(req: NextRequest) {
 
     const available = filtered.map((slot: any) => {
       const enrolledCount = slot.enrollments?.length || 0;
-      const isFull = enrolledCount >= slot.max_candidates;
+      // Capacité effective : pour une épreuve de groupe, group_size prime
+      // sur un max_candidates potentiellement périmé (anciens créneaux).
+      const effectiveMax = slot.epreuve?.is_group_epreuve
+        ? Math.max(Number(slot.max_candidates) || 1, Number(slot.epreuve.group_size) || 1)
+        : Number(slot.max_candidates) || 1;
+      const isFull = enrolledCount >= effectiveMax;
       const isEnrolled =
         payload.role === "candidate"
           ? slot.enrollments?.some((e: any) => e.candidate_id === candidateId)
@@ -154,7 +159,7 @@ export async function GET(req: NextRequest) {
         label: slot.label,
         room: slot.room || null,
         tour: slot.tour,
-        maxCandidates: slot.max_candidates,
+        maxCandidates: effectiveMax,
         enrolledCount,
         isFull,
         isEnrolled,

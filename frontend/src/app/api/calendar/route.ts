@@ -115,14 +115,20 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const titleCandidates = activeEnrolls
-        .map((e: any) =>
-          e.candidate
-            ? `${e.candidate.first_name || ""} ${e.candidate.last_name || ""}`.trim()
-            : "",
-        )
-        .filter(Boolean)
-        .join(", ");
+      // PRIVACY : un candidat ne doit voir ni les autres candidats du
+      // créneau ni les examinateurs. Les noms ne sont ajoutés au titre que
+      // pour les admins et les membres (jury).
+      const canSeeNames = payload.isAdmin || payload.role === "member";
+      const titleCandidates = canSeeNames
+        ? activeEnrolls
+            .map((e: any) =>
+              e.candidate
+                ? `${e.candidate.first_name || ""} ${e.candidate.last_name || ""}`.trim()
+                : "",
+            )
+            .filter(Boolean)
+            .join(", ")
+        : "";
 
       slotEvents.push({
         id: `slot:${slot.id}`,

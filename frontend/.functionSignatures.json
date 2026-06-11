@@ -236,7 +236,8 @@
     "src/lib/resend.ts": [
       "sendVerificationEmail(email, firstName, token)",
       "sendResendVerificationEmail(email, firstName, token)",
-      "sendPoleNotificationEmail(email, firstName, pole, candidatsCount, creneauxParMembre)"
+      "sendPoleNotificationEmail(email, firstName, pole, candidatsCount, creneauxParMembre)",
+      "sendResultEmail(email: string, firstName: string, admis: boolean, tour: number, message: string) -> Promise<...>"
     ],
     "src/app/api/tour3/obligations/route.ts": [
       "GET(req: NextRequest) -> Promise<Response>"
@@ -248,6 +249,9 @@
       "findConflict(intervals, room, startMin, endMin, excludeSlotId?) -> RoomInterval | null",
       "addInterval(intervals, room, startMin, endMin) -> void",
       "minutesToTime(minutes: number) -> string"
+    ],
+    "src/app/api/deliberations/validate/route.ts": [
+      "POST(req: NextRequest) -> Promise<Response>"
     ]
   }
 }

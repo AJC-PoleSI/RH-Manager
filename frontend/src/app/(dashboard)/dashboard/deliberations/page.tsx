@@ -65,6 +65,10 @@ export default function DeliberationsPage() {
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
   const [validateMessages, setValidateMessages] = useState<{ [id: string]: string }>({});
+  const [validateMode, setValidateMode] = useState<"global" | "individual">("global");
+  const [globalAccepted, setGlobalAccepted] = useState("");
+  const [globalRefused, setGlobalRefused] = useState("");
+  const [validateSending, setValidateSending] = useState(false);
 
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>("tinder");
@@ -364,13 +368,29 @@ export default function DeliberationsPage() {
   const currentCandidate = filteredCandidates[currentIndex] || null;
 
   const handleValidateAndSend = async () => {
+    setValidateSending(true);
     try {
-      await api.post("/deliberations/validate", { tour: selectedTour, messages: validateMessages });
+      const res = await api.post("/deliberations/validate", {
+        tour: selectedTour,
+        mode: validateMode,
+        globalAccepted,
+        globalRefused,
+        messages: validateMessages,
+      });
+      const { sent, failed, total } = res.data || {};
+      toast(
+        `Résultats envoyés : ${sent}/${total} email(s)${failed ? ` · ${failed} échec(s)` : ""}.`,
+        failed ? "error" : "success",
+      );
       setShowValidateModal(false);
       setValidateMessages({});
+      setGlobalAccepted("");
+      setGlobalRefused("");
       loadData();
-    } catch (e) {
-      console.error("Failed to validate:", e);
+    } catch (e: any) {
+      toast(e?.response?.data?.error || "Échec de l'envoi des résultats", "error");
+    } finally {
+      setValidateSending(false);
     }
   };
 
@@ -1382,30 +1402,78 @@ export default function DeliberationsPage() {
                 </div>
               </div>
 
-              {/* Per-candidate messages */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-gray-700 text-sm">Messages personnalises (optionnel)</h4>
-                {candidates
-                  .filter((c) => getStatus(c) === "accepted" || getStatus(c) === "refused")
-                  .map((c) => {
-                    const st = getStatus(c);
-                    return (
-                      <div key={c.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold text-sm text-gray-900">{c.firstName} {c.lastName}</span>
-                          {statusBadge(st)}
-                        </div>
-                        <textarea
-                          rows={2}
-                          className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                          placeholder={`Message pour ${c.firstName}...`}
-                          value={validateMessages[c.id] || ""}
-                          onChange={(e) => setValidateMessages((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                        />
-                      </div>
-                    );
-                  })}
+              {/* Mode de message */}
+              <div className="inline-flex bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setValidateMode("global")}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${validateMode === "global" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Message identique pour tous
+                </button>
+                <button
+                  onClick={() => setValidateMode("individual")}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${validateMode === "individual" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Individualisé
+                </button>
               </div>
+
+              {validateMode === "global" ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-semibold text-gray-700 text-sm flex items-center gap-2 mb-1.5">
+                      {statusBadge("accepted")} Message aux admis
+                    </label>
+                    <textarea
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                      placeholder="Félicitations ! Vous êtes admis(e) au tour suivant…"
+                      value={globalAccepted}
+                      onChange={(e) => setGlobalAccepted(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-gray-700 text-sm flex items-center gap-2 mb-1.5">
+                      {statusBadge("refused")} Message aux refusés
+                    </label>
+                    <textarea
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                      placeholder="Nous vous remercions pour votre candidature…"
+                      value={globalRefused}
+                      onChange={(e) => setGlobalRefused(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Laissez vide pour utiliser le message par défaut. Le même
+                    message est envoyé à tous les admis (resp. refusés).
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-700 text-sm">Messages personnalisés (optionnel)</h4>
+                  {candidates
+                    .filter((c) => getStatus(c) === "accepted" || getStatus(c) === "refused")
+                    .map((c) => {
+                      const st = getStatus(c);
+                      return (
+                        <div key={c.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-sm text-gray-900">{c.firstName} {c.lastName}</span>
+                            {statusBadge(st)}
+                          </div>
+                          <textarea
+                            rows={2}
+                            className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            placeholder={`Message pour ${c.firstName}...`}
+                            value={validateMessages[c.id] || ""}
+                            onChange={(e) => setValidateMessages((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -1417,9 +1485,10 @@ export default function DeliberationsPage() {
                 </button>
                 <button
                   onClick={handleValidateAndSend}
-                  className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all"
+                  disabled={validateSending || (acceptedCount + refusedCount === 0)}
+                  className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirmer et Envoyer
+                  {validateSending ? "Envoi…" : "Confirmer et Envoyer"}
                 </button>
               </div>
             </div>
