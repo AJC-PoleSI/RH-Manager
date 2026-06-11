@@ -96,11 +96,14 @@ export async function PUT(
 
     // Insert new wishes
     if (wishes.length > 0) {
-      const rows = wishes.map((w: { pole: string; rank: number }) => ({
-        candidate_id: candidateId,
-        pole: w.pole,
-        rank: w.rank,
-      }));
+      const rows = wishes.map(
+        (w: { pole: string; rank: number; wantsBureau?: boolean }) => ({
+          candidate_id: candidateId,
+          pole: w.pole,
+          rank: w.rank,
+          wants_bureau: !!w.wantsBureau,
+        }),
+      );
 
       const { error: insertError } = await supabaseAdmin
         .from("candidate_wishes")

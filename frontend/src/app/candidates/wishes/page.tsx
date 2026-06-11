@@ -16,10 +16,15 @@ const DEFAULT_POLES = [
   "Bureau - Secrétaire générale",
 ];
 
+// Pôles pour lesquels un candidat peut en plus se déclarer intéressé par
+// un poste au bureau (VP / Président / Secrétaire générale).
+const BUREAU_ELIGIBLE_POLES = ["Développement commercial", "Audit Qualité"];
+
 type Tour = { id: string; name: string; status: string };
 
 interface State {
   selectedPoles: string[];
+  wantsBureau: Record<string, boolean>;
   loading: boolean;
   saving: boolean;
   saved: boolean;
@@ -29,8 +34,10 @@ interface State {
 
 type Action =
   | { type: "SET_POLES"; payload: string[] }
+  | { type: "SET_WANTS_BUREAU"; payload: Record<string, boolean> }
   | { type: "ADD_POLE"; payload: string }
   | { type: "REMOVE_POLE"; payload: number }
+  | { type: "TOGGLE_BUREAU"; payload: string }
   | { type: "MOVE_UP"; payload: number }
   | { type: "MOVE_DOWN"; payload: number }
   | { type: "SET_LOADING"; payload: boolean }
@@ -40,6 +47,7 @@ type Action =
 
 const initialState: State = {
   selectedPoles: [],
+  wantsBureau: {},
   loading: true,
   saving: false,
   saved: false,
@@ -51,6 +59,8 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "SET_POLES":
       return { ...state, selectedPoles: action.payload };
+    case "SET_WANTS_BUREAU":
+      return { ...state, wantsBureau: action.payload };
     case "ADD_POLE":
       if (state.selectedPoles.length >= 3 || state.selectedPoles.includes(action.payload))
         return state;
@@ -59,10 +69,24 @@ function reducer(state: State, action: Action): State {
         selectedPoles: [...state.selectedPoles, action.payload],
         saved: false,
       };
-    case "REMOVE_POLE":
+    case "REMOVE_POLE": {
+      const removedPole = state.selectedPoles[action.payload];
+      const wantsBureau = { ...state.wantsBureau };
+      delete wantsBureau[removedPole];
       return {
         ...state,
         selectedPoles: state.selectedPoles.filter((_, i) => i !== action.payload),
+        wantsBureau,
+        saved: false,
+      };
+    }
+    case "TOGGLE_BUREAU":
+      return {
+        ...state,
+        wantsBureau: {
+          ...state.wantsBureau,
+          [action.payload]: !state.wantsBureau[action.payload],
+        },
         saved: false,
       };
     case "MOVE_UP":
@@ -167,10 +191,14 @@ export default function CandidateWishesPage() {
       try {
         const res = await api.get(`/wishes/${user.id}`);
         if (res.data && res.data.length > 0) {
-          const ordered = res.data
-            .sort((a: any, b: any) => a.rank - b.rank)
-            .map((w: any) => w.pole);
+          const sorted = res.data.sort((a: any, b: any) => a.rank - b.rank);
+          const ordered = sorted.map((w: any) => w.pole);
           dispatch({ type: "SET_POLES", payload: ordered.slice(0, 3) });
+          const wantsBureau: Record<string, boolean> = {};
+          sorted.forEach((w: any) => {
+            if (w.wants_bureau) wantsBureau[w.pole] = true;
+          });
+          dispatch({ type: "SET_WANTS_BUREAU", payload: wantsBureau });
         }
       } catch {
         // No existing wishes
@@ -201,6 +229,10 @@ export default function CandidateWishesPage() {
     dispatch({ type: "MOVE_DOWN", payload: index });
   };
 
+  const toggleBureau = (pole: string) => {
+    dispatch({ type: "TOGGLE_BUREAU", payload: pole });
+  };
+
   const handleSave = async () => {
     if (!user?.id) return;
     dispatch({ type: "SET_SAVING", payload: true });
@@ -208,6 +240,9 @@ export default function CandidateWishesPage() {
       const wishes = state.selectedPoles.map((pole, index) => ({
         pole,
         rank: index + 1,
+        wantsBureau: BUREAU_ELIGIBLE_POLES.includes(pole)
+          ? !!state.wantsBureau[pole]
+          : false,
       }));
       await api.put(`/wishes/${user.id}`, { wishes });
       dispatch({ type: "SET_SAVED", payload: true });
@@ -409,8 +444,9 @@ export default function CandidateWishesPage() {
             {state.selectedPoles.map((pole, index) => (
               <div
                 key={pole}
-                className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-4"
+                className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-4"
               >
+                <div className="flex items-center gap-3">
                 {/* Rank badge */}
                 <span
                   className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold flex-shrink-0 ${
@@ -490,6 +526,21 @@ export default function CandidateWishesPage() {
                       </svg>
                     </button>
                   </div>
+                )}
+                </div>
+
+                {/* Option Bureau (Dev Co / Audit Qualité uniquement) */}
+                {BUREAU_ELIGIBLE_POLES.includes(pole) && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600 pl-11 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={!!state.wantsBureau[pole]}
+                      disabled={isTourTermine}
+                      onChange={() => toggleBureau(pole)}
+                    />
+                    + intéressé(e) par un poste au bureau (VP / Président / Secrétaire générale)
+                  </label>
                 )}
               </div>
             ))}

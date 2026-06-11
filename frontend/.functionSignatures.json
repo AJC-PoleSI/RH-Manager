@@ -236,6 +236,9 @@
       "sendVerificationEmail(email, firstName, token)",
       "sendResendVerificationEmail(email, firstName, token)",
       "sendPoleNotificationEmail(email, firstName, pole, candidatsCount, creneauxParMembre)"
+    ],
+    "src/app/api/tour3/obligations/route.ts": [
+      "GET(req: NextRequest) -> Promise<Response>"
     ]
   }
 }

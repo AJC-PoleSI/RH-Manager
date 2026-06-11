@@ -20,7 +20,16 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "pole requis" }, { status: 400 });
     }
 
-    // 1. Candidats distincts ayant demandé ce pôle
+    // 1. Candidats admis au tour 2 ayant demandé ce pôle
+    const { data: delibs, error: delibErr } = await supabaseAdmin
+      .from("deliberations")
+      .select("candidate_id")
+      .eq("tour2_status", "accepted");
+    if (delibErr) throw delibErr;
+    const acceptedTour2 = new Set(
+      (delibs || []).map((d: any) => d.candidate_id),
+    );
+
     const { data: wishes, error: wishErr } = await supabaseAdmin
       .from("candidate_wishes")
       .select("candidate_id")
@@ -28,12 +37,14 @@ export async function POST(req: NextRequest) {
     if (wishErr) throw wishErr;
 
     const candidatsCount = new Set(
-      (wishes || []).map((w: any) => w.candidate_id),
+      (wishes || [])
+        .filter((w: any) => acceptedTour2.has(w.candidate_id))
+        .map((w: any) => w.candidate_id),
     ).size;
 
     if (candidatsCount === 0) {
       return Response.json(
-        { error: `Aucun candidat n'a demandé le pôle ${pole}.` },
+        { error: `Aucun candidat admis au tour 2 n'a demandé le pôle ${pole}.` },
         { status: 400 },
       );
     }

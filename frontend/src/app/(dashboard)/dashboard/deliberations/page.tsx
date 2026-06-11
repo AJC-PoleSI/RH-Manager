@@ -7,22 +7,12 @@ import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
 import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw } from "lucide-react";
 
-interface Tour3PoleMember {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  creneauxAssignes: number;
-}
-
 interface Tour3Obligation {
   pole: string;
   candidatsCount: number;
+  bureauCount: number;
   membresCount: number;
-  membres: Tour3PoleMember[];
-  creneauxRequis: number;
   creneauxParMembre: number;
-  creneauxOuverts: number;
 }
 
 interface Wish {
@@ -101,7 +91,6 @@ export default function DeliberationsPage() {
   const { toast } = useToast();
   const [tour3Obligations, setTour3Obligations] = useState<Tour3Obligation[]>([]);
   const [showTour3Tracking, setShowTour3Tracking] = useState(false);
-  const [expandedTour3Pole, setExpandedTour3Pole] = useState<string | null>(null);
   const [notifyingPole, setNotifyingPole] = useState<string | null>(null);
 
   const fetchPoleKpis = useCallback(async () => {
@@ -681,7 +670,7 @@ export default function DeliberationsPage() {
         </div>
       )}
 
-      {/* TOUR 3 — SUIVI DES POLES */}
+      {/* TOUR 3 — DEMANDES DU TOUR 2 PAR POLE */}
       {isAdmin && tour3Obligations.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <button
@@ -690,9 +679,9 @@ export default function DeliberationsPage() {
           >
             <div className="flex items-center gap-2">
               <span className="text-base">🎯</span>
-              <span className="text-sm font-semibold text-gray-800">Tour 3 — Suivi des pôles</span>
+              <span className="text-sm font-semibold text-gray-800">Tour 3 — Demandes des pôles</span>
               <span className="text-xs text-gray-400 ml-1">
-                Demandes des candidats, quotas et progression des examinateurs par pôle
+                Candidats admis au Tour 2 ayant demandé chaque pôle
               </span>
             </div>
             <svg
@@ -704,88 +693,45 @@ export default function DeliberationsPage() {
           </button>
 
           {showTour3Tracking && (
-            <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
-              {tour3Obligations.map((o) => {
-                const membersOk = o.membres.filter(
-                  (m) => m.creneauxAssignes >= o.creneauxParMembre,
-                ).length;
-                const pct = o.membresCount > 0 ? Math.min(100, Math.round((membersOk / o.membresCount) * 100)) : 0;
-                const barColor = pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-red-400";
-                const expanded = expandedTour3Pole === o.pole;
-                return (
-                  <div key={o.pole} className="border border-gray-100 rounded-lg overflow-hidden">
-                    <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-sm">{o.pole}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {o.candidatsCount} candidat{o.candidatsCount > 1 ? "s" : ""} · {o.membresCount} membre{o.membresCount > 1 ? "s" : ""} · min {o.creneauxParMembre} créneau{o.creneauxParMembre > 1 ? "x" : ""}/membre
-                        </p>
-                        <div className="mt-2 max-w-sm">
-                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={`h-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
-                          </div>
-                          <p className="text-[11px] text-gray-400 mt-1">
-                            {membersOk}/{o.membresCount} membre{o.membresCount > 1 ? "s" : ""} à jour · {o.creneauxOuverts} créneau{o.creneauxOuverts > 1 ? "x" : ""} ouvert{o.creneauxOuverts > 1 ? "s" : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => setExpandedTour3Pole(expanded ? null : o.pole)}
-                          className="text-xs text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
-                        >
-                          {expanded ? "Masquer" : "Détails"}
-                        </button>
-                        <button
-                          onClick={() => handleTour3Notify(o.pole)}
-                          disabled={notifyingPole === o.pole || o.candidatsCount === 0 || o.membresCount === 0}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          {notifyingPole === o.pole ? "Envoi…" : "🔔 Notifier les membres"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {expanded && (
-                      <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
-                        {o.membres.length === 0 ? (
-                          <p className="text-xs text-gray-400 italic">Aucun membre dans ce pôle.</p>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left min-w-[420px]">
-                              <thead>
-                                <tr className="text-xs text-gray-400 uppercase">
-                                  <th className="py-1.5 pr-4 font-medium">Membre</th>
-                                  <th className="py-1.5 pr-4 font-medium">Créneaux assurés</th>
-                                  <th className="py-1.5 font-medium">Statut</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {o.membres.map((m) => {
-                                  const ok = m.creneauxAssignes >= o.creneauxParMembre;
-                                  return (
-                                    <tr key={m.id} className="border-t border-gray-100">
-                                      <td className="py-2 pr-4 text-gray-800">{`${m.firstName} ${m.lastName}`.trim() || m.email}</td>
-                                      <td className="py-2 pr-4 text-gray-600">{m.creneauxAssignes} / {o.creneauxParMembre}</td>
-                                      <td className="py-2">
-                                        {ok ? (
-                                          <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">À jour</span>
-                                        ) : (
-                                          <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">En retard</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="px-5 pb-5 border-t border-gray-100 pt-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[480px]">
+                  <thead>
+                    <tr className="text-xs text-gray-400 uppercase">
+                      <th className="py-2 pr-4 font-medium">Pôle</th>
+                      <th className="py-2 pr-4 font-medium text-center">Candidats (admis T2)</th>
+                      <th className="py-2 pr-4 font-medium text-center">Dont option bureau</th>
+                      <th className="py-2 pr-4 font-medium text-center">Membres du pôle</th>
+                      <th className="py-2 pr-4 font-medium text-center">≈ Créneaux/membre</th>
+                      <th className="py-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tour3Obligations.map((o) => (
+                      <tr key={o.pole} className="border-t border-gray-100">
+                        <td className="py-2.5 pr-4 font-medium text-gray-800">{o.pole}</td>
+                        <td className="py-2.5 pr-4 text-center">
+                          <span className="inline-block min-w-[28px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-semibold">{o.candidatsCount}</span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-gray-500">
+                          {o.bureauCount > 0 ? o.bureauCount : "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-gray-600">{o.membresCount}</td>
+                        <td className="py-2.5 pr-4 text-center text-gray-600">{o.creneauxParMembre}</td>
+                        <td className="py-2.5">
+                          <button
+                            onClick={() => handleTour3Notify(o.pole)}
+                            disabled={notifyingPole === o.pole || o.candidatsCount === 0 || o.membresCount === 0}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            {notifyingPole === o.pole ? "Envoi…" : "🔔 Notifier"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

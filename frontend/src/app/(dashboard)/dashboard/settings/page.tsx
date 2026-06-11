@@ -161,6 +161,11 @@ export default function CreationPage() {
   /* ---- épreuves ---- */
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
 
+  /* ---- estimation Tour 3 (créneaux par pôle) ---- */
+  const [tour3Estimates, setTour3Estimates] = useState<
+    Record<string, { candidatsCount: number; bureauCount: number; membresCount: number; creneauxParMembre: number }>
+  >({});
+
   /* ---- modal ---- */
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NewEpreuveForm>({ ...EMPTY_FORM });
@@ -179,8 +184,29 @@ export default function CreationPage() {
     fetchSettings();
     fetchTours();
     fetchEpreuves();
+    fetchTour3Estimates();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Estimation du nombre de candidats (admis Tour 2) par pôle, pour aider
+  // à dimensionner les créneaux des épreuves de Tour 3.
+  const fetchTour3Estimates = async () => {
+    try {
+      const res = await api.get("/tour3/obligations");
+      const map: typeof tour3Estimates = {};
+      (res.data?.obligations || []).forEach((o: any) => {
+        map[o.pole] = {
+          candidatsCount: o.candidatsCount,
+          bureauCount: o.bureauCount,
+          membresCount: o.membresCount,
+          creneauxParMembre: o.creneauxParMembre,
+        };
+      });
+      setTour3Estimates(map);
+    } catch {
+      // Optionnel : silencieux
+    }
+  };
 
   // Convert a UTC ISO string from DB to local datetime-local input format
   const isoToDatetimeLocal = (iso: string): string => {
@@ -876,6 +902,25 @@ export default function CreationPage() {
                       </option>
                     ))}
                   </select>
+                  {form.tourId === "3" && form.pole && (
+                    <p className="mt-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-1.5">
+                      {tour3Estimates[form.pole] ? (
+                        <>
+                          🎯 <strong>{tour3Estimates[form.pole].candidatsCount}</strong> candidat
+                          {tour3Estimates[form.pole].candidatsCount > 1 ? "s" : ""} admis au Tour 2
+                          {tour3Estimates[form.pole].bureauCount > 0 && (
+                            <> (dont {tour3Estimates[form.pole].bureauCount} option bureau)</>
+                          )}{" "}
+                          ont demandé ce pôle · {tour3Estimates[form.pole].membresCount} membre
+                          {tour3Estimates[form.pole].membresCount > 1 ? "s" : ""} dans le pôle → prévoir
+                          environ {tour3Estimates[form.pole].creneauxParMembre} créneau
+                          {tour3Estimates[form.pole].creneauxParMembre > 1 ? "x" : ""} par membre.
+                        </>
+                      ) : (
+                        "🎯 Aucun candidat admis au Tour 2 n'a encore demandé ce pôle."
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
