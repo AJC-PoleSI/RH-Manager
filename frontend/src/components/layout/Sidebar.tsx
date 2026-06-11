@@ -45,6 +45,7 @@ const Sidebar = () => {
           icon: "🌙",
         },
         { href: "/dashboard/planning", label: "Planning", icon: "📅" },
+        { href: "/dashboard/tour3", label: "Tour 3 — Pôles", icon: "🎯" },
       ],
     },
     {
@@ -69,6 +70,7 @@ const Sidebar = () => {
           label: "Mes disponibilités",
           icon: "✅",
         },
+        { href: "/dashboard/tour3", label: "Tour 3 — Mon pôle", icon: "🎯" },
       ],
     },
     {

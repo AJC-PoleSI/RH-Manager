@@ -228,6 +228,18 @@
     ],
     "src/components/layout/NotificationBell.tsx": [
       "NotificationBell() -> JSX.Element (default export)"
+    ],
+    "src/app/api/tour3/notify/route.ts": [
+      "POST(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/app/(dashboard)/dashboard/tour3/page.tsx": [
+      "Tour3Page() -> JSX.Element (default export)",
+      "ProgressBar({ value, max }) -> JSX.Element"
+    ],
+    "src/lib/resend.ts": [
+      "sendVerificationEmail(email, firstName, token)",
+      "sendResendVerificationEmail(email, firstName, token)",
+      "sendPoleNotificationEmail(email, firstName, pole, candidatsCount, creneauxParMembre)"
     ]
   }
 }

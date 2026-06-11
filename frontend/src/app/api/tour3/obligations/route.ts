@@ -48,6 +48,28 @@ export async function GET(req: NextRequest) {
       });
     });
 
+    // 2bis. Progression réelle : créneaux d'épreuves de pôle existants et
+    // assignations examinateurs (combien de créneaux chaque membre couvre).
+    const { data: poleSlots } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select(
+        "id, status, epreuve:epreuves!inner(is_pole_test, pole), assignments:slot_member_assignments(member_id)",
+      )
+      .eq("epreuve.is_pole_test", true);
+
+    const slotsParPole: Record<string, number> = {};
+    const assignesParPoleMembre: Record<string, Record<string, number>> = {};
+    for (const s of (poleSlots as any[]) || []) {
+      const pole = s.epreuve?.pole;
+      if (!pole) continue;
+      slotsParPole[pole] = (slotsParPole[pole] || 0) + 1;
+      for (const a of s.assignments || []) {
+        if (!assignesParPoleMembre[pole]) assignesParPoleMembre[pole] = {};
+        assignesParPoleMembre[pole][a.member_id] =
+          (assignesParPoleMembre[pole][a.member_id] || 0) + 1;
+      }
+    }
+
     // 3. Construire le résultat
     const allPoles = new Set([
       ...Object.keys(candidatsParPole),
@@ -67,9 +89,16 @@ export async function GET(req: NextRequest) {
         pole,
         candidatsCount,
         membresCount,
-        membres: membres.map(m => ({ id: m.id, email: m.email, firstName: m.firstName, lastName: m.lastName })),
+        membres: membres.map(m => ({
+          id: m.id,
+          email: m.email,
+          firstName: m.firstName,
+          lastName: m.lastName,
+          creneauxAssignes: assignesParPoleMembre[pole]?.[m.id] || 0,
+        })),
         creneauxRequis,
         creneauxParMembre,
+        creneauxOuverts: slotsParPole[pole] || 0,
       };
     }).sort((a, b) => b.candidatsCount - a.candidatsCount);
 
@@ -86,6 +115,7 @@ export async function GET(req: NextRequest) {
             creneauxParMembre: poleData.creneauxParMembre,
             membresCount: poleData.membresCount,
             candidatsCount: poleData.candidatsCount,
+            mesCreneaux: assignesParPoleMembre[me.pole]?.[payload.id] || 0,
           };
         }
       }
