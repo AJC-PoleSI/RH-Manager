@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  fetchDayIntervals,
+  findConflict,
+  minutesToTime as m2t,
+} from "@/lib/slot-conflicts";
 import { NextRequest } from "next/server";
 
 // POST /api/slots — create a slot (admin)
@@ -80,25 +85,16 @@ export async function POST(req: NextRequest) {
 
     // ══════════════════════════════════════════════════════════════════
     // Anti-chevauchement : refuse un créneau qui se superpose à un autre
-    // dans la même salle, le même jour.
+    // dans la même salle (noms normalisés), le même jour.
     // ══════════════════════════════════════════════════════════════════
     if (room) {
       const dateStr = date.split("T")[0];
-      const { data: sameRoomSlots } = await supabaseAdmin
-        .from("evaluation_slots")
-        .select("id, start_time, end_time")
-        .eq("room", room)
-        .like("date", `${dateStr}%`);
-
-      const overlap = (sameRoomSlots || []).find((s: any) => {
-        const sStart = timeToMin(String(s.start_time).slice(0, 5));
-        const sEnd = timeToMin(String(s.end_time).slice(0, 5));
-        return startMinVal < sEnd && sStart < endMinVal;
-      });
+      const intervals = await fetchDayIntervals(dateStr);
+      const overlap = findConflict(intervals, room, startMinVal, endMinVal);
       if (overlap) {
         return Response.json(
           {
-            error: `Chevauchement : ${room} a déjà un créneau ${String(overlap.start_time).slice(0, 5)}–${String(overlap.end_time).slice(0, 5)} ce jour-là.`,
+            error: `Chevauchement : ${overlap.room} a déjà un créneau ${m2t(overlap.startMin)}–${m2t(overlap.endMin)} ce jour-là.`,
           },
           { status: 409 },
         );

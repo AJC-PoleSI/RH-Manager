@@ -109,8 +109,8 @@
       "POST(req: NextRequest) -> Response"
     ],
     "src/app/api/epreuves/[id]/route.ts": [
-      "PUT(req: NextRequest, { params }: ...) -> Promise<Response>",
-      "DELETE(req: NextRequest, { params }: ...) -> Promise<Response>"
+      "PUT(req: NextRequest, { params }) -> Promise<Response>",
+      "DELETE(req: NextRequest, { params }) -> Promise<Response>"
     ],
     "src/app/api/calendar/route.ts": [
       "GET(req: NextRequest) -> Response",
@@ -239,6 +239,14 @@
     ],
     "src/app/api/tour3/obligations/route.ts": [
       "GET(req: NextRequest) -> Promise<Response>"
+    ],
+    "src/lib/slot-conflicts.ts": [
+      "timeToMinutes(timeStr: string) -> number",
+      "normalizeRoom(room: string | null | undefined) -> string",
+      "fetchDayIntervals(dateStr: string) -> Promise<Map<string, RoomInterval[]>>",
+      "findConflict(intervals, room, startMin, endMin, excludeSlotId?) -> RoomInterval | null",
+      "addInterval(intervals, room, startMin, endMin) -> void",
+      "minutesToTime(minutes: number) -> string"
     ]
   }
 }

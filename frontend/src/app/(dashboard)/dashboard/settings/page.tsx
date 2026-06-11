@@ -60,6 +60,7 @@ interface NewEpreuveForm {
   duree: string;
   roulementMinutes: string;
   pole: string;
+  groupSize: string;
   inscriptionDeadline: string;
   /* shared */
   description: string;
@@ -91,6 +92,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   duree: "",
   roulementMinutes: "10",
   pole: "",
+  groupSize: "4",
   inscriptionDeadline: "",
   description: "",
   color: "#3B82F6",
@@ -306,8 +308,8 @@ export default function CreationPage() {
       name: ep.name || "",
       tourId: String(ep.tour || ""),
       type: ep.type || "commune",
-      date: ep.date || "",
-      time: ep.time || "",
+      date: ep.type === "commune" ? ep.dateDebut || "" : "",
+      time: ep.heureDebut || "",
       salle: ep.salle || "",
       presentedBy: ep.presentedBy || "",
       dateDebut: ep.dateDebut || "",
@@ -315,6 +317,7 @@ export default function CreationPage() {
       duree: String(ep.durationMinutes || ""),
       roulementMinutes: String(ep.roulementMinutes || "10"),
       pole: ep.pole || "",
+      groupSize: String(ep.groupSize || "4"),
       inscriptionDeadline: ep.inscriptionDeadline
         ? isoToDatetimeLocal(ep.inscriptionDeadline)
         : "",
@@ -357,6 +360,7 @@ export default function CreationPage() {
   const handleCreateEpreuve = async () => {
     setCreatingEpreuve(true);
     try {
+      const isCommune = form.type === "commune";
       const payload: any = {
         name: form.name,
         tour: form.tourId ? parseInt(form.tourId) : 1,
@@ -368,11 +372,19 @@ export default function CreationPage() {
         })),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
+        isGroupEpreuve: form.type === "groupe",
+        groupSize:
+          form.type === "groupe" ? parseInt(form.groupSize) || 1 : 1,
         roulementMinutes: form.roulementMinutes
           ? parseInt(form.roulementMinutes)
           : 10,
-        dateDebut: form.dateDebut || null,
-        dateFin: form.dateFin || null,
+        // Épreuve sur table : la date du formulaire commune alimente
+        // dateDebut, l'heure/salle/présentateur leurs colonnes dédiées.
+        dateDebut: isCommune ? form.date || null : form.dateDebut || null,
+        dateFin: isCommune ? form.date || null : form.dateFin || null,
+        heureDebut: isCommune ? form.time || null : null,
+        salle: isCommune ? form.salle || null : null,
+        presentedBy: isCommune ? form.presentedBy || null : null,
         inscriptionDeadline: form.inscriptionDeadline
           ? datetimeLocalToISO(form.inscriptionDeadline)
           : null,
@@ -381,8 +393,43 @@ export default function CreationPage() {
       };
 
       if (editingEpreuveId) {
-        await api.put(`/epreuves/${editingEpreuveId}`, payload);
-        toast("Épreuve modifiée", "success");
+        try {
+          const res = await api.put(`/epreuves/${editingEpreuveId}`, payload);
+          if (res.data?.cascade?.deletedSlots) {
+            toast(
+              `Épreuve modifiée — ${res.data.cascade.deletedSlots} créneau(x) hors plage supprimé(s), ${res.data.cascade.notifiedCandidates} candidat(s) notifié(s).`,
+              "success",
+            );
+          } else {
+            toast("Épreuve modifiée", "success");
+          }
+        } catch (err: any) {
+          // CASCADE DATES : des créneaux existent hors de la nouvelle
+          // plage → avertissement + confirmation avant suppression.
+          if (
+            err.response?.status === 409 &&
+            err.response?.data?.code === "SLOTS_OUT_OF_RANGE"
+          ) {
+            const d = err.response.data;
+            const confirmed = window.confirm(
+              `⚠️ ${d.error}\n\nConfirmer la modification des dates ?`,
+            );
+            if (!confirmed) {
+              setCreatingEpreuve(false);
+              return;
+            }
+            const res = await api.put(`/epreuves/${editingEpreuveId}`, {
+              ...payload,
+              confirmSlotCascade: true,
+            });
+            toast(
+              `Épreuve modifiée — ${res.data?.cascade?.deletedSlots || 0} créneau(x) supprimé(s), ${res.data?.cascade?.notifiedCandidates || 0} candidat(s) notifié(s).`,
+              "success",
+            );
+          } else {
+            throw err;
+          }
+        }
       } else {
         await api.post("/epreuves", payload);
         toast("Épreuve créée", "success");
@@ -886,6 +933,28 @@ export default function CreationPage() {
                     placeholder="10"
                   />
                 </div>
+                {form.type === "groupe" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre max de candidats par créneau
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.groupSize}
+                      onChange={(e) =>
+                        handleFormChange("groupSize", e.target.value)
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="4"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Limite d&apos;inscriptions candidat sur chaque créneau
+                      de cette épreuve. Le créneau se bloque automatiquement
+                      une fois plein.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Pôle (Optionnel)

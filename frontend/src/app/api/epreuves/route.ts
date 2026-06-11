@@ -48,6 +48,9 @@ export async function GET(req: NextRequest) {
       description: e.description || null,
       dateDebut: e.date_debut ? e.date_debut.split("T")[0] : null,
       dateFin: e.date_fin ? e.date_fin.split("T")[0] : null,
+      heureDebut: e.heure_debut ?? null,
+      salle: e.salle ?? null,
+      presentedBy: e.presented_by ?? null,
       inscriptionDeadline: e.inscription_deadline ?? null,
       color: e.color || "#3B82F6",
       isVisible: true, // TODO: add is_visible to Supabase schema
@@ -58,6 +61,19 @@ export async function GET(req: NextRequest) {
       const wishedPoles = await getCandidateWishedPoles(payload.id);
       result = parsed.filter(
         (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
+      );
+    } else if (payload.role === "member" && !payload.isAdmin) {
+      // PÔLE : un membre non-admin ne voit les épreuves de pôle que de
+      // SON pôle (il ne doit pas pouvoir s'inscrire comme examinateur
+      // sur les épreuves des autres pôles). Admin voit tout.
+      const { data: me } = await supabaseAdmin
+        .from("members")
+        .select("pole")
+        .eq("id", payload.id)
+        .maybeSingle();
+      result = parsed.filter(
+        (e: any) =>
+          !e.isPoleTest || !e.pole || (me?.pole && e.pole === me.pole),
       );
     }
 
@@ -91,6 +107,13 @@ export async function POST(req: NextRequest) {
           : JSON.stringify(body.evaluationQuestions ?? []),
       is_pole_test: Boolean(body.isPoleTest),
       pole: body.pole || null,
+      // Épreuves de groupe : le flag + la capacité max de candidats par
+      // créneau (repris par bulk-create/generate comme max_candidates).
+      is_group_epreuve:
+        body.isGroupEpreuve !== undefined
+          ? Boolean(body.isGroupEpreuve)
+          : body.type === "groupe",
+      group_size: Math.max(1, Number(body.groupSize) || 1),
       roulement_minutes: Number(body.roulementMinutes) || 10,
       nb_salles: Number(body.nbSalles) || 1,
       min_evaluators_per_salle: Number(body.minEvaluatorsPerSalle) || 2,
@@ -101,6 +124,16 @@ export async function POST(req: NextRequest) {
       // Only include inscription_deadline if the column exists (migration applied) and a value is set
       ...(body.inscriptionDeadline
         ? { inscription_deadline: new Date(body.inscriptionDeadline).toISOString() }
+        : {}),
+      // Épreuves sur table (commune) : heure de convocation, salle et
+      // présentateur. Colonnes ajoutées par migration — on ne les inclut
+      // que si fournies pour ne pas casser avant application.
+      ...(body.heureDebut !== undefined
+        ? { heure_debut: body.heureDebut || null }
+        : {}),
+      ...(body.salle !== undefined ? { salle: body.salle || null } : {}),
+      ...(body.presentedBy !== undefined
+        ? { presented_by: body.presentedBy || null }
         : {}),
       description: body.description || null,
       color: body.color || "#3B82F6",

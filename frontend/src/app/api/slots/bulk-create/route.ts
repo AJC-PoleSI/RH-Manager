@@ -1,17 +1,13 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, forbidden } from "@/lib/auth";
+import {
+  fetchDayIntervals,
+  findConflict,
+  addInterval,
+  timeToMinutes,
+  minutesToTime,
+} from "@/lib/slot-conflicts";
 import { NextRequest } from "next/server";
-
-function timeToMinutes(timeStr: string): number {
-  const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + (m || 0);
-}
-
-function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
 
 // POST /api/slots/bulk-create — Admin only
 // Accepts either :
@@ -104,28 +100,15 @@ export async function POST(req: NextRequest) {
     const slotsToInsert: any[] = [];
 
     // ────────────────────────────────────────────────────────────────
-    // Check for existing slots in each room on the given date
-    // to prevent overlaps when generating new slots
+    // Anti-chevauchement : intervalle existants du jour (toutes épreuves,
+    // noms de salle normalisés) + suivi des créneaux du batch en cours.
     // ────────────────────────────────────────────────────────────────
-    const existingSlotsByRoom: { [roomId: string]: Array<{ startMin: number; endMin: number }> } = {};
+    const intervals = await fetchDayIntervals(dateStr);
 
     // rooms peut contenir des strings (noms) ou des numbers (indices → "Salle N")
     const roomLabels: string[] = rooms.map((room: string | number) =>
       typeof room === "string" ? room : `Salle ${room}`
     );
-
-    for (const roomLabel of roomLabels) {
-      const { data: existingSlots } = await supabaseAdmin
-        .from("evaluation_slots")
-        .select("start_time, end_time")
-        .eq("room", roomLabel)
-        .like("date", `${dateStr}%`);
-
-      existingSlotsByRoom[roomLabel] = (existingSlots || []).map((slot: any) => ({
-        startMin: timeToMinutes(slot.start_time),
-        endMin: timeToMinutes(slot.end_time),
-      }));
-    }
 
     // ────────────────────────────────────────────────────────────────
     // Generate slots and check for overlaps
@@ -137,21 +120,23 @@ export async function POST(req: NextRequest) {
       const slotEnd = minutesToTime(slotEndMin);
 
       for (const roomLabel of roomLabels) {
-        const existingSlots = existingSlotsByRoom[roomLabel] || [];
-
-        // Check if this generated slot overlaps with any existing slot in this room
-        const hasOverlap = existingSlots.some(
-          (existing) => slotStartMin < existing.endMin && existing.startMin < slotEndMin,
+        const overlap = findConflict(
+          intervals,
+          roomLabel,
+          slotStartMin,
+          slotEndMin,
         );
 
-        if (hasOverlap) {
+        if (overlap) {
           return Response.json(
             {
-              error: `Chevauchement détecté pour ${roomLabel} : le créneau ${slotStart}–${slotEnd} chevauche un créneau existant.`,
+              error: `Chevauchement détecté pour ${roomLabel} : le créneau ${slotStart}–${slotEnd} chevauche un créneau existant (${minutesToTime(overlap.startMin)}–${minutesToTime(overlap.endMin)}).`,
             },
             { status: 400 },
           );
         }
+
+        addInterval(intervals, roomLabel, slotStartMin, slotEndMin);
 
         slotsToInsert.push({
           date: dateFormatted,

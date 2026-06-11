@@ -21,6 +21,7 @@ interface Epreuve {
   documentsUrls?: string[];
   date?: string | null;
   time?: string | null;
+  heureDebut?: string | null;
   salle?: string | null;
   presentedBy?: string | null;
   dateDebut?: string | null;
@@ -776,7 +777,7 @@ export default function CandidateEpreuvesPage() {
                             // Sinon, la plage de l'épreuve
                             const enrolledSlot = enrolledSlotByEpreuve.get(ep.id);
                             const displayDate = enrolledSlot?.date || ep.date || ep.dateDebut;
-                            const displayTime = enrolledSlot?.startTime || ep.time;
+                            const displayTime = enrolledSlot?.startTime || ep.time || ep.heureDebut;
                             const displayEndDate = enrolledSlot ? null : ep.dateFin;
                             const enrolledRoom = enrolledSlot?.room;
 

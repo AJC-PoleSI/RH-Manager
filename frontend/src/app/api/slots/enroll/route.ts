@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Slot not found" }, { status: 404 });
     }
 
-    if (!["published", "ready"].includes(slot.status)) {
+    // PUBLICATION PAR ÉPREUVE : seuls les créneaux explicitement publiés
+    // acceptent des inscriptions candidates.
+    if (slot.status !== "published") {
       return Response.json(
         { error: "Ce créneau n'est plus disponible" },
         { status: 400 },

@@ -58,15 +58,24 @@ export async function GET(req: NextRequest) {
       `,
       );
 
+    // PUBLICATION PAR ÉPREUVE : un candidat ne voit que les créneaux
+    // explicitement publiés ("published"/"full"). Les statuts draft/open/
+    // ready restent invisibles tant que l'admin n'a pas publié l'épreuve.
+    // Les membres/admins voient aussi les statuts de travail.
+    const candidateStatuses = ["published", "full"];
+    const memberStatuses = ["open", "published", "ready", "full"];
+
     if (isCandidate && candidateEnrolledSlotIds.length > 0) {
       // Include slots matching the visible statuses OR any slot the
       // candidate is enrolled in (regardless of status).
       const idList = candidateEnrolledSlotIds.join(",");
       query = query.or(
-        `status.in.(open,published,ready,full),id.in.(${idList})`,
+        `status.in.(${candidateStatuses.join(",")}),id.in.(${idList})`,
       );
+    } else if (isCandidate) {
+      query = query.in("status", candidateStatuses);
     } else {
-      query = query.in("status", ["open", "published", "ready", "full"]);
+      query = query.in("status", memberStatuses);
     }
 
     const { data: rawSlots, error } = await query
@@ -111,9 +120,9 @@ export async function GET(req: NextRequest) {
       ) {
         return false;
       }
-      // Sinon: ne montrer que les statuts publiquement-visibles avec
-      // au moins 1 examinateur affecté.
-      if (!["open", "published", "ready", "full"].includes(slot.status)) {
+      // Sinon: ne montrer que les statuts PUBLIÉS avec au moins
+      // 1 examinateur affecté (publication par épreuve).
+      if (!["published", "full"].includes(slot.status)) {
         return false;
       }
       return memberCount >= 1;

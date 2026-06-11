@@ -183,10 +183,21 @@ export default function CandidateCalendarPage() {
         };
       });
 
-      // Merge without duplicates
-      const existing = new Set(calEvents.map((e) => `${e.title}-${e.date}`));
-      const unique = slotEvents.filter((e) => !existing.has(`${e.title}-${e.date}`));
-      setEvents([...calEvents, ...unique]);
+      // Merge : un créneau réservé (avec horaire précis) REMPLACE la
+      // bannière de la même épreuve le même jour — l'ancien dédoublonnage
+      // supprimait le créneau et faisait "disparaître" une épreuve quand
+      // deux avaient lieu en même temps.
+      const slotKeys = new Set(slotEvents.map((e) => `${e.title}-${e.date}`));
+      const keptCal = calEvents.filter(
+        (e) => !slotKeys.has(`${e.title}-${e.date}`),
+      );
+      // Tri par heure pour un affichage stable des événements simultanés
+      const merged = [...keptCal, ...slotEvents].sort((a, b) =>
+        `${a.date} ${a.startTime || "00:00"}`.localeCompare(
+          `${b.date} ${b.startTime || "00:00"}`,
+        ),
+      );
+      setEvents(merged);
     } catch (err) {
       console.error("Erreur chargement calendrier:", err);
     } finally {

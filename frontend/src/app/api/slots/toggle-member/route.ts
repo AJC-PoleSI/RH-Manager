@@ -101,10 +101,12 @@ export async function POST(req: NextRequest) {
 
       if (deleteError) throw deleteError;
 
-      // Refetch slot
+      // Refetch slot (avec inscriptions pour pouvoir notifier les candidats)
       const { data: slot } = await supabaseAdmin
         .from("evaluation_slots")
-        .select("*, members:slot_member_assignments(member_id)")
+        .select(
+          "*, members:slot_member_assignments(member_id), enrollments:slot_enrollments(candidate_id, status), epreuve:epreuves(name)",
+        )
         .eq("id", slotId)
         .single();
 
@@ -201,6 +203,31 @@ export async function POST(req: NextRequest) {
             targets,
             `🆘 Besoin d'un remplaçant — ${dateStr} ${startTime} (${room}). Un examinateur s'est désinscrit et personne en file d'attente. Merci de vous porter volontaire si disponible.`,
           );
+
+          // ────────────────────────────────────────────────────────────
+          // NOTIFICATION CANDIDATS : leur créneau publié vient de passer
+          // sous le minimum d'examinateurs — on les prévient que le
+          // créneau est susceptible d'être modifié.
+          // ────────────────────────────────────────────────────────────
+          const activeEnrolls = (slot.enrollments || []).filter(
+            (e: any) => !e.status || e.status === "active",
+          );
+          if (activeEnrolls.length > 0) {
+            const epName = (slot as any)?.epreuve?.name || "Épreuve";
+            const candidateRows = activeEnrolls.map((e: any) => ({
+              sender_id: null,
+              sender_role: "admin",
+              sender_name: "Système",
+              recipient_id: e.candidate_id,
+              recipient_role: "candidate",
+              message: `⚠️ Un examinateur s'est désinscrit de votre créneau "${epName}" du ${dateStr} à ${startTime} (salle ${room}). L'équipe recherche un remplaçant — votre créneau pourrait être modifié ou annulé. Surveillez votre calendrier.`,
+            }));
+            try {
+              await supabaseAdmin.from("private_messages").insert(candidateRows);
+            } catch (e) {
+              console.error("Notification candidats (sous-effectif) échec:", e);
+            }
+          }
         }
       }
 
@@ -214,12 +241,39 @@ export async function POST(req: NextRequest) {
       // ──────────────────────────────────────────────────────────────
       const { data: targetSlot } = await supabaseAdmin
         .from("evaluation_slots")
-        .select("id, date, start_time, end_time")
+        .select(
+          "id, date, start_time, end_time, epreuve:epreuves(is_pole_test, pole)",
+        )
         .eq("id", slotId)
         .single();
 
       if (!targetSlot) {
         return Response.json({ error: "Créneau introuvable" }, { status: 404 });
+      }
+
+      // ──────────────────────────────────────────────────────────────
+      // PÔLE : un membre non-admin ne peut s'inscrire comme examinateur
+      // sur une épreuve de pôle que si c'est SON pôle. Admin bypass.
+      // ──────────────────────────────────────────────────────────────
+      const targetEpreuve = (targetSlot as any).epreuve;
+      if (
+        !payload.isAdmin &&
+        targetEpreuve?.is_pole_test &&
+        targetEpreuve?.pole
+      ) {
+        const { data: me } = await supabaseAdmin
+          .from("members")
+          .select("pole")
+          .eq("id", memberId)
+          .maybeSingle();
+        if (!me?.pole || me.pole !== targetEpreuve.pole) {
+          return Response.json(
+            {
+              error: `Cette épreuve est réservée aux membres du pôle ${targetEpreuve.pole}.`,
+            },
+            { status: 403 },
+          );
+        }
       }
 
       const conflict = await memberHasConflict(memberId, targetSlot, slotId);
@@ -262,18 +316,23 @@ export async function POST(req: NextRequest) {
       // le créneau s'ouvre et se publie automatiquement".
       // ──────────────────────────────────────────────────────────────
       if (slot && ["open", "draft", "ready"].includes(slot.status)) {
-        // FIX M3: maybeSingle so missing row doesn't crash the toggle.
-        const { data: settingRow } = await supabaseAdmin
-          .from("system_settings")
-          .select("value")
-          .eq("key", "planning_visible_candidats")
-          .maybeSingle();
-        const planningVisible =
-          settingRow?.value === "true" || settingRow?.value === true;
+        // PUBLICATION PAR ÉPREUVE : l'auto-publication ne s'applique que
+        // si CETTE épreuve a déjà été publiée par l'admin (≥ 1 créneau
+        // published/full). Un examinateur qui s'inscrit sur une épreuve
+        // non publiée ne doit PAS exposer son créneau aux candidats.
+        let epreuvePublished = false;
+        if (slot.epreuve_id) {
+          const { count } = await supabaseAdmin
+            .from("evaluation_slots")
+            .select("id", { count: "exact", head: true })
+            .eq("epreuve_id", slot.epreuve_id)
+            .in("status", ["published", "full"]);
+          epreuvePublished = (count || 0) > 0;
+        }
 
         let newStatus: string | null = null;
-        if (planningVisible && memberCount >= 1) {
-          // Au moins 1 examinateur + planning publié → published
+        if (epreuvePublished && memberCount >= 1) {
+          // Au moins 1 examinateur + épreuve déjà publiée → published
           newStatus = "published";
         } else if (
           slot.status === "open" &&

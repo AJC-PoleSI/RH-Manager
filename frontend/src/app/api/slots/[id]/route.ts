@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  fetchDayIntervals,
+  findConflict,
+  timeToMinutes,
+  minutesToTime,
+} from "@/lib/slot-conflicts";
 import { NextRequest } from "next/server";
 
 // PUT /api/slots/[id] — update a slot (admin)
@@ -73,30 +79,22 @@ export async function PUT(
           endTime !== undefined ? endTime : current.end_time,
         ).slice(0, 5);
         const dateStr = String(current.date).split("T")[0];
-        const t2m = (t: string) => {
-          const [h, m] = t.split(":").map(Number);
-          return h * 60 + (m || 0);
-        };
-        const newStart = t2m(effectiveStart);
-        const newEnd = t2m(effectiveEnd);
+        const newStart = timeToMinutes(effectiveStart);
+        const newEnd = timeToMinutes(effectiveEnd);
 
         if (effectiveRoom) {
-          const { data: sameRoomSlots } = await supabaseAdmin
-            .from("evaluation_slots")
-            .select("id, start_time, end_time")
-            .eq("room", effectiveRoom)
-            .like("date", `${dateStr}%`)
-            .neq("id", id);
-
-          const overlap = (sameRoomSlots || []).find((s: any) => {
-            const sStart = t2m(String(s.start_time).slice(0, 5));
-            const sEnd = t2m(String(s.end_time).slice(0, 5));
-            return newStart < sEnd && sStart < newEnd;
-          });
+          const intervals = await fetchDayIntervals(dateStr);
+          const overlap = findConflict(
+            intervals,
+            effectiveRoom,
+            newStart,
+            newEnd,
+            id,
+          );
           if (overlap) {
             return Response.json(
               {
-                error: `Chevauchement : ${effectiveRoom} a déjà un créneau ${String(overlap.start_time).slice(0, 5)}–${String(overlap.end_time).slice(0, 5)} ce jour-là.`,
+                error: `Chevauchement : ${overlap.room} a déjà un créneau ${minutesToTime(overlap.startMin)}–${minutesToTime(overlap.endMin)} ce jour-là.`,
               },
               { status: 409 },
             );
@@ -121,6 +119,44 @@ export async function PUT(
       .single();
 
     if (error) throw error;
+
+    // ══════════════════════════════════════════════════════════════════
+    // NOTIFICATION : si l'horaire ou la salle a changé et que des
+    // candidats sont inscrits, on les prévient du changement.
+    // ══════════════════════════════════════════════════════════════════
+    const timeOrRoomChanged =
+      startTime !== undefined || endTime !== undefined || room !== undefined;
+    const activeEnrollments = (slot?.enrollments || []).filter(
+      (e: any) => !e.status || e.status === "active",
+    );
+    if (timeOrRoomChanged && activeEnrollments.length > 0) {
+      const dateStr = slot?.date
+        ? new Date(slot.date).toLocaleDateString("fr-FR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })
+        : "";
+      const newStart = String(slot?.start_time || "").substring(0, 5);
+      const newEnd = String(slot?.end_time || "").substring(0, 5);
+      const epName = (slot as any)?.epreuve?.name || "Épreuve";
+      const newRoom = slot?.room || "—";
+
+      const rows = activeEnrollments.map((e: any) => ({
+        sender_id: null,
+        sender_role: "admin",
+        sender_name: "Système",
+        recipient_id: e.candidate_id,
+        recipient_role: "candidate",
+        message: `⚠️ Votre créneau "${epName}" a été modifié : il a désormais lieu le ${dateStr} de ${newStart} à ${newEnd} (salle ${newRoom}). Vérifiez votre calendrier.`,
+      }));
+
+      try {
+        await supabaseAdmin.from("private_messages").insert(rows);
+      } catch (e) {
+        console.error("Notification candidats (modif créneau) échec:", e);
+      }
+    }
 
     return Response.json(slot);
   } catch (error) {
