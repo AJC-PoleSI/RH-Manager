@@ -433,7 +433,6 @@ export default function DeliberationsPage() {
       "Trésorerie": "#06B6D4",
       "Bureau - VP": "#6366F1",
       "Bureau - Président": "#EF4444",
-      "Bureau - Trésorier": "#14B8A6",
       "Bureau - Secrétaire générale": "#F97316",
     };
     return colors[pole] || "#6B7280";

@@ -13,7 +13,6 @@ const DEFAULT_POLES = [
   "Trésorerie",
   "Bureau - VP",
   "Bureau - Président",
-  "Bureau - Trésorier",
   "Bureau - Secrétaire générale",
 ];
 

@@ -484,7 +484,6 @@ export default function CandidatesPage() {
                                 <option value="Trésorerie">Trésorerie</option>
                                 <option value="Bureau - VP">Bureau - VP</option>
                                 <option value="Bureau - Président">Bureau - Président</option>
-                                <option value="Bureau - Trésorier">Bureau - Trésorier</option>
                                 <option value="Bureau - Secrétaire générale">Bureau - SG</option>
                                 <option value="_none">Sans vœu</option>
                             </select>
