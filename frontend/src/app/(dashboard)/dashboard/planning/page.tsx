@@ -81,7 +81,31 @@ function getStatusBadge(status: string) {
 export default function PlanningPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isAdmin = user?.isAdmin === true;
+  // Les admins non-super sont aussi des membres : ils peuvent basculer vers
+  // leur espace membre (saisir leurs dispos, s'inscrire sur des créneaux).
+  // Le super-admin garde la vue admin pure.
+  const isRealAdmin = user?.isAdmin === true;
+  const isSuperAdmin = user?.isSuperAdmin === true;
+  const [memberMode, setMemberMode] = useState(false);
+  const isAdmin = isRealAdmin && !memberMode;
+  const canToggleMode = isRealAdmin && !isSuperAdmin;
+
+  const ModeToggle = canToggleMode ? (
+    <div className="inline-flex bg-gray-100 rounded-full p-0.5">
+      <button
+        onClick={() => setMemberMode(false)}
+        className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${!memberMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+      >
+        Vue admin
+      </button>
+      <button
+        onClick={() => setMemberMode(true)}
+        className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${memberMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+      >
+        Mes disponibilités
+      </button>
+    </div>
+  ) : null;
 
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
   const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
@@ -937,13 +961,16 @@ export default function PlanningPage() {
     return (
       <div className="flex flex-col gap-6 p-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Dispos &amp; Inscriptions
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Gérez le recrutement global et les épreuves
-          </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">
+              Dispos &amp; Inscriptions
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Gérez le recrutement global et les épreuves
+            </p>
+          </div>
+          {ModeToggle}
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
@@ -1751,6 +1778,10 @@ export default function PlanningPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
 
+      {ModeToggle && (
+        <div className="flex justify-end">{ModeToggle}</div>
+      )}
+
       {/* ─── Bannière obligation Tour 3 ─── */}
       {tour3Obligation?.myObligation && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -2108,41 +2139,77 @@ export default function PlanningPage() {
                 </div>
               </div>
 
-              {/* ── Co-évaluateurs ── */}
+              {/* ── Examinateurs (titulaires + remplaçants) ── */}
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">👥</span>
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                    Co-evaluateur(s)
+                    Examinateur(s)
                   </p>
                   {(() => {
-                    // Filtrer pour ne montrer que les AUTRES membres (pas soi-même)
-                    const coEvals = (selectedSlot.members || [])
-                      .filter((m) => m.member?.id !== user?.id)
-                      .map((m) => m.member);
+                    const minMembers =
+                      (selectedSlot as any).min_members ||
+                      (selectedSlot as any).minMembers ||
+                      2;
+                    // Ordre d'inscription (created_at) → titulaires d'abord
+                    const ordered = [...(selectedSlot.members || [])].sort(
+                      (a: any, b: any) =>
+                        String(a.created_at || "").localeCompare(
+                          String(b.created_at || ""),
+                        ),
+                    );
+                    const titulaires = ordered.slice(0, minMembers);
+                    // On n'affiche qu'un ou deux remplaçants éventuels
+                    const remplacants = ordered.slice(minMembers, minMembers + 2);
 
-                    if (coEvals.length === 0) {
+                    if (ordered.length === 0) {
                       return (
                         <p className="text-sm text-gray-400 italic">
-                          Vous evaluez seul(e) sur ce creneau
+                          Aucun examinateur sur ce creneau
                         </p>
                       );
                     }
 
+                    const renderRow = (m: any, isRempl: boolean) => {
+                      const member = m.member || {};
+                      const mine = member?.id === user?.id;
+                      return (
+                        <div key={m.id || member?.id} className="flex items-center gap-2">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${isRempl ? "bg-gray-100 text-gray-500" : "bg-indigo-100 text-indigo-700"}`}
+                          >
+                            {(member?.email?.[0] || "?").toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium text-gray-800">
+                            {member?.email || "Membre"}
+                            {mine && (
+                              <span className="ml-1 text-xs text-indigo-500">
+                                (vous)
+                              </span>
+                            )}
+                          </span>
+                          {isRempl && (
+                            <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                              Remplaçant
+                            </span>
+                          )}
+                        </div>
+                      );
+                    };
+
                     return (
                       <div className="space-y-2">
-                        {coEvals.map((member, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700">
-                              {(member?.email?.[0] || "?").toUpperCase()}
-                            </div>
-                            <span className="text-sm font-medium text-gray-800">
-                              {member?.email || "Membre"}
-                            </span>
-                          </div>
-                        ))}
+                        {titulaires.map((m: any) => renderRow(m, false))}
+                        {remplacants.length > 0 && (
+                          <>
+                            <p className="text-[10px] uppercase text-gray-400 pt-1">
+                              Remplaçant(s) éventuel(s)
+                            </p>
+                            {remplacants.map((m: any) => renderRow(m, true))}
+                          </>
+                        )}
                       </div>
                     );
                   })()}

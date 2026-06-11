@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { signToken } from "@/lib/auth";
+import { signToken, isSuperAdminEmail } from "@/lib/auth";
 import {
   checkRateLimit,
   registerFailedAttempt,
@@ -57,16 +57,23 @@ export async function POST(req: NextRequest) {
     // Connexion réussie → on remet le compteur à zéro.
     await resetRateLimit(rlKey);
 
+    const superAdmin = isSuperAdminEmail(member.email);
     const token = signToken({
       id: member.id,
       email: member.email,
       role: "member",
       isAdmin: member.is_admin,
+      isSuperAdmin: superAdmin,
     });
 
     return Response.json({
       token,
-      member: { id: member.id, email: member.email, isAdmin: member.is_admin },
+      member: {
+        id: member.id,
+        email: member.email,
+        isAdmin: member.is_admin,
+        isSuperAdmin: superAdmin,
+      },
     });
   } catch (error) {
     console.error("Login error:", error);

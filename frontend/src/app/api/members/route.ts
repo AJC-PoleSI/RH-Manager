@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  getTokenFromRequest,
+  unauthorized,
+  forbidden,
+  isSuperAdminEmail,
+} from "@/lib/auth";
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 
@@ -36,6 +41,7 @@ export async function GET(req: NextRequest) {
       email: m.email,
       password: payload.isAdmin ? (m.password_hash ? "••••••" : "") : undefined,
       isAdmin: m.is_admin,
+      isSuperAdmin: isSuperAdminEmail(m.email),
       firstName: m.first_name || "",
       lastName: m.last_name || "",
       pole: m.pole || "",

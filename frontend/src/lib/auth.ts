@@ -12,6 +12,20 @@ export interface TokenPayload {
   email: string;
   role: "member" | "candidate";
   isAdmin?: boolean;
+  isSuperAdmin?: boolean;
+}
+
+// Le compte super-admin (« admin admin ») est le seul protégé : non
+// supprimable, vue admin pure (pas de fonctions membre). Identifié par son
+// email, surchargeable via env.
+export const SUPER_ADMIN_EMAIL = (
+  process.env.SUPER_ADMIN_EMAIL ?? "admin@ajc.fr"
+)
+  .trim()
+  .toLowerCase();
+
+export function isSuperAdminEmail(email: string | null | undefined): boolean {
+  return !!email && email.trim().toLowerCase() === SUPER_ADMIN_EMAIL;
 }
 
 export function signToken(payload: TokenPayload): string {

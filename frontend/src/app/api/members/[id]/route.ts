@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  getTokenFromRequest,
+  unauthorized,
+  forbidden,
+  isSuperAdminEmail,
+} from "@/lib/auth";
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 
@@ -58,14 +63,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     if (isAdmin === false) {
       const { data: targetMember } = await supabaseAdmin
         .from("members")
-        .select("is_admin")
+        .select("email")
         .eq("id", id)
         .single();
-      if (targetMember?.is_admin) {
+      if (isSuperAdminEmail(targetMember?.email)) {
         return Response.json(
           {
             error:
-              "Impossible de retirer le rôle administrateur à un compte admin",
+              "Impossible de retirer le rôle administrateur au compte super-administrateur",
           },
           { status: 403 },
         );
@@ -118,16 +123,18 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    // SECURITY: Prevent deleting admins
+    // SECURITY: seul le compte SUPER-ADMIN est protégé. Tous les autres
+    // (y compris les admins classiques, qui sont aussi des membres)
+    // peuvent être supprimés.
     const { data: memberToDelete } = await supabaseAdmin
       .from("members")
-      .select("is_admin")
+      .select("email")
       .eq("id", id)
       .single();
 
-    if (memberToDelete?.is_admin) {
+    if (isSuperAdminEmail(memberToDelete?.email)) {
       return Response.json(
-        { error: "Cannot delete an administrator account" },
+        { error: "Impossible de supprimer le compte super-administrateur" },
         { status: 403 },
       );
     }

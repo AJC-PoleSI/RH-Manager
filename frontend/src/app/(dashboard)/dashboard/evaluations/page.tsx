@@ -13,6 +13,7 @@ interface MemberData {
     password?: string;
     pole?: string;
     isAdmin: boolean;
+    isSuperAdmin?: boolean;
 }
 
 interface EvaluationData {
@@ -141,8 +142,9 @@ function AdminView() {
                 lastName: editForm.lastName,
                 email: editForm.email,
                 pole: editForm.pole,
-                // Never send isAdmin:false for an admin — protected at API level too
-                isAdmin: editingMember.isAdmin ? true : editForm.isAdmin,
+                // Le super-admin reste toujours admin ; les admins classiques
+                // peuvent être rétrogradés.
+                isAdmin: editingMember.isSuperAdmin ? true : editForm.isAdmin,
             };
             if (editForm.password) {
                 payload.password = editForm.password;
@@ -317,7 +319,30 @@ function AdminView() {
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {members.map(m => {
+                            {(() => {
+                                // Regrouper les membres par pôle (pôles connus dans
+                                // l'ordre, "Sans pôle" en dernier).
+                                const order = [...POLES, '__none__'];
+                                const groups = new Map<string, MemberData[]>();
+                                members.forEach((m) => {
+                                    const key = m.pole && POLES.includes(m.pole) ? m.pole : '__none__';
+                                    if (!groups.has(key)) groups.set(key, []);
+                                    groups.get(key)!.push(m);
+                                });
+                                const orderedKeys = order.filter((k) => groups.has(k));
+                                return orderedKeys.flatMap((poleKey) => {
+                                    const groupMembers = groups.get(poleKey)!;
+                                    const header = (
+                                        <tr key={`hdr-${poleKey}`} className="bg-gray-50/80">
+                                            <td colSpan={6} className="px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                {poleKey === '__none__' ? 'Sans pôle' : poleKey}
+                                                <span className="ml-2 text-gray-400 font-normal normal-case">
+                                                    {groupMembers.length} membre{groupMembers.length > 1 ? 's' : ''}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                    const rows = groupMembers.map((m) => {
                                 const mEvals = memberEvalCounts[m.id] || 0;
                                 const mAvgs = memberEvalAverages[m.id] || [];
                                 const mAvg = mAvgs.length > 0
@@ -335,9 +360,11 @@ function AdminView() {
                                                     <span className="font-medium text-gray-900 block">
                                                         {displayName || <span className="text-gray-400 italic">Sans nom</span>}
                                                     </span>
-                                                    {m.isAdmin && (
+                                                    {m.isSuperAdmin ? (
+                                                        <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">Super-admin</span>
+                                                    ) : m.isAdmin ? (
                                                         <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">Admin</span>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </td>
@@ -375,7 +402,7 @@ function AdminView() {
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
-                                                {!m.isAdmin && (
+                                                {!m.isSuperAdmin && (
                                                 <button
                                                     onClick={() => handleDelete(m.id)}
                                                     className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -388,7 +415,10 @@ function AdminView() {
                                         </td>
                                     </tr>
                                 );
-                            })}
+                                    });
+                                    return [header, ...rows];
+                                });
+                            })()}
                         </tbody>
                     </table>
                     {members.length === 0 && (
@@ -535,14 +565,14 @@ function AdminView() {
                                     id="editIsAdmin"
                                     checked={editForm.isAdmin}
                                     onChange={e => setEditForm({ ...editForm, isAdmin: e.target.checked })}
-                                    disabled={editingMember?.isAdmin}
+                                    disabled={editingMember?.isSuperAdmin}
                                     className="rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <label htmlFor="editIsAdmin" className="text-sm text-gray-700">
                                     Administrateur
-                                    {editingMember?.isAdmin && (
+                                    {editingMember?.isSuperAdmin && (
                                         <span className="ml-2 text-xs text-gray-500 italic">
-                                            (verrouillé — un admin reste admin)
+                                            (super-admin — verrouillé)
                                         </span>
                                     )}
                                 </label>
@@ -782,11 +812,36 @@ function MemberView() {
 
 export default function EvaluationsPage() {
     const { user, role } = useAuth();
-    const isAdmin = role === 'member' && user?.isAdmin;
+    const isRealAdmin = role === 'member' && !!user?.isAdmin;
+    const isSuperAdmin = !!user?.isSuperAdmin;
+    // Les admins non-super sont aussi des membres : ils peuvent basculer
+    // vers leur espace membre (évaluer, voir leurs créneaux). Le super-admin
+    // garde la vue admin pure.
+    const [memberMode, setMemberMode] = useState(false);
+    const showAdmin = isRealAdmin && !memberMode;
+    const canToggle = isRealAdmin && !isSuperAdmin;
 
-    if (isAdmin) {
-        return <AdminView />;
-    }
-
-    return <MemberView />;
+    return (
+        <div className="space-y-4">
+            {canToggle && (
+                <div className="flex justify-end">
+                    <div className="inline-flex bg-gray-100 rounded-full p-0.5">
+                        <button
+                            onClick={() => setMemberMode(false)}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${!memberMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Vue admin
+                        </button>
+                        <button
+                            onClick={() => setMemberMode(true)}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${memberMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Mon espace membre
+                        </button>
+                    </div>
+                </div>
+            )}
+            {showAdmin ? <AdminView /> : <MemberView />}
+        </div>
+    );
 }

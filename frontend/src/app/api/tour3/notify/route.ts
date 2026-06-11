@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  getTokenFromRequest,
+  unauthorized,
+  forbidden,
+  isSuperAdminEmail,
+} from "@/lib/auth";
 import { notifyMembers } from "@/lib/notifications";
 import { sendPoleNotificationEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
@@ -49,13 +54,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Membres du pôle
-    const { data: members, error: memErr } = await supabaseAdmin
+    // 2. Membres du pôle (les admins non-super sont aussi des membres ;
+    // seul le super-admin est exclu).
+    const { data: allPoleMembers, error: memErr } = await supabaseAdmin
       .from("members")
       .select("id, email, first_name")
-      .eq("pole", pole)
-      .eq("is_admin", false);
+      .eq("pole", pole);
     if (memErr) throw memErr;
+    const members = (allPoleMembers || []).filter(
+      (m: any) => !isSuperAdminEmail(m.email),
+    );
 
     if (!members || members.length === 0) {
       return Response.json(

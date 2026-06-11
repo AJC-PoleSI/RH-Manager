@@ -91,9 +91,25 @@ export default function MemberDashboardCalendar({
                 firstName: e.candidate?.first_name || e.candidate?.firstName || "",
                 lastName: e.candidate?.last_name || e.candidate?.lastName || "",
             }));
-            const coEvals = (slot.members || [])
-                .filter((m: any) => m.member?.id !== user?.id)
-                .map((m: any) => m.member?.email || "Membre");
+            // Examinateurs : titulaires (min_members premiers par ordre
+            // d'inscription) + 1-2 remplaçants éventuels.
+            const minMembers = slot.min_members || slot.minMembers || 2;
+            const orderedMembers = [...(slot.members || [])].sort(
+                (a: any, b: any) =>
+                    String(a.created_at || "").localeCompare(String(b.created_at || "")),
+            );
+            const examiners = [
+                ...orderedMembers.slice(0, minMembers).map((m: any) => ({
+                    email: m.member?.email || "Membre",
+                    isMe: m.member?.id === user?.id,
+                    isReplacement: false,
+                })),
+                ...orderedMembers.slice(minMembers, minMembers + 2).map((m: any) => ({
+                    email: m.member?.email || "Membre",
+                    isMe: m.member?.id === user?.id,
+                    isReplacement: true,
+                })),
+            ];
 
             const hasCandidates = candidates.length > 0;
 
@@ -109,7 +125,7 @@ export default function MemberDashboardCalendar({
                 epreuveId: slot.epreuve?.id || slot.epreuve_id || null,
                 isGroupEpreuve: slot.epreuve?.is_group_epreuve || slot.epreuve?.isGroupEpreuve || false,
                 candidates,
-                coEvals,
+                examiners,
                 status: slot.status,
             });
         });
@@ -629,19 +645,25 @@ export default function MemberDashboardCalendar({
                                     </div>
                                 )}
 
-                                {/* Co-évaluateurs */}
-                                {selectedMemberSlot.coEvals && selectedMemberSlot.coEvals.length > 0 && (
+                                {/* Examinateurs (titulaires + remplaçants) */}
+                                {selectedMemberSlot.examiners && selectedMemberSlot.examiners.length > 0 && (
                                     <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
                                         <span className="text-indigo-600 mt-0.5">👥</span>
                                         <div className="flex-1">
-                                            <p className="text-xs text-indigo-600 font-medium mb-1.5">Co-évaluateur(s)</p>
+                                            <p className="text-xs text-indigo-600 font-medium mb-1.5">Examinateur(s)</p>
                                             <div className="space-y-1">
-                                                {selectedMemberSlot.coEvals.map((email: string, idx: number) => (
+                                                {selectedMemberSlot.examiners.map((ex: any, idx: number) => (
                                                     <div key={idx} className="flex items-center gap-2">
-                                                        <span className="w-6 h-6 rounded-full bg-indigo-200 text-indigo-800 text-[10px] font-bold flex items-center justify-center">
-                                                            {(email[0] || "?").toUpperCase()}
+                                                        <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center ${ex.isReplacement ? "bg-gray-200 text-gray-600" : "bg-indigo-200 text-indigo-800"}`}>
+                                                            {(ex.email[0] || "?").toUpperCase()}
                                                         </span>
-                                                        <span className="text-sm text-gray-800">{email}</span>
+                                                        <span className="text-sm text-gray-800">
+                                                            {ex.email}
+                                                            {ex.isMe && <span className="ml-1 text-xs text-indigo-500">(vous)</span>}
+                                                        </span>
+                                                        {ex.isReplacement && (
+                                                            <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Remplaçant</span>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>

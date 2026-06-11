@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { getTokenFromRequest, unauthorized, isSuperAdminEmail } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 // GET /api/tour3/obligations — Demandes de pôle (Tour 3) par pôle.
@@ -41,15 +41,18 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 3. Membres par pôle
-    const { data: members, error: memErr } = await supabaseAdmin
+    // 3. Membres par pôle. Les admins NON-super sont aussi des membres
+    // (évaluateurs) ; seul le super-admin est exclu des pôles.
+    const { data: allMembers, error: memErr } = await supabaseAdmin
       .from("members")
-      .select("id, email, first_name, last_name, pole, is_admin")
-      .eq("is_admin", false);
+      .select("id, email, first_name, last_name, pole, is_admin");
     if (memErr) throw memErr;
+    const members = (allMembers || []).filter(
+      (m: any) => !isSuperAdminEmail(m.email),
+    );
 
     const membresParPole: Record<string, number> = {};
-    (members || []).forEach((m: any) => {
+    members.forEach((m: any) => {
       if (!m.pole) return;
       membresParPole[m.pole] = (membresParPole[m.pole] || 0) + 1;
     });
