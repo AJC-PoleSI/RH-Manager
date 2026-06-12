@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { isTourLocked } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
 // GET /api/deliberations/[candidateId]
@@ -32,6 +33,18 @@ export async function GET(
   }
 }
 
+// 423 Locked : le tour est verrouillé, décision non modifiable.
+function tourLockedResponse(tour: number) {
+  return Response.json(
+    {
+      error: `Le Tour ${tour} est verrouillé. Réouvrez-le pour modifier les décisions.`,
+      locked: true,
+      tour,
+    },
+    { status: 423 },
+  );
+}
+
 // PUT /api/deliberations/[candidateId]
 // SECURITY: Requires auth + admin only
 export async function PUT(
@@ -53,6 +66,18 @@ export async function PUT(
       prosComment,
       consComment,
     } = await req.json();
+
+    // Verrouillage : on ne peut plus toucher aux décisions d'un tour
+    // "terminé". L'admin doit d'abord réouvrir le tour (POST /api/tours/reopen).
+    if (tour1Status !== undefined && (await isTourLocked(1))) {
+      return tourLockedResponse(1);
+    }
+    if (tour2Status !== undefined && (await isTourLocked(2))) {
+      return tourLockedResponse(2);
+    }
+    if (tour3Status !== undefined && (await isTourLocked(3))) {
+      return tourLockedResponse(3);
+    }
 
     const updateData: Record<string, unknown> = {};
     if (tour1Status !== undefined) updateData.tour1_status = tour1Status;

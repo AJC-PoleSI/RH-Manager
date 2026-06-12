@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
-import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw } from "lucide-react";
+import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock } from "lucide-react";
 
 interface Tour3Obligation {
   pole: string;
@@ -70,6 +70,11 @@ export default function DeliberationsPage() {
   const [globalRefused, setGlobalRefused] = useState("");
   const [validateSending, setValidateSending] = useState(false);
 
+  // Tours (verrouillage / passage au tour suivant)
+  const [tourStatuses, setTourStatuses] = useState<Record<number, string>>({});
+  const [advancing, setAdvancing] = useState(false);
+  const [reopening, setReopening] = useState(false);
+
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>("tinder");
 
@@ -111,8 +116,61 @@ export default function DeliberationsPage() {
     } catch { setTour3Obligations([]); }
   }, []);
 
+  const fetchTours = useCallback(async () => {
+    try {
+      const res = await api.get('/tours');
+      const map: Record<number, string> = {};
+      (Array.isArray(res.data) ? res.data : []).forEach((t: any) => {
+        const m = String(t.name || '').match(/(\d+)/);
+        const n = m ? parseInt(m[1], 10) : 0;
+        if (n && !(n in map)) map[n] = t.status;
+      });
+      setTourStatuses(map);
+    } catch { /* tours indisponibles : pas de verrouillage */ }
+  }, []);
+
   useEffect(() => { fetchPoleKpis(); }, [fetchPoleKpis]);
   useEffect(() => { fetchTour3Obligations(); }, [fetchTour3Obligations]);
+  useEffect(() => { fetchTours(); }, [fetchTours]);
+
+  // Le tour affiché est-il verrouillé (statut "termine") ?
+  const tourLocked = tourStatuses[selectedTour] === "termine";
+
+  const handleAdvanceTour = async () => {
+    if (!confirm(
+      `Verrouiller le Tour ${selectedTour} et passer au Tour ${selectedTour + 1} ?\n\n` +
+      `Les décisions (admis / refusé / réserve) du Tour ${selectedTour} ne seront plus modifiables, ` +
+      `sauf réouverture manuelle.`,
+    )) return;
+    setAdvancing(true);
+    try {
+      await api.post('/tours/advance', { fromTour: selectedTour });
+      await fetchTours();
+      toast(`Tour ${selectedTour} verrouillé · passage au Tour ${selectedTour + 1}`, 'success');
+      if (selectedTour < 3) setSelectedTour(selectedTour + 1);
+    } catch (e: any) {
+      toast(e?.response?.data?.error || "Échec du passage au tour suivant", 'error');
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const handleReopenTour = async () => {
+    if (!confirm(
+      `Réouvrir le Tour ${selectedTour} ?\n\n` +
+      `Vous pourrez à nouveau modifier ses décisions. Pensez à le re-verrouiller ensuite.`,
+    )) return;
+    setReopening(true);
+    try {
+      await api.post('/tours/reopen', { tour: selectedTour });
+      await fetchTours();
+      toast(`Tour ${selectedTour} réouvert`, 'success');
+    } catch (e: any) {
+      toast(e?.response?.data?.error || "Échec de la réouverture du tour", 'error');
+    } finally {
+      setReopening(false);
+    }
+  };
 
   const handleTour3Notify = async (pole: string) => {
     setNotifyingPole(pole);
@@ -159,6 +217,10 @@ export default function DeliberationsPage() {
   const getStatus = (c: Candidate) => c.deliberation?.[tourKey] || "";
 
   const handleDecision = async (candidateId: string, decision: string) => {
+    if (tourLocked) {
+      toast(`Le Tour ${selectedTour} est verrouillé. Réouvrez-le pour modifier les décisions.`, 'error');
+      return;
+    }
     const current = candidates.find((c) => c.id === candidateId);
     const currentStatus = current?.deliberation?.[tourKey];
     const newStatus = currentStatus === decision ? "" : decision;
@@ -214,6 +276,10 @@ export default function DeliberationsPage() {
   };
 
   const cancelDecision = async (candidateId: string) => {
+    if (tourLocked) {
+      toast(`Le Tour ${selectedTour} est verrouillé. Réouvrez-le pour modifier les décisions.`, 'error');
+      return;
+    }
     try {
       await api.put(`/deliberations/${candidateId}`, { [tourKey]: "pending" });
       setCandidates((prev) =>
@@ -455,7 +521,7 @@ export default function DeliberationsPage() {
     const btnSize = size === "sm" ? "w-8 h-8" : "w-12 h-12";
     const iconSize = size === "sm" ? 14 : 20;
     return (
-      <div className="flex items-center gap-1.5">
+      <div className={`flex items-center gap-1.5 ${tourLocked ? "opacity-40 pointer-events-none" : ""}`} title={tourLocked ? `Tour ${selectedTour} verrouillé` : undefined}>
         <button
           onClick={() => handleDecision(c.id, "refused")}
           className={`${btnSize} rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95`}
@@ -594,6 +660,60 @@ export default function DeliberationsPage() {
           )}
         </div>
       </div>
+
+      {/* Verrouillage du tour / passage au tour suivant (admin) */}
+      {isAdmin && (
+        tourLocked ? (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <Lock size={18} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-semibold text-gray-800">Tour {selectedTour} verrouillé</p>
+                <p className="text-gray-500">
+                  Les décisions de ce tour sont figées. Réouvrez-le ponctuellement pour corriger un choix.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleReopenTour}
+              disabled={reopening}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <Unlock size={15} />
+              {reopening ? "Réouverture…" : "Réouvrir ce tour"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <Lock size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-semibold text-blue-900">
+                  {selectedTour < 3
+                    ? `Clôturer le Tour ${selectedTour} et passer au Tour ${selectedTour + 1}`
+                    : `Clôturer le Tour ${selectedTour}`}
+                </p>
+                <p className="text-blue-700">
+                  Une fois les emails de validation envoyés, verrouillez ce tour pour figer les admis / refusés
+                  {selectedTour < 3 ? " et activer le tour suivant pour les candidats." : "."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleAdvanceTour}
+              disabled={advancing}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <Lock size={15} />
+              {advancing
+                ? "Verrouillage…"
+                : selectedTour < 3
+                  ? `Verrouiller & passer au Tour ${selectedTour + 1}`
+                  : `Verrouiller le Tour ${selectedTour}`}
+            </button>
+          </div>
+        )
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1222,7 +1342,7 @@ export default function DeliberationsPage() {
                       </div>
 
                       {/* ACTION BUTTONS (Tinder-style) */}
-                      <div className="px-6 pb-6 pt-2 flex items-center justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+                      <div className={`px-6 pb-6 pt-2 flex items-center justify-center gap-3 ${tourLocked ? "opacity-40 pointer-events-none" : ""}`} title={tourLocked ? `Tour ${selectedTour} verrouillé` : undefined} onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleDecision(c.id, "refused")}
                           className="w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
