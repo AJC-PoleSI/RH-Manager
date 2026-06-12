@@ -18,6 +18,8 @@ interface Tour3Obligation {
 interface Wish {
   pole: string;
   rank: number;
+  wantsBureau?: boolean;
+  posteDetail?: string | null;
 }
 
 export interface Candidate {
@@ -934,7 +936,7 @@ export default function DeliberationsPage() {
                                 {c.wishes && c.wishes.length > 0 ? (
                                   c.wishes.slice(0, 3).map((w, i) => (
                                     <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500'}`}>
-                                      {w.rank}. {w.pole}
+                                      {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
                                     </span>
                                   ))
                                 ) : (
@@ -1051,7 +1053,7 @@ export default function DeliberationsPage() {
                                     key={`wish-${w.pole}-${w.rank}`}
                                     className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'bg-gray-50 text-gray-500'}`}
                                   >
-                                    {w.rank}. {w.pole}
+                                    {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
                                   </span>
                                 ))}
                               </div>
@@ -1174,7 +1176,7 @@ export default function DeliberationsPage() {
                               <div className="flex flex-wrap gap-1 mt-1.5">
                                 {c.wishes.slice(0, 3).map((w, i) => (
                                   <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
-                                    {w.rank}. {w.pole}
+                                    {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
                                   </span>
                                 ))}
                               </div>

@@ -97,11 +97,17 @@ export async function PUT(
     // Insert new wishes
     if (wishes.length > 0) {
       const rows = wishes.map(
-        (w: { pole: string; rank: number; wantsBureau?: boolean }) => ({
+        (w: {
+          pole: string;
+          rank: number;
+          wantsBureau?: boolean;
+          posteDetail?: string | null;
+        }) => ({
           candidate_id: candidateId,
           pole: w.pole,
           rank: w.rank,
           wants_bureau: !!w.wantsBureau,
+          poste_detail: w.posteDetail || null,
         }),
       );
 

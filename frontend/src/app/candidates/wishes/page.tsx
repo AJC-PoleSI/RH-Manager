@@ -11,20 +11,30 @@ const DEFAULT_POLES = [
   "Audit Qualité",
   "Ressource Humaine",
   "Trésorerie",
-  "Bureau - VP",
-  "Bureau - Président",
-  "Bureau - Secrétaire générale",
 ];
 
 // Pôles pour lesquels un candidat peut en plus se déclarer intéressé par
 // un poste au bureau (VP / Président / Secrétaire générale).
 const BUREAU_ELIGIBLE_POLES = ["Développement commercial", "Audit Qualité"];
 
+// Postes précis sélectionnables une fois l'option bureau cochée.
+const BUREAU_ROLES = ["VP", "Président", "Secrétaire générale"];
+
+// Le pôle Trésorerie demande systématiquement un poste précis.
+const TRESORERIE_POLE = "Trésorerie";
+const TRESORERIE_ROLES = [
+  "Trésorier/trésorière",
+  "Vice Trésorier/trésorière",
+  "Coordinateur trésorerie",
+];
+
 type Tour = { id: string; name: string; status: string };
 
 interface State {
   selectedPoles: string[];
   wantsBureau: Record<string, boolean>;
+  // Poste précis choisi par pôle (bureau ou trésorerie).
+  posteDetail: Record<string, string>;
   loading: boolean;
   saving: boolean;
   saved: boolean;
@@ -35,6 +45,8 @@ interface State {
 type Action =
   | { type: "SET_POLES"; payload: string[] }
   | { type: "SET_WANTS_BUREAU"; payload: Record<string, boolean> }
+  | { type: "SET_POSTE_DETAILS"; payload: Record<string, string> }
+  | { type: "SET_POSTE_DETAIL"; payload: { pole: string; value: string } }
   | { type: "ADD_POLE"; payload: string }
   | { type: "REMOVE_POLE"; payload: number }
   | { type: "TOGGLE_BUREAU"; payload: string }
@@ -48,6 +60,7 @@ type Action =
 const initialState: State = {
   selectedPoles: [],
   wantsBureau: {},
+  posteDetail: {},
   loading: true,
   saving: false,
   saved: false,
@@ -61,6 +74,17 @@ function reducer(state: State, action: Action): State {
       return { ...state, selectedPoles: action.payload };
     case "SET_WANTS_BUREAU":
       return { ...state, wantsBureau: action.payload };
+    case "SET_POSTE_DETAILS":
+      return { ...state, posteDetail: action.payload };
+    case "SET_POSTE_DETAIL":
+      return {
+        ...state,
+        posteDetail: {
+          ...state.posteDetail,
+          [action.payload.pole]: action.payload.value,
+        },
+        saved: false,
+      };
     case "ADD_POLE":
       if (state.selectedPoles.length >= 3 || state.selectedPoles.includes(action.payload))
         return state;
@@ -72,23 +96,29 @@ function reducer(state: State, action: Action): State {
     case "REMOVE_POLE": {
       const removedPole = state.selectedPoles[action.payload];
       const wantsBureau = { ...state.wantsBureau };
+      const posteDetail = { ...state.posteDetail };
       delete wantsBureau[removedPole];
+      delete posteDetail[removedPole];
       return {
         ...state,
         selectedPoles: state.selectedPoles.filter((_, i) => i !== action.payload),
         wantsBureau,
+        posteDetail,
         saved: false,
       };
     }
-    case "TOGGLE_BUREAU":
+    case "TOGGLE_BUREAU": {
+      const next = !state.wantsBureau[action.payload];
+      const posteDetail = { ...state.posteDetail };
+      // Décocher l'option bureau efface le poste précis sélectionné.
+      if (!next) delete posteDetail[action.payload];
       return {
         ...state,
-        wantsBureau: {
-          ...state.wantsBureau,
-          [action.payload]: !state.wantsBureau[action.payload],
-        },
+        wantsBureau: { ...state.wantsBureau, [action.payload]: next },
+        posteDetail,
         saved: false,
       };
+    }
     case "MOVE_UP":
       if (action.payload === 0) return state;
       const upPoles = [...state.selectedPoles];
@@ -195,10 +225,13 @@ export default function CandidateWishesPage() {
           const ordered = sorted.map((w: any) => w.pole);
           dispatch({ type: "SET_POLES", payload: ordered.slice(0, 3) });
           const wantsBureau: Record<string, boolean> = {};
+          const posteDetail: Record<string, string> = {};
           sorted.forEach((w: any) => {
             if (w.wants_bureau) wantsBureau[w.pole] = true;
+            if (w.poste_detail) posteDetail[w.pole] = w.poste_detail;
           });
           dispatch({ type: "SET_WANTS_BUREAU", payload: wantsBureau });
+          dispatch({ type: "SET_POSTE_DETAILS", payload: posteDetail });
         }
       } catch {
         // No existing wishes
@@ -233,17 +266,26 @@ export default function CandidateWishesPage() {
     dispatch({ type: "TOGGLE_BUREAU", payload: pole });
   };
 
+  const setPosteDetail = (pole: string, value: string) => {
+    dispatch({ type: "SET_POSTE_DETAIL", payload: { pole, value } });
+  };
+
   const handleSave = async () => {
     if (!user?.id) return;
     dispatch({ type: "SET_SAVING", payload: true });
     try {
-      const wishes = state.selectedPoles.map((pole, index) => ({
-        pole,
-        rank: index + 1,
-        wantsBureau: BUREAU_ELIGIBLE_POLES.includes(pole)
-          ? !!state.wantsBureau[pole]
-          : false,
-      }));
+      const wishes = state.selectedPoles.map((pole, index) => {
+        const isBureauEligible = BUREAU_ELIGIBLE_POLES.includes(pole);
+        const isTresorerie = pole === TRESORERIE_POLE;
+        const wantsBureau = isBureauEligible ? !!state.wantsBureau[pole] : false;
+        let posteDetail: string | null = null;
+        if (isBureauEligible && wantsBureau) {
+          posteDetail = state.posteDetail[pole] || null;
+        } else if (isTresorerie) {
+          posteDetail = state.posteDetail[pole] || null;
+        }
+        return { pole, rank: index + 1, wantsBureau, posteDetail };
+      });
       await api.put(`/wishes/${user.id}`, { wishes });
       dispatch({ type: "SET_SAVED", payload: true });
     } catch {
@@ -531,16 +573,55 @@ export default function CandidateWishesPage() {
 
                 {/* Option Bureau (Dev Co / Audit Qualité uniquement) */}
                 {BUREAU_ELIGIBLE_POLES.includes(pole) && (
-                  <label className="flex items-center gap-2 text-sm text-gray-600 pl-11 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300"
-                      checked={!!state.wantsBureau[pole]}
+                  <div className="pl-11 space-y-2">
+                    <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={!!state.wantsBureau[pole]}
+                        disabled={isTourTermine}
+                        onChange={() => toggleBureau(pole)}
+                      />
+                      + intéressé(e) par un poste au bureau
+                    </label>
+                    {state.wantsBureau[pole] && (
+                      <select
+                        value={state.posteDetail[pole] || ""}
+                        disabled={isTourTermine}
+                        onChange={(e) => setPosteDetail(pole, e.target.value)}
+                        className="w-full sm:w-auto text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+                      >
+                        <option value="">Choisir un poste au bureau…</option>
+                        {BUREAU_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                {/* Poste précis en Trésorerie */}
+                {pole === TRESORERIE_POLE && (
+                  <div className="pl-11 space-y-1.5">
+                    <label className="block text-sm text-gray-600">
+                      Poste souhaité en trésorerie
+                    </label>
+                    <select
+                      value={state.posteDetail[pole] || ""}
                       disabled={isTourTermine}
-                      onChange={() => toggleBureau(pole)}
-                    />
-                    + intéressé(e) par un poste au bureau (VP / Président / Secrétaire générale)
-                  </label>
+                      onChange={(e) => setPosteDetail(pole, e.target.value)}
+                      className="w-full sm:w-auto text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+                    >
+                      <option value="">Choisir un poste…</option>
+                      {TRESORERIE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
             ))}

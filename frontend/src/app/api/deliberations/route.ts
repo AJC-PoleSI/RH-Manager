@@ -37,7 +37,9 @@ export async function GET(req: NextRequest) {
         candidate_wishes(
           id,
           pole,
-          rank
+          rank,
+          wants_bureau,
+          poste_detail
         )
       `,
       )
@@ -86,6 +88,8 @@ export async function GET(req: NextRequest) {
         .map((w: any) => ({
           pole: w.pole,
           rank: w.rank,
+          wantsBureau: !!w.wants_bureau,
+          posteDetail: w.poste_detail || null,
         }));
 
       const delib = Array.isArray(c.deliberations)
