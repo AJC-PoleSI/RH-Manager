@@ -4,29 +4,36 @@ import { NextRequest } from "next/server";
 
 // GET /api/tours - Fetch all tours with candidate count
 export async function GET(req: NextRequest) {
-  // SECURITY (audit #11): require auth + non-candidate to read tours
-  // metadata (was publicly accessible, leaking candidate counts).
+  // SECURITY (audit #11): require auth. Les candidats ont besoin de connaître
+  // le tour actif (pour débloquer le classement des vœux au Tour 2), donc ils
+  // peuvent lire les noms/statuts des tours — mais JAMAIS le nombre de
+  // candidats (candidateCount masqué à 0 pour eux).
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
-  if (payload.role === "candidate" && !payload.isAdmin) return forbidden();
+  const isPrivileged = payload.role !== "candidate" || payload.isAdmin;
   try {
     const { data: tours, error } = await supabaseAdmin
       .from("tours")
-      .select("*")
+      .select("id, name, status")
       .order("name", { ascending: true });
 
     if (error) throw error;
 
-    // Get candidate count (total candidates in system)
-    const { count: totalCandidates } = await supabaseAdmin
-      .from("candidates")
-      .select("id", { count: "exact", head: true });
+    // Compte des candidats réservé aux membres/admins.
+    let totalCandidates = 0;
+    if (isPrivileged) {
+      const { count } = await supabaseAdmin
+        .from("candidates")
+        .select("id", { count: "exact", head: true });
+      totalCandidates = count || 0;
+    }
 
     const result = (tours || []).map((t: any) => ({
       id: t.id,
       name: t.name,
       status: t.status,
-      candidateCount: t.status === "en_cours" ? totalCandidates || 0 : 0,
+      candidateCount:
+        isPrivileged && t.status === "en_cours" ? totalCandidates : 0,
     }));
 
     return Response.json(result);
