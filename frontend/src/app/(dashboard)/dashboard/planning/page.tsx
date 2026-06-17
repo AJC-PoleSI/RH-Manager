@@ -1362,8 +1362,8 @@ export default function PlanningPage() {
                               title: `${evName} - ${s.room || "Salle"}`,
                               description: `Épreuve: ${evName}\nTour: ${s.tour || s.epreuve?.tour || "?"}\nSalle: ${s.room || "—"}`,
                               location: s.room || "—",
-                              start: new Date(`${dateStr}T${tStart}:00`),
-                              end: new Date(`${dateStr}T${tEnd}:00`)
+                              startDate: new Date(`${dateStr}T${tStart}:00`),
+                              endDate: new Date(`${dateStr}T${tEnd}:00`)
                             };
                             
                             const icsContent = generateICS(evData);
