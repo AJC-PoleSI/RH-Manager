@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
+import { generateICS, downloadICS } from "@/lib/icsGenerator";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -707,8 +708,8 @@ export default function PlanningPage() {
         });
       }
       // Déclencher l'allocation auto en arrière-plan (sans bloquer l'UX)
-      api.post("/slots/auto-allocate", { epreuveId: selectedEpreuveId }).catch(
-        (e) => console.warn("auto-allocate background error:", e),
+      api.post("/dispatch/run", { epreuveId: selectedEpreuveId }).catch(
+        (e) => console.warn("dispatch background error:", e),
       );
       setInscriptionsOuvertes(true);
       toast(
@@ -907,23 +908,20 @@ export default function PlanningPage() {
     setRepartitionResult(null);
 
     try {
-      const res = await api.post("/slots/auto-assign", {
+      const res = await api.post("/dispatch/run", {
         epreuveId: selectedEpreuveId,
-        sallesParCreneau,
-        evalParSalle,
       });
 
       const data = res.data;
-      setRepartitionResult(data);
 
-      if (data.summary.totalSlots === 0) {
+      if (data.updated === 0 && data.backupsAssigned === 0) {
         toast(
-          "Aucun creneau avec suffisamment d'evaluateurs disponibles",
+          "Aucun changement lors du dispatch (créneaux déjà remplis ou manque d'examinateurs)",
           "info",
         );
       } else {
         toast(
-          `Repartition terminee : ${data.summary.totalSlots} salle(s) creee(s), ${data.summary.totalAssignments} affectation(s)`,
+          `Dispatch terminé : ${data.updated} affectations titulaires, ${data.backupsAssigned} backups assignés`,
           "success",
         );
       }
@@ -1350,6 +1348,31 @@ export default function PlanningPage() {
                             })}
                           </ul>
                         )}
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                        <button
+                          onClick={() => {
+                            const dateStr = String(s.date || "").substring(0, 10);
+                            const tStart = String(s.start_time || "08:00").substring(0, 5);
+                            const tEnd = String(s.end_time || "09:00").substring(0, 5);
+                            const evName = s.epreuve?.name || "Épreuve";
+                            
+                            const evData = {
+                              id: s.id || "slot",
+                              title: `${evName} - ${s.room || "Salle"}`,
+                              description: `Épreuve: ${evName}\nTour: ${s.tour || s.epreuve?.tour || "?"}\nSalle: ${s.room || "—"}`,
+                              location: s.room || "—",
+                              start: new Date(`${dateStr}T${tStart}:00`),
+                              end: new Date(`${dateStr}T${tEnd}:00`)
+                            };
+                            
+                            const icsContent = generateICS(evData);
+                            downloadICS(icsContent, `creneau_${evName.replace(/\s+/g, "_")}.ics`);
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-md font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm transition-all"
+                        >
+                          📅 Ajouter à mon calendrier
+                        </button>
                       </div>
                     </div>
                   </>
