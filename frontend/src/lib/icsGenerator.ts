@@ -48,33 +48,43 @@ function escapeICS(text: string): string {
 
 /**
  * Generate an ICS calendar string from event data.
+ * Accepts a single event or an array of events.
  */
-export function generateICS(event: ICSEvent): string {
+export function generateICS(events: ICSEvent | ICSEvent[]): string {
+  const eventArray = Array.isArray(events) ? events : [events];
+
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//RH Manager AJC//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${generateUID()}@rhmanager.ajc.fr`,
-    `DTSTAMP:${formatICSDate(new Date())}`,
-    `DTSTART:${formatICSDate(event.startDate)}`,
-    `DTEND:${formatICSDate(event.endDate)}`,
-    `SUMMARY:${escapeICS(event.title)}`,
   ];
 
-  if (event.description) {
-    lines.push(`DESCRIPTION:${escapeICS(event.description)}`);
-  }
-  if (event.location) {
-    lines.push(`LOCATION:${escapeICS(event.location)}`);
-  }
-  if (event.organizer) {
-    lines.push(`ORGANIZER:mailto:${event.organizer}`);
-  }
+  eventArray.forEach((event) => {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${generateUID()}@rhmanager.ajc.fr`,
+      `DTSTAMP:${formatICSDate(new Date())}`,
+      `DTSTART:${formatICSDate(event.startDate)}`,
+      `DTEND:${formatICSDate(event.endDate)}`,
+      `SUMMARY:${escapeICS(event.title)}`
+    );
 
-  lines.push("STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR");
+    if (event.description) {
+      lines.push(`DESCRIPTION:${escapeICS(event.description)}`);
+    }
+    if (event.location) {
+      lines.push(`LOCATION:${escapeICS(event.location)}`);
+    }
+    if (event.organizer) {
+      lines.push(`ORGANIZER:mailto:${event.organizer}`);
+    }
+
+    lines.push("STATUS:CONFIRMED", "END:VEVENT");
+  });
+
+  lines.push("END:VCALENDAR");
 
   // ICS requires CRLF line endings
   return lines.join("\r\n");

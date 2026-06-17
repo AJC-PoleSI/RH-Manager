@@ -246,9 +246,45 @@ export default function MemberDashboardCalendar({
     return (
         <div className="max-w-5xl mx-auto space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Mon calendrier</h1>
-                <p className="text-sm text-gray-500 mt-1">Vos créneaux assignés, évaluations et événements</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-semibold text-gray-900">Mon calendrier</h1>
+                    <p className="text-sm text-gray-500 mt-1">Vos créneaux assignés, évaluations et événements</p>
+                </div>
+                <button
+                    onClick={() => {
+                        const slotsToExport = memberCalEvents.filter(ev => (ev.type === 'slot_filled' || ev.type === 'slot_empty') && ev.date && ev.startTime);
+                        if (slotsToExport.length === 0) {
+                            alert("Aucun créneau assigné à exporter.");
+                            return;
+                        }
+                        
+                        const events = slotsToExport.map(ev => {
+                            const startDate = new Date(`${ev.date}T${ev.startTime}:00`);
+                            const endDate = new Date(`${ev.date}T${ev.endTime || ev.startTime}:00`);
+                            return {
+                                id: ev.id || "slot",
+                                title: `${ev.title}${ev.room ? ` — ${ev.room}` : ''}`,
+                                description: [
+                                    `Épreuve: ${ev.title}`,
+                                    ev.room ? `Salle: ${ev.room}` : '',
+                                    ev.tour ? `Tour ${ev.tour}` : '',
+                                    ev.candidates?.length > 0
+                                        ? `Candidat(s): ${ev.candidates.map((c: any) => `${c.firstName} ${c.lastName}`).join(', ')}`
+                                        : '',
+                                ].filter(Boolean).join('\n'),
+                                location: ev.room || undefined,
+                                startDate,
+                                endDate,
+                            };
+                        });
+                        const ics = generateICS(events);
+                        downloadICS(ics, "mon_planning.ics");
+                    }}
+                    className="text-sm px-4 py-2 border border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-all flex items-center gap-2 sm:self-auto self-start"
+                >
+                    📅 Exporter mon planning
+                </button>
             </div>
 
             {/* Upcoming events */}

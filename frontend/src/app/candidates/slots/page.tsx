@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { generateICS, downloadICS } from "@/lib/icsGenerator";
 
 function canCancelSlot(dateStr: string, startTime?: string): boolean {
   if (!dateStr) return false;
@@ -214,11 +215,35 @@ export default function CandidateSlotsPage() {
       {/* My enrollments */}
       {enrollments.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Check size={20} className="text-green-600" />
               Mes inscriptions ({enrollments.length})
             </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const events = enrollments.map(e => {
+                  const dateStr = String(e.date || "").substring(0, 10);
+                  const tStart = String(e.startTime || "08:00").substring(0, 5);
+                  const tEnd = String(e.endTime || "09:00").substring(0, 5);
+                  return {
+                    id: e.slotId,
+                    title: `${e.epreuve?.name || "Épreuve"} - ${e.room || "Salle"}`,
+                    description: `Épreuve: ${e.epreuve?.name}\nTour: ${e.epreuve?.tour}\nSalle: ${e.room || "—"}`,
+                    location: e.room || "—",
+                    startDate: new Date(`${dateStr}T${tStart}:00`),
+                    endDate: new Date(`${dateStr}T${tEnd}:00`)
+                  };
+                });
+                const icsContent = generateICS(events);
+                downloadICS(icsContent, "mon_planning.ics");
+              }}
+              className="text-xs"
+            >
+              📅 Exporter mon planning
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3">
