@@ -94,13 +94,30 @@ export default function CalendarMemberBuilder({
       // 2. Fetch les disponibilités du membre
       const resMyAvail = await api.get("/availability", fetchOptions);
 
-      const initials = new Set<string>();
+      // Build a set of temporal keys (date|start|end) from existing availabilities,
+      // then expand them to per-épreuve keys by matching against adminSlots.
+      const temporalAvails = new Set<string>();
       resMyAvail.data.forEach((av: any) => {
         if (av.date) {
           const dateOnly = av.date.split("T")[0];
           const st = (av.start_time || "").slice(0, 5);
           const et = (av.end_time || "").slice(0, 5);
-          initials.add(`${dateOnly}|${st}|${et}`);
+          temporalAvails.add(`${dateOnly}|${st}|${et}`);
+        }
+      });
+
+      // Expand to per-épreuve keys: for each temporal key, find matching slots
+      // and create a key with epreuveId appended
+      const initials = new Set<string>();
+      filteredSlots.forEach((slot: any) => {
+        if (!slot.date || !slot.start_time || !slot.end_time) return;
+        const d = slot.date.split("T")[0];
+        const st = (slot.start_time || "").slice(0, 5);
+        const et = (slot.end_time || "").slice(0, 5);
+        const temporalKey = `${d}|${st}|${et}`;
+        if (temporalAvails.has(temporalKey)) {
+          const epreuveId = slot.epreuve_id || slot.epreuveId || "none";
+          initials.add(`${temporalKey}|${epreuveId}`);
         }
       });
       setSelectedBlocks(initials);
@@ -118,10 +135,13 @@ export default function CalendarMemberBuilder({
   }, [memberId, fetchData]);
 
   // 3. Traitement des slots pour la grille Calendrier (Jours en colonnes, Heures en lignes)
+  // Key now includes epreuve_id to separate different épreuves on the same time slot.
+  // Same épreuve + same time + different rooms = grouped (correct business rule).
+  // Different épreuves + same time = separate blocks (bug fix).
   const gridData = useMemo(() => {
     const datesSet = new Set<string>();
     const timesSet = new Set<string>();
-    const blocksMap = new Map<string, any>(); // key = "date|start|end"
+    const blocksMap = new Map<string, any>(); // key = "date|start|end|epreuveId"
 
     adminSlots.forEach((slot) => {
       if (!slot.date || !slot.start_time || !slot.end_time) return;
@@ -129,24 +149,29 @@ export default function CalendarMemberBuilder({
       const d = slot.date.split("T")[0];
       const st = (slot.start_time || "").slice(0, 5);
       const et = (slot.end_time || "").slice(0, 5);
+      const epreuveId = slot.epreuve_id || slot.epreuveId || "none";
       datesSet.add(d);
       timesSet.add(st);
 
-      const key = `${d}|${st}|${et}`;
+      // Group by épreuve: same épreuve + same time = one block (rooms are grouped)
+      const key = `${d}|${st}|${et}|${epreuveId}`;
       if (!blocksMap.has(key)) {
         blocksMap.set(key, {
           date: d,
           startTime: st,
           endTime: et,
-          epreuves: new Set<string>(),
+          epreuveId,
+          epreuveName:
+            epreuvesConfigured.find((e) => e.id === epreuveId)?.name ||
+            "Épreuve",
+          rooms: new Set<string>(),
           key,
         });
       }
 
-      const epreuveName =
-        epreuvesConfigured.find((e) => e.id === slot.epreuve_id)?.name ||
-        "Epreuve";
-      blocksMap.get(key).epreuves.add(epreuveName);
+      if (slot.room) {
+        blocksMap.get(key).rooms.add(slot.room);
+      }
     });
 
     const uniqueDates = Array.from(datesSet).sort();
@@ -181,7 +206,8 @@ export default function CalendarMemberBuilder({
         const d = slot.date.split("T")[0];
         const st = (slot.start_time || "").slice(0, 5);
         const et = (slot.end_time || "").slice(0, 5);
-        const key = `${d}|${st}|${et}`;
+        const epreuveId = slot.epreuve_id || slot.epreuveId || "none";
+        const key = `${d}|${st}|${et}|${epreuveId}`;
         
         // Was it selected initially but now unchecked?
         if (initialBlocks.has(key) && !selectedBlocks.has(key)) {
@@ -218,22 +244,38 @@ export default function CalendarMemberBuilder({
       }
 
       // 4. Save new availabilities
+      // Keys are now "date|start|end|epreuveId" — strip epreuveId and
+      // deduplicate so we don't create duplicate temporal availabilities.
       const daysOfWeekMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-      const payload = Array.from(selectedBlocks).map((key) => {
-        const [date, start, end] = key.split("|");
+      const seenTemporal = new Set<string>();
+      const payload: Array<{ weekday: string; date: string; startTime: string; endTime: string }> = [];
+      Array.from(selectedBlocks).forEach((key) => {
+        const parts = key.split("|");
+        const [date, start, end] = parts; // ignore parts[3] (epreuveId)
+        const temporalKey = `${date}|${start}|${end}`;
+        if (seenTemporal.has(temporalKey)) return; // deduplicate
+        seenTemporal.add(temporalKey);
         const weekdayInt = new Date(date).getDay();
-        return {
+        payload.push({
           weekday: daysOfWeekMap[weekdayInt],
           date: date,
           startTime: start,
           endTime: end,
-        };
+        });
       });
 
       await api.put("/availability", { availabilities: payload });
       toast("Disponibilités synchronisées globales 🎉", "success");
       
+      // 5. Trigger dispatch to re-allocate examiners based on new availabilities
+      try {
+        await api.post("/api/dispatch/run");
+      } catch (e) {
+        console.error("Dispatch auto-run after save:", e);
+        // Non-blocking: don't show error to user, dispatch can be triggered manually
+      }
+
       // Update initialBlocks to match current
       setInitialBlocks(new Set(selectedBlocks));
 
@@ -329,20 +371,15 @@ export default function CalendarMemberBuilder({
                     {formatTime(time)}
                   </td>
                   {uniqueDates.map((date) => {
-                    // Chercher un block qui correspond à ce jour et cette heure de début
-                    // Vu qu'on indexe par start_time via notre construction blocksMap, on itère pr trouver
-                    let blockKey: string | null = null;
-                    let blockObj: any = null;
-
+                    // Find ALL blocks for this date + time (there may be multiple épreuves)
+                    const matchingBlocks: Array<{ key: string; block: any }> = [];
                     for (const [k, v] of Array.from(blocksMap.entries())) {
                       if (v.date === date && v.startTime === time) {
-                        blockKey = k;
-                        blockObj = v;
-                        break;
+                        matchingBlocks.push({ key: k, block: v });
                       }
                     }
 
-                    if (!blockKey || !blockObj) {
+                    if (matchingBlocks.length === 0) {
                       return (
                         <td
                           key={`${date}-${time}`}
@@ -353,49 +390,56 @@ export default function CalendarMemberBuilder({
                       );
                     }
 
-                    const isSelected = selectedBlocks.has(blockKey);
-                    const epreuvesArr = Array.from(
-                      blockObj.epreuves as Set<string>,
-                    );
-
                     return (
                       <td
                         key={`${date}-${time}`}
                         className="p-2 border-b border-gray-100 align-top"
                       >
-                        <div
-                          onClick={() => toggleBlock(blockKey!)}
-                          className={`
-                            cursor-pointer rounded-lg p-3 h-full min-h-[80px] border-2 transition-all flex flex-col items-center justify-center gap-1.5 relative
-                            ${
-                              isSelected
-                                ? "bg-blue-50 border-blue-500 shadow-sm"
-                                : "bg-white border-dashed border-gray-300 hover:border-blue-300 hover:bg-blue-50/30"
-                            }
-                          `}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow">
-                              <span className="text-white text-xs font-bold">
-                                ✓
-                              </span>
-                            </div>
-                          )}
-                          <span
-                            className={`text-xs font-bold tracking-tight ${isSelected ? "text-blue-900" : "text-gray-800"}`}
-                          >
-                            {formatTime(blockObj.startTime)} → {formatTime(blockObj.endTime)}
-                          </span>
-                          <div className="flex flex-wrap items-center justify-center gap-1">
-                            {epreuvesArr.map((ep, idx) => (
-                              <span
-                                key={idx}
-                                className={`text-[11px] font-medium px-2 py-0.5 rounded-full leading-snug text-center ${isSelected ? "bg-blue-200 text-blue-900" : "bg-gray-100 text-gray-600"}`}
+                        <div className="flex flex-col gap-1.5">
+                          {matchingBlocks.map(({ key: bKey, block: blockObj }) => {
+                            const isSelected = selectedBlocks.has(bKey);
+                            const roomsArr = Array.from(
+                              (blockObj.rooms || new Set()) as Set<string>,
+                            );
+
+                            return (
+                              <div
+                                key={bKey}
+                                onClick={() => toggleBlock(bKey)}
+                                className={`
+                                  cursor-pointer rounded-lg p-3 min-h-[70px] border-2 transition-all flex flex-col items-center justify-center gap-1.5 relative
+                                  ${
+                                    isSelected
+                                      ? "bg-blue-50 border-blue-500 shadow-sm"
+                                      : "bg-white border-dashed border-gray-300 hover:border-blue-300 hover:bg-blue-50/30"
+                                  }
+                                `}
                               >
-                                {ep}
-                              </span>
-                            ))}
-                          </div>
+                                {isSelected && (
+                                  <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow">
+                                    <span className="text-white text-xs font-bold">
+                                      ✓
+                                    </span>
+                                  </div>
+                                )}
+                                <span
+                                  className={`text-xs font-bold tracking-tight ${isSelected ? "text-blue-900" : "text-gray-800"}`}
+                                >
+                                  {formatTime(blockObj.startTime)} → {formatTime(blockObj.endTime)}
+                                </span>
+                                <span
+                                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full leading-snug text-center ${isSelected ? "bg-blue-200 text-blue-900" : "bg-gray-100 text-gray-600"}`}
+                                >
+                                  {blockObj.epreuveName}
+                                </span>
+                                {roomsArr.length > 0 && (
+                                  <span className="text-[10px] text-gray-400">
+                                    {roomsArr.join(", ")}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </td>
                     );

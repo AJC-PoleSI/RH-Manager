@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { generateICS, downloadICS } from '@/lib/icsGenerator';
 
 interface MemberDashboardCalendarProps {
     mySlots: any[];
@@ -679,7 +680,38 @@ export default function MemberDashboardCalendar({
                             </div>
                         </div>
 
-                        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+                        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+                            {(selectedMemberSlot.type === 'slot_filled' || selectedMemberSlot.type === 'slot_empty') && selectedMemberSlot.date && selectedMemberSlot.startTime ? (
+                                <button
+                                    onClick={() => {
+                                        const startDate = new Date(`${selectedMemberSlot.date}T${selectedMemberSlot.startTime}:00`);
+                                        const endDate = new Date(`${selectedMemberSlot.date}T${selectedMemberSlot.endTime || selectedMemberSlot.startTime}:00`);
+                                        const ics = generateICS({
+                                            title: `${selectedMemberSlot.title}${selectedMemberSlot.room ? ` — ${selectedMemberSlot.room}` : ''}`,
+                                            description: [
+                                                `Épreuve: ${selectedMemberSlot.title}`,
+                                                selectedMemberSlot.room ? `Salle: ${selectedMemberSlot.room}` : '',
+                                                selectedMemberSlot.tour ? `Tour ${selectedMemberSlot.tour}` : '',
+                                                selectedMemberSlot.candidates?.length > 0
+                                                    ? `Candidat(s): ${selectedMemberSlot.candidates.map((c: any) => `${c.firstName} ${c.lastName}`).join(', ')}`
+                                                    : '',
+                                            ].filter(Boolean).join('\n'),
+                                            location: selectedMemberSlot.room || undefined,
+                                            startDate,
+                                            endDate,
+                                        });
+                                        downloadICS(
+                                            ics,
+                                            `creneau-${selectedMemberSlot.date}-${(selectedMemberSlot.startTime || '').replace(':', 'h')}.ics`,
+                                        );
+                                    }}
+                                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg text-sm hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm flex items-center gap-2"
+                                >
+                                    📅 Ajouter à mon calendrier
+                                </button>
+                            ) : (
+                                <div />
+                            )}
                             <button
                                 onClick={() => setSelectedMemberSlot(null)}
                                 className="px-4 py-2 bg-white border border-gray-200 text-gray-700 font-medium rounded-lg text-sm hover:bg-gray-100 transition-colors shadow-sm"

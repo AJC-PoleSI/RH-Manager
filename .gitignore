@@ -13,3 +13,10 @@ test*.js
 # Build output
 dist/
 .next/
+
+# graphify and claude metadata
+graphify-out/
+CLAUDE.md
+.claude/
+frontend/.claude/
+
