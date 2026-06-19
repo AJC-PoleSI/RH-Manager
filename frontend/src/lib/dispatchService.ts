@@ -59,9 +59,19 @@ function isFrozen(slot: SlotInfo): boolean {
   return slotDate.getTime() - now.getTime() < FREEZE_HOURS * 3600 * 1000;
 }
 
-/** Check if a slot is "committed" (published/ready/full/closed or has enrollments) */
+/**
+ * Check if a slot is "committed" (its jury must NOT be reshuffled).
+ *
+ * IMPORTANT : `ready` n'est PAS verrouillé. `ready` signifie seulement
+ * « le jury a atteint min_members », pas « publié aux candidats ». Le geler
+ * empêchait tout rééquilibrage : les 2 premiers membres à déclarer leur
+ * dispo restaient titulaires à vie et tous les suivants finissaient
+ * éternellement remplaçants. Un créneau n'est réellement figé que s'il est
+ * publié aux candidats, rempli, clôturé, déjà choisi par un candidat
+ * (enrollment), ou dans la fenêtre de gel des 24h (gérée séparément).
+ */
 function isCommitted(slot: SlotInfo): boolean {
-  if (["published", "ready", "full", "closed"].includes(slot.status)) {
+  if (["published", "full", "closed"].includes(slot.status)) {
     return true;
   }
   const actives = (slot.enrollments || []).filter(

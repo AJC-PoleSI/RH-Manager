@@ -265,16 +265,12 @@ export default function CalendarMemberBuilder({
         });
       });
 
+      // PUT /availability re-runs the intelligent dispatch server-side
+      // (équité + brassage) over ALL availabilities, so no separate
+      // /api/dispatch/run call is needed here — that would just run the
+      // same global re-balance twice and risk a race on the assignments.
       await api.put("/availability", { availabilities: payload });
       toast("Disponibilités synchronisées globales 🎉", "success");
-      
-      // 5. Trigger dispatch to re-allocate examiners based on new availabilities
-      try {
-        await api.post("/api/dispatch/run");
-      } catch (e) {
-        console.error("Dispatch auto-run after save:", e);
-        // Non-blocking: don't show error to user, dispatch can be triggered manually
-      }
 
       // Update initialBlocks to match current
       setInitialBlocks(new Set(selectedBlocks));

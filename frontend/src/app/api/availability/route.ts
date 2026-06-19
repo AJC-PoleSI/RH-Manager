@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { runAutoAllocate } from "@/lib/auto-allocate";
+import { runDispatch } from "@/lib/dispatchService";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -181,13 +181,17 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // Background : re-run the auto-allocation so the assignments stay in sync
-    // with the member's new availabilities. Errors are swallowed because
-    // the availability save itself succeeded.
+    // Re-run the intelligent dispatch (équité + brassage anti-binôme) so the
+    // assignments stay in sync with the member's new availabilities. We use
+    // runDispatch — not the legacy runAutoAllocate — so that a full global
+    // re-balancing happens over ALL current availabilities at every save
+    // (titulaires rotate across slots instead of freezing the first two
+    // members who declared). Errors are swallowed because the availability
+    // save itself succeeded.
     try {
-      await runAutoAllocate();
+      await runDispatch();
     } catch (e) {
-      console.error("Auto-allocate after availability change failed:", e);
+      console.error("Dispatch after availability change failed:", e);
     }
 
     return Response.json({ message: "Availabilities updated" });
