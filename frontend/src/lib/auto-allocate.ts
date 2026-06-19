@@ -30,24 +30,12 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
 
   if (!slots || slots.length === 0) return { updated: 0, unfilled: [] };
 
-  // FIX H3: helper — a slot is "committed" if any of:
-  //   • status is in {published, full, closed}
-  //   • it has at least one active enrollment
-  // Committed slots keep their existing jury (no wipe, no re-pick).
-  //
-  // NOTE : `ready` est volontairement EXCLU. Un créneau « ready » a juste
-  // atteint min_members ; il doit rester rééquilibrable tant qu'il n'est pas
-  // publié aux candidats — sinon les premiers à déclarer leur dispo sont
-  // figés comme titulaires et les suivants restent toujours remplaçants.
-  const isCommitted = (s: any): boolean => {
-    if (["published", "full", "closed"].includes(s.status)) {
-      return true;
-    }
-    const actives = (s.enrollments || []).filter(
-      (e: any) => !e.status || e.status === "active",
-    );
-    return actives.length > 0;
-  };
+  // La répartition des examinateurs est indépendante de l'état candidat.
+  // On ne verrouille QUE les créneaux clôturés (`closed`) ; tout le reste
+  // (open/ready/published/full + créneaux avec inscriptions) reste
+  // rééquilibrable. Les inscriptions candidats (slot_enrollments) ne sont
+  // jamais touchées par l'allocation. Voir dispatchService.isCommitted.
+  const isCommitted = (s: any): boolean => s.status === "closed";
 
   // Fetch all availabilities
   const { data: availabilities } = await supabaseAdmin

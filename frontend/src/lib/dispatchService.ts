@@ -60,24 +60,21 @@ function isFrozen(slot: SlotInfo): boolean {
 }
 
 /**
- * Check if a slot is "committed" (its jury must NOT be reshuffled).
+ * Check if a slot's jury is locked (must NOT be reshuffled by the dispatch).
  *
- * IMPORTANT : `ready` n'est PAS verrouillé. `ready` signifie seulement
- * « le jury a atteint min_members », pas « publié aux candidats ». Le geler
- * empêchait tout rééquilibrage : les 2 premiers membres à déclarer leur
- * dispo restaient titulaires à vie et tous les suivants finissaient
- * éternellement remplaçants. Un créneau n'est réellement figé que s'il est
- * publié aux candidats, rempli, clôturé, déjà choisi par un candidat
- * (enrollment), ou dans la fenêtre de gel des 24h (gérée séparément).
+ * IMPORTANT : la répartition des EXAMINATEURS est indépendante de l'état
+ * candidat. On ne verrouille QUE les créneaux clôturés (`closed`) — l'épreuve
+ * est passée. Tout le reste (open/ready/published/full + créneaux avec
+ * candidats inscrits) reste rééquilibrable : on veut pouvoir distribuer
+ * équitablement les examinateurs (2 par créneau, en rotation) même après que
+ * le planning est publié ou que des candidats se sont inscrits.
+ *
+ * Les inscriptions candidats vivent dans une table séparée (slot_enrollments)
+ * et ne sont JAMAIS touchées par le dispatch : rééquilibrer le jury ne les
+ * impacte pas. La fenêtre de gel des 24h (isFrozen) reste le second verrou.
  */
 function isCommitted(slot: SlotInfo): boolean {
-  if (["published", "full", "closed"].includes(slot.status)) {
-    return true;
-  }
-  const actives = (slot.enrollments || []).filter(
-    (e) => !e.status || e.status === "active" || e.status === "enrolled",
-  );
-  return actives.length > 0;
+  return slot.status === "closed";
 }
 
 /** Check temporal overlap between a member's committed slots and a candidate slot */
