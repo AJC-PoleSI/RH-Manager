@@ -79,6 +79,73 @@ function getStatusBadge(status: string) {
   return { bg: "#FFF0F3", text: "#9F1239", border: "#FECDD3" };
 }
 
+/**
+ * Statut d'affectation du membre courant sur un créneau, pour le code couleur
+ * de "Mon emploi du temps" :
+ *   • vert   = vous êtes titulaire confirmé (c'est vous qui évaluez)
+ *   • orange = en attente (titulaire mais le créneau n'est pas encore publié/figé)
+ *   • rouge  = surplus → vous êtes au-delà du nombre d'examinateurs requis,
+ *              quasi sûr de ne pas être retenu.
+ */
+function getMyAssignmentStatus(
+  slot: MySlot,
+  userId?: string,
+): {
+  side: string;
+  cardClass: string;
+  timeClass: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  label: string;
+} {
+  const minMembers = (slot as any).min_members || (slot as any).minMembers || 2;
+  const ordered = [...(slot.members || [])].sort((a: any, b: any) =>
+    String(a.created_at || "").localeCompare(String(b.created_at || "")),
+  );
+  const myIndex = ordered.findIndex(
+    (m: any) => (m.member?.id || m.member_id) === userId,
+  );
+  const isConfirmedSlot = ["ready", "published", "full", "closed"].includes(
+    slot.status,
+  );
+
+  const GREEN = {
+    side: "#22c55e",
+    cardClass: "bg-green-50/30",
+    timeClass: "text-green-900",
+    badgeBg: "#dcfce7",
+    badgeText: "#166534",
+    badgeBorder: "#bbf7d0",
+    label: "Confirmé — vous évaluez",
+  };
+  const ORANGE = {
+    side: "#f59e0b",
+    cardClass: "bg-amber-50/30",
+    timeClass: "text-amber-900",
+    badgeBg: "#fef3c7",
+    badgeText: "#92400e",
+    badgeBorder: "#fde68a",
+    label: "En attente de confirmation",
+  };
+  const RED = {
+    side: "#ef4444",
+    cardClass: "bg-red-50/30",
+    timeClass: "text-red-900",
+    badgeBg: "#fee2e2",
+    badgeText: "#991b1b",
+    badgeBorder: "#fecaca",
+    label: "Peu probable d'être retenu",
+  };
+
+  // Au-delà du quota → surplus, sera vraisemblablement écarté.
+  if (myIndex >= 0 && myIndex >= minMembers) return RED;
+  // Titulaire sur un créneau figé/publié → confirmé.
+  if (isConfirmedSlot) return GREEN;
+  // Titulaire mais créneau pas encore confirmé → en attente.
+  return ORANGE;
+}
+
 export default function PlanningPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1919,21 +1986,18 @@ export default function PlanningPage() {
                       .filter(Boolean);
 
                     const hasCandidates = candidateNames.length > 0;
-                    
-                    // Style matches the Calendar
-                    const cardBg = hasCandidates ? "bg-green-50 border-green-200" : "bg-white border-gray-200";
-                    const sideColor = hasCandidates ? "#22c55e" : "#9ca3af";
-                    const epreuveBg = hasCandidates ? "#dcfce7" : "#f3f4f6";
-                    const epreuveText = hasCandidates ? "#166534" : "#4b5563";
-                    const epreuveBorder = hasCandidates ? "#bbf7d0" : "#e5e7eb";
+
+                    // Code couleur basé sur le statut d'affectation du membre
+                    // courant sur ce créneau (vert = confirmé, orange = en
+                    // attente, rouge = surplus / peu probable d'être retenu).
+                    const myStatus = getMyAssignmentStatus(slot, user?.id);
+                    const sideColor = myStatus.side;
 
                     return (
                       <div
                         key={slot.id}
                         onClick={() => setSelectedSlot(slot)}
-                        className={`flex items-stretch cursor-pointer hover:bg-gray-50/50 transition-colors ${
-                          hasCandidates ? "bg-green-50/20" : ""
-                        }`}
+                        className={`flex items-stretch cursor-pointer hover:bg-gray-50/50 transition-colors ${myStatus.cardClass}`}
                       >
                         {/* Barre latérale colorée */}
                         <div
@@ -1948,21 +2012,31 @@ export default function PlanningPage() {
                         <div className="flex-1 px-5 py-4">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              {/* Horaire + épreuve */}
-                              <div className="flex items-center gap-3 mb-1.5">
-                                <span className={`text-sm font-semibold ${hasCandidates ? "text-green-900" : "text-gray-900"}`}>
+                              {/* Horaire + épreuve + statut */}
+                              <div className="flex items-center flex-wrap gap-3 mb-1.5">
+                                <span className={`text-sm font-semibold ${myStatus.timeClass}`}>
                                   {formatTime(slot.start_time)} -{" "}
                                   {formatTime(slot.end_time)}
                                 </span>
                                 <span
                                   className="px-2 py-0.5 rounded-full text-xs font-medium"
                                   style={{
-                                    backgroundColor: epreuveBg,
-                                    color: epreuveText,
-                                    border: `1px solid ${epreuveBorder}`,
+                                    backgroundColor: "#f3f4f6",
+                                    color: "#4b5563",
+                                    border: "1px solid #e5e7eb",
                                   }}
                                 >
                                   {slot.epreuve?.name || "Epreuve"}
+                                </span>
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                                  style={{
+                                    backgroundColor: myStatus.badgeBg,
+                                    color: myStatus.badgeText,
+                                    border: `1px solid ${myStatus.badgeBorder}`,
+                                  }}
+                                >
+                                  {myStatus.label}
                                 </span>
                               </div>
 
