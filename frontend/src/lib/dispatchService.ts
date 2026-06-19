@@ -177,27 +177,10 @@ export async function runDispatch(opts?: {
     currentBySlot[a.slot_id].add(a.member_id);
   });
 
-  // 4. Build pair history from current assignments across ALL slots
-  // (not just the ones we're processing — we want global brassage)
-  const { data: allAssignments } = await supabaseAdmin
-    .from("slot_member_assignments")
-    .select("slot_id, member_id");
-
-  const pairHistory = new Map<string, number>();
-  const slotMembers: Record<string, string[]> = {};
-  (allAssignments || []).forEach((a: any) => {
-    if (!slotMembers[a.slot_id]) slotMembers[a.slot_id] = [];
-    slotMembers[a.slot_id].push(a.member_id);
-  });
-  // Count pair co-occurrences across all slots
-  Object.values(slotMembers).forEach((members) => {
-    for (let i = 0; i < members.length; i++) {
-      for (let j = i + 1; j < members.length; j++) {
-        const key = pairKey(members[i], members[j]);
-        pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
-      }
-    }
-  });
+  // 4. (Le brassage / pairHistory est désormais calculé PAR ÉPREUVE dans la
+  // boucle d'allocation — voir étape 9. La charge (équité) et la diversité
+  // des binômes se mesurent à l'intérieur d'une même épreuve, pas en mélangeant
+  // entretiens individuels et épreuves de groupe.)
 
   // 5. Match availabilities to slots by date + start_time
   const matchSlotToMembers = (slot: SlotInfo): string[] => {
@@ -225,7 +208,11 @@ export async function runDispatch(opts?: {
   });
 
   // 7. Tracking structures
-  const memberLoad: Record<string, number> = {};
+  //
+  // memberCommittedSlots est GLOBAL (toutes épreuves confondues) : il sert à
+  // empêcher le double-booking temporel — un examinateur ne peut pas être sur
+  // deux créneaux qui se chevauchent, même s'ils relèvent d'épreuves
+  // différentes.
   const memberCommittedSlots: Record<
     string,
     Array<{ date: string; start: string; end: string }>
@@ -242,144 +229,164 @@ export async function runDispatch(opts?: {
 
   let frozenCount = 0;
 
-  // 8. Pre-populate load from committed/frozen slots
+  // 8. Pré-charge GLOBALE des conflits : enregistre les membres des créneaux
+  // gelés/clôturés pour éviter tout double-booking inter-épreuves. (On ne
+  // touche PAS à la charge ici — la charge est recalculée par épreuve.)
+  const registerConflict = (memberId: string, slot: SlotInfo) => {
+    if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
+    memberCommittedSlots[memberId].push({
+      date: String(slot.date || "").substring(0, 10),
+      start: String(slot.start_time || "").substring(0, 5),
+      end: String(slot.end_time || "").substring(0, 5),
+    });
+  };
   for (const slot of sortedSlots) {
     if (isFrozen(slot as SlotInfo) || isCommitted(slot as SlotInfo)) {
       const existing = currentBySlot[slot.id] || new Set<string>();
-      existing.forEach((memberId) =>
-        commitMember(
-          memberId,
-          slot as SlotInfo,
-          memberLoad,
-          memberCommittedSlots,
-        ),
-      );
+      existing.forEach((memberId) => registerConflict(memberId, slot as SlotInfo));
     }
   }
 
-  // 9. Main allocation loop
+  // 9. Allocation PAR ÉPREUVE.
+  //
+  // Chaque épreuve est répartie indépendamment : équité (charge) et brassage
+  // (binômes) sont calculés au sein de l'épreuve uniquement. Ainsi un
+  // examinateur qui a déjà fait 2 entretiens individuels n'est pas pénalisé
+  // pour les épreuves de groupe, et chaque épreuve obtient sa propre rotation.
+  const slotsByEpreuve = new Map<string, SlotInfo[]>();
   for (const slot of sortedSlots) {
-    const existing = currentBySlot[slot.id] || new Set<string>();
-    const slotInfo = slot as SlotInfo;
+    const key = (slot as SlotInfo).epreuve_id || "__sans_epreuve__";
+    if (!slotsByEpreuve.has(key)) slotsByEpreuve.set(key, []);
+    slotsByEpreuve.get(key)!.push(slot as SlotInfo);
+  }
 
-    // 9a. Frozen slots — don't touch
-    if (isFrozen(slotInfo)) {
-      frozenCount++;
-      continue;
-    }
+  for (const epreuveSlots of Array.from(slotsByEpreuve.values())) {
+    // État équité + brassage PROPRE à cette épreuve
+    const memberLoad: Record<string, number> = {};
+    const pairHistory = new Map<string, number>();
 
-    // 9b. Committed slots — preserve jury, only add if understaffed
-    if (isCommitted(slotInfo)) {
-      existing.forEach((memberId) => {
-        if (!memberCommittedSlots[memberId]?.some(
-          (c) =>
-            c.date === String(slot.date).substring(0, 10) &&
-            c.start === String(slot.start_time).substring(0, 5),
-        )) {
-          commitMember(memberId, slotInfo, memberLoad, memberCommittedSlots);
-        }
-      });
-
-      // Try to fill gaps if understaffed
-      const quota = slot.min_members || 2;
-      if (existing.size < quota) {
-        const eligible = matchSlotToMembers(slotInfo).filter(
-          (id) => !existing.has(id),
-        );
-        const scored = eligible
-          .map((id) => ({
-            id,
-            score: scoreMember(id, Array.from(existing), memberLoad, pairHistory),
-          }))
-          .sort((a, b) => a.score - b.score);
-
-        let added = 0;
-        for (const { id } of scored) {
-          if (existing.size + added >= quota) break;
-          if (wouldConflict(id, slotInfo, memberCommittedSlots)) continue;
-          assignmentsToInsert.push({ slot_id: slot.id, member_id: id });
-          commitMember(id, slotInfo, memberLoad, memberCommittedSlots);
-          // Update pair history
-          Array.from(existing).forEach((otherId) => {
-            const key = pairKey(id, otherId);
-            pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
-          });
-          added++;
-        }
-      }
-      continue;
-    }
-
-    // 9c. Open slots — full re-allocation with brassage + equity
-    const eligible = matchSlotToMembers(slotInfo);
-    const quota = slot.min_members || 2;
-    const picked: string[] = [];
-
-    // Sort by composite score (load + pair penalty)
-    // On first pass, alreadyPicked is empty so we use pure load
-    // Then progressively factor in pair penalties
-    const sortedEligible = [...eligible].sort(
-      (a, b) =>
-        scoreMember(a, picked, memberLoad, pairHistory) -
-        scoreMember(b, picked, memberLoad, pairHistory),
-    );
-
-    for (const memberId of sortedEligible) {
-      if (picked.length >= quota) break;
-      if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) continue;
-      picked.push(memberId);
-      commitMember(memberId, slotInfo, memberLoad, memberCommittedSlots);
-      // Update pair history for next picks
-      for (const other of picked.slice(0, -1)) {
-        const key = pairKey(memberId, other);
-        pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
-      }
-    }
-
-    picked.forEach((memberId) => {
-      assignmentsToInsert.push({ slot_id: slot.id, member_id: memberId });
-    });
-
-    // 9d. Backups — pick 2 more after titulaires
-    const remainingEligible = eligible
-      .filter((id) => !picked.includes(id))
-      .sort(
-        (a, b) =>
-          scoreMember(a, picked, memberLoad, pairHistory) -
-          scoreMember(b, picked, memberLoad, pairHistory),
-      );
-
-    const backups: string[] = [];
-    for (const memberId of remainingEligible) {
-      if (backups.length >= BACKUP_COUNT) break;
-      if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) continue;
-      backups.push(memberId);
-      // Don't increment load for backups — they're on standby
-    }
-
-    backups.forEach((memberId) => {
-      backupAssignments.push({ slot_id: slot.id, member_id: memberId });
-    });
-
-    // 9e. Track unfilled slots
-    if (picked.length < quota) {
-      unfilled.push({
-        slot_id: slot.id,
-        needed: quota,
-        got: picked.length,
-      });
-    }
-
-    // 9f. Detect members who were previously assigned but aren't now (equity-driven removal)
-    existing.forEach((memberId) => {
-      if (!picked.includes(memberId) && !backups.includes(memberId)) {
-        removedMembers.push({
-          member_id: memberId,
-          slot: slotInfo,
-          reason: "répartition d'équité",
+    // Pré-charge de la charge depuis les créneaux gelés/clôturés de CETTE épreuve
+    for (const slot of epreuveSlots) {
+      if (isFrozen(slot) || isCommitted(slot)) {
+        const existing = currentBySlot[slot.id] || new Set<string>();
+        existing.forEach((memberId) => {
+          memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
         });
       }
-    });
+    }
+
+    for (const slot of epreuveSlots) {
+      const existing = currentBySlot[slot.id] || new Set<string>();
+      const slotInfo = slot;
+
+      // 9a. Frozen slots — don't touch
+      if (isFrozen(slotInfo)) {
+        frozenCount++;
+        continue;
+      }
+
+      // 9b. Committed (closed) slots — preserve jury, only add if understaffed
+      if (isCommitted(slotInfo)) {
+        const quota = slot.min_members || 2;
+        if (existing.size < quota) {
+          const eligible = matchSlotToMembers(slotInfo).filter(
+            (id) => !existing.has(id),
+          );
+          const scored = eligible
+            .map((id) => ({
+              id,
+              score: scoreMember(id, Array.from(existing), memberLoad, pairHistory),
+            }))
+            .sort((a, b) => a.score - b.score);
+
+          let added = 0;
+          for (const { id } of scored) {
+            if (existing.size + added >= quota) break;
+            if (wouldConflict(id, slotInfo, memberCommittedSlots)) continue;
+            assignmentsToInsert.push({ slot_id: slot.id, member_id: id });
+            commitMember(id, slotInfo, memberLoad, memberCommittedSlots);
+            Array.from(existing).forEach((otherId) => {
+              const key = pairKey(id, otherId);
+              pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
+            });
+            added++;
+          }
+        }
+        continue;
+      }
+
+      // 9c. Open slots — full re-allocation with brassage + equity.
+      //
+      // Sélection GLOUTONNE : à chaque pick on re-trie les candidats restants
+      // selon (charge + pénalité de binôme vis-à-vis des déjà-choisis). C'est
+      // ce qui fait réellement varier les duos — l'ancien tri unique (calculé
+      // avant le premier pick) laissait la pénalité de binôme inopérante.
+      const quota = slot.min_members || 2;
+      const picked: string[] = [];
+      const pool = matchSlotToMembers(slotInfo).filter(
+        (id) => !wouldConflict(id, slotInfo, memberCommittedSlots),
+      );
+
+      while (picked.length < quota && pool.length > 0) {
+        pool.sort(
+          (a, b) =>
+            scoreMember(a, picked, memberLoad, pairHistory) -
+            scoreMember(b, picked, memberLoad, pairHistory),
+        );
+        const chosen = pool.shift()!;
+        picked.push(chosen);
+        commitMember(chosen, slotInfo, memberLoad, memberCommittedSlots);
+        for (const other of picked.slice(0, -1)) {
+          const key = pairKey(chosen, other);
+          pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
+        }
+      }
+
+      picked.forEach((memberId) => {
+        assignmentsToInsert.push({ slot_id: slot.id, member_id: memberId });
+      });
+
+      // 9d. Backups — pick BACKUP_COUNT more after titulaires
+      const remainingEligible = matchSlotToMembers(slotInfo)
+        .filter((id) => !picked.includes(id))
+        .sort(
+          (a, b) =>
+            scoreMember(a, picked, memberLoad, pairHistory) -
+            scoreMember(b, picked, memberLoad, pairHistory),
+        );
+
+      const backups: string[] = [];
+      for (const memberId of remainingEligible) {
+        if (backups.length >= BACKUP_COUNT) break;
+        if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) continue;
+        backups.push(memberId);
+        // Don't increment load for backups — they're on standby
+      }
+
+      backups.forEach((memberId) => {
+        backupAssignments.push({ slot_id: slot.id, member_id: memberId });
+      });
+
+      // 9e. Track unfilled slots
+      if (picked.length < quota) {
+        unfilled.push({
+          slot_id: slot.id,
+          needed: quota,
+          got: picked.length,
+        });
+      }
+
+      // 9f. Detect members previously assigned but not anymore (equity removal)
+      existing.forEach((memberId) => {
+        if (!picked.includes(memberId) && !backups.includes(memberId)) {
+          removedMembers.push({
+            member_id: memberId,
+            slot: slotInfo,
+            reason: "répartition d'équité",
+          });
+        }
+      });
+    }
   }
 
   // 10. Write assignments to DB
@@ -511,6 +518,26 @@ export async function runDispatch(opts?: {
 
   // 13. Log to allocation_history for audit trail
   try {
+    // Recompute aggregate stats from the final assignments (memberLoad and
+    // pairHistory are now scoped per-épreuve inside the loop).
+    const finalLoad: Record<string, number> = {};
+    assignmentsToInsert.forEach((a) => {
+      finalLoad[a.member_id] = (finalLoad[a.member_id] || 0) + 1;
+    });
+    const finalPairs: Record<string, number> = {};
+    const bySlot: Record<string, string[]> = {};
+    assignmentsToInsert.forEach((a) => {
+      (bySlot[a.slot_id] ||= []).push(a.member_id);
+    });
+    Object.values(bySlot).forEach((members) => {
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          const key = pairKey(members[i], members[j]);
+          finalPairs[key] = (finalPairs[key] || 0) + 1;
+        }
+      }
+    });
+
     const statsPayload = {
       total_slots: sortedSlots.length,
       assigned: assignmentsToInsert.length,
@@ -518,8 +545,8 @@ export async function runDispatch(opts?: {
       unfilled: unfilled.length,
       frozen: frozenCount,
       notifications: notificationCount,
-      member_load: memberLoad,
-      pair_diversity: Object.fromEntries(pairHistory),
+      member_load: finalLoad,
+      pair_diversity: finalPairs,
     };
 
     await supabaseAdmin.from("allocation_history").insert({

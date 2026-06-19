@@ -61,6 +61,7 @@ interface NewEpreuveForm {
   roulementMinutes: string;
   pole: string;
   groupSize: string;
+  minEvaluators: string;
   inscriptionDeadline: string;
   /* shared */
   description: string;
@@ -93,6 +94,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   roulementMinutes: "10",
   pole: "",
   groupSize: "4",
+  minEvaluators: "2",
   inscriptionDeadline: "",
   description: "",
   color: "#3B82F6",
@@ -318,6 +320,11 @@ export default function CreationPage() {
       roulementMinutes: String(ep.roulementMinutes || "10"),
       pole: ep.pole || "",
       groupSize: String(ep.groupSize || "4"),
+      minEvaluators: String(
+        (ep as any).minEvaluatorsPerSalle ||
+          (ep as any).min_evaluators_per_salle ||
+          2,
+      ),
       inscriptionDeadline: ep.inscriptionDeadline
         ? isoToDatetimeLocal(ep.inscriptionDeadline)
         : "",
@@ -375,6 +382,7 @@ export default function CreationPage() {
         isGroupEpreuve: form.type === "groupe",
         groupSize:
           form.type === "groupe" ? parseInt(form.groupSize) || 1 : 1,
+        minEvaluatorsPerSalle: Math.max(1, parseInt(form.minEvaluators) || 2),
         roulementMinutes: form.roulementMinutes
           ? parseInt(form.roulementMinutes)
           : 10,
@@ -955,6 +963,26 @@ export default function CreationPage() {
                     </p>
                   </div>
                 )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre d&apos;examinateurs par créneau
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.minEvaluators}
+                    onChange={(e) =>
+                      handleFormChange("minEvaluators", e.target.value)
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="2"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Nombre d&apos;examinateurs que le dispatch affecte à chaque
+                    créneau de cette épreuve (ex. 4 pour une épreuve de groupe).
+                    S&apos;applique aux nouveaux créneaux créés.
+                  </p>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Pôle (Optionnel)

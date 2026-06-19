@@ -232,6 +232,19 @@ export async function PUT(
         .eq("epreuve_id", id);
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // min_evaluators_per_salle modifié → répercuter sur min_members des
+    // créneaux existants de l'épreuve, pour que le dispatch affecte bien le
+    // nouveau nombre d'examinateurs (sinon seuls les futurs créneaux en
+    // tiennent compte).
+    // ══════════════════════════════════════════════════════════════════
+    if (updateData.min_evaluators_per_salle !== undefined) {
+      await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ min_members: updateData.min_evaluators_per_salle })
+        .eq("epreuve_id", id);
+    }
+
     return Response.json({ ...data, cascade });
   } catch (error) {
     console.error("PUT /epreuves/:id catch error:", error);
