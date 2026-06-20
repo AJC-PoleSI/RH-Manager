@@ -162,6 +162,8 @@ export default function CandidateWishesPage() {
   const [state, dispatch] = useReducer(reducer, initialState);
   // null = en cours de chargement, true/false = réponse de l'API
   const [admitted, setAdmitted] = useState<boolean | null>(null);
+  // true = vœux confirmés définitivement au tour 3 → plus modifiables.
+  const [locked, setLocked] = useState(false);
 
   // Le classement des vœux n'est débloqué que pour les candidats admis
   // au tour 2 (délibération tour 1 acceptée).
@@ -170,6 +172,7 @@ export default function CandidateWishesPage() {
       try {
         const res = await api.get("/wishes/access");
         setAdmitted(res.data?.admitted === true);
+        setLocked(res.data?.locked === true);
       } catch {
         setAdmitted(false);
       }
@@ -245,6 +248,9 @@ export default function CandidateWishesPage() {
   const isDefinitif = state.activeTourNumber >= 3;
   const canRank = state.activeTourNumber >= 2;
   const isTourTermine = state.activeTourStatus === "termine";
+  // Lecture seule : soit le tour est terminé, soit les vœux ont été confirmés
+  // définitivement au tour 3 (verrou candidat).
+  const readOnly = isTourTermine || locked;
 
   const addPole = (pole: string) => {
     dispatch({ type: "ADD_POLE", payload: pole });
@@ -271,7 +277,16 @@ export default function CandidateWishesPage() {
   };
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!user?.id || readOnly) return;
+    // Au tour 3, la sauvegarde est une confirmation DÉFINITIVE : on prévient
+    // explicitement le candidat qu'il ne pourra plus revenir dessus.
+    if (isDefinitif) {
+      const ok = window.confirm(
+        "Confirmez-vous vos choix de pôles ?\n\nCe classement est DÉFINITIF : " +
+          "une fois confirmé, vous ne pourrez plus le modifier.",
+      );
+      if (!ok) return;
+    }
     dispatch({ type: "SET_SAVING", payload: true });
     try {
       const wishes = state.selectedPoles.map((pole, index) => {
@@ -286,8 +301,13 @@ export default function CandidateWishesPage() {
         }
         return { pole, rank: index + 1, wantsBureau, posteDetail };
       });
-      await api.put(`/wishes/${user.id}`, { wishes });
+      const res = await api.put(`/wishes/${user.id}`, {
+        wishes,
+        definitive: isDefinitif,
+      });
       dispatch({ type: "SET_SAVED", payload: true });
+      // Le serveur confirme le verrouillage (uniquement si tour 3 actif).
+      if (res.data?.locked === true) setLocked(true);
     } catch {
       // Error
     } finally {
@@ -508,7 +528,7 @@ export default function CandidateWishesPage() {
                 </span>
 
                 {/* Reorder buttons */}
-                {!isTourTermine && (
+                {!readOnly && (
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => moveUp(index)}
@@ -579,7 +599,7 @@ export default function CandidateWishesPage() {
                         type="checkbox"
                         className="rounded border-gray-300"
                         checked={!!state.wantsBureau[pole]}
-                        disabled={isTourTermine}
+                        disabled={readOnly}
                         onChange={() => toggleBureau(pole)}
                       />
                       + intéressé(e) par un poste au bureau
@@ -587,7 +607,7 @@ export default function CandidateWishesPage() {
                     {state.wantsBureau[pole] && (
                       <select
                         value={state.posteDetail[pole] || ""}
-                        disabled={isTourTermine}
+                        disabled={readOnly}
                         onChange={(e) => setPosteDetail(pole, e.target.value)}
                         className="w-full sm:w-auto text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
                       >
@@ -610,7 +630,7 @@ export default function CandidateWishesPage() {
                     </label>
                     <select
                       value={state.posteDetail[pole] || ""}
-                      disabled={isTourTermine}
+                      disabled={readOnly}
                       onChange={(e) => setPosteDetail(pole, e.target.value)}
                       className="w-full sm:w-auto text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
                     >
@@ -630,7 +650,7 @@ export default function CandidateWishesPage() {
       </div>
 
       {/* Available poles to select */}
-      {!isTourTermine && state.selectedPoles.length < 3 && (
+      {!readOnly && state.selectedPoles.length < 3 && (
         <div>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Pôles disponibles
@@ -665,7 +685,7 @@ export default function CandidateWishesPage() {
       )}
 
       {/* All poles shown when 3 are selected */}
-      {!isTourTermine &&
+      {!readOnly &&
         state.selectedPoles.length >= 3 &&
         availablePoles.length > 0 && (
           <div>
@@ -687,7 +707,7 @@ export default function CandidateWishesPage() {
         )}
 
       {/* Save button */}
-      {!isTourTermine && (
+      {!readOnly && (
         <div className="flex justify-end">
           <button
             onClick={handleSave}
@@ -708,6 +728,30 @@ export default function CandidateWishesPage() {
                   ? "Confirmer mes choix définitifs"
                   : "Sauvegarder"}
           </button>
+        </div>
+      )}
+
+      {/* Vœux confirmés définitivement (verrou tour 3) */}
+      {locked && !isTourTermine && (
+        <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-4">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#16A34A"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-shrink-0 mt-0.5"
+          >
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <p className="text-sm text-green-800">
+            <strong>Choix confirmés.</strong> Votre classement de pôles est
+            désormais définitif et ne peut plus être modifié.
+          </p>
         </div>
       )}
 

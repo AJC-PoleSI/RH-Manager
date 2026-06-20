@@ -1,7 +1,18 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { isCandidateAdmittedTour1 } from "@/lib/admission";
+import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
+
+/** Numéro du tour actuellement "en_cours" (0 si aucun). */
+async function getActiveTourNumber(): Promise<number> {
+  const map = await getToursByNumber();
+  let active = 0;
+  for (const [num, row] of Object.entries(map)) {
+    if (row.status === "en_cours") active = Math.max(active, Number(num));
+  }
+  return active;
+}
 
 // SECURITY (audit #6/#7): only the candidate themselves OR a member
 // (incl. admin) can read/write a candidate's wishes. Another candidate
@@ -74,10 +85,33 @@ export async function PUT(
         { status: 403 },
       );
     }
+
+    // VERROU DÉFINITIF (Tour 3) : une fois confirmés au tour 3, les vœux sont
+    // figés. Un candidat ne peut plus les modifier (les membres/admin, eux,
+    // gardent la main). Cf. supabase-migration-wishes-lock.sql.
+    const { data: cand } = await supabaseAdmin
+      .from("candidates")
+      .select("wishes_locked_at")
+      .eq("id", candidateId)
+      .maybeSingle();
+    if (cand?.wishes_locked_at) {
+      return Response.json(
+        {
+          error:
+            "Vos choix de pôles ont été confirmés définitivement et ne peuvent plus être modifiés.",
+          locked: true,
+        },
+        { status: 403 },
+      );
+    }
   }
 
   try {
-    const { wishes } = await req.json();
+    const body = await req.json();
+    const { wishes } = body;
+    // Le client envoie definitive=true via le bouton « Confirmer mes choix
+    // définitifs » (uniquement disponible au tour 3).
+    const definitive = body?.definitive === true;
 
     if (!Array.isArray(wishes)) {
       return Response.json(
@@ -118,6 +152,21 @@ export async function PUT(
       if (insertError) throw insertError;
     }
 
+    // VERROU : si c'est une confirmation définitive d'un candidat au tour 3,
+    // on fige les vœux. On vérifie côté serveur que le tour actif est bien le
+    // tour 3 (≥ 3) pour qu'un client ne puisse pas verrouiller prématurément.
+    let locked = false;
+    if (payload.role === "candidate" && definitive) {
+      const activeTour = await getActiveTourNumber();
+      if (activeTour >= 3) {
+        await supabaseAdmin
+          .from("candidates")
+          .update({ wishes_locked_at: new Date().toISOString() })
+          .eq("id", candidateId);
+        locked = true;
+      }
+    }
+
     // Return updated wishes
     const { data: updated, error: fetchError } = await supabaseAdmin
       .from("candidate_wishes")
@@ -127,7 +176,7 @@ export async function PUT(
 
     if (fetchError) throw fetchError;
 
-    return Response.json(updated);
+    return Response.json({ wishes: updated, locked });
   } catch (error) {
     return Response.json({ error: "Failed to save wishes" }, { status: 500 });
   }
