@@ -101,7 +101,10 @@ export default function DeliberationsPage() {
   // Tour 3 — Suivi des pôles (obligations + notification)
   const { toast } = useToast();
   const [tour3Obligations, setTour3Obligations] = useState<Tour3Obligation[]>([]);
+  // Vœux DÉFINITIFS confirmés au tour 3 (second tableau).
+  const [tour3Final, setTour3Final] = useState<Tour3Obligation[]>([]);
   const [showTour3Tracking, setShowTour3Tracking] = useState(false);
+  const [showTour3Final, setShowTour3Final] = useState(false);
   const [notifyingPole, setNotifyingPole] = useState<string | null>(null);
 
   const fetchPoleKpis = useCallback(async () => {
@@ -115,7 +118,8 @@ export default function DeliberationsPage() {
     try {
       const res = await api.get('/tour3/obligations');
       setTour3Obligations(res.data?.obligations || []);
-    } catch { setTour3Obligations([]); }
+      setTour3Final(res.data?.obligationsTour3 || []);
+    } catch { setTour3Obligations([]); setTour3Final([]); }
   }, []);
 
   const fetchTours = useCallback(async () => {
@@ -812,7 +816,7 @@ export default function DeliberationsPage() {
         </div>
       )}
 
-      {/* TOUR 3 — DEMANDES DU TOUR 2 PAR POLE */}
+      {/* TABLEAU 1 — DEMANDES PROVISOIRES (vœux du TOUR 2) */}
       {isAdmin && tour3Obligations.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <button
@@ -821,9 +825,9 @@ export default function DeliberationsPage() {
           >
             <div className="flex items-center gap-2">
               <span className="text-base">🎯</span>
-              <span className="text-sm font-semibold text-gray-800">Tour 3 — Demandes des pôles</span>
+              <span className="text-sm font-semibold text-gray-800">Demandes des pôles — provisoires (Tour 2)</span>
               <span className="text-xs text-gray-400 ml-1">
-                Candidats admis au Tour 2 ayant demandé chaque pôle
+                Vœux du Tour 2 des candidats admis — pour dimensionner le Tour 3
               </span>
             </div>
             <svg
@@ -865,6 +869,73 @@ export default function DeliberationsPage() {
                             onClick={() => handleTour3Notify(o.pole)}
                             disabled={notifyingPole === o.pole || o.candidatsCount === 0 || o.membresCount === 0}
                             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            {notifyingPole === o.pole ? "Envoi…" : "🔔 Notifier"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TABLEAU 2 — DEMANDES DÉFINITIVES (vœux confirmés au TOUR 3) */}
+      {isAdmin && tour3Final.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => setShowTour3Final(!showTour3Final)}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">✅</span>
+              <span className="text-sm font-semibold text-gray-800">Demandes des pôles — définitives (Tour 3)</span>
+              <span className="text-xs text-gray-400 ml-1">
+                Vœux confirmés par les candidats au Tour 3
+              </span>
+            </div>
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showTour3Final ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showTour3Final && (
+            <div className="px-5 pb-5 border-t border-gray-100 pt-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[480px]">
+                  <thead>
+                    <tr className="text-xs text-gray-400 uppercase">
+                      <th className="py-2 pr-4 font-medium">Pôle</th>
+                      <th className="py-2 pr-4 font-medium text-center">Candidats (confirmés T3)</th>
+                      <th className="py-2 pr-4 font-medium text-center">Dont option bureau</th>
+                      <th className="py-2 pr-4 font-medium text-center">Membres du pôle</th>
+                      <th className="py-2 pr-4 font-medium text-center">≈ Créneaux/membre</th>
+                      <th className="py-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tour3Final.map((o) => (
+                      <tr key={o.pole} className="border-t border-gray-100">
+                        <td className="py-2.5 pr-4 font-medium text-gray-800">{o.pole}</td>
+                        <td className="py-2.5 pr-4 text-center">
+                          <span className="inline-block min-w-[28px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-xs font-semibold">{o.candidatsCount}</span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-gray-500">
+                          {o.bureauCount > 0 ? o.bureauCount : "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-gray-600">{o.membresCount}</td>
+                        <td className="py-2.5 pr-4 text-center text-gray-600">{o.creneauxParMembre}</td>
+                        <td className="py-2.5">
+                          <button
+                            onClick={() => handleTour3Notify(o.pole)}
+                            disabled={notifyingPole === o.pole || o.candidatsCount === 0 || o.membresCount === 0}
+                            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
                           >
                             {notifyingPole === o.pole ? "Envoi…" : "🔔 Notifier"}
                           </button>

@@ -43,14 +43,33 @@ export async function GET(
     return Response.json({ error: "Accès interdit" }, { status: 403 });
   }
 
+  // ?tour=N — ne renvoyer que les vœux de ce tour. Si absent, renvoie tout
+  // (rétro-compat). Le formulaire candidat passe le tour actif ; au tour 3,
+  // si aucun vœu n'existe encore pour le tour 3, on retombe sur les vœux du
+  // tour 2 pour pré-remplir le classement.
+  const tourParam = req.nextUrl.searchParams.get("tour");
+  const tour = tourParam ? parseInt(tourParam, 10) : null;
+
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("candidate_wishes")
       .select("*")
-      .eq("candidate_id", candidateId)
-      .order("rank", { ascending: true });
+      .eq("candidate_id", candidateId);
+    if (tour) query = query.eq("tour", tour);
 
+    const { data, error } = await query.order("rank", { ascending: true });
     if (error) throw error;
+
+    // Repli tour 3 → tour 2 si rien n'a encore été saisi pour le tour 3.
+    if (tour && tour >= 3 && (!data || data.length === 0)) {
+      const { data: prev } = await supabaseAdmin
+        .from("candidate_wishes")
+        .select("*")
+        .eq("candidate_id", candidateId)
+        .eq("tour", 2)
+        .order("rank", { ascending: true });
+      return Response.json(prev || []);
+    }
 
     return Response.json(data);
   } catch (error) {
@@ -120,11 +139,19 @@ export async function PUT(
       );
     }
 
-    // Delete existing wishes
+    // Tour auquel ces vœux sont rattachés : on horodate par tour pour
+    // distinguer les choix PROVISOIRES (tour 2, dimensionnement du tour 3)
+    // des choix DÉFINITIFS (tour 3). Dérivé côté serveur du tour en cours.
+    const activeTour = await getActiveTourNumber();
+    const wishTour = activeTour >= 3 ? 3 : 2;
+
+    // Ne supprimer QUE les vœux du tour courant : les vœux du tour 2 doivent
+    // persister quand le candidat enregistre ses vœux du tour 3.
     const { error: deleteError } = await supabaseAdmin
       .from("candidate_wishes")
       .delete()
-      .eq("candidate_id", candidateId);
+      .eq("candidate_id", candidateId)
+      .eq("tour", wishTour);
 
     if (deleteError) throw deleteError;
 
@@ -142,6 +169,7 @@ export async function PUT(
           rank: w.rank,
           wants_bureau: !!w.wantsBureau,
           poste_detail: w.posteDetail || null,
+          tour: wishTour,
         }),
       );
 
@@ -156,15 +184,12 @@ export async function PUT(
     // on fige les vœux. On vérifie côté serveur que le tour actif est bien le
     // tour 3 (≥ 3) pour qu'un client ne puisse pas verrouiller prématurément.
     let locked = false;
-    if (payload.role === "candidate" && definitive) {
-      const activeTour = await getActiveTourNumber();
-      if (activeTour >= 3) {
-        await supabaseAdmin
-          .from("candidates")
-          .update({ wishes_locked_at: new Date().toISOString() })
-          .eq("id", candidateId);
-        locked = true;
-      }
+    if (payload.role === "candidate" && definitive && activeTour >= 3) {
+      await supabaseAdmin
+        .from("candidates")
+        .update({ wishes_locked_at: new Date().toISOString() })
+        .eq("id", candidateId);
+      locked = true;
     }
 
     // Return updated wishes

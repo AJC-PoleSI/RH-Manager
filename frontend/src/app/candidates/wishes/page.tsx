@@ -222,7 +222,11 @@ export default function CandidateWishesPage() {
     }
     const fetchWishes = async () => {
       try {
-        const res = await api.get(`/wishes/${user.id}`);
+        // Charge les vœux du tour actif (le serveur retombe sur le tour 2
+        // pour pré-remplir si le tour 3 est encore vide).
+        const tourQuery =
+          state.activeTourNumber >= 2 ? `?tour=${state.activeTourNumber}` : "";
+        const res = await api.get(`/wishes/${user.id}${tourQuery}`);
         if (res.data && res.data.length > 0) {
           const sorted = res.data.sort((a: any, b: any) => a.rank - b.rank);
           const ordered = sorted.map((w: any) => w.pole);
@@ -243,7 +247,7 @@ export default function CandidateWishesPage() {
       }
     };
     fetchWishes();
-  }, [user?.id]);
+  }, [user?.id, state.activeTourNumber]);
 
   const isDefinitif = state.activeTourNumber >= 3;
   const canRank = state.activeTourNumber >= 2;
