@@ -140,6 +140,10 @@ export default function CandidateEpreuvesPage() {
   } | null>(null);
   // Planning visibility (masqué côté admin = page candidate cachée)
   const [planningVisible, setPlanningVisible] = useState<boolean | null>(null);
+  // Statut de chaque tour (numéro → "a_venir" | "en_cours" | "termine").
+  // Un tour "termine" est verrouillé : plus d'inscription possible, et
+  // l'affichage avance automatiquement au tour suivant.
+  const [tourStatuses, setTourStatuses] = useState<Record<number, string>>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -156,11 +160,21 @@ export default function CandidateEpreuvesPage() {
         return;
       }
 
-      const [epRes, enrollRes, slotsRes] = await Promise.all([
+      const [epRes, enrollRes, slotsRes, toursRes] = await Promise.all([
         api.get("/epreuves"),
         api.get("/slots/my-enrollments").catch(() => ({ data: [] })),
         api.get("/slots/available").catch(() => ({ data: [] })),
+        api.get("/tours").catch(() => ({ data: [] })),
       ]);
+
+      // Statut de chaque tour (numéro extrait du nom : "Tour 1" → 1).
+      const statuses: Record<number, string> = {};
+      (Array.isArray(toursRes.data) ? toursRes.data : []).forEach((t: any) => {
+        const m = String(t.name || "").match(/(\d+)/);
+        const n = m ? parseInt(m[1], 10) : 0;
+        if (n && !(n in statuses)) statuses[n] = t.status;
+      });
+      setTourStatuses(statuses);
 
       if (epRes.data && Array.isArray(epRes.data)) {
         // Phase 4: Only show visible epreuves to candidates
@@ -228,8 +242,30 @@ export default function CandidateEpreuvesPage() {
     };
   }, [fetchData]);
 
+  // Un tour est verrouillé quand son statut est "termine".
+  const isTourLocked = useCallback(
+    (tourNum: number) => tourStatuses[tourNum] === "termine",
+    [tourStatuses],
+  );
+
   // Active tour
   const activeTour = useMemo(() => {
+    const tourNums = Array.from(new Set(epreuves.map((e) => e.tour))).sort(
+      (a, b) => a - b,
+    );
+    const list = tourNums.length ? tourNums : [1, 2, 3];
+
+    // Si on connaît les statuts des tours, ils font foi : on saute les tours
+    // verrouillés ("termine") et on affiche le tour en cours / le prochain.
+    if (Object.keys(tourStatuses).length > 0) {
+      const enCours = list.find((t) => tourStatuses[t] === "en_cours");
+      if (enCours != null) return enCours;
+      const open = list.filter((t) => tourStatuses[t] !== "termine");
+      if (open.length) return Math.min(...open);
+      return Math.max(...list);
+    }
+
+    // Repli (statuts indisponibles) : heuristique sur les épreuves à venir.
     const now = new Date();
     const toursWithFutureEpreuves = epreuves
       .filter((e) => {
@@ -242,32 +278,42 @@ export default function CandidateEpreuvesPage() {
       return Math.max(...epreuves.map((e) => e.tour), 1);
     }
     return Math.min(...toursWithFutureEpreuves);
-  }, [epreuves]);
+  }, [epreuves, tourStatuses]);
 
   const tours = Array.from(new Set(epreuves.map((e) => e.tour))).sort();
   if (tours.length === 0) tours.push(1, 2, 3);
 
-  const epreuvesByTour = tours.map((t) => ({
-    tour: t,
-    items: epreuves.filter((e) => e.tour === t),
-  }));
+  // Épreuves des tours verrouillés masquées au candidat (plus d'inscription).
+  const epreuvesByTour = tours
+    .filter((t) => !isTourLocked(t))
+    .map((t) => ({
+      tour: t,
+      items: epreuves.filter((e) => e.tour === t),
+    }));
+
+  // Créneaux affichés dans le calendrier : on retire ceux des tours
+  // verrouillés (le candidat ne peut plus s'y inscrire).
+  const visibleSlots = useMemo(
+    () => allSlots.filter((s) => !isTourLocked(s.epreuve?.tour ?? 0)),
+    [allSlots, isTourLocked],
+  );
 
   // ═══ Epreuve color mapping ═══
   const epreuveColorMap = useMemo(() => {
     const map = new Map<string, (typeof EPREUVE_COLORS)[0]>();
-    const uniqueNames = Array.from(new Set(allSlots.map((s) => s.epreuve?.name || "").filter(Boolean)));
+    const uniqueNames = Array.from(new Set(visibleSlots.map((s) => s.epreuve?.name || "").filter(Boolean)));
     uniqueNames.forEach((name, i) => {
       map.set(name, EPREUVE_COLORS[i % EPREUVE_COLORS.length]);
     });
     return map;
-  }, [allSlots]);
+  }, [visibleSlots]);
 
   // ═══ Calendar grid computation ═══
   const calendarData = useMemo(() => {
-    if (allSlots.length === 0) return null;
+    if (visibleSlots.length === 0) return null;
 
     // Get unique dates sorted
-    const dates = Array.from(new Set(allSlots.map((s) => {
+    const dates = Array.from(new Set(visibleSlots.map((s) => {
       const d = s.date?.split("T")[0];
       return d || "";
     }).filter(Boolean))).sort();
@@ -275,8 +321,8 @@ export default function CandidateEpreuvesPage() {
     if (dates.length === 0) return null;
 
     // Get time range
-    const allStartMinutes = allSlots.map((s) => timeToMinutes(s.startTime));
-    const allEndMinutes = allSlots.map((s) => timeToMinutes(s.endTime));
+    const allStartMinutes = visibleSlots.map((s) => timeToMinutes(s.startTime));
+    const allEndMinutes = visibleSlots.map((s) => timeToMinutes(s.endTime));
     const minTime = Math.floor(Math.min(...allStartMinutes) / 60) * 60; // Round down to hour
     const maxTime = Math.ceil(Math.max(...allEndMinutes) / 60) * 60; // Round up to hour
 
@@ -290,7 +336,7 @@ export default function CandidateEpreuvesPage() {
     const slotMap = new Map<string, Map<string, AvailableSlot[]>>();
     dates.forEach((d) => slotMap.set(d, new Map()));
 
-    allSlots.forEach((slot) => {
+    visibleSlots.forEach((slot) => {
       const d = slot.date?.split("T")[0] || "";
       const dateMap = slotMap.get(d);
       if (!dateMap) return;
@@ -306,13 +352,22 @@ export default function CandidateEpreuvesPage() {
     });
 
     return { dates, timeRows, slotMap, minTime, maxTime };
-  }, [allSlots]);
+  }, [visibleSlots]);
 
   // ═══ Enrollment handler ═══
   const handleEnrollInSlot = async (
     slot: AvailableSlot,
     options?: { force?: boolean },
   ) => {
+    // Garde : tour verrouillé → inscription impossible.
+    const slotTour =
+      slot.epreuve?.tour ??
+      epreuves.find((ep) => ep.name === slot.epreuve?.name)?.tour ??
+      0;
+    if (isTourLocked(slotTour)) {
+      setErrorMsg("Ce tour est terminé : les inscriptions sont closes.");
+      return;
+    }
     const epreuveId = epreuves.find((ep) => ep.name === slot.epreuve?.name)?.id;
     setEnrolling(slot.id);
     setErrorMsg(null);
@@ -571,7 +626,7 @@ export default function CandidateEpreuvesPage() {
                 <div className="flex items-center justify-center h-48">
                   <Loader2 className="animate-spin text-blue-500" size={28} />
                 </div>
-              ) : !calendarData || allSlots.length === 0 ? (
+              ) : !calendarData || visibleSlots.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
                   <Calendar className="mx-auto text-gray-300 mb-3" size={48} />
                   <p className="text-gray-500 font-medium">Aucun créneau disponible</p>

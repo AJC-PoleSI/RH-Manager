@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments, isActiveEnrollment } from "@/lib/enrollment";
 import { getCandidateWishedPoles } from "@/lib/admission";
+import { isTourLocked } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
@@ -48,6 +49,16 @@ export async function POST(req: NextRequest) {
     if (slot.status !== "published") {
       return Response.json(
         { error: "Ce créneau n'est plus disponible" },
+        { status: 400 },
+      );
+    }
+
+    // TOUR VERROUILLÉ : si le tour de l'épreuve est terminé, les inscriptions
+    // sont closes (le candidat ne peut plus s'inscrire ni se réinscrire).
+    const epreuveTour = slot.epreuve?.tour ?? slot.tour;
+    if (epreuveTour != null && (await isTourLocked(Number(epreuveTour)))) {
+      return Response.json(
+        { error: "Ce tour est terminé : les inscriptions sont closes." },
         { status: 400 },
       );
     }
