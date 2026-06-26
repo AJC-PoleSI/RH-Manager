@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { availabilityMatchesSlot } from "@/lib/dispatch-core";
 
 /**
  * Aligns slot_member_assignments to the availabilities table.
@@ -37,10 +38,11 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
   // jamais touchées par l'allocation. Voir dispatchService.isCommitted.
   const isCommitted = (s: any): boolean => s.status === "closed";
 
-  // Fetch all availabilities
+  // Fetch all availabilities (end_time inclus pour le matching par
+  // chevauchement horaire — cf. availabilityMatchesSlot).
   const { data: availabilities } = await supabaseAdmin
     .from("availabilities")
-    .select("member_id, date, start_time");
+    .select("member_id, date, start_time, end_time");
 
   // Current state
   const slotIds = slots.map((s: any) => s.id);
@@ -55,18 +57,13 @@ export async function runAutoAllocate(opts?: { epreuveId?: string }): Promise<{
     currentBySlot[a.slot_id].add(a.member_id);
   });
 
-  // Match availabilities to slots by date + start_time
+  // Match availabilities to slots par chevauchement horaire.
   const matchSlotToMembers = (slot: any): string[] => {
-    const slotDate = String(slot.date || "").substring(0, 10);
-    const slotStart = String(slot.start_time || "").substring(0, 5);
     const matches: string[] = [];
     (availabilities || []).forEach((av: any) => {
-      const avDate = String(av.date || "").substring(0, 10);
-      const avStart = String(av.start_time || "").substring(0, 5);
-      if (avDate === slotDate && avStart === slotStart) {
-        if (av.member_id && !matches.includes(av.member_id)) {
-          matches.push(av.member_id);
-        }
+      if (!availabilityMatchesSlot(av, slot)) return;
+      if (av.member_id && !matches.includes(av.member_id)) {
+        matches.push(av.member_id);
       }
     });
     return matches;

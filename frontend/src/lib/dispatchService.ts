@@ -1,4 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import {
+  pairKey,
+  isFrozen,
+  scoreMember,
+  availabilityMatchesSlot,
+} from "@/lib/dispatch-core";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
@@ -19,9 +25,7 @@ import { supabaseAdmin } from "@/lib/supabase";
  */
 
 // ─── Constants ────────────────────────────────────────────────────────
-const FREEZE_HOURS = 24;
 const BACKUP_COUNT = 2; // Nombre de remplaçants par créneau
-const PAIR_PENALTY_WEIGHT = 2; // Multiplicateur pénalité binôme
 
 // ─── Types ────────────────────────────────────────────────────────────
 interface DispatchResult {
@@ -44,20 +48,8 @@ interface SlotInfo {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
-
-/** Canonical pair key (alphabetically sorted for uniqueness) */
-function pairKey(a: string, b: string): string {
-  return [a, b].sort().join("|");
-}
-
-/** Check if a slot is frozen (< 24h before start) */
-function isFrozen(slot: SlotInfo): boolean {
-  const dateStr = String(slot.date || "").substring(0, 10);
-  const timeStr = String(slot.start_time || "08:00").substring(0, 5);
-  const slotDate = new Date(`${dateStr}T${timeStr}:00`);
-  const now = new Date();
-  return slotDate.getTime() - now.getTime() < FREEZE_HOURS * 3600 * 1000;
-}
+// pairKey / isFrozen / scoreMember / availabilityMatchesSlot vivent dans
+// dispatch-core.ts (logique pure, testée unitairement).
 
 /**
  * Check if a slot's jury is locked (must NOT be reshuffled by the dispatch).
@@ -114,28 +106,6 @@ function commitMember(
   });
 }
 
-/**
- * Score a member for assignment to a slot.
- * Lower score = better candidate.
- * Combines:
- *   - Load (number of existing assignments) — for equity
- *   - Pair penalty — for diversity/brassage
- */
-function scoreMember(
-  memberId: string,
-  alreadyPicked: string[],
-  memberLoad: Record<string, number>,
-  pairHistory: Map<string, number>,
-): number {
-  const loadScore = memberLoad[memberId] || 0;
-  let pairPenalty = 0;
-  for (const other of alreadyPicked) {
-    const key = pairKey(memberId, other);
-    pairPenalty += (pairHistory.get(key) || 0) * PAIR_PENALTY_WEIGHT;
-  }
-  return loadScore + pairPenalty;
-}
-
 // ─── Main Dispatch Function ───────────────────────────────────────────
 
 export async function runDispatch(opts?: {
@@ -159,10 +129,11 @@ export async function runDispatch(opts?: {
       notifications: 0,
     };
 
-  // 2. Fetch all availabilities
+  // 2. Fetch all availabilities (end_time inclus pour le matching par
+  // chevauchement horaire — cf. availabilityMatchesSlot).
   const { data: availabilities } = await supabaseAdmin
     .from("availabilities")
-    .select("member_id, date, start_time");
+    .select("member_id, date, start_time, end_time");
 
   // 3. Fetch current assignments
   const slotIds = slots.map((s: any) => s.id);
@@ -182,18 +153,14 @@ export async function runDispatch(opts?: {
   // des binômes se mesurent à l'intérieur d'une même épreuve, pas en mélangeant
   // entretiens individuels et épreuves de groupe.)
 
-  // 5. Match availabilities to slots by date + start_time
+  // 5. Match availabilities to slots par chevauchement horaire (une dispo qui
+  // englobe le créneau compte, même si les heures de début diffèrent).
   const matchSlotToMembers = (slot: SlotInfo): string[] => {
-    const slotDate = String(slot.date || "").substring(0, 10);
-    const slotStart = String(slot.start_time || "").substring(0, 5);
     const matches: string[] = [];
     (availabilities || []).forEach((av: any) => {
-      const avDate = String(av.date || "").substring(0, 10);
-      const avStart = String(av.start_time || "").substring(0, 5);
-      if (avDate === slotDate && avStart === slotStart) {
-        if (av.member_id && !matches.includes(av.member_id)) {
-          matches.push(av.member_id);
-        }
+      if (!availabilityMatchesSlot(av, slot)) return;
+      if (av.member_id && !matches.includes(av.member_id)) {
+        matches.push(av.member_id);
       }
     });
     return matches;

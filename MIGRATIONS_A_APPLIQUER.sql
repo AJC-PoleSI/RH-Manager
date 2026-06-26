@@ -38,6 +38,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_wishes_candidate_pole_tour
   ON candidate_wishes (candidate_id, pole, tour);
 
 
+-- ------------------------------------------------------------
+-- 3) Index de performance (additif, sans risque)
+-- ------------------------------------------------------------
+-- Le dispatch et les KPI font des lectures par date/heure et par slot/membre.
+-- Ces index accélèrent les requêtes quand le volume grandit. 100% sûrs
+-- (aucune validation de données, IF NOT EXISTS).
+
+CREATE INDEX IF NOT EXISTS idx_availabilities_date_start
+  ON availabilities (date, start_time);
+CREATE INDEX IF NOT EXISTS idx_availabilities_member
+  ON availabilities (member_id);
+
+CREATE INDEX IF NOT EXISTS idx_sma_slot
+  ON slot_member_assignments (slot_id);
+CREATE INDEX IF NOT EXISTS idx_sma_member
+  ON slot_member_assignments (member_id);
+
+CREATE INDEX IF NOT EXISTS idx_slot_enrollments_slot
+  ON slot_enrollments (slot_id);
+CREATE INDEX IF NOT EXISTS idx_slot_enrollments_candidate
+  ON slot_enrollments (candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_wishes_candidate
+  ON candidate_wishes (candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_eval_slots_epreuve
+  ON evaluation_slots (epreuve_id);
+CREATE INDEX IF NOT EXISTS idx_eval_slots_date_start
+  ON evaluation_slots (date, start_time);
+
+
 -- ============================================================
 -- FIN
 -- ============================================================
