@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tour = searchParams.get("tour");
 
+    const canSeeAllComments = payload.isAdmin;
+
     const { data: candidates, error } = await supabaseAdmin
       .from("candidates")
       .select(
@@ -61,27 +63,30 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      evaluations = evaluations.map((ev: any) => ({
-        id: ev.id,
-        scores:
-          typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores,
-        comment: ev.comment,
-        createdAt: ev.created_at,
-        member: ev.members
-          ? {
-              email: ev.members.email,
-              firstName: ev.members.first_name,
-              lastName: ev.members.last_name,
-            }
-          : null,
-        epreuve: ev.epreuves
-          ? {
-              name: ev.epreuves.name,
-              tour: ev.epreuves.tour,
-              type: ev.epreuves.type,
-            }
-          : null,
-      }));
+      evaluations = evaluations.map((ev: any) => {
+        const isOwnEval = ev.member_id === payload.id;
+        return {
+          id: ev.id,
+          scores:
+            typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores,
+          comment: canSeeAllComments || isOwnEval ? ev.comment : null,
+          createdAt: ev.created_at,
+          member: ev.members
+            ? {
+                email: ev.members.email,
+                firstName: ev.members.first_name,
+                lastName: ev.members.last_name,
+              }
+            : null,
+          epreuve: ev.epreuves
+            ? {
+                name: ev.epreuves.name,
+                tour: ev.epreuves.tour,
+                type: ev.epreuves.type,
+              }
+            : null,
+        };
+      });
 
       const wishes = (c.candidate_wishes || [])
         .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))

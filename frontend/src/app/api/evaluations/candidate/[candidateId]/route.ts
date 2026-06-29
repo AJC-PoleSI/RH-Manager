@@ -31,13 +31,12 @@ export async function GET(
 
     if (error) throw error;
 
+    const canSeeAllComments = payload.isAdmin;
+
     // Parse scores and format each evaluation
     const parsed = (evaluations || []).map((e: any) => {
       const rawScores =
         typeof e.scores === "string" ? JSON.parse(e.scores) : e.scores || {};
-      // Forcer la conversion en number — Object.values() peut retourner des
-      // strings si scores a été stocké en JSON avec des "1" au lieu de 1.
-      // Sans ça, reduce(sum + v, 0) donne "0" + "1" + "1" + ... = "0111..."
       const scores: Record<string, number> = {};
       let total = 0;
       for (const [k, v] of Object.entries(rawScores)) {
@@ -47,11 +46,13 @@ export async function GET(
         total += safe;
       }
 
+      const isOwnEval = e.member_id === payload.id;
+
       return {
         id: e.id,
         scores,
         scoreTotal: total,
-        comment: e.comment,
+        comment: canSeeAllComments || isOwnEval ? e.comment : null,
         createdAt: e.created_at,
         epreuve: e.epreuves
           ? {
