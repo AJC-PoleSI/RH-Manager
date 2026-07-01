@@ -1,11 +1,25 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import prisma from '../utils/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error('FATAL: JWT_SECRET environment variable is not set.');
+}
+
+// L'auto-inscription des membres (comptes privilégiés du jury) est désactivée
+// par défaut : les membres sont créés par un admin via POST /api/members.
+// Mettre ALLOW_MEMBER_REGISTRATION=true pour la réactiver explicitement.
+const ALLOW_MEMBER_REGISTRATION = process.env.ALLOW_MEMBER_REGISTRATION === 'true';
+
+/** Comparaison à temps constant pour éviter les fuites par timing. */
+function safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a);
+    const bb = Buffer.from(b);
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
 }
 
 // Password validation: min 8 chars, 1 uppercase, 1 number
@@ -17,6 +31,10 @@ function validatePassword(password: string): string | null {
 }
 
 export const register = async (req: Request, res: Response) => {
+    if (!ALLOW_MEMBER_REGISTRATION) {
+        return res.status(403).json({ error: "L'inscription des membres est désactivée. Contactez un administrateur." });
+    }
+
     const { email, password } = req.body;
 
     const pwError = validatePassword(password);
@@ -34,7 +52,8 @@ export const register = async (req: Request, res: Response) => {
 
         res.status(201).json({ message: 'Member created successfully', member: { id: member.id, email: member.email } });
     } catch (error) {
-        res.status(400).json({ error: 'Error creating member. Email might already exist.' });
+        // Message générique : ne pas révéler si l'email existe déjà (énumération).
+        res.status(400).json({ error: 'Impossible de créer le compte.' });
     }
 };
 
@@ -89,17 +108,27 @@ export const candidateLogin = async (req: Request, res: Response) => {
     try {
         const candidate = await prisma.candidate.findUnique({ where: { email } });
 
-        if (!candidate || candidate.lastName.toLowerCase() !== lastName.toLowerCase()) {
+        // ⚠️ STOPGAP DE SÉCURITÉ : le nom de famille n'est PAS un secret. Cette
+        // vérification ne constitue pas une authentification forte. Elle reste
+        // acceptable UNIQUEMENT parce que (1) le rate-limiting /api/auth bride le
+        // brute-force et (2) un token candidat est désormais confiné à ses
+        // propres données (voir requireMember / allowSelfCandidateOrMember).
+        // À REMPLACER par un vrai secret (lien magique / OTP envoyé par email).
+        const provided = String(lastName).trim().toLowerCase();
+        const actual = candidate ? candidate.lastName.trim().toLowerCase() : '';
+        const ok = !!candidate && safeEqual(provided, actual);
+
+        if (!ok) {
             return res.status(401).json({ error: 'Identifiants invalides.' });
         }
 
         const token = jwt.sign(
-            { candidateId: candidate.id, role: 'candidate' },
+            { candidateId: candidate!.id, role: 'candidate' },
             JWT_SECRET,
             { expiresIn: '2h' }
         );
 
-        res.json({ token, candidate: { id: candidate.id, email: candidate.email } });
+        res.json({ token, candidate: { id: candidate!.id, email: candidate!.email } });
     } catch (error) {
         res.status(500).json({ error: 'Erreur de connexion.' });
     }

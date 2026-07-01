@@ -24,7 +24,9 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        // Épingle l'algorithme : empêche toute confusion d'algorithme (ex. « none »
+        // ou substitution HS/RS) même si la lib change ses défauts.
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any;
         (req as AuthRequest).user = {
             userId: decoded.userId || decoded.candidateId,
             isAdmin: decoded.isAdmin || false,
@@ -43,4 +45,29 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
         return res.status(403).json({ error: 'Admin access required' });
     }
     next();
+};
+
+/**
+ * Réserve la route aux membres/jury (et admins) : rejette les tokens de rôle
+ * « candidate ». Les endpoints de gestion (liste des candidats, délibérations,
+ * évaluations…) ne doivent JAMAIS être accessibles avec un token candidat.
+ */
+export const requireMember = (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as AuthRequest).user;
+    if (!user || user.role === 'candidate') {
+        return res.status(403).json({ error: 'Accès réservé aux membres' });
+    }
+    next();
+};
+
+/**
+ * Autorise l'accès à une ressource scopée par candidat si l'appelant est
+ * membre/admin OU s'il est le candidat propriétaire (`candidateId` du token ==
+ * paramètre d'URL). Empêche les IDOR sur les vœux/délibérations d'un candidat.
+ */
+export const allowSelfCandidateOrMember = (req: Request, paramCandidateId: string): boolean => {
+    const user = (req as AuthRequest).user;
+    if (!user) return false;
+    if (user.role !== 'candidate') return true; // membre/admin
+    return !!user.candidateId && user.candidateId === paramCandidateId;
 };

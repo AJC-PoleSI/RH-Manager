@@ -1,18 +1,17 @@
 import { Router } from 'express';
 import { getAllCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate } from '../controllers/candidateController';
-import { authenticateToken } from '../middlewares/authMiddleware';
+import { authenticateToken, requireMember, requireAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Public routes
-
-// Protected routes
-router.use(authenticateToken);
+// Toutes les routes candidats sont réservées aux membres/jury (jamais un token
+// candidat) ; les opérations destructives sont réservées aux admins.
+router.use(authenticateToken, requireMember);
 
 router.post('/', createCandidate);
 router.get('/', getAllCandidates);
 router.get('/:id', getCandidateById);
-router.put('/:id', updateCandidate);
-router.delete('/:id', deleteCandidate);
+router.put('/:id', requireAdmin, updateCandidate);
+router.delete('/:id', requireAdmin, deleteCandidate);
 
 export default router;
