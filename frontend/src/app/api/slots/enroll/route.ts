@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { filterActiveEnrollments, isActiveEnrollment } from "@/lib/enrollment";
+import {
+  filterActiveEnrollments,
+  isActiveEnrollment,
+  effectiveMaxCandidates,
+} from "@/lib/enrollment";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { isTourLocked } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
