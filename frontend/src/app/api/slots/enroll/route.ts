@@ -7,6 +7,7 @@ import {
 } from "@/lib/enrollment";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { isTourLocked } from "@/lib/tour-status";
+import { timeOverlaps } from "@/lib/dispatch-core";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
