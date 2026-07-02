@@ -54,6 +54,9 @@ export async function GET(req: NextRequest) {
       .filter((slot: any) => slot.epreuve)
       .map((slot: any) => ({
         ...slot,
+        // Capacité effective (group_size pour les épreuves de groupe) pour
+        // que le planning admin/membre affiche la même limite que le candidat.
+        max_candidates: effectiveMaxCandidates(slot),
         enrollments: (slot.enrollments || []).filter(
           filterActiveEnrollments,
         ),
