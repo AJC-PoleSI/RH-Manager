@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { filterActiveEnrollments } from "@/lib/enrollment";
+import {
+  filterActiveEnrollments,
+  effectiveMaxCandidates,
+} from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
