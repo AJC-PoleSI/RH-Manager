@@ -55,6 +55,8 @@ export async function GET(req: NextRequest) {
       )
       .map((a: any) => ({
         ...a.slot,
+        // Capacité effective alignée sur candidat/admin (source unique).
+        max_candidates: effectiveMaxCandidates(a.slot),
         // FIX C2: drop cancelled enrollments from member's view so admin
         // and member see the same active candidate list.
         enrollments: (a.slot.enrollments || []).filter(
