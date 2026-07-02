@@ -294,6 +294,57 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // ANTI-DOUBLE-RÉSERVATION TEMPORELLE (toutes épreuves confondues)
+    // Un candidat ne peut pas être inscrit à deux créneaux qui se
+    // chevauchent dans le temps, même s'ils relèvent d'épreuves
+    // DIFFÉRENTES — il ne peut pas être à deux endroits en même temps.
+    // Symétrique du wouldConflict appliqué aux examinateurs (dispatch).
+    // ══════════════════════════════════════════════════════════════════
+    if (slot.date && slot.start_time) {
+      const targetDate = String(slot.date).substring(0, 10);
+      const targetStart = String(slot.start_time).substring(0, 5);
+      const targetEnd = String(slot.end_time || slot.start_time).substring(
+        0,
+        5,
+      );
+
+      const { data: myActive } = await supabaseAdmin
+        .from("slot_enrollments")
+        .select(
+          "slot_id, status, slot:evaluation_slots(id, date, start_time, end_time, epreuve:epreuves(name))",
+        )
+        .eq("candidate_id", candidateId);
+
+      for (const row of (myActive as any[]) || []) {
+        if (row.status === "cancelled") continue;
+        if (!row.slot || row.slot_id === slotId) continue;
+        const oDate = String(row.slot.date || "").substring(0, 10);
+        if (oDate !== targetDate) continue;
+        const oStart = String(row.slot.start_time || "").substring(0, 5);
+        const oEnd = String(
+          row.slot.end_time || row.slot.start_time || "",
+        ).substring(0, 5);
+        if (timeOverlaps(targetStart, targetEnd, oStart, oEnd)) {
+          const dateLabel = new Date(`${oDate}T12:00:00`).toLocaleDateString(
+            "fr-FR",
+            { weekday: "long", day: "numeric", month: "long" },
+          );
+          const epreuveLabel = row.slot.epreuve?.name
+            ? ` — ${row.slot.epreuve.name}`
+            : "";
+          return Response.json(
+            {
+              error: `Vous êtes déjà inscrit à un créneau qui chevauche cet horaire : ${dateLabel} ${oStart}-${oEnd}${epreuveLabel}. Désinscrivez-vous d'abord.`,
+              code: "TIME_CONFLICT",
+              conflictingSlotId: row.slot.id,
+            },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // GARDE ABSOLUE : Anti-double évaluation [Candidat + Épreuve]
     // Si ce candidat a DÉJÀ été évalué pour cette épreuve, il ne peut
     // plus s'inscrire sur un créneau de la même épreuve.
