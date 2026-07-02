@@ -37,3 +37,30 @@ export function isCancelledEnrollment(status: EnrollmentStatus): boolean {
 export const filterActiveEnrollments = (
   e: { status?: string | null },
 ): boolean => isActiveEnrollment(e.status as EnrollmentStatus);
+
+/**
+ * Capacité EFFECTIVE d'un créneau — source unique de vérité.
+ *
+ * Pour une épreuve de groupe, la vraie limite est `group_size` (le
+ * `max_candidates` stocké peut être périmé : d'anciens créneaux ont été
+ * créés avec max_candidates=1 avant la persistance de group_size, et
+ * passaient "complet" dès le 1er inscrit). Pour un entretien individuel,
+ * c'est `max_candidates` (défaut 1).
+ *
+ * DOIT être utilisé par TOUTES les routes qui exposent ou vérifient la
+ * capacité (enroll, available, all, my-slots) pour que "X/Y inscrits" et
+ * "complet" s'affichent de façon identique côté candidat, membre et admin.
+ */
+export function effectiveMaxCandidates(slot: {
+  max_candidates?: number | null;
+  epreuve?: {
+    is_group_epreuve?: boolean | null;
+    group_size?: number | null;
+  } | null;
+}): number {
+  const base = Number(slot.max_candidates) || 1;
+  if (slot.epreuve?.is_group_epreuve) {
+    return Math.max(base, Number(slot.epreuve.group_size) || 1);
+  }
+  return base;
+}
