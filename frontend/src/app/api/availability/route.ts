@@ -216,24 +216,10 @@ export async function POST(req: NextRequest) {
   const memberId = payload.id;
 
   try {
-    // ── Vérifier que la saisie est ouverte ──
-    if (!payload.isAdmin) {
-      const { data: settings } = await supabaseAdmin
-        .from("system_settings")
-        .select("value")
-        .eq("key", "saisie_dispos_ouverte")
-        .single();
-
-      if (!settings || settings.value !== "true") {
-        return Response.json(
-          {
-            error:
-              "La saisie des disponibilites est fermee. Contactez l'administrateur.",
-          },
-          { status: 403 },
-        );
-      }
-    }
+    // Note : la saisie des dispos est désormais TOUJOURS ouverte (cf. PUT).
+    // Les examinateurs peuvent s'inscrire/se désinscrire à tout moment jusqu'à
+    // l'épreuve. L'ancien verrou "saisie_dispos_ouverte" n'est plus appliqué
+    // ici non plus, pour rester cohérent avec la grille (PUT).
 
     const { weekday, start_time, end_time } = await req.json();
 
