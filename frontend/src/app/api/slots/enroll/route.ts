@@ -122,9 +122,7 @@ export async function POST(req: NextRequest) {
     // avant la persistance de group_size) → ils passaient "full" dès le
     // 1er inscrit. On dérive la capacité de l'épreuve et on auto-répare.
     // ══════════════════════════════════════════════════════════════════
-    const effectiveMax = slot.epreuve?.is_group_epreuve
-      ? Math.max(Number(slot.max_candidates) || 1, Number(slot.epreuve.group_size) || 1)
-      : Number(slot.max_candidates) || 1;
+    const effectiveMax = effectiveMaxCandidates(slot);
     if (effectiveMax !== slot.max_candidates) {
       // Self-heal : aligne le créneau sur la capacité de l'épreuve.
       await supabaseAdmin
