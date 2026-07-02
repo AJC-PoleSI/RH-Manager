@@ -133,11 +133,8 @@ export async function GET(req: NextRequest) {
 
     const available = filtered.map((slot: any) => {
       const enrolledCount = slot.enrollments?.length || 0;
-      // Capacité effective : pour une épreuve de groupe, group_size prime
-      // sur un max_candidates potentiellement périmé (anciens créneaux).
-      const effectiveMax = slot.epreuve?.is_group_epreuve
-        ? Math.max(Number(slot.max_candidates) || 1, Number(slot.epreuve.group_size) || 1)
-        : Number(slot.max_candidates) || 1;
+      // Capacité effective : source unique de vérité partagée (enrollment.ts).
+      const effectiveMax = effectiveMaxCandidates(slot);
       const isFull = enrolledCount >= effectiveMax;
       const isEnrolled =
         payload.role === "candidate"
