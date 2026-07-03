@@ -5,6 +5,7 @@ import {
   scoreMember,
   availabilityMatchesSlot,
 } from "@/lib/dispatch-core";
+import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
