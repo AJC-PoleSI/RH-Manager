@@ -187,6 +187,14 @@ export async function POST(req: NextRequest) {
       console.error("Failed to send verification email:", emailErr);
     }
 
+    // Miroir Befast (best-effort, non bloquant).
+    await mirrorToBefast({
+      firstName: candidate.first_name,
+      lastName: candidate.last_name,
+      email: candidate.email,
+      dateOfBirth: candidate.date_of_birth,
+    });
+
     return Response.json({ emailPending: true, email: candidate.email }, { status: 201 });
   } catch (error) {
     console.error("registerCandidate error:", error);
