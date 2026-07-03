@@ -1,8 +1,33 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
 import { sendVerificationEmail } from "@/lib/resend";
+import { postSigned, BEFAST_BASE_URL } from "@/lib/integration";
 import { NextRequest } from "next/server";
 import crypto from "crypto";
+
+// Bidirectionnalité : une inscription directe sur RH crée aussi le compte
+// Befast (le maître). Best-effort — ne doit jamais faire échouer l'inscription
+// RH. Befast est idempotent (keyé sur l'email) et enverra son propre email.
+async function mirrorToBefast(input: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  dateOfBirth: string;
+}): Promise<void> {
+  try {
+    const password = crypto.randomBytes(18).toString("base64url"); // provisoire
+    await postSigned(`${BEFAST_BASE_URL}/api/onboarding/register`, {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.email,
+      dateOfBirth: input.dateOfBirth,
+      password,
+      source: "rh_direct",
+    });
+  } catch (e) {
+    console.error("mirrorToBefast failed (best-effort):", e);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
