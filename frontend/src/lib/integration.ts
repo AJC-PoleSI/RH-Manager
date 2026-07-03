@@ -34,7 +34,7 @@ function b64urlDecode(s: string): Buffer {
 }
 
 function hmacHex(data: string): string {
-  return crypto.createHmac("sha256", SECRET).update(data).digest("hex");
+  return crypto.createHmac("sha256", getSecret()).update(data).digest("hex");
 }
 
 function timingEqual(a: string, b: string): boolean {
