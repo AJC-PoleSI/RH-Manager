@@ -357,26 +357,22 @@ export async function runDispatch(opts?: {
     }
   }
 
-  // 10. Write assignments to DB
-  // Delete existing assignments for non-committed, non-frozen slots
+  // 10. Write assignments to DB — ATOMIQUE.
+  // delete (créneaux non gelés / non clôturés) + insert des titulaires se font
+  // dans UNE seule transaction Postgres via la RPC replace_slot_assignments :
+  // si l'insert échoue, le delete est annulé → un créneau n'est jamais laissé
+  // sans jury. Repli non atomique tant que la RPC n'est pas déployée. Une vraie
+  // erreur est propagée (rien n'a changé) pour ne pas mettre à jour des statuts
+  // désynchronisés à l'étape 11. Cf. dispatch-io.ts.
   const wipeableSlotIds = sortedSlots
     .filter((s: any) => !isCommitted(s as SlotInfo) && !isFrozen(s as SlotInfo))
     .map((s: any) => s.id);
 
-  if (wipeableSlotIds.length > 0) {
-    await supabaseAdmin
-      .from("slot_member_assignments")
-      .delete()
-      .in("slot_id", wipeableSlotIds);
-  }
-
-  // Insert titulaire assignments
-  if (assignmentsToInsert.length > 0) {
-    const { error: insertErr } = await supabaseAdmin
-      .from("slot_member_assignments")
-      .insert(assignmentsToInsert);
-    if (insertErr) console.error("Insert assignments error:", insertErr);
-  }
+  await applyAssignments(
+    supabaseAdmin as unknown as DispatchClient,
+    wipeableSlotIds,
+    assignmentsToInsert,
+  );
 
   // Insert backup assignments into evaluator_allocations table
   // (with statut = 'en_attente')
