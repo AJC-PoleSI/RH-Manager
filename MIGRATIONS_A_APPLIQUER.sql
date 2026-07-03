@@ -69,6 +69,37 @@ CREATE INDEX IF NOT EXISTS idx_eval_slots_date_start
   ON evaluation_slots (date, start_time);
 
 
+-- ------------------------------------------------------------
+-- 4) Écriture ATOMIQUE des affectations examinateurs (dispatch)
+--    (supabase-migration-dispatch-atomic.sql)
+-- ------------------------------------------------------------
+-- Le dispatch supprime puis réinsère les affectations d'un lot de créneaux.
+-- Sans transaction, un échec d'insert laissait des créneaux SANS jury. Cette
+-- fonction fait delete + insert dans UNE transaction (rollback si échec).
+-- Le code retombe sur l'ancien comportement tant qu'elle n'existe pas, donc
+-- l'ordre déploiement/migration est indifférent. Idempotent (CREATE OR REPLACE).
+
+create or replace function replace_slot_assignments(
+  p_slot_ids uuid[],
+  p_assignments jsonb
+) returns void
+language plpgsql
+as $$
+begin
+  if p_slot_ids is not null and array_length(p_slot_ids, 1) is not null then
+    delete from slot_member_assignments
+      where slot_id = any (p_slot_ids);
+  end if;
+
+  if p_assignments is not null and jsonb_array_length(p_assignments) > 0 then
+    insert into slot_member_assignments (slot_id, member_id)
+    select (elem ->> 'slot_id')::uuid, (elem ->> 'member_id')::uuid
+    from jsonb_array_elements(p_assignments) as elem;
+  end if;
+end;
+$$;
+
+
 -- ============================================================
 -- FIN
 -- ============================================================
