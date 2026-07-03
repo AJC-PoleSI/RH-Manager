@@ -19,10 +19,14 @@
     {
       "name": "Onboarding (Next.js)",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/felixpitz/Desktop/onboarding-ajc",
+        "run",
+        "dev"
+      ],
       "port": 3002,
-      "autoPort": true,
-      "cwd": "/Users/felixpitz/Desktop/onboarding-ajc"
+      "autoPort": true
     }
   ]
 }
