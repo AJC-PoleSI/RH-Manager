@@ -12,7 +12,10 @@ if [ "${SKIP_SEMGREP:-0}" = "1" ]; then
   exit 0
 fi
 
-mapfile -t STAGED_FILES < <(git diff --cached --name-only --diff-filter=ACMR)
+STAGED_FILES=()
+while IFS= read -r f; do
+  [ -n "$f" ] && STAGED_FILES+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
 
 if [ "${#STAGED_FILES[@]}" -eq 0 ]; then
   exit 0
