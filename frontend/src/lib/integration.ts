@@ -6,11 +6,13 @@ import { NextRequest } from "next/server";
 // Implémenté à l'identique dans les 3 surfaces (RH, Befast, Onboarding).
 // ════════════════════════════════════════════════════════════════════════
 
-const SECRET: string =
-  process.env.INTEGRATION_SECRET ??
-  (() => {
+function getSecret(): string {
+  const secret = process.env.INTEGRATION_SECRET;
+  if (!secret) {
     throw new Error("FATAL: INTEGRATION_SECRET is not set.");
-  })();
+  }
+  return secret;
+}
 
 export const BEFAST_BASE_URL = (
   process.env.BEFAST_BASE_URL ?? "http://localhost:3001"
