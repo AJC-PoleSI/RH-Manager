@@ -52,3 +52,27 @@ The system is designed to be fully functional.
 1. Go to `http://localhost:3001/login`.
 2. Login as Member (Admin) or Register as Candidate.
 3. Explore the Dashboard and feature specific pages.
+
+## Security scanning (Semgrep, via Docker)
+
+Every commit is scanned locally by [Semgrep](https://semgrep.dev) running inside Docker (rulesets: `p/security-audit`, `p/secrets`, `p/owasp-top-ten`, `p/javascript`, `p/typescript`, `p/react`, `p/sql-injection`). A commit is blocked if a blocking finding is detected in the staged files.
+
+**One-time setup after cloning:**
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+This points git at the versioned hooks in `.githooks/` (`git config core.hooksPath .githooks`) and makes the scripts executable. Docker Desktop (or another Docker daemon) must be running.
+
+**Manual full scan:**
+
+```bash
+./scripts/semgrep-scan.sh
+```
+
+**Emergency bypass** (use sparingly, e.g. Docker unavailable):
+
+```bash
+SKIP_SEMGREP=1 git commit -m "..."
+```
