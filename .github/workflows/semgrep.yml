@@ -1,0 +1,32 @@
+name: Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # pin: v4.2.2
+
+      # Rulesets à garder synchronisés avec scripts/semgrep-scan.sh (scan local pre-commit).
+      # continue-on-error : dette de sécurité pré-existante dans le repo (voir findings au 2026-07-03).
+      # Retirer cette ligne une fois la dette résorbée pour rendre le job bloquant.
+      - name: Run Semgrep
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/react \
+            --config p/sql-injection \
+            --error \
+            --metrics=off
