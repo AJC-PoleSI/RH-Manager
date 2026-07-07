@@ -1099,10 +1099,10 @@ export default function CalendarAdminBuilder({
             }}
             height="auto"
             expandRows={true}
-            editable={viewMode === "creation"}
+            editable={viewMode === "creation" && !readOnly}
             droppable={false}
             eventDurationEditable={false}
-            eventStartEditable={viewMode === "creation"}
+            eventStartEditable={viewMode === "creation" && !readOnly}
             selectable={false}
             validRange={validRange}
             dateClick={handleDateClick}
