@@ -192,6 +192,22 @@ export default function CalendarMemberBuilder({
     });
   };
 
+  // Raccourci : cocher/décocher tous les blocs qui passent le filtre.
+  // Si tous sont déjà cochés → tout décocher, sinon tout cocher.
+  const toggleAllBlocks = (filter: (block: any) => boolean) => {
+    setSelectedBlocks((prev) => {
+      const keys: string[] = [];
+      for (const [k, v] of Array.from(blocksMapRef.entries())) {
+        if (filter(v)) keys.push(k);
+      }
+      if (keys.length === 0) return prev;
+      const allSelected = keys.every((k) => prev.has(k));
+      const newSet = new Set(prev);
+      keys.forEach((k) => (allSelected ? newSet.delete(k) : newSet.add(k)));
+      return newSet;
+    });
+  };
+
   const handleSave = async () => {
     try {
       // 1. Detect withdrawals from ASSIGNED slots
