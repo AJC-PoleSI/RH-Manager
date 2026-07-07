@@ -197,7 +197,7 @@ export default function CalendarMemberBuilder({
   const toggleAllBlocks = (filter: (block: any) => boolean) => {
     setSelectedBlocks((prev) => {
       const keys: string[] = [];
-      for (const [k, v] of Array.from(blocksMapRef.entries())) {
+      for (const [k, v] of Array.from(gridData.blocksMap.entries())) {
         if (filter(v)) keys.push(k);
       }
       if (keys.length === 0) return prev;
