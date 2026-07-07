@@ -416,7 +416,7 @@ export default function CalendarAdminBuilder({
       const minutes = clickedDate.getMinutes().toString().padStart(2, "0");
       const startTime = `${hours}:${minutes}`;
 
-      if (viewMode !== "creation") return;
+      if (viewMode !== "creation" || readOnly) return;
 
       const currentOverlap = checkOverlap(dateStr, startTime, durationMinutes);
       if (currentOverlap >= nbSalles) {
