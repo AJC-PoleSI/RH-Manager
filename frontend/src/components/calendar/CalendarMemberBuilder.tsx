@@ -368,6 +368,15 @@ export default function CalendarMemberBuilder({
                         day: "numeric",
                         month: "short",
                       })}
+                      <button
+                        onClick={() =>
+                          toggleAllBlocks((b) => b.date === date)
+                        }
+                        className="block mx-auto mt-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-2 py-0.5 hover:bg-blue-50 transition-colors"
+                        title="Cocher/décocher toute la journée"
+                      >
+                        ✓ jour
+                      </button>
                     </th>
                   );
                 })}
