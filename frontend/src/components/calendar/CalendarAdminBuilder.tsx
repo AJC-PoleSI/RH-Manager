@@ -511,7 +511,7 @@ export default function CalendarAdminBuilder({
       const target = info.jsEvent?.target as HTMLElement;
       const slotId = info.event.extendedProps?.slotId || info.event.id;
 
-      if (viewMode !== "creation") return;
+      if (viewMode !== "creation" || readOnly) return;
 
       if (target?.classList?.contains("fc-event-delete-btn")) {
         deleteSlot(slotId);
