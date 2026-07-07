@@ -549,16 +549,11 @@ export default function OpeningsManager({
                 {openings.map((o) => {
                   if (editingId === o.id) {
                     return (
-                      <tr key={o.id} className="contents">
-                        {
-                          renderFormRow(
-                            editForm,
-                            setEditForm,
-                            handleSaveEdit,
-                            () => setEditingId(null),
-                          ).props.children
-                        }
-                      </tr>
+                      <Fragment key={o.id}>
+                        {renderFormRow(editForm, setEditForm, handleSaveEdit, () =>
+                          setEditingId(null),
+                        )}
+                      </Fragment>
                     );
                   }
                   const color =
