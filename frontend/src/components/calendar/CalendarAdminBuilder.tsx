@@ -1057,11 +1057,19 @@ export default function CalendarAdminBuilder({
       {/* ═══ FULLCALENDAR WEEK VIEW ═══ */}
       <div className="p-4 flex-1 bg-gray-50/30">
         {/* Instructions */}
-        <p className="text-xs text-gray-500 mb-3">
-          <strong>Clic</strong> pour créer · <strong>Glissez</strong> pour
-          déplacer (snap 5min, multi-jours) · <strong>✕</strong> au survol pour
-          supprimer
-        </p>
+        {readOnly ? (
+          <p className="text-xs text-gray-500 mb-3">
+            👁️ <strong>Vue de contrôle</strong> — les créneaux sont gérés via
+            le tableau des ouvertures ci-dessus · 🔒 = créneau occupé
+            (examinateurs ou candidats inscrits)
+          </p>
+        ) : (
+          <p className="text-xs text-gray-500 mb-3">
+            <strong>Clic</strong> pour créer · <strong>Glissez</strong> pour
+            déplacer (snap 5min, multi-jours) · <strong>✕</strong> au survol
+            pour supprimer
+          </p>
+        )}
 
         <div className="calendar-week-grid bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           <FullCalendar
