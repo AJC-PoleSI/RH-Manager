@@ -1,0 +1,41 @@
+<h2>Schéma — Ce qui se passe quand tu modifies une ouverture</h2>
+<p class="subtitle">Exemple : la B12 du lundi passe de « 9h–17h » à « 9h–16h ». Le système recalcule en protégeant les occupés.</p>
+
+<div class="section">
+  <div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <div class="label" style="margin-bottom:8px">Avant (9h–17h)</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:13px">
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:6px 10px">09:00 🔒 2 examinateurs inscrits</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:6px 10px">09:40 (libre)</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:6px 10px">10:20 (libre)</div>
+        <div style="background:#F3F4F6;border:1px dashed #D1D5DB;border-radius:6px;padding:4px 10px;color:#9CA3AF;text-align:center">🍽 pause 12:00–13:30</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:6px 10px">13:30 (libre)</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:6px 10px">…</div>
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:6px 10px">16:20 🔒 1 candidat inscrit</div>
+      </div>
+    </div>
+    <div style="align-self:center;font-size:26px">→</div>
+    <div style="flex:1;min-width:260px">
+      <div class="label" style="margin-bottom:8px">Après recalcul (9h–16h)</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:13px">
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:6px 10px">09:00 🔒 intact (occupé)</div>
+        <div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:6px 10px">09:40 ✓ conservé</div>
+        <div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:6px 10px">10:20 ✓ conservé</div>
+        <div style="background:#F3F4F6;border:1px dashed #D1D5DB;border-radius:6px;padding:4px 10px;color:#9CA3AF;text-align:center">🍽 pause 12:00–13:30</div>
+        <div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:6px 10px">13:30 ✓ conservé</div>
+        <div style="background:#FECACA;border:1px solid #EF4444;border-radius:6px;padding:6px 10px;text-decoration:line-through;color:#7F1D1D">15:20 (libre, hors plage) → supprimé</div>
+        <div style="background:#FEE2E2;border:2px solid #DC2626;border-radius:6px;padding:6px 10px">⚠️ 16:20 🔒 occupé mais hors plage → <strong>conflit signalé, à toi de décider</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:14px;font-size:13px">
+    <strong>Les 3 règles du recalcul :</strong>
+    <ul style="margin:8px 0 0 18px;line-height:1.7">
+      <li><span style="color:#16A34A;font-weight:600">Libres</span> : supprimés / recréés librement selon la nouvelle plage</li>
+      <li><span style="color:#D97706;font-weight:600">Occupés dans la plage</span> : jamais touchés</li>
+      <li><span style="color:#DC2626;font-weight:600">Occupés hors plage</span> : signalés ⚠️ — tu choisis « garder » ou « supprimer » (les inscrits sont alors notifiés via le système de messages existant)</li>
+    </ul>
+  </div>
+</div>
