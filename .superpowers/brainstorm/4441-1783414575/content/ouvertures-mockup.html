@@ -1,0 +1,98 @@
+<h2>Maquette — Nouvel écran « Création des créneaux » (admin)</h2>
+<p class="subtitle">L'admin ne crée plus des créneaux un par un : il déclare des <strong>ouvertures de salles</strong>, le système découpe. Regarde la maquette, puis dis-moi dans le terminal ce qui va / ne va pas.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Épreuve : Entretien individuel — Tour 1 · durée 30 min + 10 min roulement = créneaux de 40 min</div>
+  <div class="mockup-body">
+
+    <!-- Bandeau résumé -->
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 16px">
+        <div style="font-size:20px;font-weight:700;color:#1E40AF">27</div>
+        <div style="font-size:12px;color:#3B82F6">créneaux générés</div>
+      </div>
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 16px">
+        <div style="font-size:20px;font-weight:700;color:#166534">27 / 24</div>
+        <div style="font-size:12px;color:#16A34A">capacité vs candidats attendus ✓</div>
+      </div>
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 16px">
+        <div style="font-size:20px;font-weight:700;color:#92400E">2</div>
+        <div style="font-size:12px;color:#D97706">créneaux occupés (protégés)</div>
+      </div>
+    </div>
+
+    <!-- Tableau des ouvertures -->
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead>
+        <tr style="background:#F9FAFB;text-align:left;color:#6B7280;font-size:12px;text-transform:uppercase">
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB">Salle</th>
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB">Date</th>
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB">Horaires</th>
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB">Pause</th>
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB">Créneaux</th>
+          <th style="padding:10px 12px;border-bottom:1px solid #E5E7EB"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><span style="background:#DBEAFE;color:#1E40AF;padding:2px 10px;border-radius:99px;font-weight:600">B12</span></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">Lun 14 juil.</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">09:00 – 17:00</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;color:#6B7280">12:00 – 13:30</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><strong>9</strong> <span style="color:#9CA3AF;font-size:12px">(dont 2 occupés 🔒)</span></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;text-align:right"><span style="color:#3B82F6;cursor:pointer">✏️ Modifier</span> &nbsp; <span style="color:#EF4444;cursor:pointer">🗑</span></td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><span style="background:#E9D5FF;color:#6D28D9;padding:2px 10px;border-radius:99px;font-weight:600">B14</span></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">Lun 14 juil.</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">09:00 – 17:00</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;color:#6B7280">12:00 – 13:30</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><strong>9</strong></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;text-align:right"><span style="color:#3B82F6;cursor:pointer">✏️ Modifier</span> &nbsp; <span style="color:#EF4444;cursor:pointer">🗑</span></td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><span style="background:#DBEAFE;color:#1E40AF;padding:2px 10px;border-radius:99px;font-weight:600">B12</span></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">Mar 15 juil.</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6">14:00 – 20:00</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;color:#9CA3AF">—</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6"><strong>9</strong></td>
+          <td style="padding:10px 12px;border-bottom:1px solid #F3F4F6;text-align:right"><span style="color:#3B82F6;cursor:pointer">✏️ Modifier</span> &nbsp; <span style="color:#EF4444;cursor:pointer">🗑</span></td>
+        </tr>
+        <!-- Ligne d'ajout -->
+        <tr style="background:#F8FAFF">
+          <td style="padding:10px 12px"><input class="mock-input" style="width:80px" placeholder="Salle"></td>
+          <td style="padding:10px 12px"><input class="mock-input" style="width:120px" placeholder="Date 📅"></td>
+          <td style="padding:10px 12px"><input class="mock-input" style="width:60px" placeholder="09:00"> – <input class="mock-input" style="width:60px" placeholder="17:00"></td>
+          <td style="padding:10px 12px"><input class="mock-input" style="width:110px" placeholder="Pause (option)"></td>
+          <td style="padding:10px 12px;color:#3B82F6;font-size:13px">→ 9 créneaux</td>
+          <td style="padding:10px 12px;text-align:right"><button class="mock-button">+ Ajouter</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="mock-button" style="background:#F3F4F6;color:#374151">📋 Dupliquer une journée…</button>
+      <span style="font-size:12px;color:#9CA3AF;align-self:center">ex. copier toutes les ouvertures du lun 14 → mer 16</span>
+    </div>
+
+    <!-- Aperçu calendrier (vue de contrôle) -->
+    <div style="margin-top:22px;border-top:1px dashed #E5E7EB;padding-top:16px">
+      <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:10px">👁️ Vue de contrôle (calendrier existant, en lecture) — les créneaux découpés apparaissent ici en direct</div>
+      <div style="display:grid;grid-template-columns:50px repeat(2,1fr);gap:4px;font-size:11px">
+        <div></div><div style="text-align:center;font-weight:600;color:#6B7280">Lun 14 — B12</div><div style="text-align:center;font-weight:600;color:#6B7280">Lun 14 — B14</div>
+        <div style="color:#9CA3AF;text-align:right;padding-right:6px">09:00</div>
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:4px 8px">09:00 🔒 occupé</div>
+        <div style="background:#E9D5FF;border:1px solid #8B5CF6;border-radius:6px;padding:4px 8px">09:00</div>
+        <div style="color:#9CA3AF;text-align:right;padding-right:6px">09:40</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:4px 8px">09:40</div>
+        <div style="background:#E9D5FF;border:1px solid #8B5CF6;border-radius:6px;padding:4px 8px">09:40</div>
+        <div style="color:#9CA3AF;text-align:right;padding-right:6px">…</div>
+        <div style="background:#DBEAFE;border:1px solid #3B82F6;border-radius:6px;padding:4px 8px">10:20</div>
+        <div style="background:#E9D5FF;border:1px solid #8B5CF6;border-radius:6px;padding:4px 8px">10:20</div>
+        <div style="color:#9CA3AF;text-align:right;padding-right:6px">12:00</div>
+        <div style="background:#F3F4F6;border:1px dashed #D1D5DB;border-radius:6px;padding:4px 8px;color:#9CA3AF;grid-column:2/4;text-align:center">🍽 Pause 12:00 – 13:30 (aucun créneau)</div>
+      </div>
+    </div>
+
+  </div>
+</div>
