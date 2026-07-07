@@ -6,7 +6,6 @@ import {
   sliceOpeningRow,
   slotInsertRow,
   checkOpeningOverlap,
-  fetchOpeningSlots,
   isSlotOccupied,
   validateOpeningInput,
 } from "@/lib/openings-service";
