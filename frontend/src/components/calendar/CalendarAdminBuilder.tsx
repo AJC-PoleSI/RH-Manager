@@ -795,7 +795,7 @@ export default function CalendarAdminBuilder({
               {durationMinutes}min + {roulementMinutes}min roulement ={" "}
               {totalSlotDuration}min/créneau
             </span>
-            {viewMode === "creation" && (
+            {viewMode === "creation" && !readOnly && (
               <button
                 onClick={() => { setShowBulkGen(!showBulkGen); setShowConfig(false); }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${
