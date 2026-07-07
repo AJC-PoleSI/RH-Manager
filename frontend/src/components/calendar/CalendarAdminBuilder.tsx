@@ -444,6 +444,7 @@ export default function CalendarAdminBuilder({
     [
       roomList,
       viewMode,
+      readOnly,
       checkOverlap,
       durationMinutes,
       nbSalles,
