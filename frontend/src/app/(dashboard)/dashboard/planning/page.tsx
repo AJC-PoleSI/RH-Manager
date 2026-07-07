@@ -1572,6 +1572,20 @@ export default function PlanningPage() {
               )}
             </div>
 
+            {/* Ouvertures de salles : l'admin déclare les plages, le système
+                découpe en créneaux — le calendrier devient une vue de contrôle */}
+            {activeTab === "creation" && (
+              <OpeningsManager
+                selectedEpreuveId={selectedEpreuveId}
+                epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
+                toast={toast}
+                onUpdate={() => {
+                  fetchSlotData();
+                  fetchAllSlotsGlobal();
+                }}
+              />
+            )}
+
             <CalendarAdminBuilder
               selectedEpreuveId={selectedEpreuveId}
               epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
@@ -1581,6 +1595,7 @@ export default function PlanningPage() {
                 fetchAllSlotsGlobal(); // Refresh vue globale aussi
               }}
               viewMode={activeTab}
+              readOnly={activeTab === "creation"}
             />
 
             {/* ══════════════════════════════════════════════════════════════════
