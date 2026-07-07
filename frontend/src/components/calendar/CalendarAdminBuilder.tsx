@@ -524,7 +524,7 @@ export default function CalendarAdminBuilder({
         }
       }
     },
-    [slots, viewMode, deleteSlot], // eslint satisfied
+    [slots, viewMode, readOnly, deleteSlot], // eslint satisfied
   );
 
   /** Custom event rendering */
