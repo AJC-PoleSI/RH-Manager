@@ -480,7 +480,7 @@ export default function CalendarAdminBuilder({
         .toString()
         .padStart(2, "0")}`;
 
-      if (viewMode !== "creation") {
+      if (viewMode !== "creation" || readOnly) {
         info.revert();
         return;
       }
