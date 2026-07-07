@@ -1586,6 +1586,7 @@ export default function PlanningPage() {
                 onUpdate={() => {
                   fetchSlotData();
                   fetchAllSlotsGlobal();
+                  setCalRefreshKey((k) => k + 1);
                 }}
               />
             )}
