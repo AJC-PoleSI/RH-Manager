@@ -24,6 +24,9 @@ interface CalendarAdminBuilderProps {
   /** Vue de contrôle : désactive création au clic, drag & drop, suppression
    *  et génération rapide — les créneaux sont gérés via les ouvertures. */
   readOnly?: boolean;
+  /** Incrémenté par le parent pour forcer un re-fetch des créneaux
+   *  (ex. après création/modification d'une ouverture). */
+  refreshKey?: number;
 }
 
 interface SlotData {
