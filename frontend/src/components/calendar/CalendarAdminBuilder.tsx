@@ -897,7 +897,7 @@ export default function CalendarAdminBuilder({
       )}
 
       {/* Bulk generation panel */}
-      {viewMode === "creation" && showBulkGen && (
+      {viewMode === "creation" && !readOnly && showBulkGen && (
         <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/60 space-y-3">
           {/* Header */}
           <div className="flex items-center justify-between">
