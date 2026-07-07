@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         const { data: slotPreCheck } = await supabaseAdmin
           .from("evaluation_slots")
           .select(
-            "id, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id)",
+            "id, date, start_time, end_time, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id)",
           )
           .eq("id", slotId)
           .single();
@@ -73,9 +73,25 @@ export async function POST(req: NextRequest) {
           const assignedIds = new Set(
             (slotPreCheck.members || []).map((m: any) => m.member_id),
           );
-          const eligibleWaitlist = (slotPreCheck.waitlist || []).filter(
+          // BUG FIX (trouvé en test local) : ce filtre n'excluait que les
+          // membres déjà affectés, pas ceux en conflit horaire — alors que
+          // la promotion réelle plus bas (memberHasConflict) les exclut.
+          // Résultat : la garde laissait passer une désinscription en
+          // pensant qu'un remplaçant existait, puis personne n'était
+          // promu → créneau sous l'effectif minimum avec un candidat
+          // inscrit et aucun garde-fou déclenché.
+          const waitlistCandidates = (slotPreCheck.waitlist || []).filter(
             (w: any) => w.member_id && !assignedIds.has(w.member_id),
           );
+          const eligibleWaitlist = [];
+          for (const w of waitlistCandidates) {
+            const hasConflict = await memberHasConflict(
+              w.member_id,
+              slotPreCheck as any,
+              slotId,
+            );
+            if (!hasConflict) eligibleWaitlist.push(w);
+          }
 
           if (
             activeEnrolls.length > 0 &&
