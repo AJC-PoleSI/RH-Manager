@@ -5,7 +5,7 @@
 // création clic-par-clic. Spec :
 // docs/superpowers/specs/2026-07-07-creation-creneaux-ouvertures-design.md
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { sliceOpening } from "@/lib/opening-slicer";
 
