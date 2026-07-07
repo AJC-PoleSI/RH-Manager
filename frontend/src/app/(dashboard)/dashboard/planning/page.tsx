@@ -1601,6 +1601,7 @@ export default function PlanningPage() {
               }}
               viewMode={activeTab}
               readOnly={activeTab === "creation"}
+              refreshKey={calRefreshKey}
             />
 
             {/* ══════════════════════════════════════════════════════════════════
