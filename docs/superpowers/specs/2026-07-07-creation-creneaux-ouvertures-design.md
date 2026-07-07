@@ -61,7 +61,7 @@ Règles :
 - Si un créneau chevauche `[break_start, break_end)`, il est décalé pour commencer à `break_end` ; le découpage continue après.
 - Déterministe : deux appels avec les mêmes entrées produisent la même liste. C'est la base du recalcul par diff.
 
-Les créneaux créés héritent de l'épreuve comme le fait le bulk-create actuel : `max_candidates` (groupSize si épreuve de groupe, sinon 1), `min_members` (`min_evaluators_per_salle`), `tour`, statut initial `open`. Le workflow de publication existant (publish aux examinateurs, visibilité candidats, dispatch) ne change pas.
+Les créneaux créés héritent de l'épreuve comme le fait le bulk-create actuel : `max_candidates` (groupSize si épreuve de groupe, sinon 1), `min_members` (`min_evaluators_per_salle`), `tour`, statut initial `draft` (comme le bulk-create actuel). Le workflow de publication existant (publish aux examinateurs, visibilité candidats, dispatch) ne change pas.
 
 ### 3. Recalcul avec protection (diff)
 
