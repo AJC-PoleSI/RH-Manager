@@ -503,7 +503,7 @@ export default function CalendarAdminBuilder({
 
       moveSlot(slotId, newDate, newStartTime);
     },
-    [durationMinutes, checkOverlap, viewMode, toast, moveSlot, nbSalles],
+    [durationMinutes, checkOverlap, viewMode, readOnly, toast, moveSlot, nbSalles],
   );
 
   /** Click on event → delete */
