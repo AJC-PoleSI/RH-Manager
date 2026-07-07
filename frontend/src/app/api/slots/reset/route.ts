@@ -102,6 +102,19 @@ export async function POST(req: NextRequest) {
       if (slotError) throw slotError;
     }
 
+    // 2b. Supprimer aussi les ouvertures de salles de l'épreuve (sinon
+    //     elles regénéreraient des créneaux fantômes au prochain recalcul)
+    if (epreuveId) {
+      try {
+        await supabaseAdmin
+          .from("room_openings")
+          .delete()
+          .eq("epreuve_id", epreuveId);
+      } catch {
+        // table absente tant que la migration room_openings n'est pas appliquée
+      }
+    }
+
     // 3. ALWAYS clean member availabilities for this épreuve's date range
     //    (runs even when 0 slots existed, so stale data gets flushed)
     let availabilitiesDeleted = 0;
