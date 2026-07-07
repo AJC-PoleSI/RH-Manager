@@ -237,7 +237,7 @@ export default function CalendarAdminBuilder({
   // ─── Effects ─────────────────────────────────────────────────────
   useEffect(() => {
     if (selectedEpreuveId) fetchSlots();
-  }, [selectedEpreuveId, fetchSlots]);
+  }, [selectedEpreuveId, fetchSlots, refreshKey]);
 
   const createSlot = useCallback(
     async (date: string, startTime: string, room: string) => {
