@@ -147,7 +147,7 @@ export async function PUT(
   } catch (error) {
     console.error("Update opening error:", error);
     return Response.json(
-      { error: "Échec de modification de l'ouverture", details: String(error) },
+      { error: "Échec de modification de l'ouverture", details: (error as any)?.message || String(error) },
       { status: 500 },
     );
   }
@@ -218,7 +218,7 @@ export async function DELETE(
   } catch (error) {
     console.error("Delete opening error:", error);
     return Response.json(
-      { error: "Échec de suppression de l'ouverture", details: String(error) },
+      { error: "Échec de suppression de l'ouverture", details: (error as any)?.message || String(error) },
       { status: 500 },
     );
   }

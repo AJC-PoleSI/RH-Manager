@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("List openings error:", error);
     return Response.json(
-      { error: "Échec du chargement des ouvertures", details: String(error) },
+      { error: "Échec du chargement des ouvertures", details: (error as any)?.message || String(error) },
       { status: 500 },
     );
   }
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Create opening error:", error);
     return Response.json(
-      { error: "Échec de création de l'ouverture", details: String(error) },
+      { error: "Échec de création de l'ouverture", details: (error as any)?.message || String(error) },
       { status: 500 },
     );
   }

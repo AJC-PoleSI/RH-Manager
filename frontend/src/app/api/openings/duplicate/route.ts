@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Duplicate openings error:", error);
     return Response.json(
-      { error: "Échec de duplication", details: String(error) },
+      { error: "Échec de duplication", details: (error as any)?.message || String(error) },
       { status: 500 },
     );
   }
