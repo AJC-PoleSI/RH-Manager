@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
+import OpeningsManager from "@/components/calendar/OpeningsManager";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
