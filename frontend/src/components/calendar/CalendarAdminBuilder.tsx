@@ -21,6 +21,9 @@ interface CalendarAdminBuilderProps {
   toast: (msg: string, type?: "success" | "error" | "info") => void;
   onUpdate: () => void;
   viewMode?: "creation" | "evaluators" | "candidates";
+  /** Vue de contrôle : désactive création au clic, drag & drop, suppression
+   *  et génération rapide — les créneaux sont gérés via les ouvertures. */
+  readOnly?: boolean;
 }
 
 interface SlotData {
