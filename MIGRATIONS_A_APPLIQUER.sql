@@ -33,9 +33,24 @@ ALTER TABLE candidates
 ALTER TABLE candidate_wishes
   ADD COLUMN IF NOT EXISTS tour INTEGER NOT NULL DEFAULT 2;
 
+-- BUG FIX (trouvé en test local) : les contraintes UNIQUE d'origine
+-- (candidat_id, pole) et (candidat_id, rank) — posées avant l'existence de
+-- la colonne `tour` — bloquent la soumission des vœux Tour 3 dès qu'un
+-- candidat réutilise un pôle ou un rang déjà pris au Tour 2 (le cas
+-- normal) : PUT /api/wishes/[candidateId] échoue en 500. À retirer.
+ALTER TABLE candidate_wishes
+  DROP CONSTRAINT IF EXISTS candidate_wishes_candidate_id_pole_key;
+ALTER TABLE candidate_wishes
+  DROP CONSTRAINT IF EXISTS candidate_wishes_candidate_id_rank_key;
+
 -- Un candidat a au plus un classement par (pôle, tour).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_wishes_candidate_pole_tour
   ON candidate_wishes (candidate_id, pole, tour);
+
+-- Remplace l'ancienne contrainte (candidat_id, rank) : un candidat a au plus
+-- un vœu par rang, mais SEULEMENT au sein d'un même tour.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_wishes_candidate_rank_tour
+  ON candidate_wishes (candidate_id, rank, tour);
 
 
 -- ------------------------------------------------------------
