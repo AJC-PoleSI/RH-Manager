@@ -388,7 +388,16 @@ export default function CalendarMemberBuilder({
                   key={time}
                   className="hover:bg-gray-50/30 transition-colors"
                 >
-                  <td className="p-3 font-medium text-gray-600 bg-gray-50/50 border-r border-b border-gray-100 sticky left-0 z-10 text-right">
+                  <td className="p-3 font-medium text-gray-600 bg-gray-50/50 border-r border-b border-gray-100 sticky left-0 z-10 text-right whitespace-nowrap">
+                    <button
+                      onClick={() =>
+                        toggleAllBlocks((b) => b.startTime === time)
+                      }
+                      className="mr-1.5 text-[10px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-1.5 py-0.5 hover:bg-blue-50 transition-colors"
+                      title="Cocher/décocher cet horaire sur tous les jours"
+                    >
+                      ✓
+                    </button>
                     {formatTime(time)}
                   </td>
                   {uniqueDates.map((date) => {
