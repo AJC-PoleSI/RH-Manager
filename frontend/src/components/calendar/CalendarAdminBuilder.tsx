@@ -618,9 +618,11 @@ export default function CalendarAdminBuilder({
         );
       }
 
+      const isOccupied = members.length > 0 || enrollments.length > 0;
+
       return (
         <div className="relative w-full h-full px-1 py-0.5 overflow-hidden">
-          {viewMode === "creation" && (
+          {viewMode === "creation" && !readOnly && (
             <button
               className="fc-event-delete-btn"
               onClick={(e) => {
@@ -635,6 +637,7 @@ export default function CalendarAdminBuilder({
             </button>
           )}
           <div className="text-[10px] font-bold leading-tight truncate">
+            {isOccupied && "🔒 "}
             {room}
           </div>
           <div className="text-[10px] leading-tight opacity-80">
