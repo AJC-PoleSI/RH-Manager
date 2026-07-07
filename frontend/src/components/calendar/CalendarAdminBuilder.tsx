@@ -647,7 +647,7 @@ export default function CalendarAdminBuilder({
         </div>
       );
     },
-    [viewMode, deleteSlot],
+    [viewMode, readOnly, deleteSlot],
   );
 
   /** Week header label update */
