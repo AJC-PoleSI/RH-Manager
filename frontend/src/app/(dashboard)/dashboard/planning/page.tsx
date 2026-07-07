@@ -245,6 +245,10 @@ export default function PlanningPage() {
   const [mySlots, setMySlots] = useState<MySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<MySlot | null>(null); // pour la modale
 
+  // Compteur pour forcer le re-fetch du calendrier de contrôle après
+  // une mutation d'ouverture (création/modif/suppression/duplication)
+  const [calRefreshKey, setCalRefreshKey] = useState(0);
+
   // Calendrier admin — vue propre (même design que candidat)
   const [adminCalView, setAdminCalView] = useState<"month" | "week">("month");
   const [adminCalDate, setAdminCalDate] = useState(new Date());
