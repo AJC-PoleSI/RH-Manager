@@ -127,6 +127,7 @@ export default function CalendarAdminBuilder({
   toast,
   onUpdate,
   viewMode = "creation",
+  readOnly = false,
 }: CalendarAdminBuilderProps) {
   // State
   const [slots, setSlots] = useState<SlotData[]>([]);
