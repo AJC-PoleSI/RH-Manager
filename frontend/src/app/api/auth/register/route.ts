@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     const { data: member, error } = await supabaseAdmin
       .from("members")
       .insert({
-        email,
+        // SECURITY (audit SEC-008) : le login compare en minuscules.
+        email: String(email).trim().toLowerCase(),
         password_hash: hashedPassword,
         is_admin: false, // SECURITY: always false — admin promotion via separate flow
       })

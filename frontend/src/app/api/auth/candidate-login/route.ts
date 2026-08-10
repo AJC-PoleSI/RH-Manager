@@ -43,7 +43,20 @@ export async function POST(req: NextRequest) {
       .eq("email", emailNorm)
       .single();
 
-    if (error || !candidate) {
+    // Panne d'infra (base en pause, réseau…) ≠ candidat inexistant.
+    // PGRST116 = « aucune ligne » : seul cas d'un vrai email inconnu.
+    if (error && error.code !== "PGRST116") {
+      console.error("Candidate login DB error:", error);
+      return Response.json(
+        {
+          error:
+            "Service temporairement indisponible (base de données injoignable). Réessayez dans quelques instants.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!candidate) {
       await registerFailedAttempt(rlKey);
       return Response.json(
         { error: "Candidat introuvable. Vérifiez votre email." },

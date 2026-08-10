@@ -42,7 +42,24 @@ export async function POST(req: NextRequest) {
       .eq("email", emailNorm)
       .single();
 
-    if (error || !member) {
+    // Panne d'infra (base en pause, réseau, RLS…) ≠ mauvais identifiants.
+    // PGRST116 = « aucune ligne » : c'est le seul cas où l'absence de
+    // résultat signifie réellement « ce compte n'existe pas ». Tout autre
+    // code est une erreur serveur : on ne doit ni compter un échec dans le
+    // rate limit, ni faire croire à l'utilisateur que son mot de passe est
+    // faux (sinon tous les comptes semblent cassés d'un coup).
+    if (error && error.code !== "PGRST116") {
+      console.error("Login DB error:", error);
+      return Response.json(
+        {
+          error:
+            "Service temporairement indisponible (base de données injoignable). Réessayez dans quelques instants.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!member) {
       await registerFailedAttempt(rlKey);
       return Response.json({ error: "Invalid credentials" }, { status: 401 });
     }

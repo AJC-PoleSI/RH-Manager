@@ -70,10 +70,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // SECURITY (audit SEC-008) : le login compare des emails en minuscules.
+    // Sans cette normalisation, un compte créé en casse mixte est
+    // introuvable à la connexion → « Invalid credentials » à vie.
+    const emailNorm = String(email).trim().toLowerCase();
+
     const { data: existing } = await supabaseAdmin
       .from("members")
       .select("id")
-      .eq("email", email)
+      .eq("email", emailNorm)
       .maybeSingle();
 
     if (existing) {
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from("members")
       .insert({
-        email,
+        email: emailNorm,
         password_hash: passwordHash,
         is_admin: isAdmin || false,
         first_name: firstName || null,

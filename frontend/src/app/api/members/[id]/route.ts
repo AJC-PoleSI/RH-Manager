@@ -78,7 +78,10 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
 
     const updateData: Record<string, unknown> = {};
-    if (email !== undefined) updateData.email = email;
+    // SECURITY (audit SEC-008) : email toujours stocké en minuscules,
+    // sinon le compte devient impossible à connecter (le login normalise).
+    if (email !== undefined)
+      updateData.email = String(email).trim().toLowerCase();
     if (isAdmin !== undefined) updateData.is_admin = isAdmin;
     if (firstName !== undefined) updateData.first_name = firstName;
     if (lastName !== undefined) updateData.last_name = lastName;
