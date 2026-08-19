@@ -22,3 +22,6 @@ frontend/.claude/
 
 .vercel
 .superpowers/
+
+# Script de debug contenant un JWT admin — retiré (audit 19/08/2026)
+login.js

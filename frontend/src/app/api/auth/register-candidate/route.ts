@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
 import { sendVerificationEmail } from "@/lib/resend";
 import { postSigned, BEFAST_BASE_URL } from "@/lib/integration";
+import { consumeQuota, clientIp, IP_QUOTA } from "@/lib/rate-limit";
 import { NextRequest } from "next/server";
 import crypto from "crypto";
 
@@ -31,6 +32,22 @@ async function mirrorToBefast(input: {
 
 export async function POST(req: NextRequest) {
   try {
+    // SECURITY (audit du 19/08/2026, point #5) : chaque inscription envoie un
+    // mail de vérification et crée un compte miroir chez Befast. Sans quota,
+    // c'est une porte ouverte à la création de comptes en masse. Clé par IP :
+    // l'email étant fourni par l'appelant, une clé par email serait inutile.
+    const rl = await consumeQuota(`register-candidate-ip:${clientIp(req)}`, IP_QUOTA);
+    if (rl.limited) {
+      return Response.json(
+        {
+          error: `Trop d'inscriptions depuis cette connexion. Réessayez dans ${Math.ceil(
+            rl.retryAfterSeconds / 60,
+          )} minute(s).`,
+        },
+        { status: 429 },
+      );
+    }
+
     const {
       firstName,
       lastName,

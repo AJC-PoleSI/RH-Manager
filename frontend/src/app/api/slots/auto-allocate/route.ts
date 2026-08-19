@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  // SECURITY (audit du 19/08/2026, point #11) : opération lourde qui recalcule
+  // tout le planning. Elle est légitimement déclenchée par un membre qui
+  // enregistre ses disponibilités, mais un CANDIDAT n'a rien à y faire.
+  if (payload.role !== "member") {
+    return Response.json({ error: "Acces interdit" }, { status: 403 });
+  }
 
   try {
     const body = await req.json().catch(() => ({}));

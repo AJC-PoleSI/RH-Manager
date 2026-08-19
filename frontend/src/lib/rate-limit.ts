@@ -128,3 +128,50 @@ export async function resetRateLimit(key: string): Promise<void> {
     console.error("resetRateLimit error:", e);
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Quota d'abus (audit du 19/08/2026, point #5)
+//
+// `registerFailedAttempt` ne compte que les ÉCHECS : c'est le bon modèle pour
+// un login, pas pour un endpoint qui envoie un email. Sur inscription et
+// renvoi de vérification, chaque appel RÉUSSI coûte un email — il faut donc
+// compter toutes les tentatives, abouties ou non.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** IP de l'appelant derrière le proxy Vercel. "unknown" si indéterminable. */
+export function clientIp(req: { headers: Headers }): string {
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0]!.trim();
+  return req.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+/**
+ * Consomme une unité de quota. Contrairement à registerFailedAttempt, compte
+ * CHAQUE appel. Retourne `limited: true` si le seuil est déjà atteint — dans
+ * ce cas l'appelant doit répondre 429 sans exécuter l'action.
+ *
+ * Fail-open comme le reste du module : une panne de la table ne doit pas
+ * bloquer les inscriptions.
+ */
+export async function consumeQuota(
+  key: string,
+  config: Partial<RateLimitConfig> = {},
+): Promise<RateLimitStatus> {
+  const status = await checkRateLimit(key);
+  if (status.limited) return status;
+  return registerFailedAttempt(key, config);
+}
+
+/** Quotas par défaut pour les endpoints qui envoient un email. */
+export const EMAIL_QUOTA: RateLimitConfig = {
+  maxAttempts: 5,
+  windowSeconds: 60 * 60, // 1 h
+  lockSeconds: 60 * 60,
+};
+
+/** Quota par IP, plus large : plusieurs personnes peuvent partager une IP. */
+export const IP_QUOTA: RateLimitConfig = {
+  maxAttempts: 15,
+  windowSeconds: 60 * 60,
+  lockSeconds: 60 * 60,
+};

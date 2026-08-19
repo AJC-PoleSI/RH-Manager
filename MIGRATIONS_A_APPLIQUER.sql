@@ -140,3 +140,18 @@ alter table evaluation_slots
 
 create index if not exists idx_room_openings_epreuve on room_openings(epreuve_id);
 create index if not exists idx_evaluation_slots_opening on evaluation_slots(opening_id);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ⚠️ PRIORITAIRE — VERROUILLAGE RLS (audit sécurité du 19/08/2026, point #4)
+--
+-- La base est actuellement en LECTURE ET ÉCRITURE PUBLIQUES : avec la clé
+-- anon, 22 tables sur 25 sont lisibles (dont members.password_hash) et les
+-- PATCH/DELETE sur members et candidates renvoient HTTP 204. Autrement dit :
+-- promotion admin et suppression de la base possibles sans authentification.
+--
+-- Le SQL complet, commenté, avec vérification et script d'annulation :
+--     supabase-migration-rls-lockdown.sql
+--
+-- À appliquer EN PREMIER dans l'éditeur SQL Supabase. Ne casse pas l'app :
+-- toutes les routes API passent par service_role, qui contourne la RLS.
+-- ════════════════════════════════════════════════════════════════════════════
