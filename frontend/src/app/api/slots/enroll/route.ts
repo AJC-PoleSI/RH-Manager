@@ -51,6 +51,20 @@ export async function POST(req: NextRequest) {
 
     // PUBLICATION PAR ÉPREUVE : seuls les créneaux explicitement publiés
     // acceptent des inscriptions candidates.
+    //
+    // Cas "full" à part : sous forte contention (plusieurs candidats
+    // cliquent en même temps), le créneau peut basculer en "full" pendant
+    // qu'une autre requête est encore en vol — celle-ci arrivait ici avec
+    // le message générique "n'est plus disponible", trompeur (donne
+    // l'impression d'un bug) alors qu'il s'agit juste d'un créneau
+    // complet. On renvoie le même message que la vraie vérification de
+    // capacité un peu plus bas, pour une expérience cohérente.
+    if (slot.status === "full") {
+      return Response.json(
+        { error: "Ce créneau est complet" },
+        { status: 400 },
+      );
+    }
     if (slot.status !== "published") {
       return Response.json(
         { error: "Ce créneau n'est plus disponible" },
