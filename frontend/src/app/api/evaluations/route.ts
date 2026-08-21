@@ -261,7 +261,42 @@ export async function POST(req: NextRequest) {
     }
 
     return Response.json(evaluation, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    // COURSE CONCURRENTE (ex. Business Game : plusieurs examinateurs
+    // créent la note collective d'un même candidat au même instant) :
+    // celui qui perd la course viole la contrainte unique
+    // (candidate_id, epreuve_id) WHERE is_group=true/false. Plutôt que
+    // de renvoyer une erreur brute, on relit la ligne créée par le
+    // gagnant et on répond comme le fait déjà la pré-vérification plus
+    // haut — le frontend sait déjà récupérer ce cas (saveGroupEval).
+    if (error?.code === "23505" && candidateId && epreuveId) {
+      try {
+        const { data: existing } = await supabaseAdmin
+          .from("candidate_evaluations")
+          .select("id")
+          .eq("candidate_id", candidateId)
+          .eq("epreuve_id", epreuveId)
+          .eq("is_group", wantGroupEval)
+          .eq(wantGroupEval ? "epreuve_id" : "member_id", wantGroupEval ? epreuveId : memberId)
+          .limit(1)
+          .maybeSingle();
+        if (existing) {
+          return Response.json(
+            {
+              error: wantGroupEval
+                ? "Une évaluation collective existe déjà pour ce candidat."
+                : "Vous avez déjà évalué ce candidat pour cette épreuve.",
+              code: wantGroupEval ? "GROUP_EVAL_EXISTS" : "INDIVIDUAL_EVAL_EXISTS",
+              id: existing.id,
+            },
+            { status: 409 },
+          );
+        }
+      } catch {
+        /* repli sur l'erreur générique ci-dessous */
+      }
+    }
+    console.error("Evaluation POST error:", error);
     return Response.json(
       { error: "Failed to submit evaluation" },
       { status: 400 },
