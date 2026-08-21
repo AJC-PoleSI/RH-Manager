@@ -191,3 +191,67 @@ ALTER TABLE members
 CREATE UNIQUE INDEX IF NOT EXISTS uq_members_password_reset_token
   ON members (password_reset_token)
   WHERE password_reset_token IS NOT NULL;
+
+
+-- ============================================================
+-- 2026-08-21 : inscription candidate ATOMIQUE (anti-survente)
+--    (supabase-migration-enroll-atomic.sql)
+-- ============================================================
+-- Trouvé en test de charge : sous forte contention, la vérification de
+-- capacité + insertion en 2 temps côté JS laissait passer une survente
+-- intermittente (jusqu'à 10 inscrits pour 8 places avec 200 candidats
+-- simultanés). Cette fonction verrouille + compte + écrit en UNE seule
+-- transaction Postgres. Tant qu'elle n'est pas appliquée, l'app retombe
+-- sur l'ancien comportement (best-effort, fenêtre de course connue).
+
+create or replace function enroll_candidate_atomic(
+  p_slot_id uuid,
+  p_candidate_id uuid,
+  p_max_candidates integer
+) returns jsonb
+language plpgsql
+as $$
+declare
+  v_existing_id uuid;
+  v_existing_status text;
+  v_active_count integer;
+  v_row_id uuid;
+begin
+  perform 1 from evaluation_slots where id = p_slot_id for update;
+
+  select id, status into v_existing_id, v_existing_status
+    from slot_enrollments
+    where slot_id = p_slot_id and candidate_id = p_candidate_id;
+
+  if v_existing_id is not null
+     and (v_existing_status is null or v_existing_status in ('active', 'enrolled')) then
+    return jsonb_build_object('id', v_existing_id, 'status', 'already_enrolled');
+  end if;
+
+  select count(*) into v_active_count
+    from slot_enrollments
+    where slot_id = p_slot_id
+      and (status is null or status in ('active', 'enrolled'));
+
+  if v_active_count >= p_max_candidates then
+    return jsonb_build_object('status', 'full');
+  end if;
+
+  if v_existing_id is not null then
+    update slot_enrollments
+      set status = 'active', enrolled_at = now()
+      where id = v_existing_id;
+    v_row_id := v_existing_id;
+  else
+    insert into slot_enrollments (slot_id, candidate_id, status, enrolled_at)
+      values (p_slot_id, p_candidate_id, 'active', now())
+      returning id into v_row_id;
+  end if;
+
+  if v_active_count + 1 >= p_max_candidates then
+    update evaluation_slots set status = 'full' where id = p_slot_id;
+  end if;
+
+  return jsonb_build_object('id', v_row_id, 'status', 'created');
+end;
+$$;
