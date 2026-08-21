@@ -80,9 +80,17 @@ export async function POST(req: NextRequest) {
 
   const memberId = user.id;
 
+  // Hissés hors du try pour rester accessibles dans le catch (cf. le
+  // rattrapage de la course concurrente sur la contrainte unique, en bas).
+  let candidateId: string | undefined;
+  let epreuveId: string | undefined;
+  let wantGroupEval = false;
+
   try {
-    const { candidateId, epreuveId, scores, comment, isGroup } = await req.json();
-    const wantGroupEval = isGroup === true;
+    const body = await req.json();
+    ({ candidateId, epreuveId } = body);
+    const { scores, comment, isGroup } = body;
+    wantGroupEval = isGroup === true;
 
     if (!candidateId || !epreuveId) {
       return Response.json(
