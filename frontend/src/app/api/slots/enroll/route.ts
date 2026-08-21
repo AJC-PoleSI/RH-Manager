@@ -428,123 +428,152 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // FIX (cancelled-row reuse): if a cancelled row exists for this
-    // (slot, candidate), reactivate it instead of inserting a new one —
-    // otherwise the unique constraint trips and the candidate is stuck.
+    // ══════════════════════════════════════════════════════════════════
+    // ÉCRITURE ATOMIQUE : capacité + insertion/réactivation dans UNE
+    // seule transaction Postgres (verrou de ligne sur le créneau), via
+    // la RPC enroll_candidate_atomic. Élimine la fenêtre de course
+    // "compter puis insérer" côté JS qui laissait passer une survente
+    // intermittente sous forte contention (mesuré en test de charge :
+    // jusqu'à 10 inscrits pour 8 places avec 200 candidats simultanés).
+    // Repli sur l'ancien comportement best-effort tant que la migration
+    // n'est pas appliquée (supabase-migration-enroll-atomic.sql), pour
+    // ne pas casser les inscriptions pendant la fenêtre de déploiement.
+    // ══════════════════════════════════════════════════════════════════
     let enrollment: any = null;
-    let enrollError: any = null;
-    const cancelledRow = (slot.enrollments || []).find(
-      (e: any) => e.candidate_id === candidateId && e.status === "cancelled",
+
+    const { data: atomicResult, error: atomicError } = await supabaseAdmin.rpc(
+      "enroll_candidate_atomic",
+      {
+        p_slot_id: slotId,
+        p_candidate_id: candidateId,
+        p_max_candidates: effectiveMax,
+      },
     );
 
-    if (cancelledRow) {
-      const { data, error } = await supabaseAdmin
-        .from("slot_enrollments")
-        .update({ status: "active", enrolled_at: new Date().toISOString() })
-        .eq("id", cancelledRow.id)
-        .select(
-          `
-          *,
-          slot:evaluation_slots(*, epreuve:epreuves(name))
-        `,
-        )
-        .single();
-      enrollment = data;
-      enrollError = error;
-    } else {
-      // Extra guard: check directly in DB before inserting to prevent
-      // any duplicate that slipped through the in-memory checks above
-      // (e.g. when slot.enrollments cache was stale or status mismatch).
-      const { data: existingInDb } = await supabaseAdmin
-        .from("slot_enrollments")
-        .select("id, status")
-        .eq("slot_id", slotId)
-        .eq("candidate_id", candidateId)
-        .maybeSingle();
-
-      if (existingInDb && isActiveEnrollment(existingInDb.status as any)) {
+    if (!atomicError) {
+      if (atomicResult?.status === "full") {
         return Response.json(
-          { ...existingInDb, alreadyEnrolled: true },
+          { error: "Ce créneau est complet" },
+          { status: 400 },
+        );
+      }
+      if (atomicResult?.status === "already_enrolled") {
+        return Response.json(
+          {
+            id: atomicResult.id,
+            slot_id: slotId,
+            candidate_id: candidateId,
+            status: "active",
+            alreadyEnrolled: true,
+          },
           { status: 200 },
         );
       }
-
-      // FIX: insert with explicit status="active". Without this, the
-      // row's `status` column defaults to NULL (if no DB default), which
-      // various read filters accept but which has caused inconsistent
-      // states across endpoints. Be explicit.
-      const { data, error } = await supabaseAdmin
+      const { data: full } = await supabaseAdmin
         .from("slot_enrollments")
-        .insert({
-          slot_id: slotId,
-          candidate_id: candidateId,
-          status: "active",
-          enrolled_at: new Date().toISOString(),
-        })
-        .select(
-          `
-          *,
-          slot:evaluation_slots(*, epreuve:epreuves(name))
-        `,
-        )
+        .select("*, slot:evaluation_slots(*, epreuve:epreuves(name))")
+        .eq("id", atomicResult.id)
         .single();
-      enrollment = data;
-      enrollError = error;
-    }
-
-    if (enrollError) throw enrollError;
-
-    // FIX H2: post-insert race-check. Two parallel POSTs could both pass
-    // the pre-check above. Re-count active enrollments and rollback this
-    // one if we exceeded capacity. Note: this is best-effort — a proper
-    // fix requires a Postgres RPC/CHECK constraint, but this closes the
-    // window in 99% of cases.
-    const { data: postCheck } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        "max_candidates, enrollments:slot_enrollments(id, status, enrolled_at)",
-      )
-      .eq("id", slotId)
-      .single();
-
-    if (postCheck) {
-      // Capacité effective (idem pré-check) — pas la valeur potentiellement
-      // périmée stockée sur le créneau.
-      const postMax = Math.max(
-        Number(postCheck.max_candidates) || 1,
-        effectiveMax,
+      enrollment = full;
+    } else if (isFunctionMissingError(atomicError)) {
+      // ── Repli NON ATOMIQUE (migration pas encore appliquée) ──
+      console.warn(
+        "[enroll] RPC enroll_candidate_atomic absente — repli non atomique (fenêtre de course connue). Appliquez supabase-migration-enroll-atomic.sql.",
       );
-      const actives = (postCheck.enrollments || [])
-        .filter(filterActiveEnrollments)
-        .sort((a: any, b: any) =>
-          String(a.enrolled_at || "").localeCompare(String(b.enrolled_at || "")),
-        );
 
-      if (actives.length > postMax) {
-        // We are the loser of the race — rollback our insert.
-        const loserIds = actives
-          .slice(postMax)
-          .map((e: any) => e.id);
-        if (loserIds.includes(enrollment.id)) {
-          await supabaseAdmin
-            .from("slot_enrollments")
-            .delete()
-            .eq("id", enrollment.id);
+      let enrollError: any = null;
+      const cancelledRow = (slot.enrollments || []).find(
+        (e: any) => e.candidate_id === candidateId && e.status === "cancelled",
+      );
+
+      if (cancelledRow) {
+        const { data, error } = await supabaseAdmin
+          .from("slot_enrollments")
+          .update({ status: "active", enrolled_at: new Date().toISOString() })
+          .eq("id", cancelledRow.id)
+          .select(`*, slot:evaluation_slots(*, epreuve:epreuves(name))`)
+          .single();
+        enrollment = data;
+        enrollError = error;
+      } else {
+        // Extra guard: check directly in DB before inserting to prevent
+        // any duplicate that slipped through the in-memory checks above.
+        const { data: existingInDb } = await supabaseAdmin
+          .from("slot_enrollments")
+          .select("id, status")
+          .eq("slot_id", slotId)
+          .eq("candidate_id", candidateId)
+          .maybeSingle();
+
+        if (existingInDb && isActiveEnrollment(existingInDb.status as any)) {
           return Response.json(
-            { error: "Ce créneau est complet (course concurrente)" },
-            { status: 409 },
+            { ...existingInDb, alreadyEnrolled: true },
+            { status: 200 },
           );
         }
+
+        const { data, error } = await supabaseAdmin
+          .from("slot_enrollments")
+          .insert({
+            slot_id: slotId,
+            candidate_id: candidateId,
+            status: "active",
+            enrolled_at: new Date().toISOString(),
+          })
+          .select(`*, slot:evaluation_slots(*, epreuve:epreuves(name))`)
+          .single();
+        enrollment = data;
+        enrollError = error;
       }
 
-      // On ne marque "full" QUE si la capacité effective est atteinte.
-      const activeCount = actives.length;
-      if (activeCount >= postMax) {
-        await supabaseAdmin
-          .from("evaluation_slots")
-          .update({ status: "full" })
-          .eq("id", slotId);
+      if (enrollError) throw enrollError;
+
+      // Post-insert race-check best-effort — uniquement sur ce repli non
+      // atomique, où la fenêtre de course existe encore.
+      const { data: postCheck } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select(
+          "max_candidates, enrollments:slot_enrollments(id, status, enrolled_at)",
+        )
+        .eq("id", slotId)
+        .single();
+
+      if (postCheck) {
+        const postMax = Math.max(
+          Number(postCheck.max_candidates) || 1,
+          effectiveMax,
+        );
+        const actives = (postCheck.enrollments || [])
+          .filter(filterActiveEnrollments)
+          .sort((a: any, b: any) =>
+            String(a.enrolled_at || "").localeCompare(String(b.enrolled_at || "")),
+          );
+
+        if (actives.length > postMax) {
+          const loserIds = actives.slice(postMax).map((e: any) => e.id);
+          if (loserIds.includes(enrollment.id)) {
+            await supabaseAdmin
+              .from("slot_enrollments")
+              .delete()
+              .eq("id", enrollment.id);
+            return Response.json(
+              { error: "Ce créneau est complet (course concurrente)" },
+              { status: 409 },
+            );
+          }
+        }
+
+        if (actives.length >= postMax) {
+          await supabaseAdmin
+            .from("evaluation_slots")
+            .update({ status: "full" })
+            .eq("id", slotId);
+        }
       }
+    } else {
+      // Erreur RPC réelle (pas "fonction absente") : la transaction a
+      // tout annulé côté Postgres, rien n'a été modifié.
+      throw atomicError;
     }
 
     return Response.json(enrollment, { status: 201 });
