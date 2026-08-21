@@ -271,15 +271,17 @@ export async function POST(req: NextRequest) {
     // haut — le frontend sait déjà récupérer ce cas (saveGroupEval).
     if (error?.code === "23505" && candidateId && epreuveId) {
       try {
-        const { data: existing } = await supabaseAdmin
+        let existingQuery = supabaseAdmin
           .from("candidate_evaluations")
           .select("id")
           .eq("candidate_id", candidateId)
           .eq("epreuve_id", epreuveId)
-          .eq("is_group", wantGroupEval)
-          .eq(wantGroupEval ? "epreuve_id" : "member_id", wantGroupEval ? epreuveId : memberId)
-          .limit(1)
-          .maybeSingle();
+          .eq("is_group", wantGroupEval);
+        // Contrainte unique individuelle = (candidate_id, epreuve_id,
+        // member_id) : sans ce filtre on récupérerait la note d'un autre
+        // examinateur.
+        if (!wantGroupEval) existingQuery = existingQuery.eq("member_id", memberId);
+        const { data: existing } = await existingQuery.maybeSingle();
         if (existing) {
           return Response.json(
             {
