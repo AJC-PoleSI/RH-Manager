@@ -73,8 +73,6 @@ export async function PUT(
       updateData.duration_minutes = Number(body.durationMinutes);
     if (body.roulementMinutes !== undefined)
       updateData.roulement_minutes = Number(body.roulementMinutes);
-    if (body.nbSalles !== undefined)
-      updateData.nb_salles = Number(body.nbSalles);
     if (body.minEvaluatorsPerSalle !== undefined)
       updateData.min_evaluators_per_salle = Number(body.minEvaluatorsPerSalle);
     if (body.dateDebut !== undefined)

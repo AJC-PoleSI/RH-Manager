@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
-type View = 'landing' | 'login' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
+type View = 'landing' | 'login' | 'forgot-password' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
 
 export default function LoginPage() {
     const [view, setView] = useState<View>('landing');
@@ -17,6 +17,11 @@ export default function LoginPage() {
     // Member login form
     const [memberEmail, setMemberEmail] = useState('');
     const [memberPassword, setMemberPassword] = useState('');
+
+    // « Mot de passe oublié ? » (membres)
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotSent, setForgotSent] = useState(false);
 
     // Candidate login form
     const [candidateLoginEmail, setCandidateLoginEmail] = useState('');
@@ -54,6 +59,8 @@ export default function LoginPage() {
             anneeIntegration: '',
         });
         setCvFile(null);
+        setForgotEmail('');
+        setForgotSent(false);
         setError('');
         setStep(1);
     };
@@ -81,6 +88,22 @@ export default function LoginPage() {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setForgotLoading(true);
+        try {
+            await api.post('/auth/forgot-password', { email: forgotEmail });
+        } catch {
+            // La route répond volontairement 200 même si l'adresse est
+            // inconnue (anti-énumération) : seule une panne réseau atterrit
+            // ici, et on affiche quand même la confirmation.
+        } finally {
+            setForgotLoading(false);
+            setForgotSent(true);
         }
     };
 
@@ -412,12 +435,103 @@ export default function LoginPage() {
 
                     <div className="mt-4 text-center">
                         <button
+                            onClick={() => {
+                                setError('');
+                                setForgotEmail(memberEmail);
+                                setForgotSent(false);
+                                setView('forgot-password');
+                            }}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition"
+                        >
+                            Mot de passe oublié ?
+                        </button>
+                    </div>
+
+                    <div className="mt-3 text-center">
+                        <button
                             onClick={goToLanding}
                             className="text-sm text-gray-500 hover:text-gray-700 transition"
                         >
                             ← Retour
                         </button>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── MOT DE PASSE OUBLIÉ (Member) ──────────────────────────────
+    if (view === 'forgot-password') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
+                    {forgotSent ? (
+                        <>
+                            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-2xl">
+                                📩
+                            </div>
+                            <h1 className="text-xl font-semibold text-gray-900 text-center">
+                                Vérifiez votre boîte mail
+                            </h1>
+                            <p className="mt-2 text-sm text-gray-500 text-center leading-relaxed">
+                                Si un compte AJC est associé à cette adresse, un lien pour
+                                choisir un nouveau mot de passe vient d&apos;être envoyé.
+                                Il est valable 24 heures.
+                            </p>
+                            <div className="mt-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500 text-center">
+                                Pensez à regarder dans vos spams.
+                            </div>
+                            <button
+                                onClick={() => { resetForms(); setView('login'); }}
+                                className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
+                            >
+                                Retour à la connexion
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <h1 className="text-xl font-semibold text-gray-900 text-center">
+                                Mot de passe oublié
+                            </h1>
+                            <p className="mt-1 text-sm text-gray-500 text-center">
+                                Indiquez votre adresse AJC : nous vous enverrons un lien pour
+                                choisir un nouveau mot de passe.
+                            </p>
+
+                            <form onSubmit={handleForgotPassword} className="mt-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        required
+                                        autoFocus
+                                        value={forgotEmail}
+                                        onChange={(e) => setForgotEmail(e.target.value)}
+                                        placeholder="nom@ajc-mail.com"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={forgotLoading}
+                                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                                >
+                                    {forgotLoading ? 'Envoi…' : 'Envoyer le lien'}
+                                </button>
+                            </form>
+
+                            <div className="mt-4 text-center">
+                                <button
+                                    onClick={() => { setError(''); setView('login'); }}
+                                    className="text-sm text-gray-500 hover:text-gray-700 transition"
+                                >
+                                    ← Retour à la connexion
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         );

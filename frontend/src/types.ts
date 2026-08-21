@@ -33,6 +33,5 @@ export interface Epreuve {
   type: string;
   durationMinutes: number;
   roulementMinutes: number;
-  nbSalles: number;
   minEvaluatorsPerSalle: number;
 }

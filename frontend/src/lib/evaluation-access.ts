@@ -49,3 +49,51 @@ export async function isMemberAssignedToSlot(
 
   return !error && !!data && data.length > 0;
 }
+
+/**
+ * Liste les épreuves qu'un membre est autorisé à évaluer POUR UN CANDIDAT
+ * donné : celles où il est assigné à un créneau sur lequel ce candidat a une
+ * inscription active. C'est la règle unique qui gouverne l'accès aux
+ * évaluations (individuelles, collectives, commentaires, cochage).
+ *
+ * Les admins ne passent pas par ici : ils voient tout.
+ */
+export async function listEvaluableEpreuveIds(
+  memberId: string,
+  candidateId: string,
+): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("slot_member_assignments")
+    .select(
+      "slot:evaluation_slots!inner(id, epreuve_id, enrollments:slot_enrollments(candidate_id, status))",
+    )
+    .eq("member_id", memberId);
+
+  if (error || !data) return [];
+
+  const ids = new Set<string>();
+  for (const row of data as any[]) {
+    const slot = row.slot;
+    if (!slot?.epreuve_id) continue;
+    const hasCandidate = (slot.enrollments || [])
+      .filter((e: any) => !e.status || e.status === "active")
+      .some((e: any) => e.candidate_id === candidateId);
+    if (hasCandidate) ids.add(slot.epreuve_id);
+  }
+  return Array.from(ids);
+}
+
+/**
+ * Un membre peut-il évaluer ce candidat sur cette épreuve ?
+ * `isAdmin` court-circuite la vérification.
+ */
+export async function canEvaluate(
+  memberId: string,
+  candidateId: string,
+  epreuveId: string,
+  isAdmin = false,
+): Promise<boolean> {
+  if (isAdmin) return true;
+  const ids = await listEvaluableEpreuveIds(memberId, candidateId);
+  return ids.includes(epreuveId);
+}

@@ -84,6 +84,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [epreuves, setEpreuves] = useState<any[]>([]);
   const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>(initialEpreuveId);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // ── Individual evaluation state ──
   const [indivScores, setIndivScores] = useState<Record<number, string>>({});
@@ -112,12 +113,16 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   useEffect(() => {
     const loadData = async () => {
       try {
+        // On ne charge QUE les épreuves que l'examinateur a le droit
+        // d'évaluer pour ce candidat (créneau commun). Les admins
+        // reçoivent la liste complète depuis la même route.
         const [candRes, epRes] = await Promise.all([
           api.get(`/candidates/${id}`),
-          api.get("/epreuves"),
+          api.get(`/evaluations/allowed-epreuves?candidateId=${id}`),
         ]);
         setCandidate(candRes.data);
-        setEpreuves(epRes.data);
+        setEpreuves(epRes.data?.epreuves || []);
+        setIsAdmin(!!epRes.data?.isAdmin);
       } catch (error) {
         console.error(error);
         toast("Erreur lors du chargement des données", "error");
@@ -127,6 +132,15 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     };
     loadData();
   }, [id, toast]);
+
+  // Une épreuve passée en query string mais absente de la liste autorisée
+  // ne doit pas rester sélectionnée (lien reçu, favori, retour arrière…).
+  useEffect(() => {
+    if (loading || !selectedEpreuveId) return;
+    if (!epreuves.some((e) => e.id === selectedEpreuveId)) {
+      setSelectedEpreuveId("");
+    }
+  }, [loading, epreuves, selectedEpreuveId]);
 
   const selectedEpreuve = epreuves.find((e) => e.id === selectedEpreuveId);
   const isGroupEpreuve = !!selectedEpreuve?.isGroupEpreuve;
@@ -389,19 +403,40 @@ function EvaluateCandidateForm({ id }: { id: string }) {
           <CardTitle>Choisir l&apos;épreuve</CardTitle>
         </CardHeader>
         <CardContent>
-          <select
-            className="w-full p-2 border rounded-md"
-            value={selectedEpreuveId}
-            onChange={(e) => setSelectedEpreuveId(e.target.value)}
-            required
-          >
-            <option value="">-- Sélectionner une épreuve --</option>
-            {epreuves.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name} ({e.type}){e.isGroupEpreuve ? " · groupe" : ""}
-              </option>
-            ))}
-          </select>
+          {epreuves.length === 0 ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+              <p className="text-sm font-medium text-amber-900">
+                Aucune épreuve à évaluer pour ce candidat.
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Vous ne pouvez noter un candidat que sur les épreuves où vous
+                êtes assigné à son créneau. Rapprochez-vous d&apos;un
+                responsable recrutement si vous pensez qu&apos;il s&apos;agit
+                d&apos;une erreur.
+              </p>
+            </div>
+          ) : (
+            <>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={selectedEpreuveId}
+                onChange={(e) => setSelectedEpreuveId(e.target.value)}
+                required
+              >
+                <option value="">-- Sélectionner une épreuve --</option>
+                {epreuves.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} ({e.type}){e.isGroupEpreuve ? " · groupe" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-2">
+                {isAdmin
+                  ? "Compte admin : toutes les épreuves sont accessibles."
+                  : "Seules les épreuves où vous êtes examinateur de ce candidat sont proposées."}
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 

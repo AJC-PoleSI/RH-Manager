@@ -6,24 +6,14 @@ import api from "@/lib/api";
 // FullCalendar
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import type {
-  EventInput,
-  EventDropArg,
-  EventClickArg,
-} from "@fullcalendar/core";
-import type { DateClickArg } from "@fullcalendar/interaction";
+import type { EventInput, EventClickArg } from "@fullcalendar/core";
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface CalendarAdminBuilderProps {
   selectedEpreuveId: string;
   epreuve: any;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
-  onUpdate: () => void;
   viewMode?: "creation" | "evaluators" | "candidates";
-  /** Vue de contrôle : désactive création au clic, drag & drop, suppression
-   *  et génération rapide — les créneaux sont gérés via les ouvertures. */
-  readOnly?: boolean;
   /** Incrémenté par le parent pour forcer un re-fetch des créneaux
    *  (ex. après création/modification d'une ouverture). */
   refreshKey?: number;
@@ -71,18 +61,20 @@ const ROOM_PALETTE = [
   { bg: "#CFFAFE", border: "#06B6D4", text: "#155E75" }, // Cyan
 ];
 
-const DEFAULT_MIN_TIME = "07:00:00";
-const DEFAULT_MAX_TIME = "20:00:00";
+// Repli quand aucun créneau n'existe encore : la plage est alors inconnue.
+const FALLBACK_MIN_TIME = "08:00:00";
+const FALLBACK_MAX_TIME = "19:00:00";
+
+/** Hauteur (px) d'une ligne de 30 min selon la densité choisie.
+ *  Compact : la journée entière tient à l'écran sans scroller. */
+const ROW_HEIGHT: Record<Density, number> = {
+  compact: 16,
+  confort: 34,
+};
+
+type Density = "compact" | "confort";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  return `${Math.floor(total / 60)
-    .toString()
-    .padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
-}
-
 /** Get Monday of the week containing `date` */
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -116,6 +108,25 @@ function formatDateISO(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** Arrondit à l'heure pleine, vers le bas (floor) ou vers le haut (ceil).
+ *  Les libellés horaires tombent ainsi sur des :00 et non des :30. */
+function snapToHour(mins: number, dir: "floor" | "ceil"): number {
+  const snapped =
+    dir === "floor" ? Math.floor(mins / 60) * 60 : Math.ceil(mins / 60) * 60;
+  return Math.min(24 * 60, Math.max(0, snapped));
+}
+
+function minutesToTimeString(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+}
+
 function getRoomColor(room: string, roomIndex: number) {
   if (!ROOM_COLORS[room]) {
     ROOM_COLORS[room] = ROOM_PALETTE[roomIndex % ROOM_PALETTE.length];
@@ -123,36 +134,37 @@ function getRoomColor(room: string, roomIndex: number) {
   return ROOM_COLORS[room];
 }
 
+function memberName(m: any): string {
+  const first = m?.member?.firstName || m?.member?.first_name || "";
+  const last = m?.member?.lastName || m?.member?.last_name || "";
+  return `${first} ${last}`.trim() || m?.member?.email || "—";
+}
+
 // ─── Component ───────────────────────────────────────────────────────
+/**
+ * Vue de CONTRÔLE du planning d'une épreuve. Les créneaux sont créés et
+ * modifiés via le tableau des ouvertures de salles (OpeningsManager) : ce
+ * calendrier ne fait que les afficher, avec un détail au clic.
+ */
 export default function CalendarAdminBuilder({
   selectedEpreuveId,
   epreuve,
   toast,
-  onUpdate,
   viewMode = "creation",
-  readOnly = false,
   refreshKey = 0,
 }: CalendarAdminBuilderProps) {
   // State
   const [slots, setSlots] = useState<SlotData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [slotMinTime, setSlotMinTime] = useState(DEFAULT_MIN_TIME);
-  const [slotMaxTime, setSlotMaxTime] = useState(DEFAULT_MAX_TIME);
+  const [density, setDensity] = useState<Density>("compact");
+  /** null = plage horaire déduite automatiquement des créneaux. */
+  const [manualRange, setManualRange] = useState<{
+    min: string;
+    max: string;
+  } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [currentWeekLabel, setCurrentWeekLabel] = useState("");
-  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date | null>(null);
-  const [editingSlot, setEditingSlot] = useState<SlotData | null>(null);
-  const [editedRoom, setEditedRoom] = useState("");
-  const [savingRoom, setSavingRoom] = useState(false);
-
-  // State for bulk generation panel
-  const [showBulkGen, setShowBulkGen] = useState(false);
-  const [bulkGenDays, setBulkGenDays] = useState<Set<string>>(new Set());
-  const [bulkGenStart, setBulkGenStart] = useState("08:00");
-  const [bulkGenEnd, setBulkGenEnd] = useState("18:00");
-  const [bulkGenCount, setBulkGenCount] = useState(10); // nombre direct de créneaux/jour
-  const [bulkGenerating, setBulkGenerating] = useState(false);
-  const [bulkRoomNames, setBulkRoomNames] = useState<string[]>([]); // noms de salles personnalisés
+  const [detailSlot, setDetailSlot] = useState<SlotData | null>(null);
 
   // Refs
   const calendarRef = useRef<FullCalendar>(null);
@@ -163,36 +175,40 @@ export default function CalendarAdminBuilder({
   const roulementMinutes =
     epreuve?.roulementMinutes || epreuve?.roulement_minutes || 10;
   const totalSlotDuration = durationMinutes + roulementMinutes;
-  const nbSalles = parseInt(epreuve?.nbSalles || epreuve?.nb_salles || "1");
 
-  // Initialiser bulkRoomNames quand l'épreuve change
-  useEffect(() => {
-    setBulkRoomNames(
-      Array.from({ length: Math.max(1, nbSalles) }, (_, i) => `Salle ${i + 1}`)
-    );
-  }, [nbSalles, selectedEpreuveId]);
-
-  // Helpers pour gérer les noms
-  const effectiveBulkNbSalles = bulkRoomNames.length || nbSalles;
-  const addRoom = () => setBulkRoomNames((prev) => [...prev, `Salle ${prev.length + 1}`]);
-  const removeRoom = (idx: number) => setBulkRoomNames((prev) => prev.filter((_, i) => i !== idx));
-  const renameRoom = (idx: number, name: string) =>
-    setBulkRoomNames((prev) => prev.map((n, i) => (i === idx ? name : n)));
-
-  // Build unique room list from existing slots + expected rooms
+  // Liste des salles réellement utilisées par les créneaux existants.
   const roomList = useMemo(() => {
-    const roomsFromSlots = Array.from(
-      new Set(slots.map((s) => s.room).filter(Boolean)),
-    ) as string[];
-    // Add expected rooms that might not have slots yet
-    for (let i = 1; i <= nbSalles; i++) {
-      const defaultName = `Salle ${i}`;
-      if (!roomsFromSlots.includes(defaultName)) {
-        roomsFromSlots.push(defaultName);
-      }
+    return (
+      Array.from(new Set(slots.map((s) => s.room).filter(Boolean))) as string[]
+    ).sort();
+  }, [slots]);
+
+  // ─── Plage horaire affichée ──────────────────────────────────────
+  // Par défaut on colle aux créneaux existants (arrondi à l'heure pleine) :
+  // inutile d'afficher 07h→20h quand tout se joue entre 9h et 13h.
+  const autoRange = useMemo(() => {
+    if (slots.length === 0) {
+      return { min: FALLBACK_MIN_TIME, max: FALLBACK_MAX_TIME };
     }
-    return roomsFromSlots.sort();
-  }, [slots, nbSalles]);
+    let minMins = 24 * 60;
+    let maxMins = 0;
+    slots.forEach((s) => {
+      const start = toMinutes(s.start_time || s.startTime || "08:00");
+      const end = toMinutes(s.end_time || s.endTime || "09:00");
+      if (start < minMins) minMins = start;
+      if (end > maxMins) maxMins = end;
+    });
+    if (minMins >= maxMins) {
+      return { min: FALLBACK_MIN_TIME, max: FALLBACK_MAX_TIME };
+    }
+    return {
+      min: minutesToTimeString(snapToHour(minMins, "floor")),
+      max: minutesToTimeString(snapToHour(maxMins, "ceil")),
+    };
+  }, [slots]);
+
+  const slotMinTime = manualRange?.min ?? autoRange.min;
+  const slotMaxTime = manualRange?.max ?? autoRange.max;
 
   // ─── validRange for FullCalendar ─────────────────────────────────
   const validRange = useMemo(() => {
@@ -239,139 +255,6 @@ export default function CalendarAdminBuilder({
     if (selectedEpreuveId) fetchSlots();
   }, [selectedEpreuveId, fetchSlots, refreshKey]);
 
-  const createSlot = useCallback(
-    async (date: string, startTime: string, room: string) => {
-      const endTime = addMinutes(startTime, durationMinutes);
-      try {
-        setLoading(true);
-        await api.post("/slots", {
-          epreuveId: selectedEpreuveId,
-          date,
-          startTime,
-          endTime,
-          durationMinutes,
-          room,
-          tour: epreuve?.tour || 1,
-          maxCandidates: epreuve?.isGroupEpreuve ? epreuve?.groupSize || 1 : 1,
-          minMembers:
-            epreuve?.minEvaluatorsPerSalle ||
-            epreuve?.min_evaluators_per_salle ||
-            2,
-        });
-        toast(`Créneau créé : ${startTime} → ${endTime} (${room})`, "success");
-        fetchSlots();
-        onUpdate();
-      } catch (error: any) {
-        toast(
-          error.response?.data?.error || "Erreur création du créneau",
-          "error",
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [selectedEpreuveId, durationMinutes, epreuve, toast, fetchSlots, onUpdate],
-  );
-
-  const moveSlot = useCallback(
-    async (slotId: string, newDate: string, newStartTime: string) => {
-      const newEndTime = addMinutes(newStartTime, durationMinutes);
-      try {
-        setLoading(true);
-        await api.put(`/slots/${slotId}`, {
-          date: newDate,
-          startTime: newStartTime,
-          endTime: newEndTime,
-        });
-        toast(
-          `Créneau déplacé → ${newDate} ${newStartTime} - ${newEndTime}`,
-          "success",
-        );
-        fetchSlots();
-        onUpdate();
-      } catch (error: any) {
-        toast(error.response?.data?.error || "Erreur déplacement", "error");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [durationMinutes, toast, fetchSlots, onUpdate],
-  );
-
-  const deleteSlot = useCallback(
-    async (slotId: string) => {
-      if (!window.confirm("Supprimer ce créneau définitivement ?")) return;
-      try {
-        setLoading(true);
-        await api.delete(`/slots/${slotId}`);
-        toast("Créneau supprimé", "success");
-        fetchSlots();
-        onUpdate();
-      } catch {
-        toast("Erreur suppression", "error");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [toast, fetchSlots, onUpdate],
-  );
-
-  const saveEditedRoom = async () => {
-    if (!editingSlot) return;
-    try {
-      setSavingRoom(true);
-      await api.put(`/slots/${editingSlot.id}`, { room: editedRoom });
-      toast("Salle modifiée", "success");
-      setEditingSlot(null);
-      fetchSlots();
-      onUpdate();
-    } catch {
-      toast("Erreur lors de la modification de la salle", "error");
-    } finally {
-      setSavingRoom(false);
-    }
-  };
-
-  const checkOverlap = useCallback(
-    (
-      targetDateStr: string,
-      targetStart: string,
-      targetDurationMins: number,
-      excludeSlotId?: string,
-    ) => {
-      const targetDaySlots = slots.filter(
-        (s) =>
-          (s.date || "").split("T")[0] === targetDateStr &&
-          s.id !== excludeSlotId,
-      );
-
-      const toMins = (hhmm: string) => {
-        const [h, m] = hhmm.split(":").map(Number);
-        return h * 60 + m;
-      };
-
-      const startA = toMins(targetStart);
-      const endA = startA + targetDurationMins;
-
-      let maxOverlap = 0;
-      for (let min = startA; min < endA; min++) {
-        let count = 0;
-        targetDaySlots.forEach((s) => {
-          const sDur =
-            s.duration_minutes || s.durationMinutes || durationMinutes;
-          const sStart = toMins(s.start_time || s.startTime || "08:00");
-          const sEnd = sStart + sDur;
-          if (min >= sStart && min < sEnd) {
-            count++;
-          }
-        });
-        if (count > maxOverlap) maxOverlap = count;
-      }
-      return maxOverlap;
-    },
-    [slots, durationMinutes],
-  );
-
   // ─── Build FullCalendar events ────────────────────────────────────
   const events: EventInput[] = useMemo(() => {
     return slots.map((slot) => {
@@ -408,127 +291,14 @@ export default function CalendarAdminBuilder({
 
   // ─── FullCalendar handlers ────────────────────────────────────────
 
-  /** Click on grid → create slot (ask which room if multiple) */
-  const handleDateClick = useCallback(
-    (info: DateClickArg) => {
-      const clickedDate = info.date;
-      // Skip weekends
-      if (clickedDate.getDay() === 0 || clickedDate.getDay() === 6) return;
-
-      const dateStr = formatDateISO(clickedDate);
-      const hours = clickedDate.getHours().toString().padStart(2, "0");
-      const minutes = clickedDate.getMinutes().toString().padStart(2, "0");
-      const startTime = `${hours}:${minutes}`;
-
-      if (viewMode !== "creation" || readOnly) return;
-
-      const currentOverlap = checkOverlap(dateStr, startTime, durationMinutes);
-      if (currentOverlap >= nbSalles) {
-        toast(
-          `Impossible d'ajouter : capacité max (${nbSalles} salles) atteinte sur cette plage horaire.`,
-          "error",
-        );
-        return;
-      }
-
-      if (roomList.length <= 1) {
-        createSlot(dateStr, startTime, roomList[0] || "Salle 1");
-      } else {
-        // Quick room picker
-        const choice = window.prompt(
-          `Créer un créneau à ${startTime} le ${new Date(dateStr + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}\n\nChoisissez la salle (numéro) :\n${roomList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}`,
-          "1",
-        );
-        if (!choice) return;
-        const idx = parseInt(choice) - 1;
-        const room = roomList[idx] || roomList[0] || "Salle 1";
-        createSlot(dateStr, startTime, room);
-      }
-    },
-    [
-      roomList,
-      viewMode,
-      readOnly,
-      checkOverlap,
-      durationMinutes,
-      nbSalles,
-      toast,
-      createSlot,
-    ],
-  );
-
-  /** Drag event to new time/day → update slot */
-  const handleEventDrop = useCallback(
-    (info: EventDropArg) => {
-      const event = info.event;
-      const slotId = event.extendedProps?.slotId || event.id;
-
-      if (!event.start) {
-        info.revert();
-        return;
-      }
-
-      const newDate = formatDateISO(event.start);
-
-      // Skip weekends
-      if (event.start.getDay() === 0 || event.start.getDay() === 6) {
-        toast("Impossible de déplacer sur un week-end", "error");
-        info.revert();
-        return;
-      }
-
-      const newStartTime = `${event.start
-        .getHours()
-        .toString()
-        .padStart(2, "0")}:${event.start
-        .getMinutes()
-        .toString()
-        .padStart(2, "0")}`;
-
-      if (viewMode !== "creation" || readOnly) {
-        info.revert();
-        return;
-      }
-
-      const currentOverlap = checkOverlap(
-        newDate,
-        newStartTime,
-        durationMinutes,
-        slotId,
-      );
-      if (currentOverlap >= nbSalles) {
-        toast(
-          `Impossible de déplacer : capacité max (${nbSalles} salles) atteinte.`,
-          "error",
-        );
-        info.revert();
-        return;
-      }
-
-      moveSlot(slotId, newDate, newStartTime);
-    },
-    [durationMinutes, checkOverlap, viewMode, readOnly, toast, moveSlot, nbSalles],
-  );
-
-  /** Click on event → delete */
+  /** Clic sur un créneau → détail en lecture seule */
   const handleEventClick = useCallback(
     (info: EventClickArg) => {
-      const target = info.jsEvent?.target as HTMLElement;
       const slotId = info.event.extendedProps?.slotId || info.event.id;
-
-      if (viewMode !== "creation" || readOnly) return;
-
-      if (target?.classList?.contains("fc-event-delete-btn")) {
-        deleteSlot(slotId);
-      } else {
-        const sl = slots.find((s) => s.id === slotId);
-        if (sl) {
-          setEditingSlot(sl);
-          setEditedRoom(sl.room || "Salle 1");
-        }
-      }
+      const sl = slots.find((s) => s.id === slotId);
+      if (sl) setDetailSlot(sl);
     },
-    [slots, viewMode, readOnly, deleteSlot], // eslint satisfied
+    [slots],
   );
 
   /** Custom event rendering */
@@ -539,36 +309,37 @@ export default function CalendarAdminBuilder({
           hour: "2-digit",
           minute: "2-digit",
         }) || "";
-      const end =
-        eventInfo.event.end?.toLocaleTimeString("fr-FR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }) || "";
       const room = eventInfo.event.extendedProps?.room || "";
-      // Durée réelle = end - start (en minutes). Évite les incohérences
-      // si la colonne duration_minutes en base ne correspond pas à
-      // l'écart effectif start_time / end_time.
-      const dur =
-        eventInfo.event.start && eventInfo.event.end
-          ? Math.max(
-              0,
-              Math.round(
-                (eventInfo.event.end.getTime() -
-                  eventInfo.event.start.getTime()) /
-                  60000,
-              ),
-            )
-          : eventInfo.event.extendedProps?.duration;
       const members = eventInfo.event.extendedProps?.members || [];
       const enrollments = eventInfo.event.extendedProps?.enrollments || [];
       const maxCand = eventInfo.event.extendedProps?.maxCandidates || 1;
+      const isOccupied = members.length > 0 || enrollments.length > 0;
+
+      // En mode compact, un créneau de 30 min ne fait que ~16px : on
+      // n'affiche qu'une ligne dense (heure + salle ou effectif).
+      if (density === "compact") {
+        let badge = "";
+        if (viewMode === "evaluators") {
+          badge = members.length > 0 ? `${members.length} éval` : "0 éval";
+        } else if (viewMode === "candidates") {
+          badge = `${enrollments.length}/${maxCand}`;
+        } else {
+          badge = room;
+        }
+        return (
+          <div className="fc-compact-event" title={`${start} · ${room}`}>
+            <span className="fc-compact-time">{start}</span>
+            <span className="fc-compact-badge">
+              {isOccupied && viewMode === "creation" ? "🔒 " : ""}
+              {badge}
+            </span>
+          </div>
+        );
+      }
 
       if (viewMode === "evaluators") {
         return (
-          <div
-            className="relative w-full h-full p-1 overflow-hidden"
-            style={{ cursor: "default" }}
-          >
+          <div className="relative w-full h-full p-1 overflow-hidden">
             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">
               {start} - {room}
             </div>
@@ -577,10 +348,9 @@ export default function CalendarAdminBuilder({
                 <div
                   key={i}
                   className="text-[9px] font-medium leading-tight truncate text-blue-900 bg-blue-100/90 rounded px-1 mb-0.5"
-                  title={`${m.member?.firstName || m.member?.first_name || ""} ${m.member?.lastName || m.member?.last_name || m.member?.email}`}
+                  title={memberName(m)}
                 >
-                  {m.member?.firstName || m.member?.first_name || ""}{" "}
-                  {m.member?.lastName || m.member?.last_name || m.member?.email}
+                  {memberName(m)}
                 </div>
               ))
             ) : (
@@ -594,10 +364,7 @@ export default function CalendarAdminBuilder({
 
       if (viewMode === "candidates") {
         return (
-          <div
-            className="relative w-full h-full p-1 overflow-hidden"
-            style={{ cursor: "default" }}
-          >
+          <div className="relative w-full h-full p-1 overflow-hidden">
             <div className="text-[10px] font-bold truncate opacity-80 mb-0.5">
               {start} - {room}
             </div>
@@ -622,24 +389,13 @@ export default function CalendarAdminBuilder({
         );
       }
 
-      const isOccupied = members.length > 0 || enrollments.length > 0;
-
+      const end =
+        eventInfo.event.end?.toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }) || "";
       return (
         <div className="relative w-full h-full px-1 py-0.5 overflow-hidden">
-          {viewMode === "creation" && !readOnly && (
-            <button
-              className="fc-event-delete-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                const slotId =
-                  eventInfo.event.extendedProps?.slotId || eventInfo.event.id;
-                deleteSlot(slotId);
-              }}
-              title="Supprimer"
-            >
-              ✕
-            </button>
-          )}
           <div className="text-[10px] font-bold leading-tight truncate">
             {isOccupied && "🔒 "}
             {room}
@@ -647,19 +403,16 @@ export default function CalendarAdminBuilder({
           <div className="text-[10px] leading-tight opacity-80">
             {start} – {end}
           </div>
-          {dur && <div className="text-[9px] opacity-60">{dur}min</div>}
         </div>
       );
     },
-    [viewMode, readOnly, deleteSlot],
+    [viewMode, density],
   );
 
   /** Week header label update */
   const handleDatesSet = useCallback((info: any) => {
     const monday = getMonday(info.start);
     setCurrentWeekLabel(formatWeekRange(monday));
-    setCurrentWeekMonday(monday);
-    setBulkGenDays(new Set()); // reset day selection on week change
   }, []);
 
   // ─── Navigation ──────────────────────────────────────────────────
@@ -672,93 +425,6 @@ export default function CalendarAdminBuilder({
   function navigateToday() {
     calendarRef.current?.getApi().today();
   }
-
-  // ─── Bulk generation ─────────────────────────────────────────────
-  // Computes visible Mon-Fri dates for the current week, filtered by validRange
-  const bulkWeekDays = useMemo(() => {
-    if (!currentWeekMonday) return [];
-    const days = [];
-    const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-    const start = validRange?.start;
-    const end = validRange?.end;
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(currentWeekMonday);
-      d.setDate(d.getDate() + i);
-      const iso = formatDateISO(d);
-      if ((start && iso < start) || (end && iso >= end)) continue;
-      days.push({
-        iso,
-        label: `${dayLabels[i]} ${d.getDate()}/${d.getMonth() + 1}`,
-      });
-    }
-    return days;
-  }, [currentWeekMonday, validRange]);
-
-  // Total slots to create = count per day × selected days × rooms
-  const bulkSlotCount = bulkGenDays.size > 0
-    ? bulkGenCount * bulkGenDays.size * Math.max(1, effectiveBulkNbSalles)
-    : 0;
-
-  // Nombre max de créneaux qui rentrent dans la plage horaire (info)
-  const maxSlotsInRange = useMemo(() => {
-    if (totalSlotDuration <= 0) return 0;
-    const [sh, sm] = bulkGenStart.split(":").map(Number);
-    const [eh, em] = bulkGenEnd.split(":").map(Number);
-    const dur = parseInt(String(epreuve?.durationMinutes || epreuve?.duration_minutes || 30));
-    const range = (eh * 60 + em) - (sh * 60 + sm);
-    if (range < dur) return 0;
-    // start + (n-1)*spacing + duration <= rangeEnd
-    return Math.max(0, Math.floor((range - dur) / totalSlotDuration) + 1);
-  }, [bulkGenStart, bulkGenEnd, totalSlotDuration, epreuve]);
-
-  // Handler nombre : on clamp simplement à [1, maxSlotsInRange]
-  const handleBulkCountChange = (n: number) => {
-    setBulkGenCount(Math.max(1, n));
-  };
-
-  // Handlers de plage : NE TOUCHENT PAS au nombre de créneaux
-  const handleBulkStartChange = (val: string) => {
-    if (val) setBulkGenStart(val);
-  };
-  const handleBulkEndChange = (val: string) => {
-    if (val) setBulkGenEnd(val);
-  };
-
-  const handleBulkGenerate = async () => {
-    if (bulkGenDays.size === 0) {
-      toast("Sélectionnez au moins un jour", "error");
-      return;
-    }
-    const rooms = bulkRoomNames.length > 0 ? bulkRoomNames : Array.from({ length: Math.max(1, nbSalles) }, (_, i) => `Salle ${i + 1}`);
-    setBulkGenerating(true);
-    let totalCreated = 0;
-    const sortedDays = Array.from(bulkGenDays).sort();
-    try {
-      for (const dateIso of sortedDays) {
-        const res = await api.post("/slots/bulk-create", {
-          epreuveId: selectedEpreuveId,
-          date: dateIso,
-          startTime: bulkGenStart,
-          endTime: bulkGenEnd, // utilisé comme borne haute uniquement
-          count: bulkGenCount, // ← nombre exact demandé (plage fixe)
-          rooms,
-        });
-        totalCreated += res.data?.count || 0;
-      }
-      toast(`${totalCreated} créneau(x) générés ✅`, "success");
-      setBulkGenDays(new Set());
-      setShowBulkGen(false);
-      await fetchSlots();
-      onUpdate();
-      if (sortedDays.length > 0 && calendarRef.current) {
-        calendarRef.current.getApi().gotoDate(sortedDays[0]);
-      }
-    } catch (err: any) {
-      toast(err.response?.data?.error || "Erreur génération", "error");
-    } finally {
-      setBulkGenerating(false);
-    }
-  };
 
   // ─── Guard ───────────────────────────────────────────────────────
   if (!epreuve) return null;
@@ -778,15 +444,17 @@ export default function CalendarAdminBuilder({
     );
   }
 
+  const rowHeight = ROW_HEIGHT[density];
+
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
       {/* ═══ HEADER ═══ */}
-      <div className="px-5 py-4 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-5 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
           <div className="flex items-center gap-3">
             <h2 className="text-base font-semibold text-gray-900">
-              📅 Calendar Builder
+              📅 Vue du planning
             </h2>
             {loading && (
               <span className="text-xs text-blue-600 animate-pulse">
@@ -799,21 +467,34 @@ export default function CalendarAdminBuilder({
               {durationMinutes}min + {roulementMinutes}min roulement ={" "}
               {totalSlotDuration}min/créneau
             </span>
-            {viewMode === "creation" && !readOnly && (
-              <button
-                onClick={() => { setShowBulkGen(!showBulkGen); setShowConfig(false); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors border ${
-                  showBulkGen
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
-                }`}
-                title="Générer N créneaux automatiquement"
-              >
-                ⚡ Génération rapide
-              </button>
-            )}
+            {/* Densité d'affichage */}
+            <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+              {(
+                [
+                  ["compact", "Compact"],
+                  ["confort", "Confort"],
+                ] as [Density, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setDensity(key)}
+                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    density === key
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-500 hover:bg-gray-50"
+                  }`}
+                  title={
+                    key === "compact"
+                      ? "Toute la journée visible d'un coup d'œil"
+                      : "Créneaux plus grands, plus de détail"
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
-              onClick={() => { setShowConfig(!showConfig); setShowBulkGen(false); }}
+              onClick={() => setShowConfig(!showConfig)}
               className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               title="Paramètres plage horaire"
             >
@@ -873,7 +554,8 @@ export default function CalendarAdminBuilder({
                 const val = e.target.value;
                 if (val && /^\d{2}:\d{2}$/.test(val)) {
                   const newMin = val + ":00";
-                  if (newMin < slotMaxTime) setSlotMinTime(newMin);
+                  if (newMin < slotMaxTime)
+                    setManualRange({ min: newMin, max: slotMaxTime });
                 }
               }}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
@@ -888,197 +570,40 @@ export default function CalendarAdminBuilder({
                 const val = e.target.value;
                 if (val && /^\d{2}:\d{2}$/.test(val)) {
                   const newMax = val + ":00";
-                  if (newMax > slotMinTime) setSlotMaxTime(newMax);
+                  if (newMax > slotMinTime)
+                    setManualRange({ min: slotMinTime, max: newMax });
                 }
               }}
               className="border border-gray-300 rounded-md px-2 py-1 text-xs"
             />
           </div>
-          <span className="text-[10px] text-gray-400">
-            Plage horaire visible du calendrier
-          </span>
-        </div>
-      )}
-
-      {/* Bulk generation panel */}
-      {viewMode === "creation" && !readOnly && showBulkGen && (
-        <div className="px-5 py-4 border-b border-gray-100 bg-blue-50/60 space-y-3">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-blue-800">
-              ⚡ Génération rapide
-            </p>
-            <span className="text-[11px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-              {durationMinutes}min épreuve + {roulementMinutes}min roulement = {totalSlotDuration}min/créneau · {effectiveBulkNbSalles} salle(s)
-            </span>
-          </div>
-
-          {/* Noms des salles */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-gray-700">Salles :</label>
-              <button
-                onClick={addRoom}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition-colors"
-              >
-                + Ajouter une salle
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {bulkRoomNames.map((name, idx) => (
-                <div key={idx} className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => renameRoom(idx, e.target.value)}
-                    className="border border-gray-300 rounded-md px-2 py-1 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    placeholder={`Salle ${idx + 1}`}
-                  />
-                  {bulkRoomNames.length > 1 && (
-                    <button
-                      onClick={() => removeRoom(idx)}
-                      className="text-gray-400 hover:text-red-500 text-sm leading-none"
-                      title="Supprimer"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Plage horaire (FIXE) */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-gray-600 font-medium">Plage horaire :</span>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">De</label>
-              <input
-                type="time"
-                value={bulkGenStart}
-                onChange={(e) => handleBulkStartChange(e.target.value)}
-                className="border border-gray-300 bg-white rounded-md px-2 py-1.5 text-sm"
-              />
-              <label className="text-xs text-gray-500">à</label>
-              <input
-                type="time"
-                value={bulkGenEnd}
-                onChange={(e) => handleBulkEndChange(e.target.value)}
-                className="border border-gray-300 bg-white rounded-md px-2 py-1.5 text-sm"
-              />
-            </div>
-            <span className="text-[11px] text-gray-400">
-              (max {maxSlotsInRange} créneaux possibles dans cette plage)
-            </span>
-          </div>
-
-          {/* Nombre de créneaux par jour */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-xs font-semibold text-gray-700">Créneaux / jour :</label>
-            <input
-              type="number"
-              min={1}
-              max={Math.max(1, maxSlotsInRange)}
-              value={bulkGenCount}
-              onChange={(e) => handleBulkCountChange(parseInt(e.target.value) || 1)}
-              className={`w-20 border-2 rounded-md px-2 py-1.5 text-sm font-bold text-center ${
-                bulkGenCount > maxSlotsInRange
-                  ? "border-red-400 bg-red-50 text-red-700"
-                  : "border-blue-400 bg-white text-blue-700"
-              }`}
-            />
-            <span className="text-xs text-gray-500">× {Math.max(1, effectiveBulkNbSalles)} salle(s)</span>
-            {bulkGenCount > maxSlotsInRange && (
-              <span className="text-xs text-red-600 font-medium">
-                ⚠ Trop pour cette plage (max {maxSlotsInRange})
-              </span>
-            )}
-          </div>
-
-          {/* Day selector */}
-          <div>
-            <p className="text-xs text-gray-500 mb-2">Jours à générer (semaine visible) :</p>
-            <div className="flex flex-wrap gap-2">
-              {bulkWeekDays.length === 0 ? (
-                <span className="text-xs text-gray-400 italic">
-                  Naviguez vers la semaine souhaitée dans le calendrier.
-                </span>
-              ) : (
-                <>
-                  {bulkWeekDays.map((day) => {
-                    const selected = bulkGenDays.has(day.iso);
-                    return (
-                      <button
-                        key={day.iso}
-                        onClick={() => {
-                          setBulkGenDays((prev) => {
-                            const next = new Set(prev);
-                            selected ? next.delete(day.iso) : next.add(day.iso);
-                            return next;
-                          });
-                        }}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                          selected
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-                        }`}
-                      >
-                        {day.label}
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => setBulkGenDays(new Set(bulkWeekDays.map(d => d.iso)))}
-                    className="px-3 py-1.5 text-xs text-blue-600 rounded-lg border border-blue-300 hover:bg-blue-50 transition-colors"
-                  >
-                    Tous
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Action */}
-          <div className="flex items-center justify-between pt-1">
-            {bulkSlotCount > 0 ? (
-              <span className="text-sm font-semibold text-blue-800">
-                → {bulkSlotCount} créneau(x) à créer
-              </span>
-            ) : (
-              <span className="text-xs text-gray-400">Sélectionnez au moins un jour</span>
-            )}
+          {manualRange ? (
             <button
-              onClick={handleBulkGenerate}
-              disabled={bulkGenerating || bulkGenDays.size === 0 || bulkGenCount > maxSlotsInRange}
-              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              onClick={() => setManualRange(null)}
+              className="text-[11px] font-medium text-blue-600 hover:text-blue-800 underline"
             >
-              {bulkGenerating ? "Génération…" : `Générer ${bulkSlotCount > 0 ? bulkSlotCount : ""} créneau(x)`}
+              Revenir à l&apos;ajustement automatique
             </button>
-          </div>
+          ) : (
+            <span className="text-[10px] text-gray-400">
+              Plage ajustée automatiquement sur vos créneaux
+            </span>
+          )}
         </div>
       )}
 
       {/* ═══ FULLCALENDAR WEEK VIEW ═══ */}
       <div className="p-4 flex-1 bg-gray-50/30">
-        {/* Instructions */}
-        {readOnly ? (
-          <p className="text-xs text-gray-500 mb-3">
-            👁️ <strong>Vue de contrôle</strong> — les créneaux sont gérés via
-            le tableau des ouvertures ci-dessus · 🔒 = créneau occupé
-            (examinateurs ou candidats inscrits)
-          </p>
-        ) : (
-          <p className="text-xs text-gray-500 mb-3">
-            <strong>Clic</strong> pour créer · <strong>Glissez</strong> pour
-            déplacer (snap 5min, multi-jours) · <strong>✕</strong> au survol
-            pour supprimer
-          </p>
-        )}
+        <p className="text-xs text-gray-500 mb-3">
+          👁️ <strong>Vue de contrôle</strong> — les créneaux sont gérés via le
+          tableau des ouvertures ci-dessus · clic sur un créneau pour le détail
+          · 🔒 = créneau occupé
+        </p>
 
         <div className="calendar-week-grid bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           <FullCalendar
             ref={calendarRef}
-            plugins={[timeGridPlugin, interactionPlugin]}
+            plugins={[timeGridPlugin]}
             initialView="timeGridWeek"
             initialDate={formatDateISO(initialDate)}
             locale="fr"
@@ -1088,8 +613,7 @@ export default function CalendarAdminBuilder({
             allDaySlot={false}
             slotMinTime={slotMinTime}
             slotMaxTime={slotMaxTime}
-            slotDuration="00:05:00"
-            snapDuration="00:05:00"
+            slotDuration="00:30:00"
             slotLabelInterval="01:00:00"
             slotLabelFormat={{
               hour: "2-digit",
@@ -1102,15 +626,13 @@ export default function CalendarAdminBuilder({
               month: "short",
             }}
             height="auto"
-            expandRows={true}
-            editable={viewMode === "creation" && !readOnly}
-            droppable={false}
-            eventDurationEditable={false}
-            eventStartEditable={viewMode === "creation" && !readOnly}
+            expandRows={false}
+            editable={false}
             selectable={false}
+            eventStartEditable={false}
+            eventDurationEditable={false}
+            eventMinHeight={density === "compact" ? 14 : 24}
             validRange={validRange}
-            dateClick={handleDateClick}
-            eventDrop={handleEventDrop}
             eventClick={handleEventClick}
             eventContent={renderEventContent}
             datesSet={handleDatesSet}
@@ -1120,49 +642,83 @@ export default function CalendarAdminBuilder({
         </div>
       </div>
 
-      {/* Modal Édition Salle */}
-      {editingSlot && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Éditer le créneau</h3>
+      {/* Modal détail créneau (lecture seule) */}
+      {detailSlot && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setDetailSlot(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  {detailSlot.room || "Salle"}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {new Date(
+                    (detailSlot.date || "").split("T")[0] + "T12:00:00",
+                  ).toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}{" "}
+                  ·{" "}
+                  {(detailSlot.start_time || detailSlot.startTime || "").slice(
+                    0,
+                    5,
+                  )}
+                  –
+                  {(detailSlot.end_time || detailSlot.endTime || "").slice(0, 5)}
+                </p>
+              </div>
               <button
-                onClick={() => setEditingSlot(null)}
+                onClick={() => setDetailSlot(null)}
                 className="text-gray-400 hover:text-gray-600 p-1 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 ✕
               </button>
             </div>
-            <div className="p-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom de la salle
-              </label>
-              <input
-                type="text"
-                value={editedRoom}
-                onChange={(e) => setEditedRoom(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveEditedRoom();
-                }}
-              />
-            </div>
-            <div className="p-5 bg-gray-50 flex justify-end gap-3 rounded-b-xl border-t border-gray-100">
-              <button
-                onClick={() => setEditingSlot(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 bg-gray-100 rounded-lg transition-colors"
-                disabled={savingRoom}
-              >
-                Annuler
-              </button>
-              <button
-                onClick={saveEditedRoom}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
-                disabled={savingRoom}
-              >
-                {savingRoom ? "Enregistrement..." : "Enregistrer"}
-              </button>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-1.5">
+                  Examinateurs ({(detailSlot.members || []).length})
+                </p>
+                {(detailSlot.members || []).length === 0 ? (
+                  <p className="text-xs text-red-600 italic">
+                    Aucun examinateur assigné
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {(detailSlot.members || []).map((m, i) => (
+                      <li key={i} className="text-sm text-gray-700">
+                        · {memberName(m)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-1.5">
+                  Candidats ({(detailSlot.enrollments || []).length}/
+                  {detailSlot.maxCandidates || detailSlot.max_candidates || 1})
+                </p>
+                {(detailSlot.enrollments || []).length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">
+                    Aucun candidat inscrit
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {(detailSlot.enrollments || []).map((e: any, i: number) => (
+                      <li key={i} className="text-sm text-gray-700">
+                        🎓 {e.candidate?.first_name} {e.candidate?.last_name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1171,6 +727,9 @@ export default function CalendarAdminBuilder({
       {/* ═══ LEGEND ═══ */}
       <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-4 text-[11px] text-gray-500 flex-wrap">
         <span className="font-medium text-gray-600">Légende :</span>
+        {roomList.length === 0 && (
+          <span className="text-gray-400 italic">Aucune salle utilisée</span>
+        )}
         {roomList.map((room, idx) => {
           const color = getRoomColor(room, idx);
           const count = slots.filter((s) => s.room === room).length;
@@ -1195,6 +754,9 @@ export default function CalendarAdminBuilder({
 
       {/* ═══ CSS OVERRIDES ═══ */}
       <style jsx global>{`
+        .calendar-week-grid {
+          --fc-row-height: ${rowHeight}px;
+        }
         .calendar-week-grid .fc {
           font-family: inherit;
           border: none;
@@ -1203,7 +765,7 @@ export default function CalendarAdminBuilder({
         .calendar-week-grid .fc .fc-col-header-cell {
           background: #f9fafb;
           border-bottom: 2px solid #e5e7eb;
-          padding: 10px 4px;
+          padding: 6px 4px;
         }
         .calendar-week-grid .fc .fc-col-header-cell-cushion {
           font-weight: 600;
@@ -1221,9 +783,9 @@ export default function CalendarAdminBuilder({
           .fc-col-header-cell-cushion {
           color: #2563eb;
         }
-        /* Time grid */
+        /* Time grid — la hauteur de ligne pilote toute la densité */
         .calendar-week-grid .fc .fc-timegrid-slot {
-          height: 20px;
+          height: var(--fc-row-height);
           border-color: #f3f4f6;
         }
         .calendar-week-grid .fc .fc-timegrid-slot-minor {
@@ -1235,18 +797,22 @@ export default function CalendarAdminBuilder({
           color: #9ca3af;
           font-weight: 500;
         }
+        .calendar-week-grid .fc .fc-timegrid-slot-label-cushion {
+          font-size: 10px;
+          padding: 0 6px;
+        }
         .calendar-week-grid .fc .fc-timegrid-axis-cushion {
           padding: 2px 6px;
         }
         /* Events */
         .calendar-week-grid .fc .fc-timegrid-col-events {
-          margin: 0 2px;
+          margin: 0 1px;
         }
         .calendar-week-grid .fc .fc-timegrid-event {
-          border-radius: 6px;
+          border-radius: 4px;
           border-left-width: 3px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-          cursor: grab;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+          cursor: pointer;
           transition:
             box-shadow 0.15s,
             transform 0.15s;
@@ -1257,18 +823,31 @@ export default function CalendarAdminBuilder({
           transform: scale(1.02);
           z-index: 10 !important;
         }
-        .calendar-week-grid .fc .fc-timegrid-event:active {
-          cursor: grabbing;
-        }
         .calendar-week-grid .fc .fc-timegrid-event .fc-event-main {
-          padding: 1px 2px;
+          padding: 0;
           overflow: hidden;
         }
-        /* Dragging */
-        .calendar-week-grid .fc .fc-event-dragging {
+        /* Rendu compact : une seule ligne heure + badge */
+        .fc-compact-event {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          width: 100%;
+          height: 100%;
+          padding: 0 3px;
+          font-size: 9px;
+          line-height: 1;
+          overflow: hidden;
+          white-space: nowrap;
+        }
+        .fc-compact-event .fc-compact-time {
+          font-weight: 700;
+          flex-shrink: 0;
+        }
+        .fc-compact-event .fc-compact-badge {
           opacity: 0.85;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-          transform: scale(1.05);
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         /* Now indicator */
         .calendar-week-grid .fc .fc-timegrid-now-indicator-line {
@@ -1282,31 +861,6 @@ export default function CalendarAdminBuilder({
         .calendar-week-grid .fc td,
         .calendar-week-grid .fc th {
           border-color: #f3f4f6;
-        }
-        .calendar-week-grid .fc .fc-highlight {
-          background-color: rgba(59, 130, 246, 0.12);
-        }
-        /* Delete button on event hover */
-        .fc-event-delete-btn {
-          position: absolute;
-          top: 2px;
-          right: 2px;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          background: rgba(239, 68, 68, 0.9);
-          color: white;
-          font-size: 9px;
-          display: none;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          border: none;
-          line-height: 1;
-          z-index: 10;
-        }
-        .calendar-week-grid .fc .fc-timegrid-event:hover .fc-event-delete-btn {
-          display: flex;
         }
       `}</style>
     </div>

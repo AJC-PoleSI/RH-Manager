@@ -30,10 +30,6 @@ interface Epreuve {
   duration_minutes?: number;
   roulementMinutes?: number;
   roulement_minutes?: number;
-  nbSalles?: number;
-  nb_salles?: number;
-  minEvaluatorsPerSalle?: number;
-  min_evaluators_per_salle?: number;
   isGroupEpreuve?: boolean;
   groupSize?: number;
 }
@@ -210,11 +206,6 @@ export default function PlanningPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // Planning visibility for candidates
   const [planningVisible, setPlanningVisible] = useState(false);
-  // Logistique des créneaux (Phase 1 — déplacé depuis le formulaire épreuves)
-  const [logNbSalles, setLogNbSalles] = useState(1);
-  const [logMinEval, setLogMinEval] = useState(2);
-  const [logSaving, setLogSaving] = useState(false);
-
   // ViewMode state
   const [activeTab, setActiveTab] = useState<
     "creation" | "evaluators" | "candidates"
@@ -342,48 +333,6 @@ export default function PlanningPage() {
     fetchAdminSettings();
     fetchAllMembers();
   }, [fetchAdminSettings, fetchAllMembers]);
-
-  // Sync logistique fields when selected epreuve changes
-  useEffect(() => {
-    if (!selectedEpreuveId) return;
-    const ep = epreuves.find((e: any) => e.id === selectedEpreuveId) as any;
-    if (ep) {
-      setLogNbSalles(ep.nbSalles || ep.nb_salles || 1);
-      setLogMinEval(
-        ep.minEvaluatorsPerSalle || ep.min_evaluators_per_salle || 2,
-      );
-    }
-  }, [selectedEpreuveId, epreuves]);
-
-  // Save logistique fields to epreuve
-  const handleSaveLogistique = async () => {
-    if (!selectedEpreuveId) return;
-    setLogSaving(true);
-    try {
-      await api.put(`/epreuves/${selectedEpreuveId}`, {
-        nbSalles: logNbSalles,
-        minEvaluatorsPerSalle: logMinEval,
-      });
-      // Update epreuves list in local state
-      setEpreuves((prev: any) =>
-        prev.map((ep: any) =>
-          ep.id === selectedEpreuveId
-            ? {
-                ...ep,
-                nbSalles: logNbSalles,
-                minEvaluatorsPerSalle: logMinEval,
-              }
-            : ep,
-        ),
-      );
-      toast("Configuration logistique sauvegardee", "success");
-    } catch (e) {
-      console.error("Erreur sauvegarde logistique:", e);
-      toast("Erreur lors de la sauvegarde", "error");
-    } finally {
-      setLogSaving(false);
-    }
-  };
 
   // Fetch real availability data from API
   const fetchAvailabilityData = useCallback(async () => {
@@ -1481,63 +1430,6 @@ export default function PlanningPage() {
 
         {selectedEpreuveId ? (
           <>
-            {/* ══════════════════════════════════════════════════════════════════
-                            LOGISTIQUE DES CRÉNEAUX — nb salles + min évaluateurs
-                            (Déplacé depuis le formulaire de création d'épreuve)
-                            ══════════════════════════════════════════════════════════════════ */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-4">
-                ⚙️ Logistique des créneaux
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Nombre de salles
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={logNbSalles}
-                    onChange={(e) =>
-                      setLogNbSalles(parseInt(e.target.value) || 1)
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Salles en parallèle pour cette épreuve
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Min. évaluateurs / salle
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={logMinEval}
-                    onChange={(e) =>
-                      setLogMinEval(parseInt(e.target.value) || 1)
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Minimum d&apos;évaluateurs requis par salle
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button
-                  onClick={handleSaveLogistique}
-                  disabled={logSaving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {logSaving ? "Sauvegarde..." : "Sauvegarder la logistique"}
-                </button>
-              </div>
-            </div>
-
-            {/* Ancienne position du calendrier supprimée */}
-
             {/* TABS DE VUES */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 mb-2 rounded-lg w-fit">
               <button
@@ -1595,12 +1487,7 @@ export default function PlanningPage() {
               selectedEpreuveId={selectedEpreuveId}
               epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
               toast={toast}
-              onUpdate={() => {
-                fetchSlotData();
-                fetchAllSlotsGlobal(); // Refresh vue globale aussi
-              }}
               viewMode={activeTab}
-              readOnly={activeTab === "creation"}
               refreshKey={calRefreshKey}
             />
 
@@ -1660,7 +1547,7 @@ export default function PlanningPage() {
                       <p className="text-sm font-semibold text-gray-800">Publier aux examinateurs</p>
                       <p className="text-xs text-gray-500">
                         {inscriptionsOuvertes
-                          ? `✅ Publiés — examinateurs inscrivent leurs dispos · l'algo sélectionne ${logMinEval} par créneau automatiquement`
+                          ? `✅ Publiés — examinateurs inscrivent leurs dispos · l'algo sélectionne le nombre d'examinateurs requis par créneau automatiquement`
                           : "⏸️ Créneaux non publiés — les examinateurs ne voient rien"}
                       </p>
                     </div>

@@ -5,19 +5,9 @@ import {
   unauthorized,
   forbidden,
 } from "@/lib/auth";
+import { validatePassword } from "@/lib/password";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
-
-// Password validation: min 8 chars, 1 uppercase, 1 number
-function validatePassword(password: string): string | null {
-  if (!password || password.length < 8)
-    return "Le mot de passe doit contenir au moins 8 caracteres.";
-  if (!/[A-Z]/.test(password))
-    return "Le mot de passe doit contenir au moins une majuscule.";
-  if (!/[0-9]/.test(password))
-    return "Le mot de passe doit contenir au moins un chiffre.";
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   // SECURITY: Only authenticated admins can create new members

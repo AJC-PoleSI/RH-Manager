@@ -11,6 +11,8 @@ interface AuthState {
   isInitialized: boolean;
   loginMember: (token: string, member: any) => void;
   loginCandidate: (token: string, candidate: any) => void;
+  /** Met à jour l'utilisateur en session (état + localStorage). */
+  updateUser: (patch: Record<string, any>) => void;
   logout: () => void;
 }
 
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthState>({
   isInitialized: false,
   loginMember: () => {},
   loginCandidate: () => {},
+  updateUser: () => {},
   logout: () => {},
 });
 
@@ -81,6 +84,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     router.push("/candidates/dashboard");
   };
 
+  const updateUser = (patch: Record<string, any>) => {
+    setUser((prev: any) => {
+      const nextUser = { ...(prev || {}), ...patch };
+      localStorage.setItem("user", JSON.stringify(nextUser));
+      return nextUser;
+    });
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -98,6 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isInitialized,
         loginMember,
         loginCandidate,
+        updateUser,
         logout,
       }}
     >

@@ -38,7 +38,6 @@ export async function GET(req: NextRequest) {
             })()
           : (e.evaluation_questions ?? []),
       roulementMinutes: e.roulement_minutes ?? 10,
-      nbSalles: e.nb_salles ?? 1,
       minEvaluatorsPerSalle: e.min_evaluators_per_salle ?? 2,
       isPoleTest: e.is_pole_test ?? false,
       pole: e.pole || null,
@@ -115,7 +114,6 @@ export async function POST(req: NextRequest) {
           : body.type === "groupe",
       group_size: Math.max(1, Number(body.groupSize) || 1),
       roulement_minutes: Number(body.roulementMinutes) || 10,
-      nb_salles: Number(body.nbSalles) || 1,
       min_evaluators_per_salle: Number(body.minEvaluatorsPerSalle) || 2,
       date_debut: body.dateDebut
         ? new Date(body.dateDebut).toISOString()

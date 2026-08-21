@@ -155,3 +155,39 @@ create index if not exists idx_evaluation_slots_opening on evaluation_slots(open
 -- À appliquer EN PREMIER dans l'éditeur SQL Supabase. Ne casse pas l'app :
 -- toutes les routes API passent par service_role, qui contourne la RLS.
 -- ════════════════════════════════════════════════════════════════════════════
+
+
+-- ============================================================
+-- 2026-08-20 : nettoyage — epreuves.nb_salles devenu inutile
+-- ============================================================
+-- Les salles ne sont plus déduites d'un compteur : elles sont déclarées
+-- nommément dans `room_openings` (une ligne = une salle + une plage). La
+-- colonne `nb_salles` n'est plus lue ni écrite par l'application, et le
+-- panneau « Logistique des créneaux » de /dashboard/planning (qui doublonnait
+-- le champ « Nombre d'examinateurs par créneau » du formulaire d'épreuve) a
+-- été supprimé.
+--
+-- OPTIONNEL : à n'exécuter qu'une fois le déploiement du code en place.
+-- ALTER TABLE epreuves DROP COLUMN IF EXISTS nb_salles;
+
+
+-- ============================================================
+-- 2026-08-20 : mots de passe — lien de réinitialisation par email
+--    (supabase-migration-password-reset.sql)
+-- ============================================================
+-- Nécessaire pour « Mot de passe oublié ? », l'envoi d'un lien de
+-- définition de mot de passe par un admin, et l'obligation de changer de
+-- mot de passe à la prochaine connexion.
+--
+-- `password_reset_token` stocke l'EMPREINTE SHA-256 du jeton, jamais le
+-- jeton lui-même.
+
+ALTER TABLE members
+  ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
+  ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_members_password_reset_token
+  ON members (password_reset_token)
+  WHERE password_reset_token IS NOT NULL;

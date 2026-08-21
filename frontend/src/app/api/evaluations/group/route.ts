@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { canEvaluate } from "@/lib/evaluation-access";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/group?candidateId=X&epreuveId=Y
@@ -24,28 +25,17 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  if (!user.isAdmin) {
-    const { data: validSlot } = await supabaseAdmin
-      .from("slot_member_assignments")
-      .select(
-        "slot:evaluation_slots!inner(id, epreuve_id, enrollments:slot_enrollments(candidate_id, status))",
-      )
-      .eq("member_id", user.id);
-
-    const isAssigned = (validSlot || []).some((row: any) => {
-      const s = row.slot;
-      if (!s || s.epreuve_id !== epreuveId) return false;
-      return (s.enrollments || [])
-        .filter((e: any) => !e.status || e.status === "active")
-        .some((e: any) => e.candidate_id === candidateId);
-    });
-
-    if (!isAssigned) {
-      return Response.json(
-        { error: "Vous n'êtes pas assigné à un créneau de cette épreuve." },
-        { status: 403 },
-      );
-    }
+  const allowed = await canEvaluate(
+    user.id,
+    candidateId,
+    epreuveId,
+    user.isAdmin,
+  );
+  if (!allowed) {
+    return Response.json(
+      { error: "Vous n'êtes pas assigné à un créneau de cette épreuve." },
+      { status: 403 },
+    );
   }
 
   const { data, error } = await supabaseAdmin

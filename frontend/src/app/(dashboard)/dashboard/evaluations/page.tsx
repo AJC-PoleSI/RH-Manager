@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3 } from 'lucide-react';
+import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
 
 interface MemberData {
     id: string;
@@ -159,6 +159,46 @@ function AdminView() {
         }
     };
 
+    // ── Liens « choisir son mot de passe » ──
+    const [sendingLink, setSendingLink] = useState<string | null>(null);
+    const [bulkSending, setBulkSending] = useState(false);
+
+    const sendResetLink = async (m: MemberData) => {
+        const name = `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email;
+        if (!confirm(`Envoyer à ${name} un lien pour choisir son mot de passe ?\n\nSon mot de passe actuel reste valable tant qu'il n'a pas utilisé le lien.`)) return;
+        setSendingLink(m.id);
+        try {
+            await api.post('/members/reset-links', { memberId: m.id, forceChange: true });
+            alert(`Lien envoyé à ${m.email}.`);
+        } catch (err: any) {
+            alert(err.response?.data?.error || "Erreur lors de l'envoi du lien");
+        } finally {
+            setSendingLink(null);
+        }
+    };
+
+    const sendAllResetLinks = async () => {
+        const count = members.filter(m => !m.isSuperAdmin).length;
+        if (!confirm(
+            `Envoyer un lien de définition de mot de passe aux ${count} membres ?\n\n` +
+            `Chacun recevra un email et devra choisir son propre mot de passe à sa prochaine connexion. ` +
+            `Le compte super-admin est exclu.`
+        )) return;
+        setBulkSending(true);
+        try {
+            const res = await api.post('/members/reset-links', { all: true, forceChange: true });
+            const failed: string[] = res.data?.failed || [];
+            alert(
+                `${res.data?.sent || 0} email(s) envoyé(s) sur ${res.data?.total || 0}.` +
+                (failed.length ? `\n\nÉchecs : ${failed.join(', ')}` : '')
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.error || "Erreur lors de l'envoi des liens");
+        } finally {
+            setBulkSending(false);
+        }
+    };
+
     // ── Stats ──
     const evaluateurCount = members.filter(m => !m.isAdmin).length;
 
@@ -195,13 +235,24 @@ function AdminView() {
                     <h1 className="text-2xl font-semibold text-gray-900">Évaluateurs</h1>
                     <p className="text-gray-500 mt-1">Comptes membres JE et notations</p>
                 </div>
-                <button
-                    onClick={() => setShowCreateForm(!showCreateForm)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
-                >
-                    <UserPlus size={16} />
-                    Nouvel évaluateur
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={sendAllResetLinks}
+                        disabled={bulkSending}
+                        className="flex items-center gap-2 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                        title="Chaque membre reçoit un email pour choisir lui-même son mot de passe"
+                    >
+                        <MailCheck size={16} />
+                        {bulkSending ? 'Envoi…' : 'Envoyer les liens mot de passe'}
+                    </button>
+                    <button
+                        onClick={() => setShowCreateForm(!showCreateForm)}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                    >
+                        <UserPlus size={16} />
+                        Nouvel évaluateur
+                    </button>
+                </div>
             </div>
 
             {/* Stats Row */}
@@ -401,6 +452,14 @@ function AdminView() {
                                                     title="Modifier"
                                                 >
                                                     <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => sendResetLink(m)}
+                                                    disabled={sendingLink === m.id}
+                                                    className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                                                    title="Envoyer un lien pour choisir son mot de passe"
+                                                >
+                                                    <KeyRound size={14} />
                                                 </button>
                                                 {!m.isSuperAdmin && (
                                                 <button

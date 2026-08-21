@@ -230,3 +230,69 @@ export async function sendPoleNotificationEmail(
     html,
   });
 }
+
+/**
+ * Lien de définition / réinitialisation de mot de passe (membres).
+ *
+ * `mode` change uniquement le ton :
+ *   • "reset"  → l'utilisateur a cliqué sur « Mot de passe oublié ? »
+ *   • "invite" → un admin lui demande de choisir son mot de passe
+ */
+export async function sendPasswordResetEmail(
+  email: string,
+  firstName: string,
+  token: string,
+  mode: "reset" | "invite" = "reset",
+  ttlHours = 24,
+) {
+  const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+  const isInvite = mode === "invite";
+
+  const subject = isInvite
+    ? "Choisissez votre mot de passe · AJC Recrutement"
+    : "Réinitialisation de votre mot de passe · AJC Recrutement";
+  const titre = isInvite
+    ? "Choisissez votre mot de passe"
+    : "Réinitialisation du mot de passe";
+  const intro = isInvite
+    ? "L'équipe recrutement vous invite à définir vous-même votre mot de passe pour accéder à la plateforme AJC Recrutement."
+    : "Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau.";
+  const cta = isInvite ? "Définir mon mot de passe" : "Réinitialiser mon mot de passe";
+  const outro = isInvite
+    ? "Si vous n'attendiez pas cet email, ignorez-le : votre mot de passe actuel reste valable."
+    : "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email : votre mot de passe actuel reste inchangé.";
+
+  const safeName = (firstName || "").trim();
+
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${titre}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2563EB;padding:32px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Audencia Junior Conseil</p>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">${titre}</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px 12px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour${safeName ? " " + safeName : ""},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">${intro}</p>
+          <p style="margin:0 0 24px;text-align:center;">
+            <a href="${resetUrl}" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;">${cta}</a>
+          </p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">Ce lien est valable ${ttlHours} heures et ne peut servir qu'une fois.</p>
+          <p style="margin:0 0 20px;font-size:12px;color:#9ca3af;line-height:1.6;word-break:break-all;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br/>${resetUrl}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">${outro}</p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+
+  return resend.emails.send({ from: FROM, to: email, subject, html });
+}

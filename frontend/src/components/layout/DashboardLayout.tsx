@@ -3,12 +3,13 @@
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import NotificationBell from "./NotificationBell";
+import ChangePasswordModal from "./ChangePasswordModal";
 import { useAuth } from "@/hooks/useAuth";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-function TopNav() {
+function TopNav({ onChangePassword }: { onChangePassword: () => void }) {
   const { user, role, logout } = useAuth();
 
   const displayName = user?.firstName
@@ -47,6 +48,15 @@ function TopNav() {
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
         {role === "member" && <NotificationBell />}
         <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">{displayName}</span>
+        {role === "member" && (
+          <button
+            onClick={onChangePassword}
+            className="text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
+            title="Changer mon mot de passe"
+          >
+            🔑<span className="hidden lg:inline ml-1">Mot de passe</span>
+          </button>
+        )}
         <button
           onClick={logout}
           className="text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
@@ -65,8 +75,14 @@ function DashboardContent({
   children: React.ReactNode;
   allowedRoles?: Array<"member" | "candidate">;
 }) {
-  const { token, role, isInitialized } = useAuth();
+  const { token, role, user, isInitialized, updateUser } = useAuth();
   const router = useRouter();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
+  // Compte marqué « doit choisir un nouveau mot de passe » : l'écran est
+  // bloquant tant que ce n'est pas fait (flag renvoyé par /api/auth/login).
+  const mustChangePassword =
+    role === "member" && user?.mustChangePassword === true;
 
   // SECURITY: role-based route guard. Without this, a candidate who
   // pasted an admin URL would land on the dashboard chrome (Topnav,
@@ -103,8 +119,17 @@ function DashboardContent({
 
   return (
     <SettingsProvider>
+      {mustChangePassword && (
+        <ChangePasswordModal
+          forced
+          onClose={() => updateUser({ mustChangePassword: false })}
+        />
+      )}
+      {!mustChangePassword && showPasswordModal && (
+        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
       <div className="flex flex-col min-h-screen">
-        <TopNav />
+        <TopNav onChangePassword={() => setShowPasswordModal(true)} />
         <div className="flex flex-1 relative">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-y-auto">

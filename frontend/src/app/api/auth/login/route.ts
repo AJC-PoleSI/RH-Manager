@@ -74,6 +74,27 @@ export async function POST(req: NextRequest) {
     // Connexion réussie → on remet le compteur à zéro.
     await resetRateLimit(rlKey);
 
+    // Le flag « doit changer son mot de passe » est lu à part et en
+    // best-effort : tant que supabase-migration-password-reset.sql n'est pas
+    // appliqué, la colonne n'existe pas — et une connexion ne doit jamais
+    // échouer pour cette raison.
+    let mustChangePassword = false;
+    {
+      const { data: flags, error: flagError } = await supabaseAdmin
+        .from("members")
+        .select("must_change_password")
+        .eq("id", member.id)
+        .maybeSingle();
+      if (flagError) {
+        console.warn(
+          "must_change_password indisponible (migration non appliquée ?)",
+          flagError.message,
+        );
+      } else {
+        mustChangePassword = flags?.must_change_password === true;
+      }
+    }
+
     const superAdmin = isSuperAdminEmail(member.email);
     const token = signToken({
       id: member.id,
@@ -90,6 +111,9 @@ export async function POST(req: NextRequest) {
         email: member.email,
         isAdmin: member.is_admin,
         isSuperAdmin: superAdmin,
+        // true → le dashboard impose le choix d'un nouveau mot de passe
+        // avant toute autre action (cf. ForcePasswordChange).
+        mustChangePassword,
       },
     });
   } catch (error) {

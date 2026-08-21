@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { canEvaluate } from "@/lib/evaluation-access";
 import { NextRequest } from "next/server";
 
 // PUT /api/evaluations/[id] - Update an evaluation
@@ -33,20 +34,11 @@ export async function PUT(
     let canEdit = user.isAdmin || existing.member_id === user.id;
 
     if (!canEdit && existing.is_group === true) {
-      const { data: validSlot } = await supabaseAdmin
-        .from("slot_member_assignments")
-        .select(
-          "slot:evaluation_slots!inner(id, epreuve_id, enrollments:slot_enrollments(candidate_id, status))",
-        )
-        .eq("member_id", user.id);
-
-      canEdit = (validSlot || []).some((row: any) => {
-        const s = row.slot;
-        if (!s || s.epreuve_id !== existing.epreuve_id) return false;
-        return (s.enrollments || [])
-          .filter((e: any) => !e.status || e.status === "active")
-          .some((e: any) => e.candidate_id === existing.candidate_id);
-      });
+      canEdit = await canEvaluate(
+        user.id,
+        existing.candidate_id,
+        existing.epreuve_id,
+      );
     }
 
     if (!canEdit) {
