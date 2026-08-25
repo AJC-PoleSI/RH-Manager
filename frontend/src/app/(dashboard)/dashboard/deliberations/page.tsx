@@ -1335,6 +1335,7 @@ export default function DeliberationsPage() {
                                   </p>
                                   <p className="text-xs text-gray-400 mt-0.5">
                                     {ev.member?.firstName || ev.member?.email || "Evaluateur"} &middot; {ev.epreuve?.name || ""} &middot; Note: {getScoreTotal(ev.scores)}
+                                    {ev.epreuve?.maxTotal ? ` / ${ev.epreuve.maxTotal}` : ""}
                                   </p>
                                 </div>
                               </div>
