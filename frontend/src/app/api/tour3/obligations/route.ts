@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, isSuperAdminEmail } from "@/lib/auth";
+import {
+  getTokenFromRequest,
+  unauthorized,
+  forbidden,
+  isSuperAdminEmail,
+} from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 // GET /api/tour3/obligations — Demandes de pôle (Tour 3) par pôle.
