@@ -108,7 +108,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   description: "",
   color: "#3B82F6",
   documents: null,
-  criteres: [{ name: "", coefficient: 1 }],
+  criteres: [{ name: "", maxPoints: DEFAULT_MAX_POINTS }],
 };
 
 /* ------------------------------------------------------------------ */
