@@ -66,12 +66,14 @@ export async function POST(req: NextRequest) {
     if (user.role === "candidate") role = "candidate";
     else if (user.isAdmin) role = "admin";
 
+    const senderName = await resolveSenderName(user);
+
     const { data, error } = await supabaseAdmin
       .from("private_messages")
       .insert({
         sender_id: user.id,
         sender_role: role,
-        sender_name: senderName || user.email.split("@")[0],
+        sender_name: senderName,
         recipient_id: recipientId,
         recipient_role: recipientRole || "member",
         message: message.trim(),
