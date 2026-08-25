@@ -1306,7 +1306,9 @@ export default function DeliberationsPage() {
                             <div className="flex items-center gap-4 mt-2">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-lg">&#11088;</span>
-                                <span className="text-lg font-bold text-gray-800">{avgScore}</span>
+                                <span className="text-lg font-bold text-gray-800">
+                                  {avgScore ? `${avgScore} / 20` : "-"}
+                                </span>
                               </div>
                               <span className="text-xs text-gray-400">
                                 {evalCount} evaluation{evalCount !== 1 ? "s" : ""}
