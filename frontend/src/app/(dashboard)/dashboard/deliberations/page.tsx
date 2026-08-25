@@ -380,10 +380,14 @@ export default function DeliberationsPage() {
 
     if (byEpreuve.size === 0) return 0;
 
-    const perEpreuve = [...byEpreuve.values()].map(
-      (ratios) => ratios.reduce((a, b) => a + b, 0) / ratios.length,
-    );
-    const overall = perEpreuve.reduce((a, b) => a + b, 0) / perEpreuve.length;
+    const perEpreuve: number[] = [];
+    byEpreuve.forEach((ratios) => {
+      perEpreuve.push(
+        ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length,
+      );
+    });
+    const overall =
+      perEpreuve.reduce((a: number, b: number) => a + b, 0) / perEpreuve.length;
 
     return Math.round(overall * 20 * 10) / 10;
   };
