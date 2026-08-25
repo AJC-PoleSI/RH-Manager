@@ -6,7 +6,14 @@ import jwt from "jsonwebtoken";
  */
 
 const API_URL = "http://localhost:3000";
-const JWT_SECRET = "22d1848c06bdf08a7fa9585e2a6fb7387f52d3561da14367db7635fe3593bde9";
+// SÉCURITÉ : ne JAMAIS écrire le secret en dur ici — ce fichier est suivi par
+// git dans un dépôt public. Le secret est lu depuis l'environnement.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET absent de l'environnement. Lancer avec : JWT_SECRET=... npx tsx run-simulation.ts",
+  );
+}
 
 // Token admin de test
 const ADMIN_ID = "00000000-0000-0000-0000-000000000001"; // À adapter
