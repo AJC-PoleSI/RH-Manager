@@ -87,36 +87,6 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/epreuves
-// Barème par défaut d'un critère quand aucun n'est fourni — aligné sur le
-// repli utilisé par la grille de notation et par la validation des scores
-// (`q.weight || q.maxScore || q.coefficient || 20`).
-const DEFAULT_MAX_POINTS = 20;
-
-// `weight` porte le nombre de points MAXIMUM d'un critère. Un client qui
-// envoie 0, une valeur négative ou rien du tout rendrait l'épreuve
-// impossible à noter (toute note serait « supérieure au barème »), donc on
-// retombe sur le barème par défaut.
-function normalizeQuestions(raw: unknown): unknown[] {
-  let questions: unknown = raw;
-  if (typeof questions === "string") {
-    try {
-      questions = JSON.parse(questions);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(questions)) return [];
-
-  return questions.map((q: any) => {
-    if (!q || typeof q !== "object") return q;
-    const declared = Number(q.weight ?? q.maxScore ?? q.coefficient);
-    return {
-      ...q,
-      weight: Number.isFinite(declared) && declared > 0 ? declared : DEFAULT_MAX_POINTS,
-    };
-  });
-}
-
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
