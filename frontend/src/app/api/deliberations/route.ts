@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 // GET /api/deliberations - Fetch all deliberations with candidate info
