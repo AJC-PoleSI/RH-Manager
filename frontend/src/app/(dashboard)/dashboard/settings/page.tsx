@@ -354,7 +354,7 @@ export default function CreationPage() {
   const addCritere = () => {
     setForm((prev) => ({
       ...prev,
-      criteres: [...prev.criteres, { name: "", coefficient: 1 }],
+      criteres: [...prev.criteres, { name: "", maxPoints: DEFAULT_MAX_POINTS }],
     }));
   };
 
