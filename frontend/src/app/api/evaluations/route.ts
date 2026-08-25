@@ -182,10 +182,7 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (epreuveData?.evaluation_questions) {
-        const questions: any[] =
-          typeof epreuveData.evaluation_questions === "string"
-            ? JSON.parse(epreuveData.evaluation_questions)
-            : epreuveData.evaluation_questions;
+        const questions = parseQuestions(epreuveData.evaluation_questions);
 
         const parsedScores =
           typeof scores === "string" ? JSON.parse(scores) : scores;
@@ -196,14 +193,13 @@ export async function POST(req: NextRequest) {
           const question = questions[idx];
           if (!question) continue;
 
-          const maxPoints = Number(
-            question.weight || question.maxScore || question.coefficient || 20,
-          );
+          const maxPoints = getMaxPoints(question);
+          const label = getCriterionLabel(question);
 
           if (scoreVal < 0) {
             return Response.json(
               {
-                error: `La note pour le critère "${question.q || question.question}" ne peut pas être négative.`,
+                error: `La note pour le critère "${label}" ne peut pas être négative.`,
               },
               { status: 400 },
             );
@@ -211,7 +207,7 @@ export async function POST(req: NextRequest) {
           if (scoreVal > maxPoints) {
             return Response.json(
               {
-                error: `La note pour le critère "${question.q || question.question}" ne peut pas dépasser ${maxPoints} points.`,
+                error: `La note pour le critère "${label}" ne peut pas dépasser ${maxPoints} points.`,
               },
               { status: 400 },
             );
