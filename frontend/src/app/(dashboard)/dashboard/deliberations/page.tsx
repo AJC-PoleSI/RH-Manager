@@ -38,7 +38,14 @@ interface Evaluation {
   id: string;
   scores: any;
   comment?: string;
-  epreuve?: { name: string; tour: number; type?: string };
+  epreuve?: {
+    id?: string;
+    name: string;
+    tour: number;
+    type?: string;
+    /** Total de points de l'épreuve, calculé côté serveur depuis ses critères. */
+    maxTotal?: number;
+  };
   member?: { email: string; firstName?: string; lastName?: string };
 }
 
