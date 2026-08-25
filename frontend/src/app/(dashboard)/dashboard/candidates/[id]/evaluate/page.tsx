@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import {
+  getCriterionLabel,
+  getMaxPoints,
+  type EvaluationCriterion,
+} from "@/lib/evaluation-criteria";
 
 type Question = EvaluationCriterion;
 
