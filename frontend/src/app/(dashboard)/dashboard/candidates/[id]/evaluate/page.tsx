@@ -9,13 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
-interface Question {
-  q?: string;
-  question?: string;
-  weight?: number | string;
-  maxScore?: number | string;
-  coefficient?: number | string;
-}
+type Question = EvaluationCriterion;
 
 function ScoreGrid({
   questions,
