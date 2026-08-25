@@ -1111,9 +1111,14 @@ export default function CreationPage() {
 
             {/* Critères d'évaluation */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Critères d&apos;évaluation
               </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Pour chaque critère, indiquez le nombre de points maximum que
+                l&apos;examinateur pourra attribuer. Une note supérieure à ce
+                barème sera refusée.
+              </p>
 
               <div className="space-y-2">
                 {form.criteres.map((c, idx) => (
@@ -1127,21 +1132,27 @@ export default function CreationPage() {
                       className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Nom du critère"
                     />
-                    <input
-                      type="number"
-                      value={c.coefficient}
-                      onChange={(e) =>
-                        updateCritere(
-                          idx,
-                          "coefficient",
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                      className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Coeff."
-                      min={0}
-                      step={0.5}
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={c.maxPoints}
+                        onChange={(e) =>
+                          updateCritere(
+                            idx,
+                            "maxPoints",
+                            parseFloat(e.target.value) || 0,
+                          )
+                        }
+                        className="w-20 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Points"
+                        min={1}
+                        step={1}
+                        title="Nombre de points maximum pour ce critère"
+                      />
+                      <span className="text-sm text-gray-500 whitespace-nowrap">
+                        pts max
+                      </span>
+                    </div>
                     {form.criteres.length > 1 && (
                       <button
                         type="button"
