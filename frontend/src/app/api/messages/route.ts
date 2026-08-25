@@ -2,6 +2,27 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
+/**
+ * Nom affiché de l'expéditeur, dérivé UNIQUEMENT du jeton — jamais du corps
+ * de la requête. Retombe sur la partie locale de l'email si la fiche n'a pas
+ * de nom renseigné.
+ */
+async function resolveSenderName(user: {
+  id: string;
+  email: string;
+  role: string;
+}): Promise<string> {
+  const table = user.role === "candidate" ? "candidates" : "members";
+  const { data } = await supabaseAdmin
+    .from(table)
+    .select("first_name, last_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const full = `${data?.first_name ?? ""} ${data?.last_name ?? ""}`.trim();
+  return full || user.email.split("@")[0];
+}
+
 // GET /api/messages - Fetch private messages for current user
 export async function GET(req: NextRequest) {
   const user = getTokenFromRequest(req);
