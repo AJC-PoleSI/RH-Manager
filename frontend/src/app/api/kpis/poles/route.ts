@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Compter les places acceptées par pôle
-    (deliberations || []).forEach((d: any) => {
+    assignments.forEach((d: any) => {
       if (d.assigned_pole && poleStats[d.assigned_pole]) {
         poleStats[d.assigned_pole].placesAcceptees++;
       }
