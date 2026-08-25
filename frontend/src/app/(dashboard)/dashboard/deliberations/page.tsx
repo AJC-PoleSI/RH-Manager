@@ -1160,7 +1160,9 @@ export default function DeliberationsPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
                                 <span>&#11088;</span>
-                                <span className="font-bold text-gray-800">{avg || "-"}</span>
+                                <span className="font-bold text-gray-800">
+                                  {avg ? `${avg} / 20` : "-"}
+                                </span>
                                 <span className="text-xs text-gray-400">({evalC} eval{evalC !== 1 ? "s" : ""})</span>
                               </div>
                             </div>
