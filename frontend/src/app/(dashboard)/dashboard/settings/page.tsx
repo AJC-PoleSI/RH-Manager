@@ -312,9 +312,9 @@ export default function CreationPage() {
     const criteres = Array.isArray(ep.evaluationQuestions)
       ? ep.evaluationQuestions.map((q: any) => ({
           name: q.q || q.name || "",
-          coefficient: q.weight || q.coefficient || 1,
+          maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
         }))
-      : [{ name: "", coefficient: 1 }];
+      : [{ name: "", maxPoints: DEFAULT_MAX_POINTS }];
     setForm({
       name: ep.name || "",
       tourId: String(ep.tour || ""),
