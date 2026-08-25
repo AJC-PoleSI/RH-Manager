@@ -1,6 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { canEvaluate } from "@/lib/evaluation-access";
+import {
+  getCriterionLabel,
+  getMaxPoints,
+  parseQuestions,
+} from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations - Fetch evaluations (scoped by role)
