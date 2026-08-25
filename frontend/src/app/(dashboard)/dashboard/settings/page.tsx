@@ -384,7 +384,8 @@ export default function CreationPage() {
         durationMinutes: form.duree ? parseInt(form.duree) : 30,
         evaluationQuestions: form.criteres.map((c) => ({
           q: c.name,
-          weight: c.coefficient,
+          // `weight` est lu par l'API comme le nombre de points max du critère.
+          weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
         })),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
