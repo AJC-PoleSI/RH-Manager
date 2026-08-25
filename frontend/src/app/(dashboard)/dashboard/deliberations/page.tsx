@@ -375,12 +375,12 @@ export default function DeliberationsPage() {
   };
 
   const getScoreTotal = (scores: any): number => {
-    try {
-      const parsed = typeof scores === "string" ? JSON.parse(scores) : scores;
-      return Object.values(parsed || {}).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
-    } catch {
-      return 0;
-    }
+    const parsed = parseScores(scores);
+    if (!parsed) return 0;
+    return Object.values(parsed).reduce(
+      (sum: number, v: any) => sum + (Number(v) || 0),
+      0,
+    );
   };
 
   const getEvalCount = (c: Candidate): number => c.evaluations?.length || 0;
