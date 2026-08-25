@@ -51,10 +51,38 @@ export async function isMemberAssignedToSlot(
 }
 
 /**
+ * Épreuves « sur table » (type `commune`).
+ *
+ * Ce format fonctionne par convocation globale : tous les candidats sont
+ * réunis au même moment, il n'y a donc NI créneau NI inscription (l'interface
+ * candidat masque l'inscription pour ce type). Les rattacher à la règle du
+ * créneau partagé les rendait ininscriptibles ET innotables : aucun
+ * examinateur ne pouvait saisir de note, seul un admin y arrivait en
+ * court-circuitant la vérification.
+ *
+ * Le cloisonnement par créneau garde tout son sens pour les entretiens et les
+ * épreuves de groupe — il ne s'applique simplement pas à un format où le jury
+ * n'est pas découpé par créneau.
+ */
+async function listCommuneEpreuveIds(): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("epreuves")
+    .select("id")
+    .eq("type", "commune");
+
+  if (error || !data) return [];
+  return data.map((e: any) => e.id);
+}
+
+/**
  * Liste les épreuves qu'un membre est autorisé à évaluer POUR UN CANDIDAT
- * donné : celles où il est assigné à un créneau sur lequel ce candidat a une
- * inscription active. C'est la règle unique qui gouverne l'accès aux
- * évaluations (individuelles, collectives, commentaires, cochage).
+ * donné :
+ *   • celles où il est assigné à un créneau sur lequel ce candidat a une
+ *     inscription active (entretiens, épreuves de groupe) ;
+ *   • les épreuves sur table, qui n'ont pas de créneau par construction.
+ *
+ * C'est la règle unique qui gouverne l'accès aux évaluations (individuelles,
+ * collectives, commentaires, cochage).
  *
  * Les admins ne passent pas par ici : ils voient tout.
  */
@@ -69,17 +97,21 @@ export async function listEvaluableEpreuveIds(
     )
     .eq("member_id", memberId);
 
-  if (error || !data) return [];
-
   const ids = new Set<string>();
-  for (const row of data as any[]) {
-    const slot = row.slot;
-    if (!slot?.epreuve_id) continue;
-    const hasCandidate = (slot.enrollments || [])
-      .filter((e: any) => !e.status || e.status === "active")
-      .some((e: any) => e.candidate_id === candidateId);
-    if (hasCandidate) ids.add(slot.epreuve_id);
+
+  if (!error && data) {
+    for (const row of data as any[]) {
+      const slot = row.slot;
+      if (!slot?.epreuve_id) continue;
+      const hasCandidate = (slot.enrollments || [])
+        .filter((e: any) => !e.status || e.status === "active")
+        .some((e: any) => e.candidate_id === candidateId);
+      if (hasCandidate) ids.add(slot.epreuve_id);
+    }
   }
+
+  for (const id of await listCommuneEpreuveIds()) ids.add(id);
+
   return Array.from(ids);
 }
 
