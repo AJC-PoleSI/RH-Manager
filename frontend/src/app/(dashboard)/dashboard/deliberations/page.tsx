@@ -1063,7 +1063,9 @@ export default function DeliberationsPage() {
                               </div>
                             </td>
                             <td className="px-5 py-3 text-center text-gray-600">{evalC}</td>
-                            <td className="px-5 py-3 text-center font-bold text-blue-600">{avg || "-"}</td>
+                            <td className="px-5 py-3 text-center font-bold text-blue-600">
+                              {avg ? <>{avg}<span className="text-xs font-normal text-gray-400"> / 20</span></> : "-"}
+                            </td>
                             <td className="px-5 py-3 text-center">{statusBadge(status)}</td>
                             <td className="px-5 py-3">
                               <div className="flex justify-center">
