@@ -330,22 +330,48 @@ export default function DeliberationsPage() {
     }
   };
 
+  // Moyenne d'un candidat, ramenée sur 20.
+  //
+  // Chaque évaluation est d'abord convertie en pourcentage de réussite
+  // (total obtenu / total de points de l'épreuve), ce qui neutralise les
+  // différences de barème entre épreuves. Les évaluations d'une MÊME épreuve
+  // sont ensuite moyennées entre elles avant d'être moyennées avec les autres
+  // épreuves : sans cela, une épreuve notée par deux examinateurs compterait
+  // double par rapport à une épreuve notée par un seul.
   const getAvgScore = (c: Candidate): number => {
     if (!c.evaluations || c.evaluations.length === 0) return 0;
-    let total = 0;
-    let count = 0;
+
+    // Ratios 0..1 regroupés par épreuve.
+    const byEpreuve = new Map<string, number[]>();
+
     c.evaluations.forEach((ev) => {
-      try {
-        const scores = typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores;
-        if (scores) {
-          Object.values(scores).forEach((v: any) => {
-            total += Number(v) || 0;
-            count++;
-          });
-        }
-      } catch {}
+      const scores = parseScores(ev.scores);
+      if (!scores) return;
+
+      const obtained = Object.values(scores)
+        .map(Number)
+        .filter((n) => Number.isFinite(n))
+        .reduce((a, b) => a + b, 0);
+
+      const maxTotal = Number(ev.epreuve?.maxTotal);
+      // Sans barème connu, on ne peut pas normaliser : on ignore cette
+      // évaluation plutôt que de fausser la moyenne avec une note brute.
+      if (!Number.isFinite(maxTotal) || maxTotal <= 0) return;
+
+      const key = ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve";
+      const ratios = byEpreuve.get(key) || [];
+      ratios.push(Math.min(1, Math.max(0, obtained / maxTotal)));
+      byEpreuve.set(key, ratios);
     });
-    return count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+
+    if (byEpreuve.size === 0) return 0;
+
+    const perEpreuve = [...byEpreuve.values()].map(
+      (ratios) => ratios.reduce((a, b) => a + b, 0) / ratios.length,
+    );
+    const overall = perEpreuve.reduce((a, b) => a + b, 0) / perEpreuve.length;
+
+    return Math.round(overall * 20 * 10) / 10;
   };
 
   const getScoreTotal = (scores: any): number => {
