@@ -34,6 +34,20 @@ export interface Candidate {
   wishes?: Wish[];
 }
 
+/** `scores` arrive tantôt en objet, tantôt en chaîne JSON selon la route. */
+function parseScores(raw: any): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof raw === "object" ? raw : null;
+}
+
 interface Evaluation {
   id: string;
   scores: any;
