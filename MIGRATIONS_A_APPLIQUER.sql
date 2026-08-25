@@ -255,3 +255,22 @@ begin
   return jsonb_build_object('id', v_row_id, 'status', 'created');
 end;
 $$;
+
+
+-- ------------------------------------------------------------
+-- 5) Colonnes utilisées par le code mais absentes des migrations
+--    (supabase-migration-colonnes-manquantes.sql)
+-- ------------------------------------------------------------
+-- Audit du 25 août 2026. `epreuves.color` et `epreuves.description` existent
+-- en production (ajoutées à la main) mais dans aucun fichier du dépôt :
+-- reconstruire la base depuis le repo donne une app cassée dès la création
+-- d'épreuve. `deliberations.assigned_pole` est absente PARTOUT, y compris en
+-- production, et faisait échouer GET /api/kpis/poles en 500 (code 42703).
+--
+-- La route tolère désormais son absence, mais la colonne reste nécessaire au
+-- décompte des places acceptées par pôle.
+
+ALTER TABLE epreuves ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#3B82F6';
+ALTER TABLE epreuves ADD COLUMN IF NOT EXISTS description TEXT;
+
+ALTER TABLE deliberations ADD COLUMN IF NOT EXISTS assigned_pole TEXT;

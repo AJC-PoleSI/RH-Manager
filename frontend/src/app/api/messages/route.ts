@@ -48,8 +48,12 @@ export async function POST(req: NextRequest) {
   if (!user) return unauthorized();
 
   try {
-    const { recipientId, recipientRole, message, senderName } =
-      await req.json();
+    // SECURITY : `senderName` n'est PAS lu depuis le corps de la requête.
+    // C'est le champ affiché dans la messagerie ; le recopier tel quel
+    // laissait n'importe qui écrire sous une fausse identité — un candidat
+    // pouvait s'adresser à un examinateur sous le nom « Admin AJC ».
+    // Le nom est reconstruit côté serveur à partir du jeton.
+    const { recipientId, recipientRole, message } = await req.json();
 
     if (!recipientId || !message?.trim()) {
       return Response.json(
