@@ -130,10 +130,9 @@ export async function POST(req: NextRequest) {
       tour: body.tour ?? 1,
       type: body.type ?? "commune",
       duration_minutes: Number(body.durationMinutes) || 30,
-      evaluation_questions:
-        typeof body.evaluationQuestions === "string"
-          ? body.evaluationQuestions
-          : JSON.stringify(body.evaluationQuestions ?? []),
+      evaluation_questions: JSON.stringify(
+        normalizeQuestions(body.evaluationQuestions ?? []),
+      ),
       is_pole_test: Boolean(body.isPoleTest),
       pole: body.pole || null,
       // Épreuves de groupe : le flag + la capacité max de candidats par
