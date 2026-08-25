@@ -1,0 +1,829 @@
+<title>Audit RH Manager</title>
+<meta name="description" content="Audit fonctionnel et sécurité de la plateforme de recrutement AJC, sur trois tours complets." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+
+<style>
+  :root {
+    --ink:        #141824;
+    --ink-soft:   #39404f;
+    --muted:      #676f80;
+    --paper:      #f4f5f8;
+    --surface:    #ffffff;
+    --surface-2:  #eceef3;
+    --rule:       #dfe2ea;
+    --rule-soft:  #eaecf1;
+    --accent:     #3d4ea8;
+    --accent-dim: #8b95cc;
+
+    --crit:       #b32a46;
+    --crit-bg:    #fbe9ed;
+    --high:       #b0621b;
+    --high-bg:    #fbf0e4;
+    --med:        #7d6a12;
+    --med-bg:     #f8f3e0;
+    --ok:         #1c6f47;
+    --ok-bg:      #e5f1eb;
+
+    --shadow:     0 1px 2px rgba(20,24,36,.05), 0 8px 24px -16px rgba(20,24,36,.28);
+
+    --measure: 68ch;
+    --f-display: "Spectral", "Iowan Old Style", Georgia, serif;
+    --f-body: "Public Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:        #e6e9f1;
+      --ink-soft:   #b9c0cf;
+      --muted:      #8b93a5;
+      --paper:      #0e1016;
+      --surface:    #171a23;
+      --surface-2:  #1f232e;
+      --rule:       #2a2f3c;
+      --rule-soft:  #232733;
+      --accent:     #94a0e6;
+      --accent-dim: #5b66a8;
+
+      --crit:       #f2879e;
+      --crit-bg:    #2e1620;
+      --high:       #e8a765;
+      --high-bg:    #2c1f11;
+      --med:        #d8c46a;
+      --med-bg:     #272212;
+      --ok:         #74c69d;
+      --ok-bg:      #12251c;
+
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink:        #e6e9f1;
+    --ink-soft:   #b9c0cf;
+    --muted:      #8b93a5;
+    --paper:      #0e1016;
+    --surface:    #171a23;
+    --surface-2:  #1f232e;
+    --rule:       #2a2f3c;
+    --rule-soft:  #232733;
+    --accent:     #94a0e6;
+    --accent-dim: #5b66a8;
+
+    --crit:       #f2879e;
+    --crit-bg:    #2e1620;
+    --high:       #e8a765;
+    --high-bg:    #2c1f11;
+    --med:        #d8c46a;
+    --med-bg:     #272212;
+    --ok:         #74c69d;
+    --ok-bg:      #12251c;
+
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ── En-tête ─────────────────────────────────────────── */
+  header.masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 64px 0 26px;
+    margin-bottom: 0;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(2.4rem, 6vw, 3.5rem);
+    line-height: 1.05;
+    letter-spacing: -.02em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--f-display);
+    font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+    font-style: italic;
+    color: var(--ink-soft);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  /* ── Bandeau méthode ─────────────────────────────────── */
+  .method {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .method div {
+    padding: 20px 22px 20px 0;
+    border-right: 1px solid var(--rule-soft);
+  }
+  .method div:last-child { border-right: 0; }
+  .method dt {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  .method dd {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  /* ── Compteurs ───────────────────────────────────────── */
+  .tally {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin: 40px 0 8px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--sev, var(--rule));
+  }
+  .tile .n {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--sev, var(--ink));
+    display: block;
+  }
+  .tile .lbl {
+    font-size: 12.5px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 8px;
+    display: block;
+    font-weight: 600;
+  }
+  .t-crit { --sev: var(--crit); }
+  .t-high { --sev: var(--high); }
+  .t-med  { --sev: var(--med); }
+  .t-ok   { --sev: var(--ok); }
+
+  .runstat {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    margin: 14px 0 0;
+  }
+  .runstat b { color: var(--ink); font-weight: 500; }
+
+  /* ── Sections ────────────────────────────────────────── */
+  section { margin-top: 64px; }
+  h2 {
+    font-family: var(--f-display);
+    font-size: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0 0 6px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+  .sec-note {
+    color: var(--muted);
+    font-size: 15px;
+    max-width: var(--measure);
+    margin: 14px 0 30px;
+  }
+
+  /* ── Constats ────────────────────────────────────────── */
+  .findings { display: flex; flex-direction: column; gap: 18px; }
+
+  article.f {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--sev);
+    border-radius: 3px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  article.f.crit { --sev: var(--crit); --sev-bg: var(--crit-bg); }
+  article.f.high { --sev: var(--high); --sev-bg: var(--high-bg); }
+  article.f.med  { --sev: var(--med);  --sev-bg: var(--med-bg); }
+
+  .f-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .chip {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--sev);
+    background: var(--sev-bg);
+    border: 1px solid var(--sev);
+    border-radius: 2px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+  .f-id {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  article.f h3 {
+    font-family: var(--f-body);
+    font-size: 1.12rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0 0 10px;
+    letter-spacing: -.005em;
+    text-wrap: balance;
+  }
+  article.f p { margin: 0 0 12px; max-width: var(--measure); }
+  article.f p:last-child { margin-bottom: 0; }
+
+  .evidence {
+    background: var(--surface-2);
+    border-left: 2px solid var(--accent-dim);
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    padding: 12px 14px;
+    margin: 14px 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--ink-soft);
+  }
+  .fix {
+    border-top: 1px dashed var(--rule);
+    padding-top: 12px;
+    margin-top: 14px;
+    font-size: 15px;
+  }
+  .fix strong {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 700;
+  }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: .87em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+  article.f .evidence code { background: none; padding: 0; }
+
+  /* ── Déroulé des tours ───────────────────────────────── */
+  ol.tours {
+    list-style: none;
+    counter-reset: tour;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  ol.tours li {
+    counter-increment: tour;
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 20px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    align-items: start;
+  }
+  ol.tours li::before {
+    content: "T" counter(tour);
+    font-family: var(--f-mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  ol.tours h4 {
+    font-family: var(--f-body);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  ol.tours p { margin: 0; color: var(--ink-soft); font-size: 15px; max-width: var(--measure); }
+
+  /* ── Tableau OK ──────────────────────────────────────── */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 540px; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.verdict { white-space: nowrap; font-family: var(--f-mono); font-size: 12px; font-weight: 700; color: var(--ok); }
+
+  /* ── Encadré action ──────────────────────────────────── */
+  .callout {
+    background: var(--crit-bg);
+    border: 1px solid var(--crit);
+    border-radius: 3px;
+    padding: 24px 26px;
+    margin: 32px 0;
+  }
+  .callout h3 {
+    font-family: var(--f-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: var(--crit);
+  }
+  .callout ol { margin: 0; padding-left: 20px; }
+  .callout li { margin-bottom: 10px; max-width: var(--measure); }
+  .callout li:last-child { margin-bottom: 0; }
+
+  ul.plain { padding-left: 20px; margin: 0; }
+  ul.plain li { margin-bottom: 9px; max-width: var(--measure); }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 2px solid var(--ink);
+    font-size: 14px;
+    color: var(--muted);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  @media (max-width: 620px) {
+    body { font-size: 16px; }
+    .wrap { padding: 0 18px 64px; }
+    .method div { border-right: 0; border-bottom: 1px solid var(--rule-soft); padding-right: 0; }
+    ol.tours li { grid-template-columns: 44px 1fr; gap: 14px; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Audit · 25 août 2026</p>
+  <h1>Audit RH&nbsp;Manager</h1>
+  <p class="standfirst">Trois tours de recrutement simulés de bout en bout — épreuves, plannings, business games, notation, vœux et délibérations — avec sondage systématique des droits d'accès de chaque rôle.</p>
+</header>
+
+<dl class="method">
+  <div>
+    <dt>Environnement</dt>
+    <dd>Sandbox Supabase local, code applicatif identique à la production</dd>
+  </div>
+  <div>
+    <dt>Acteurs</dt>
+    <dd>1 admin · 3 examinateurs · 4 candidats</dd>
+  </div>
+  <div>
+    <dt>Méthode</dt>
+    <dd>Appels directs aux routes API avec jetons signés par rôle</dd>
+  </div>
+  <div>
+    <dt>Couverture</dt>
+    <dd>39 routes de lecture, 3 rôles, 3 tours complets</dd>
+  </div>
+</dl>
+
+<div class="tally">
+  <div class="tile t-crit"><span class="n">2</span><span class="lbl">Critiques</span></div>
+  <div class="tile t-high"><span class="n">5</span><span class="lbl">Élevés</span></div>
+  <div class="tile t-med"><span class="n">5</span><span class="lbl">Moyens</span></div>
+  <div class="tile t-ok"><span class="n">78</span><span class="lbl">Vérifiés conformes</span></div>
+</div>
+<p class="runstat"><b>325</b> appels HTTP · <b>2</b> erreurs 500 (même route) · <b>1</b> erreur 404 (attendue) · <b>0</b> régression sur les correctifs de juillet</p>
+
+<!-- ══════════════════════════════════════════════════ -->
+<section>
+  <h2>À corriger en priorité</h2>
+  <p class="sec-note">Classé par gravité réelle pour le recrutement en cours. Chaque constat a été reproduit ; la preuve est la réponse brute de l'API ou de la base.</p>
+
+  <div class="findings">
+
+    <article class="f crit">
+      <div class="f-head">
+        <span class="chip">Critique</span>
+        <span class="f-id">C-01 · confirmé en production</span>
+      </div>
+      <h3>Le secret JWT de production est publié sur GitHub</h3>
+      <p>Le dépôt <code>AJC-PoleSI/RH-Manager</code> est <strong>public</strong>, et deux fichiers suivis par git contenaient la clé <code>JWT_SECRET</code> de production en clair. Cette clé est celle qui signe les jetons de session : n'importe qui, sur Internet, pouvait forger un jeton administrateur valide et obtenir un accès total à la plateforme — lire les coordonnées de tous les candidats, modifier des notes, changer des décisions de délibération.</p>
+      <div class="evidence">$ grep -rl "&lt;secret&gt;" --include="*.ts" .
+run-simulation.ts
+simulate-load-real.ts
+
+$ gh repo view --json visibility
+{"nameWithOwner":"AJC-PoleSI/RH-Manager","visibility":"PUBLIC"}
+
+# la clé trouvée dans ces fichiers est identique à JWT_SECRET de frontend/.env.local</div>
+      <p>J'ai retiré la clé des deux fichiers (ils lisent désormais <code>process.env.JWT_SECRET</code>), mais <strong>elle reste dans 3&nbsp;commits de l'historique public</strong> : la retirer du code ne la révoque pas.</p>
+      <div class="fix">
+        <strong>À faire par toi</strong>
+        Régénérer <code>JWT_SECRET</code> dans les variables d'environnement Vercel, puis redéployer. Toutes les sessions en cours seront déconnectées — à faire hors créneau d'épreuve. Passer le dépôt en privé serait une seconde ceinture, mais la rotation reste indispensable : la clé a été publique.
+      </div>
+    </article>
+
+    <article class="f crit">
+      <div class="f-head">
+        <span class="chip">Critique</span>
+        <span class="f-id">C-02 · reproduit</span>
+      </div>
+      <h3>Un candidat peut lister tous les autres candidats et leur jury</h3>
+      <p>La route <code>GET /api/slots/all</code> ne vérifie qu'une chose : que l'appelant soit authentifié. Elle renvoie donc à un <em>candidat</em> exactement la même charge utile qu'à l'admin — le planning complet avec, pour chaque créneau, l'identité des examinateurs affectés et celle des candidats inscrits.</p>
+      <div class="evidence">GET /api/slots/all   (jeton candidat « Alice Martin »)   → 200
+
+exposé : bilal.nguyen@… · Nguyen · chloe.dupont@… · Dupont
+         david.rossi@…  · Rossi
+         examinateur01@ajc-mail.com · examinateur02@… · examinateur03@…
+
+# source : le seul contrôle est `if (!payload) return unauthorized()`</div>
+      <p>Deux conséquences : une fuite de données personnelles (nom, prénom, adresse mail de chaque candidat, accessible à tous les autres), et une rupture d'équité — un candidat peut connaître à l'avance la composition de son jury et se renseigner sur les examinateurs.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Refuser le rôle <code>candidate</code> sur cette route, comme le font déjà <code>/api/candidates</code> et <code>/api/deliberations</code>. Les candidats ont déjà <code>/api/slots/available</code> et <code>/api/slots/my-enrollments</code>, qui sont correctement filtrés.
+      </div>
+    </article>
+
+    <article class="f high">
+      <div class="f-head">
+        <span class="chip">Élevé</span>
+        <span class="f-id">H-01 · confirmé en production</span>
+      </div>
+      <h3>La page KPI par pôle renvoie une erreur 500</h3>
+      <p><code>GET /api/kpis/poles</code> lit une colonne <code>deliberations.assigned_pole</code> qui n'existe dans <strong>aucune migration du dépôt</strong> — et que j'ai vérifiée absente de la base de production. La route échoue donc systématiquement, pour l'admin comme pour les examinateurs.</p>
+      <div class="evidence">GET /api/kpis/poles  (admin)        → 500 {"error":"Failed to fetch pole KPIs"}
+serveur : column deliberations.assigned_pole does not exist  (code 42703)
+
+# vérification schéma production (lecture seule) :
+  ABSENTE   deliberations.assigned_pole
+  PRÉSENTE  epreuves.color · epreuves.description
+  PRÉSENTE  candidate_wishes.tour · candidates.wishes_locked_at</div>
+      <p>Au passage : <code>assigned_pole</code> n'est écrit par aucune route de l'application. Même une fois la colonne créée, le compteur « places acceptées » de cet écran restera à zéro tant que l'affectation de pôle en délibération n'est pas implémentée.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Ajouter <code>ALTER TABLE deliberations ADD COLUMN IF NOT EXISTS assigned_pole TEXT;</code> à <code>MIGRATIONS_A_APPLIQUER.sql</code> — ou, si l'affectation de pôle n'est plus au programme, retirer la colonne des deux requêtes qui la lisent.
+      </div>
+    </article>
+
+    <article class="f high">
+      <div class="f-head">
+        <span class="chip">Élevé</span>
+        <span class="f-id">H-02 · reproduit</span>
+      </div>
+      <h3>Les mails de résultats sont comptés comme envoyés même quand aucun ne part</h3>
+      <p>Toutes les fonctions de <code>lib/resend.ts</code> font <code>return resend.emails.send(…)</code> sans jamais examiner ce que le SDK renvoie. Or le SDK Resend <strong>ne rejette pas</strong> en cas d'échec : il résout avec <code>{ data: null, error: {…} }</code>. Comme <code>deliberations/validate</code> compte les succès avec <code>Promise.allSettled</code>, un échec total remonte comme un succès total.</p>
+      <div class="evidence">await resend.emails.send({…})   // clé invalide
+  → la promesse RÉSOUT
+  data  : null
+  error : {"statusCode":401,"name":"validation_error","message":"API key is invalid"}
+
+POST /api/deliberations/validate  → 200 {"ok":true,"tour":3,"sent":1,"failed":0}
+                                          ▲ aucun mail n'est parti</div>
+      <p>Concrètement : tu valides la soirée de délibération, l'interface affiche « N mails envoyés », et les candidats n'apprennent jamais leur résultat. Le même défaut touche les mails de vérification d'adresse, de réinitialisation de mot de passe et de convocation Tour&nbsp;3.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Dans chaque fonction d'envoi, récupérer le résultat et lever une erreur si <code>error</code> est non nul — <code>allSettled</code> comptera alors correctement, et l'écran de validation pourra afficher les échecs.
+      </div>
+    </article>
+
+    <article class="f high">
+      <div class="f-head">
+        <span class="chip">Élevé</span>
+        <span class="f-id">H-03 · reproduit</span>
+      </div>
+      <h3>Le coefficient par défaut plafonne toutes les notes à 1 point</h3>
+      <p>Le formulaire de création d'épreuve propose pour chaque critère un champ <em>« Coeff. »</em> initialisé à <code>1</code>. Cette valeur est enregistrée dans <code>weight</code> — et <code>POST /api/evaluations</code> interprète <code>weight</code> non pas comme un coefficient, mais comme le <strong>nombre de points maximum</strong> du critère.</p>
+      <div class="evidence">Épreuve créée avec les valeurs par défaut du formulaire (coefficient = 1)
+
+  saisie 15 → 400  La note pour le critère "Motivation" ne peut pas dépasser 1 points.
+  saisie 10 → 400  La note pour le critère "Motivation" ne peut pas dépasser 1 points.
+  saisie  2 → 400  La note pour le critère "Motivation" ne peut pas dépasser 1 points.
+  saisie  1 → 201  enregistré</div>
+      <p>Une épreuve créée sans passer manuellement chaque coefficient à 20 est donc notée sur 1 point par critère. Trois interprétations coexistent pour la même valeur : « coefficient » dans le formulaire admin, « points max » dans l'API et dans la grille de notation, et « rien du tout » dans le calcul de moyenne de la délibération.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Renommer le champ en « Points max » et porter la valeur par défaut à 20 — c'est déjà le repli utilisé partout dans le code (<code>q.weight || q.maxScore || 20</code>). Vérifier ensuite les épreuves déjà créées en production : celles laissées à 1 sont impossibles à noter normalement.
+      </div>
+    </article>
+
+    <article class="f high">
+      <div class="f-head">
+        <span class="chip">Élevé</span>
+        <span class="f-id">H-04 · reproduit</span>
+      </div>
+      <h3>Une épreuve « sur table » n'est notable par aucun examinateur</h3>
+      <p>Les épreuves de type <em>commune</em> fonctionnent par convocation globale : l'interface candidat masque volontairement l'inscription, donc ces épreuves n'ont ni créneau ni inscription. Mais <code>canEvaluate()</code> exige précisément d'être affecté à un créneau où le candidat est inscrit. Aucun examinateur ne peut donc saisir de note sur une épreuve sur table.</p>
+      <div class="evidence">EXAM1 → note CAND1 sur l'épreuve commune   → 403 NOT_ASSIGNED_TO_SLOT
+ADMIN → note CAND1 sur l'épreuve commune   → 201 (l'admin contourne canEvaluate)</div>
+      <p>La règle de cloisonnement est saine — c'est exactement ce que tu voulais vérifier, et elle tient partout ailleurs. Le problème est qu'elle n'a pas de porte d'entrée pour le format « tout le monde en amphi ».</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Deux options : autoriser explicitement la notation d'une épreuve <code>commune</code> à tout membre (le cloisonnement par créneau n'a pas de sens pour ce format), ou créer un créneau « amphi » avec inscription automatique de tous les candidats convoqués.
+      </div>
+    </article>
+
+    <article class="f high">
+      <div class="f-head">
+        <span class="chip">Élevé</span>
+        <span class="f-id">H-05 · reproduit</span>
+      </div>
+      <h3>N'importe qui peut écrire un message sous un faux nom</h3>
+      <p>Dans <code>POST /api/messages</code>, <code>sender_id</code> et <code>sender_role</code> sont bien dérivés du jeton — mais <code>sender_name</code>, qui est le champ <em>affiché</em> dans la messagerie, est recopié tel quel depuis le corps de la requête.</p>
+      <div class="evidence">POST /api/messages   (jeton candidat)
+  body : { recipientId: &lt;examinateur&gt;, message: "…", senderName: "Admin AJC" }
+  → 201  { senderName: "Admin AJC", senderRole: "candidate" }</div>
+      <p>Un candidat peut donc écrire à un examinateur en se présentant comme l'administration. Le rôle réel est stocké, mais rien ne garantit qu'il soit affiché à côté du nom.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Ignorer <code>senderName</code> du corps de requête et reconstruire le nom côté serveur depuis <code>members</code> ou <code>candidates</code> à partir de <code>user.id</code>.
+      </div>
+    </article>
+
+    <article class="f med">
+      <div class="f-head">
+        <span class="chip">Moyen</span>
+        <span class="f-id">M-01 · reproduit</span>
+      </div>
+      <h3>La moyenne affichée en délibération mélange les barèmes</h3>
+      <p><code>getAvgScore()</code> additionne toutes les notes de tous les critères de toutes les épreuves, puis divise par le <em>nombre de critères</em>. Le barème de chaque critère est ignoré, et le nombre d'examinateurs aussi.</p>
+      <p>Tant que toutes les épreuves utilisent le même barème, le chiffre reste comparable. Dès que deux épreuves ont des barèmes différents — ce que le formulaire autorise — la moyenne perd son sens : un 1/1 et un 1/20 pèsent identiquement. Un candidat noté par deux examinateurs voit aussi cette épreuve compter double par rapport à un candidat noté par un seul.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Normaliser chaque note sur son barème (<code>score / weight</code>) avant de moyenner, et moyenner d'abord par épreuve avant de moyenner entre épreuves.
+      </div>
+    </article>
+
+    <article class="f med">
+      <div class="f-head">
+        <span class="chip">Moyen</span>
+        <span class="f-id">M-02 · reproduit</span>
+      </div>
+      <h3>Les candidats n'ont aucun accès aux notifications</h3>
+      <p><code>GET /api/notifications</code> répond <code>403</code> à tout jeton candidat, alors qu'admin et examinateurs obtiennent <code>200</code>. Toute notification destinée à un candidat — créneau annulé, changement de jury, convocation — est donc inatteignable depuis son espace.</p>
+      <div class="fix">
+        <strong>À trancher</strong>
+        Soit les candidats doivent recevoir des notifications dans l'app et il faut lever le <code>403</code> en filtrant sur leur identifiant, soit le canal candidat est l'email uniquement — auquel cas il n'y a rien à corriger, mais H-02 devient d'autant plus urgent.
+      </div>
+    </article>
+
+    <article class="f med">
+      <div class="f-head">
+        <span class="chip">Moyen</span>
+        <span class="f-id">M-03 · reproduit</span>
+      </div>
+      <h3>Périmètre large pour les examinateurs non-admin</h3>
+      <p>Un examinateur simple obtient <code>200</code> sur <code>/api/candidates</code> (fiches complètes de tous les candidats) et sur <code>/api/kpis/global</code>. L'export CSV, la liste des salariés et le suivi des évaluateurs sont eux correctement réservés à l'admin.</p>
+      <p>Ce n'est pas une faille au sens strict — un jury a besoin de voir les dossiers. C'est un choix à valider : aujourd'hui, tout membre du staff peut lire les coordonnées de tous les candidats, y compris ceux qu'il n'examine jamais.</p>
+    </article>
+
+    <article class="f med">
+      <div class="f-head">
+        <span class="chip">Moyen</span>
+        <span class="f-id">M-04 · reproduit</span>
+      </div>
+      <h3>Deux routes internes lisibles par un candidat</h3>
+      <p><code>/api/settings</code> (heures d'ouverture, durée de créneau) et <code>/api/tour3/obligations</code> (nombre de candidats et de membres par pôle) répondent <code>200</code> à un jeton candidat. Aucune donnée personnelle d'autrui n'y transite, mais <code>tour3/obligations</code> expose la tension de recrutement pôle par pôle — une information stratégique qui peut influencer le classement des vœux.</p>
+      <div class="evidence">GET /api/tour3/obligations   (jeton candidat) → 200
+{"obligations":[{"pole":"Marketing","candidatsCount":2,"membresCount":4,…},
+                {"pole":"Audit Qualité","candidatsCount":2,"bureauCount":2,…}]}</div>
+    </article>
+
+    <article class="f med">
+      <div class="f-head">
+        <span class="chip">Moyen</span>
+        <span class="f-id">M-05 · constat de code</span>
+      </div>
+      <h3>Colonnes de production absentes des migrations</h3>
+      <p>Trois colonnes que le code écrit ou lit n'existent dans aucun fichier de migration du dépôt : <code>epreuves.color</code>, <code>epreuves.description</code> (présentes en production, ajoutées à la main) et <code>deliberations.assigned_pole</code> (absente partout, cf. H-01). Reconstruire la base depuis le dépôt — pour une préprod, un nouveau développeur ou une reprise après incident — donne une application cassée dès la création d'épreuve.</p>
+      <div class="fix">
+        <strong>Correctif</strong>
+        Un fichier <code>supabase-migration-colonnes-manquantes.sql</code> avec les <code>ADD COLUMN IF NOT EXISTS</code> correspondants, ajouté à <code>MIGRATIONS_A_APPLIQUER.sql</code>.
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════ -->
+<section>
+  <h2>Le scénario joué</h2>
+  <p class="sec-note">Trois tours complets, avec pour chaque étape une tentative légitime et une tentative illégitime, afin de vérifier que la règle bloque bien ce qu'elle doit bloquer.</p>
+
+  <ol class="tours">
+    <li>
+      <div>
+        <h4>Les trois types d'épreuve, business game inclus</h4>
+        <p>Une épreuve sur table, quatre entretiens individuels et un business game de deux groupes de deux candidats. Les trois examinateurs se sont inscrits sur les créneaux, avec un troisième volontairement laissé hors du premier business game pour servir de témoin. Quatre candidats répartis, notation individuelle et collective, fil de commentaires partagé entre examinateurs du même groupe, messagerie privée. Puis délibération : trois admis, un refusé.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h4>Vœux de pôles et entretiens de motivation</h4>
+        <p>Les trois admis classent trois pôles chacun, avec option bureau et poste précis pour la trésorerie. Trois créneaux d'entretien, jury de deux examinateurs. Le candidat refusé au tour 1 a été testé sur chaque action du tour 2 — vœux et inscription — et bloqué à chaque fois. Délibération : deux admis, un refusé.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h4>Entretiens finaux, vœux définitifs et verrouillage</h4>
+        <p>Les deux finalistes rejouent au tour 3 <em>exactement les mêmes pôles et les mêmes rangs</em> qu'au tour 2 — le cas qui cassait auparavant. Enregistré sans erreur, avec conservation de l'historique des vœux du tour 2. Confirmation définitive, verrouillage, tentative de modification après verrou refusée, correction par l'admin toujours possible. Délibération finale, puis réouverture d'un tour verrouillé pour corriger une décision.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ══════════════════════════════════════════════════ -->
+<section>
+  <h2>Ce qui fonctionne</h2>
+  <p class="sec-note">78 vérifications conformes. Voici celles qui répondent directement à tes questions.</p>
+
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th scope="col">Vérification</th><th scope="col">Résultat</th><th scope="col">Verdict</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Un examinateur peut-il noter un candidat qu'il n'a pas vu&nbsp;?</strong><br />Testé au tour 1 (business game et entretien), au tour 2 et au tour 3</td>
+        <td>Refusé à chaque fois, code <code>NOT_ASSIGNED_TO_SLOT</code>. La règle est centralisée dans <code>canEvaluate()</code>&nbsp;: seul un examinateur affecté à un créneau où le candidat est inscrit peut le noter.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Le business game tient-il&nbsp;?</strong></td>
+        <td>Deux groupes de deux, deux examinateurs par groupe, une seule note collective par candidat. Le doublon de note collective est refusé (<code>409 GROUP_EVAL_EXISTS</code>), y compris en course concurrente entre deux examinateurs.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Les échanges entre examinateurs pendant le business game</strong></td>
+        <td>Fil de commentaires partagé entre les examinateurs du même créneau. L'examinateur absent du créneau reçoit <code>403</code>, le candidat concerné aussi. Messagerie privée correctement cloisonnée&nbsp;: un tiers ne voit pas la conversation.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Les notes sont-elles justes&nbsp;?</strong></td>
+        <td>Les 23 évaluations enregistrées ont été relues en base et comparées à ce qui avait été envoyé&nbsp;: aucune altération, et toutes stockées en nombres (pas de concaténation de chaînes). L'API de délibération les restitue toutes, sans perte.</td>
+        <td class="verdict">Conforme</td>
+      </tr>
+      <tr>
+        <td><strong>Barème</strong></td>
+        <td>Une note supérieure au maximum du critère ou négative est refusée en <code>400</code>. Double notation d'un même examinateur sur la même épreuve refusée.</td>
+        <td class="verdict">Conforme</td>
+      </tr>
+      <tr>
+        <td><strong>Vœux du tour 3</strong> <span style="color:var(--muted)">(le bug de juillet)</span></td>
+        <td>Rejouer au tour 3 les mêmes pôles et rangs qu'au tour 2 fonctionne. Les vœux du tour 2 sont conservés en parallèle. Le correctif d'index unique par tour est bien en place.</td>
+        <td class="verdict">Corrigé</td>
+      </tr>
+      <tr>
+        <td><strong>Verrouillage des vœux</strong></td>
+        <td>Confirmation définitive au tour 3 → <code>locked: true</code>, toute modification ultérieure par le candidat refusée en <code>403</code>, correction par l'admin toujours possible.</td>
+        <td class="verdict">Conforme</td>
+      </tr>
+      <tr>
+        <td><strong>Conflits d'inscription</strong></td>
+        <td>Sur-réservation d'un créneau plein refusée, double inscription refusée, chevauchement horaire entre deux épreuves différentes détecté avec un message explicite nommant le créneau en conflit.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Retrait d'un examinateur</strong></td>
+        <td>Bloqué en <code>409</code> lorsqu'un candidat est déjà inscrit et qu'aucun remplaçant réellement disponible n'existe. Le correctif de juillet sur les remplaçants fictifs tient.</td>
+        <td class="verdict">Corrigé</td>
+      </tr>
+      <tr>
+        <td><strong>Verrouillage des tours</strong></td>
+        <td>Une fois un tour terminé&nbsp;: décisions figées (<code>423</code>), inscriptions closes (<code>400</code>). La réouverture par l'admin restaure bien la modification.</td>
+        <td class="verdict">Conforme</td>
+      </tr>
+      <tr>
+        <td><strong>Dispatch automatique</strong></td>
+        <td>Sur 4 créneaux avec 3 examinateurs disponibles&nbsp;: 8 affectations, 4 remplaçants, 0 créneau non pourvu, minimum de 2 examinateurs respecté partout, écart de charge d'un seul créneau entre le plus et le moins sollicité.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Épreuves de pôle</strong></td>
+        <td>Un examinateur d'un autre pôle est refusé à l'inscription (<code>403</code>) et ne voit même pas l'épreuve. Côté candidat, l'épreuve n'apparaît que si le pôle figure dans ses vœux.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Élévation de privilèges</strong></td>
+        <td>Créer une épreuve, créer des créneaux, changer un statut, faire avancer un tour, décider d'une admission, valider les délibérations&nbsp;: refusé en <code>403</code> pour les candidats <em>et</em> pour les examinateurs non-admin. Sans jeton&nbsp;: <code>401</code>.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Accès croisés entre candidats</strong></td>
+        <td>Vœux d'un autre candidat en lecture et en écriture&nbsp;: <code>403</code>. Fiche d'un autre candidat&nbsp;: <code>403</code>. Ses évaluations&nbsp;: <code>403</code>. Le désinscrire d'un créneau&nbsp;: impossible. Un candidat ne peut modifier que ses nom, prénom et téléphone — jamais son email ni sa date de naissance, qui sont ses identifiants de connexion.</td>
+        <td class="verdict">Solide</td>
+      </tr>
+      <tr>
+        <td><strong>Cloisonnement des commentaires en délibération</strong></td>
+        <td>Un examinateur non-admin ne lit que ses propres commentaires d'évaluation&nbsp;; ceux des autres lui sont masqués. L'admin voit tout.</td>
+        <td class="verdict">Conforme</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════ -->
+<section>
+  <h2>Ce qu'il te reste à faire</h2>
+
+  <div class="callout">
+    <h3>Avant tout le reste</h3>
+    <ol>
+      <li><strong>Régénérer le <code>JWT_SECRET</code> en production</strong> et redéployer. C'est la seule action qui révoque la clé publiée. Je ne peux pas la faire à ta place&nbsp;: elle déconnecte tout le monde et touche la production.</li>
+      <li><strong>Vérifier que le correctif des vœux est bien appliqué en production.</strong> La colonne <code>candidate_wishes.tour</code> existe en prod, donc la migration a été posée — mais je n'ai pas pu vérifier en lecture seule si les anciennes contraintes uniques ont été supprimées. Si elles subsistent, le tour 3 cassera pour la plupart des candidats.</li>
+    </ol>
+    <p style="margin:14px 0 0"><strong>La requête à lancer dans l'éditeur SQL Supabase&nbsp;:</strong></p>
+    <div class="evidence">SELECT conname FROM pg_constraint
+WHERE conrelid = 'candidate_wishes'::regclass AND contype = 'u';
+
+-- Attendu : aucune ligne.
+-- Si "candidate_wishes_candidate_id_pole_key" ou "…_rank_key" apparaît,
+-- appliquer la section 2 de MIGRATIONS_A_APPLIQUER.sql immédiatement.</div>
+  </div>
+
+  <h3 style="font-family:var(--f-display);font-size:1.25rem;font-weight:600;margin:36px 0 12px">Limites de cet audit</h3>
+  <ul class="plain">
+    <li>Aucune des trois fenêtres Chrome n'avait de session active — elles retombaient toutes sur <code>/login</code>. Je ne peux pas saisir d'identifiants moi-même, donc l'audit a été mené par appels API depuis un sandbox local exécutant le même code que la production, et non en cliquant dans l'interface avec tes comptes.</li>
+    <li>Ce qui n'est donc <strong>pas</strong> couvert&nbsp;: les bugs purement visuels, les états d'interface, la navigation, le rendu mobile. Tout ce qui est logique métier et contrôle d'accès l'est.</li>
+    <li>Je n'ai rien écrit dans la base de production. Les deux seules requêtes lancées vers la prod étaient des contrôles de schéma en lecture seule, sans donnée personnelle.</li>
+    <li>Les quatre candidats et les épreuves créés vivent dans le sandbox local uniquement.</li>
+  </ul>
+
+  <h3 style="font-family:var(--f-display);font-size:1.25rem;font-weight:600;margin:36px 0 12px">Pour aller plus loin</h3>
+  <ul class="plain">
+    <li>Si tu ouvres toi-même les sessions dans Chrome, je peux reprendre l'audit côté interface — je piloterai des onglets déjà connectés sans jamais toucher à un champ mot de passe.</li>
+    <li>L'équité de charge du dispatch est bonne <em>par épreuve</em>, mais elle est recalculée à zéro à chaque épreuve. Sur l'ensemble d'un recrutement, un examinateur peut cumuler beaucoup plus de créneaux qu'un autre. Ce n'est pas un bug, c'est un choix documenté dans le code — à revoir si la charge devient un sujet entre membres.</li>
+    <li>Deux allocateurs coexistent toujours&nbsp;: <code>runDispatch</code> (via la sauvegarde des disponibilités) et <code>runAutoAllocate</code> (via <code>toggle-member</code> et <code>/slots/auto-allocate</code>). À unifier avant qu'ils ne divergent.</li>
+  </ul>
+</section>
+
+<footer>
+  Audit mené le 25 août 2026 sur la branche <code>main</code> · 325 appels HTTP · 90 vérifications · sandbox Supabase local, code applicatif identique à la production. Les scripts d'audit sont reproductibles et peuvent être relancés après correction.
+</footer>
+
+</div>
