@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { normalizeQuestions } from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 const isActiveEnrollment = (e: any) => !e.status || e.status === "active";
