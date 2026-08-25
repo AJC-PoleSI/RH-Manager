@@ -107,10 +107,9 @@ export async function PUT(
     if (body.color !== undefined)
       updateData.color = body.color;
     if (body.evaluationQuestions !== undefined) {
-      updateData.evaluation_questions =
-        typeof body.evaluationQuestions === "string"
-          ? body.evaluationQuestions
-          : JSON.stringify(body.evaluationQuestions);
+      updateData.evaluation_questions = JSON.stringify(
+        normalizeQuestions(body.evaluationQuestions),
+      );
     }
 
     // ══════════════════════════════════════════════════════════════════
