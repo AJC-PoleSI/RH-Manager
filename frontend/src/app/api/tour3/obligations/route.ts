@@ -7,9 +7,16 @@ import { NextRequest } from "next/server";
 // pôle dans leurs vœux, dont combien ont coché l'option "bureau" (Dev Co
 // / Audit Qualité), combien de membres sont dans ce pôle, et une
 // estimation du nombre de créneaux à prévoir par membre.
+//
+// SECURITY : donnée interne d'organisation, réservée au staff. Elle révèle la
+// tension de recrutement pôle par pôle (nombre de candidats en lice contre
+// nombre de membres) — une information qu'un candidat pourrait exploiter pour
+// orienter le classement de ses vœux. Les seuls appelants sont les écrans du
+// tableau de bord.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  if (payload.role === "candidate") return forbidden();
 
   try {
     // 1. Candidats admis au tour 2 (= ceux qui passeront le tour 3)
