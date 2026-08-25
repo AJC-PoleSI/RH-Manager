@@ -39,11 +39,11 @@ function ScoreGrid({
   return (
     <div className="space-y-4">
       {questions.map((q, idx) => {
-        const maxPoints = Number(q.weight || q.maxScore || q.coefficient || 20);
+        const maxPoints = getMaxPoints(q);
         return (
           <div key={idx} className="space-y-1">
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-4 items-center">
-              <Label>{q.q || q.question}</Label>
+              <Label>{getCriterionLabel(q)}</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
