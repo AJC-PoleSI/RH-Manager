@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import {
   filterActiveEnrollments,
   effectiveMaxCandidates,
