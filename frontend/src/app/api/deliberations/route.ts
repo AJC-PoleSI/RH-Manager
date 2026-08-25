@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
           member_id,
           created_at,
           members!member_id(email, first_name, last_name),
-          epreuves(id, name, tour, type)
+          epreuves(id, name, tour, type, evaluation_questions)
         ),
         candidate_wishes(
           id,
