@@ -28,16 +28,7 @@ export async function GET(req: NextRequest) {
       tourName: `Tour ${e.tour}`,
       type: e.type,
       durationMinutes: e.duration_minutes,
-      evaluationQuestions:
-        typeof e.evaluation_questions === "string"
-          ? (() => {
-              try {
-                return JSON.parse(e.evaluation_questions);
-              } catch {
-                return [];
-              }
-            })()
-          : (e.evaluation_questions ?? []),
+      evaluationQuestions: parseQuestions(e.evaluation_questions),
       roulementMinutes: e.roulement_minutes ?? 10,
       minEvaluatorsPerSalle: e.min_evaluators_per_salle ?? 2,
       isPoleTest: e.is_pole_test ?? false,
