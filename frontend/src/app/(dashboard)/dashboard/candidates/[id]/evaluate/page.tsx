@@ -162,10 +162,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       .map(Number)
       .filter((n) => !isNaN(n))
       .reduce((a, b) => a + b, 0);
-  const maxTotal = questions.reduce(
-    (sum, q) => sum + Number(q.weight || q.maxScore || q.coefficient || 20),
-    0,
-  );
+  const maxTotal = questions.reduce((sum, q) => sum + getMaxPoints(q), 0);
   const otherEvals = peerEvals.filter((e) => !e.isMine);
 
   // ── Load group evaluation when épreuve selected ──
