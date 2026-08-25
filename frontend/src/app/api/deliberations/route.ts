@@ -81,9 +81,15 @@ export async function GET(req: NextRequest) {
             : null,
           epreuve: ev.epreuves
             ? {
+                id: ev.epreuves.id,
                 name: ev.epreuves.name,
                 tour: ev.epreuves.tour,
                 type: ev.epreuves.type,
+                // Total de points de l'épreuve, pour que le client puisse
+                // ramener chaque note sur une base commune avant de moyenner.
+                // Sans lui, une épreuve notée /5 et une notée /20 pèsent
+                // identiquement dans la moyenne affichée en délibération.
+                maxTotal: getTotalMaxPoints(ev.epreuves.evaluation_questions),
               }
             : null,
         };
