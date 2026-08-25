@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getCandidateWishedPoles } from "@/lib/admission";
+import { normalizeQuestions, parseQuestions } from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
