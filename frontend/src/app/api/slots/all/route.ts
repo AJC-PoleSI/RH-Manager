@@ -8,9 +8,20 @@ import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 // GET /api/slots/all — get all slots with members & enrollments (with optional filters)
+//
+// SECURITY : réservé au staff. Cette route renvoie le planning COMPLET, avec
+// pour chaque créneau l'identité des examinateurs affectés ET celle des
+// candidats inscrits (nom, prénom, email). Elle ne vérifiait auparavant que la
+// présence d'un jeton : n'importe quel candidat pouvait donc énumérer tous les
+// autres candidats du recrutement et connaître à l'avance la composition de
+// son jury.
+//
+// Côté candidat, les écrans utilisent /api/slots/available et
+// /api/slots/my-enrollments, qui filtrent correctement.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  if (payload.role === "candidate") return forbidden();
 
   const { searchParams } = new URL(req.url);
   const tour = searchParams.get("tour");
