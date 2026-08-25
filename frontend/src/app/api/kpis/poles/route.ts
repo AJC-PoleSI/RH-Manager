@@ -18,14 +18,26 @@ export async function GET(req: NextRequest) {
 
     if (wishError) throw wishError;
 
-    // Fetch accepted deliberations (pour compter les places acceptées)
+    // Fetch accepted deliberations (pour compter les places acceptées).
+    //
+    // `assigned_pole` n'existe pas encore sur toutes les bases : la colonne
+    // n'a longtemps été créée par aucune migration versionnée, et son absence
+    // faisait échouer TOUTE la route en 500 (code Postgres 42703) — l'écran
+    // « KPI par pôle » était donc inutilisable. On la lit à part et on se
+    // rabat sur un décompte vide si elle manque, plutôt que de perdre aussi
+    // les statistiques de vœux, qui ne dépendent pas d'elle.
     const { data: deliberations, error: delibError } = await supabaseAdmin
       .from("deliberations")
-      .select(
-        "candidate_id, tour1_status, tour2_status, tour3_status, assigned_pole",
-      );
+      .select("candidate_id, tour1_status, tour2_status, tour3_status");
 
     if (delibError) throw delibError;
+
+    const { data: assignedRows, error: assignedError } = await supabaseAdmin
+      .from("deliberations")
+      .select("candidate_id, assigned_pole");
+
+    if (assignedError && assignedError.code !== "42703") throw assignedError;
+    const assignments = assignedError ? [] : (assignedRows ?? []);
 
     // Agréger par pôle
     const poleStats: Record<
