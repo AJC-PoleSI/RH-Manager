@@ -40,10 +40,19 @@ interface Epreuve {
   visibleCandidats: boolean;
 }
 
+// `maxPoints` = nombre de points MAXIMUM du critère, pas un coefficient
+// multiplicateur. C'est ainsi que la valeur est interprétée partout ailleurs :
+// POST /api/evaluations refuse toute note > maxPoints, et la grille de
+// notation affiche « / maxPoints ». Le champ s'appelait « coefficient » et
+// valait 1 par défaut, ce qui plafonnait toutes les notes à 1 point.
 interface Critere {
   name: string;
-  coefficient: number;
+  maxPoints: number;
 }
+
+// Barème par défaut d'un critère : /20. C'est aussi le repli utilisé par
+// l'API et par la grille de notation (`q.weight || q.maxScore || 20`).
+const DEFAULT_MAX_POINTS = 20;
 
 interface NewEpreuveForm {
   name: string;
