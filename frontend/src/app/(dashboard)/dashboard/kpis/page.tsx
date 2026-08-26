@@ -25,14 +25,18 @@ interface KPIData {
 export default function KPIsPage() {
   const [data, setData] = useState<KPIData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
     const fetchKPIs = async () => {
       try {
         const res = await api.get("/kpis/global");
         setData(res.data);
-      } catch (e) {
-        console.error(e);
+      } catch (e: any) {
+        // Les statistiques de pilotage sont réservées aux admins : on le dit,
+        // plutôt que d'afficher une erreur de chargement trompeuse.
+        if (e?.response?.status === 403) setForbidden(true);
+        else console.error(e);
       } finally {
         setLoading(false);
       }
