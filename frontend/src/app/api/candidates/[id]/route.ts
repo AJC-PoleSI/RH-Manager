@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { projectCandidateForMember } from "@/lib/candidate-visibility";
 import { NextRequest } from "next/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
