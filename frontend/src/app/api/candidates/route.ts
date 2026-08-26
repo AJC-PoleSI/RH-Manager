@@ -54,13 +54,20 @@ export async function GET(req: NextRequest) {
 
     const total = count ?? 0;
 
-    // Map snake_case to camelCase for frontend
-    const mapped = (data || []).map((c: any) => ({
-      ...c,
-      firstName: c.first_name,
-      lastName: c.last_name,
-      createdAt: c.created_at,
-    }));
+    // Map snake_case to camelCase for frontend.
+    // SECURITY : un membre non-admin ne reçoit qu'un sous-ensemble des champs
+    // (cf. lib/candidate-visibility) — la requête fait un select("*") pour
+    // rester simple, la projection est appliquée ici avant la réponse.
+    const isAdmin = !!payload.isAdmin;
+    const mapped = (data || []).map((c: any) => {
+      const visible = projectCandidateForMember(c, isAdmin);
+      return {
+        ...visible,
+        firstName: visible.first_name,
+        lastName: visible.last_name,
+        createdAt: visible.created_at,
+      };
+    });
 
     return Response.json({
       data: mapped,
