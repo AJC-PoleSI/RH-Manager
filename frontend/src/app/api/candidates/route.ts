@@ -1,5 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  candidateSearchFields,
+  projectCandidateForMember,
+} from "@/lib/candidate-visibility";
 import { NextRequest } from "next/server";
 
 // GET /api/candidates?search=&limit=&page=
