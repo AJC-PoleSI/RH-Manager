@@ -155,8 +155,10 @@ export default function DashboardPage() {
 
     // ── Effects ───────────────────────────────
     useEffect(() => {
-        fetchKPIs();
+        // Les KPI globaux sont réservés aux admins : ne pas déclencher un
+        // appel voué à un 403 pour les examinateurs.
         if (isAdmin) {
+            fetchKPIs();
             fetchEpreuves();
         }
     }, [role, user, isAdmin, fetchKPIs, fetchEpreuves]);
