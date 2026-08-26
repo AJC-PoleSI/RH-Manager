@@ -112,10 +112,13 @@ export async function GET(req: NextRequest) {
         id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
-        email: c.email,
+        // Un examinateur non-admin voit l'identité, le téléphone, les notes,
+        // les vœux et les commentaires d'évaluation — pas l'email, le parcours
+        // scolaire ni les notes internes de l'équipe recrutement.
+        email: canSeeAllComments ? c.email : undefined,
         phone: c.phone,
-        formation: c.formation,
-        comments: c.comments,
+        formation: canSeeAllComments ? c.formation : undefined,
+        comments: canSeeAllComments ? c.comments : undefined,
         deliberation: delib
           ? {
               tour1Status: delib.tour1_status,
