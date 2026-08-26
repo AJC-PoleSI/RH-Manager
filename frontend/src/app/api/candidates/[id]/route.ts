@@ -27,15 +27,23 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return Response.json({ error: "Candidate not found" }, { status: 404 });
     }
 
-    // ── Membres : accès à toutes les fiches candidat ──
-    // La restriction se fait au niveau de l'évaluation (seuls les assignés peuvent évaluer)
+    // ── Membres : la fiche est accessible, mais RÉDUITE pour les non-admins ──
+    // Un examinateur voit l'identité, le téléphone (pour joindre un candidat
+    // en retard), les notes et les commentaires d'évaluation — pas l'email,
+    // la date de naissance, le parcours scolaire ni les champs internes.
+    // Le candidat lui-même garde sa fiche complète.
+    const isSelf = payload.role === "candidate" && payload.id === id;
+    const source =
+      isSelf || payload.isAdmin
+        ? data
+        : projectCandidateForMember(data, false);
 
     // Map snake_case to camelCase
     const mapped: any = {
-      ...data,
-      firstName: data.first_name,
-      lastName: data.last_name,
-      createdAt: data.created_at,
+      ...source,
+      firstName: source.first_name,
+      lastName: source.last_name,
+      createdAt: source.created_at,
     };
 
     // Map wishes sorted by rank
