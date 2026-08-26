@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
       // filtres arbitraires / l'exfiltration de données.
       const safeSearch = search.replace(/[(),*%]/g, "").trim();
       if (safeSearch) {
+        const fields = candidateSearchFields(!!payload.isAdmin);
         query = query.or(
-          `first_name.ilike.%${safeSearch}%,last_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%`,
+          fields.map((f) => `${f}.ilike.%${safeSearch}%`).join(","),
         );
       }
     }
