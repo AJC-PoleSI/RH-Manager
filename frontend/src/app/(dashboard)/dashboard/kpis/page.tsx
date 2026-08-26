@@ -52,6 +52,14 @@ export default function KPIsPage() {
     );
   }
 
+  if (forbidden) {
+    return (
+      <p className="text-gray-500 text-center p-12">
+        Ces statistiques sont réservées aux administrateurs.
+      </p>
+    );
+  }
+
   if (!data) {
     return (
       <p className="text-gray-500 text-center p-12">
