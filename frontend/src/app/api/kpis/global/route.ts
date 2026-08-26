@@ -5,11 +5,16 @@ import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 // GET /api/kpis/global - Fetch global KPIs with real data
-// SECURITY: Requires authentication + admin/member role
+//
+// SECURITY : réservé aux admins. Ce sont des chiffres de PILOTAGE du
+// recrutement, pas un outil de jury — et `evaluationsPerMember` expose
+// nommément combien d'évaluations chaque examinateur a saisies. Les deux
+// écrans voisins (KPI par pôle, suivi des évaluateurs) étaient déjà
+// admin-only ; celui-ci restait ouvert à tout membre.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
-  if (payload.role === "candidate") return forbidden();
+  if (!payload.isAdmin) return forbidden();
 
   try {
     const [
