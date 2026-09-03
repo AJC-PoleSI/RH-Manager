@@ -47,6 +47,21 @@ export async function GET(req: NextRequest, context: RouteContext) {
       createdAt: source.created_at,
     };
 
+    // ── Photo (trombinoscope) ──
+    // Seulement son existence et sa date : les octets sont servis par
+    // /api/candidates/[id]/photo, pour ne pas alourdir cette réponse. Une
+    // erreur ici (migration pas encore appliquée) ne doit pas casser la fiche.
+    const { data: photo, error: photoError } = await supabaseAdmin
+      .from("candidate_photos")
+      .select("updated_at")
+      .eq("candidate_id", id)
+      .maybeSingle();
+    if (photoError) {
+      console.error("candidate photo lookup failed:", photoError);
+    }
+    mapped.hasPhoto = !!photo;
+    mapped.photoUpdatedAt = photo?.updated_at || null;
+
     // Map wishes sorted by rank
     if (data.candidate_wishes) {
       mapped.wishes = (data.candidate_wishes as any[])
