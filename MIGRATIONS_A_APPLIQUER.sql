@@ -274,3 +274,44 @@ ALTER TABLE epreuves ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#3B82F6';
 ALTER TABLE epreuves ADD COLUMN IF NOT EXISTS description TEXT;
 
 ALTER TABLE deliberations ADD COLUMN IF NOT EXISTS assigned_pole TEXT;
+
+
+-- ------------------------------------------------------------
+-- 6) Organigramme des candidats : photos + coups de cœur
+--    (supabase-migration-photos-coups-de-coeur.sql)
+-- ------------------------------------------------------------
+-- Trombinoscope du jury (photo + nom/prénom), photo reprise en délibération,
+-- et 5 coups de cœur par membre pour tout le recrutement (un cœur par
+-- candidat ; un cœur posé sur un candidat éliminé est réutilisable).
+--
+-- Photos dans une table à part : les routes existantes font `select("*")`
+-- sur `candidates`, une colonne image y ferait transiter des mégaoctets à
+-- chaque appel.
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS candidate_photos (
+  candidate_id UUID PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+  mime_type    TEXT        NOT NULL,
+  data         TEXT        NOT NULL,          -- image base64 (sans préfixe data:)
+  byte_size    INTEGER     NOT NULL,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by   TEXT
+);
+
+ALTER TABLE candidate_photos ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS candidate_favorites (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  member_id    UUID NOT NULL REFERENCES members(id)    ON DELETE CASCADE,
+  candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_favorites_member_candidate
+  ON candidate_favorites (member_id, candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_favorites_candidate
+  ON candidate_favorites (candidate_id);
+
+ALTER TABLE candidate_favorites ENABLE ROW LEVEL SECURITY;

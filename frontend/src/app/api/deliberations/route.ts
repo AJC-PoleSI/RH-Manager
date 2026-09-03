@@ -54,6 +54,61 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    // ── Trombinoscope : photo + coups de cœur ────────────────────────────
+    // Deux lectures séparées plutôt qu'une jointure : la photo pèse plusieurs
+    // dizaines de kilo-octets, elle ne doit JAMAIS voyager dans cette réponse
+    // (le client la récupère une par une sur /api/candidates/[id]/photo). On
+    // ne remonte ici que l'existence de la photo et sa date.
+    const [photosRes, favoritesRes] = await Promise.all([
+      supabaseAdmin.from("candidate_photos").select("candidate_id, updated_at"),
+      // SECURITY : un examinateur non-admin ne voit QUE ses propres coups de
+      // cœur. Le décompte global et le nom des votants sont réservés à l'admin.
+      canSeeAllComments
+        ? supabaseAdmin
+            .from("candidate_favorites")
+            .select(
+              "candidate_id, member_id, members!member_id(first_name, last_name, email)",
+            )
+        : supabaseAdmin
+            .from("candidate_favorites")
+            .select("candidate_id, member_id")
+            .eq("member_id", payload.id),
+    ]);
+
+    const photoByCandidate = new Map<string, string>();
+    if (!photosRes.error) {
+      for (const p of photosRes.data || []) {
+        photoByCandidate.set(p.candidate_id, p.updated_at);
+      }
+    } else {
+      // Table absente (migration non appliquée) : la délibération doit
+      // continuer de fonctionner, simplement sans photos.
+      console.error("deliberations: candidate_photos indisponible", photosRes.error);
+    }
+
+    const myFavorites = new Set<string>();
+    const favoritesByCandidate = new Map<string, string[]>();
+    if (!favoritesRes.error) {
+      for (const f of (favoritesRes.data || []) as any[]) {
+        if (f.member_id === payload.id) myFavorites.add(f.candidate_id);
+        if (canSeeAllComments) {
+          const m = f.members;
+          const name = m
+            ? [m.first_name, m.last_name].filter(Boolean).join(" ").trim() ||
+              m.email
+            : "Membre";
+          const list = favoritesByCandidate.get(f.candidate_id) || [];
+          list.push(name);
+          favoritesByCandidate.set(f.candidate_id, list);
+        }
+      }
+    } else {
+      console.error(
+        "deliberations: candidate_favorites indisponible",
+        favoritesRes.error,
+      );
+    }
+
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
