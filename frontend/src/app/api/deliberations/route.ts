@@ -163,10 +163,19 @@ export async function GET(req: NextRequest) {
         ? c.deliberations[0] || null
         : c.deliberations;
 
+      const voters = favoritesByCandidate.get(c.id) || [];
+
       return {
         id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
+        // Trombinoscope : la vignette est chargée à part, on n'expose ici que
+        // sa présence et sa date (qui sert de cache-buster côté client).
+        hasPhoto: photoByCandidate.has(c.id),
+        photoUpdatedAt: photoByCandidate.get(c.id) || null,
+        isFavorite: myFavorites.has(c.id),
+        favoritesCount: canSeeAllComments ? voters.length : 0,
+        favoritedBy: canSeeAllComments ? voters.sort() : [],
         // Un examinateur non-admin voit l'identité, le téléphone, les notes,
         // les vœux et les commentaires d'évaluation — pas l'email, le parcours
         // scolaire ni les notes internes de l'équipe recrutement.
