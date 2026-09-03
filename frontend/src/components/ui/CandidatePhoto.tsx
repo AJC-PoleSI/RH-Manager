@@ -62,6 +62,7 @@ export default function CandidatePhoto({
   hasPhoto,
   version,
   size = 48,
+  fill = false,
   grayscale = false,
   rounded = "rounded-full",
   className,
