@@ -23,8 +23,13 @@ interface CandidatePhotoProps {
   hasPhoto?: boolean;
   /** Date de dernière mise à jour : sert de cache-buster. */
   version?: string | null;
-  /** Côté de la vignette en pixels. */
+  /**
+   * Côté de la vignette en pixels. Avec `fill`, la vignette occupe la largeur
+   * disponible et `size` ne sert plus qu'à dimensionner les initiales.
+   */
   size?: number;
+  /** Occupe toute la largeur du parent, en carré (grille du trombinoscope). */
+  fill?: boolean;
   /** Grise la photo — utilisé pour les candidats éliminés. */
   grayscale?: boolean;
   /** Arrondi : `full` pour un rond, sinon un rayon Tailwind. */
