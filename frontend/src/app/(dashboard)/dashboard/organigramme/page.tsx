@@ -462,10 +462,10 @@ function CandidateTile({
           lastName={c.lastName}
           hasPhoto={c.hasPhoto}
           version={c.photoUpdatedAt}
-          size={0}
+          size={72}
+          fill
           grayscale={c.eliminated}
           rounded="rounded-lg"
-          className="!w-full !h-auto aspect-square"
         />
         <p
           className={cn(
