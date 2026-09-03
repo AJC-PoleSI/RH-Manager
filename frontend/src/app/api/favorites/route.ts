@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import {
   MAX_FAVORITES,
@@ -54,6 +54,21 @@ function quotaPayload(used: number, totalHearts: number) {
   };
 }
 
+/**
+ * La table n'existe pas : le SQL est à passer à la main dans Supabase. On le
+ * dit au staff plutôt que de renvoyer une 500 muette.
+ */
+function migrationPendingResponse() {
+  return Response.json(
+    {
+      error:
+        "Les coups de cœur ne sont pas encore activés : la migration SQL (supabase-migration-photos-coups-de-coeur.sql) reste à appliquer dans Supabase.",
+      migrationPending: true,
+    },
+    { status: 503 },
+  );
+}
+
 /** GET /api/favorites — les coups de cœur du membre connecté et son quota. */
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
@@ -67,6 +82,7 @@ export async function GET(req: NextRequest) {
       favorites: quotaPayload(used, ids.length),
     });
   } catch (error) {
+    if (isMissingTableError(error)) return migrationPendingResponse();
     console.error("GET /api/favorites error:", error);
     return Response.json(
       { error: "Échec du chargement des coups de cœur" },
@@ -119,9 +135,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // La délibération de la CIBLE est lue ici, et pas déduite de `loadQuota` :
+    // celui-ci ne connaît que les candidats déjà aimés par le membre. Sans
+    // cette lecture, un cœur posé sur un éliminé qui n'était pas encore dans
+    // ses favoris était compté comme payant — donc refusé à quota plein.
     const { data: candidate } = await supabaseAdmin
       .from("candidates")
-      .select("id")
+      .select("id, deliberations(tour1_status, tour2_status, tour3_status)")
       .eq("id", candidateId)
       .maybeSingle();
 
@@ -129,7 +149,11 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Candidat introuvable" }, { status: 404 });
     }
 
-    const { ids, eliminatedIds, used } = await loadQuota(payload.id);
+    const targetDelib = Array.isArray((candidate as any).deliberations)
+      ? (candidate as any).deliberations[0] || null
+      : (candidate as any).deliberations || null;
+
+    const { ids, used } = await loadQuota(payload.id);
 
     // Déjà coché : idempotent, on ne consomme pas un second cœur.
     if (ids.includes(candidateId)) {
@@ -141,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     // Un cœur sur un candidat déjà éliminé ne coûte rien — sinon le quota
     // bloquerait pour un vote sans effet sur la suite du recrutement.
-    const costsAHeart = !eliminatedIds.has(candidateId);
+    const costsAHeart = !isEliminated(targetDelib);
     if (costsAHeart && used >= MAX_FAVORITES) {
       return Response.json(
         {
@@ -167,6 +191,7 @@ export async function POST(req: NextRequest) {
       favorites: quotaPayload(after.used, after.ids.length),
     });
   } catch (error) {
+    if (isMissingTableError(error)) return migrationPendingResponse();
     console.error("POST /api/favorites error:", error);
     return Response.json(
       { error: "Échec de l'enregistrement du coup de cœur" },

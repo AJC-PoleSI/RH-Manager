@@ -141,8 +141,9 @@ export default function CandidatePhotoUpload({
 
         <p className="text-xs text-gray-500 mt-3 leading-relaxed max-w-sm">
           Une photo de visage, cadrée simplement — elle sert au jury à vous
-          reconnaître le jour des entretiens. JPEG, PNG ou WebP. L'image est
-          automatiquement recadrée en carré et réduite avant l'envoi.
+          reconnaître le jour des entretiens. JPEG, PNG ou WebP.
+          L&apos;image est automatiquement recadrée en carré et réduite avant
+          l&apos;envoi.
         </p>
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, X, HelpCircle, ChevronLeft, ChevronRight, User, Star, MessageSquare, Award } from 'lucide-react';
+import { Check, X, HelpCircle, ChevronLeft, ChevronRight, User, Star, MessageSquare, Award, Heart } from 'lucide-react';
 import clsx from 'clsx';
+import CandidatePhoto from '@/components/ui/CandidatePhoto';
 
 interface TinderDeliberationProps {
     candidates: any[];
@@ -256,15 +257,49 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                 >
                     {/* Card Header */}
                     <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-5 text-white">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h1 className="text-2xl font-semibold tracking-tight">
-                                    {currentCandidate.firstName} {currentCandidate.lastName}
-                                </h1>
-                                <p className="text-slate-300 text-sm mt-1">{currentCandidate.email}</p>
-                                {currentCandidate.phone && (
-                                    <p className="text-slate-400 text-xs mt-0.5">{currentCandidate.phone}</p>
-                                )}
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                                {/* Trombinoscope : le visage d'abord, c'est ce qui
+                                    permet au jury de se souvenir de qui on parle. */}
+                                <CandidatePhoto
+                                    candidateId={currentCandidate.id}
+                                    firstName={currentCandidate.firstName}
+                                    lastName={currentCandidate.lastName}
+                                    hasPhoto={currentCandidate.hasPhoto}
+                                    version={currentCandidate.photoUpdatedAt}
+                                    size={64}
+                                    rounded="rounded-xl"
+                                    grayscale={status === 'refused'}
+                                    className="ring-2 ring-white/20"
+                                />
+                                <div className="min-w-0">
+                                    <h1 className="text-2xl font-semibold tracking-tight truncate">
+                                        {currentCandidate.firstName} {currentCandidate.lastName}
+                                    </h1>
+                                    {currentCandidate.email && (
+                                        <p className="text-slate-300 text-sm mt-1 truncate">{currentCandidate.email}</p>
+                                    )}
+                                    {currentCandidate.phone && (
+                                        <p className="text-slate-400 text-xs mt-0.5">{currentCandidate.phone}</p>
+                                    )}
+                                    {/* Coups de cœur : le sien toujours, le décompte
+                                        de l'équipe seulement pour l'admin. */}
+                                    {(currentCandidate.isFavorite || (isAdmin && currentCandidate.favoritesCount > 0)) && (
+                                        <span
+                                            className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-200 text-[11px] font-semibold"
+                                            title={
+                                                isAdmin && currentCandidate.favoritedBy?.length
+                                                    ? `Coup de cœur de : ${currentCandidate.favoritedBy.join(', ')}`
+                                                    : 'Votre coup de cœur'
+                                            }
+                                        >
+                                            <Heart size={11} fill={currentCandidate.isFavorite ? 'currentColor' : 'none'} />
+                                            {isAdmin && currentCandidate.favoritesCount > 0
+                                                ? `${currentCandidate.favoritesCount} coup${currentCandidate.favoritesCount > 1 ? 's' : ''} de cœur`
+                                                : 'Votre coup de cœur'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex flex-col items-center">
                                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-2xl font-semibold">

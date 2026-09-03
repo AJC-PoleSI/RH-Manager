@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, ArrowLeft } from "lucide-react";
+import CandidatePhoto from "@/components/ui/CandidatePhoto";
+import CandidatePhotoUpload from "@/components/forms/CandidatePhotoUpload";
 
 interface EvalMember {
   id: string;
@@ -154,18 +156,14 @@ export default function CandidateDetailPage({
       {/* Candidate Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-2xl font-bold">
-            {(
-              candidate.firstName?.[0] ||
-              candidate.first_name?.[0] ||
-              ""
-            ).toUpperCase()}
-            {(
-              candidate.lastName?.[0] ||
-              candidate.last_name?.[0] ||
-              ""
-            ).toUpperCase()}
-          </div>
+          <CandidatePhoto
+            candidateId={candidate.id}
+            firstName={candidate.firstName || candidate.first_name}
+            lastName={candidate.lastName || candidate.last_name}
+            hasPhoto={candidate.hasPhoto}
+            version={candidate.photoUpdatedAt}
+            size={64}
+          />
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">
               {candidate.firstName || candidate.first_name}{" "}
@@ -183,6 +181,26 @@ export default function CandidateDetailPage({
             </div>
           </div>
         </div>
+        {/* Photo du trombinoscope. L'admin peut dépanner un candidat qui n'a
+            pas déposé la sienne — sinon l'organigramme reste troué. */}
+        {!isCandidate && user?.isAdmin && (
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Photo du trombinoscope
+            </p>
+            <CandidatePhotoUpload
+              candidateId={candidate.id}
+              firstName={candidate.firstName || candidate.first_name}
+              lastName={candidate.lastName || candidate.last_name}
+              initialHasPhoto={!!candidate.hasPhoto}
+              size={96}
+              onChange={(next) =>
+                setCandidate((prev: any) => ({ ...prev, hasPhoto: next }))
+              }
+            />
+          </div>
+        )}
+
         {/* Notes internes : masquées pour les candidats */}
         {!isCandidate && candidate.comments && (
           <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm border border-yellow-100">

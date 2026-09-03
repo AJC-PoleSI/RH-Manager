@@ -47,3 +47,25 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 export default supabaseAdmin;
+
+/**
+ * La table n'existe pas encore en base.
+ *
+ * Les migrations de ce projet sont appliquées À LA MAIN dans le SQL Editor de
+ * Supabase (cf. MIGRATIONS_A_APPLIQUER.sql) : entre un déploiement et
+ * l'exécution du SQL, le code tourne face à un schéma incomplet. Plutôt
+ * qu'une 500 opaque, les routes concernées dégradent proprement et disent au
+ * staff que la migration reste à poser.
+ *
+ * PostgREST remonte tantôt le code Postgres `42P01`, tantôt son propre
+ * `PGRST205` (table absente du cache de schéma).
+ */
+export function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = String((error as any).code ?? "");
+  if (code === "42P01" || code === "PGRST205") return true;
+  const message = String((error as any).message ?? "").toLowerCase();
+  return (
+    message.includes("does not exist") || message.includes("schema cache")
+  );
+}

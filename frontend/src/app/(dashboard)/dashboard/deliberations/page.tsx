@@ -5,7 +5,8 @@ import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
-import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock } from "lucide-react";
+import CandidatePhoto from "@/components/ui/CandidatePhoto";
+import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart } from "lucide-react";
 
 interface Tour3Obligation {
   pole: string;
@@ -32,6 +33,14 @@ export interface Candidate {
   evaluations?: Evaluation[];
   deliberation?: Deliberation;
   wishes?: Wish[];
+  /** Trombinoscope : les octets de la photo sont servis par une route dédiée. */
+  hasPhoto?: boolean;
+  photoUpdatedAt?: string | null;
+  /** Coup de cœur de l'examinateur connecté. */
+  isFavorite?: boolean;
+  /** Décompte et noms : renseignés uniquement pour un admin. */
+  favoritesCount?: number;
+  favoritedBy?: string[];
 }
 
 /** `scores` arrive tantôt en objet, tantôt en chaîne JSON selon la route. */
@@ -402,9 +411,6 @@ export default function DeliberationsPage() {
   };
 
   const getEvalCount = (c: Candidate): number => c.evaluations?.length || 0;
-
-  const getInitials = (c: Candidate) =>
-    `${(c.firstName || "")[0] || ""}${(c.lastName || "")[0] || ""}`.toUpperCase();
 
   const getFirstPole = (c: Candidate): string => {
     if (c.wishes && c.wishes.length > 0) {
@@ -1041,13 +1047,20 @@ export default function DeliberationsPage() {
                           <tr key={c.id} className="hover:bg-gray-50">
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                  {getInitials(c)}
-                                </div>
+                                <CandidatePhoto
+                                  candidateId={c.id}
+                                  firstName={c.firstName}
+                                  lastName={c.lastName}
+                                  hasPhoto={c.hasPhoto}
+                                  version={c.photoUpdatedAt}
+                                  size={32}
+                                  grayscale={status === "refused"}
+                                />
                                 <div>
                                   <a href={`/dashboard/candidates/${c.id}`} className="font-medium text-gray-900 hover:text-blue-600">
                                     {c.firstName} {c.lastName}
                                   </a>
+                                  <FavoriteBadge c={c} isAdmin={isAdmin} />
                                   <p className="text-xs text-gray-400">{c.email}</p>
                                 </div>
                               </div>
@@ -1142,16 +1155,22 @@ export default function DeliberationsPage() {
                             }}
                           >
                             <div className="flex items-center gap-3">
-                              <div
-                                className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0"
-                                style={{ backgroundColor: poleColor(pole) }}
-                              >
-                                {getInitials(c)}
-                              </div>
+                              <CandidatePhoto
+                                candidateId={c.id}
+                                firstName={c.firstName}
+                                lastName={c.lastName}
+                                hasPhoto={c.hasPhoto}
+                                version={c.photoUpdatedAt}
+                                size={48}
+                                rounded="rounded-xl"
+                                grayscale={status === "refused"}
+                                className="shadow-sm"
+                              />
                               <div className="flex-1 min-w-0">
                                 <a href={`/dashboard/candidates/${c.id}`} className="font-bold text-gray-900 hover:text-blue-600 block truncate">
                                   {c.firstName} {c.lastName}
                                 </a>
+                                <FavoriteBadge c={c} isAdmin={isAdmin} />
                                 <p className="text-xs text-gray-500 truncate">{c.formation || "Formation non renseignee"}</p>
                               </div>
                               {statusBadge(status)}
@@ -1291,11 +1310,22 @@ export default function DeliberationsPage() {
                         }}
                       >
                         <div className="flex items-center gap-5">
-                          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-md flex-shrink-0 bg-blue-600">
-                            {getInitials(c)}
-                          </div>
+                          <CandidatePhoto
+                            candidateId={c.id}
+                            firstName={c.firstName}
+                            lastName={c.lastName}
+                            hasPhoto={c.hasPhoto}
+                            version={c.photoUpdatedAt}
+                            size={80}
+                            rounded="rounded-2xl"
+                            grayscale={status === "refused"}
+                            className="shadow-md"
+                          />
                           <div className="flex-1 min-w-0">
-                            <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h1>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h1>
+                              <FavoriteBadge c={c} isAdmin={isAdmin} inline />
+                            </div>
                             <p className="text-sm text-gray-500 mt-0.5">{c.formation || "Formation non renseignee"}</p>
                             {/* Pole wishes */}
                             {c.wishes && c.wishes.length > 0 && (
@@ -1605,11 +1635,19 @@ export default function DeliberationsPage() {
               {reserveCandidates.map((c) => (
                 <div key={c.id} className="border border-gray-200 rounded-xl p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs bg-blue-600">
-                      {getInitials(c)}
-                    </div>
+                    <CandidatePhoto
+                      candidateId={c.id}
+                      firstName={c.firstName}
+                      lastName={c.lastName}
+                      hasPhoto={c.hasPhoto}
+                      version={c.photoUpdatedAt}
+                      size={40}
+                    />
                     <div>
-                      <div className="font-semibold text-gray-900">{c.firstName} {c.lastName}</div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        {c.firstName} {c.lastName}
+                        <FavoriteBadge c={c} isAdmin={isAdmin} inline />
+                      </div>
                       <div className="text-xs text-gray-500">{c.formation || ""}</div>
                     </div>
                   </div>
@@ -1747,5 +1785,51 @@ export default function DeliberationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Coups de cœur en délibération
+   ═══════════════════════════════════════════════════════════════════════════
+   Un examinateur voit uniquement SON cœur ; l'admin voit en plus le décompte
+   de l'équipe et, au survol, qui l'a donné. C'est l'API qui applique ce
+   cloisonnement (favoritesCount/favoritedBy arrivent vides pour un non-admin) :
+   ce composant se contente de ne rien afficher quand il n'y a rien à montrer.
+*/
+function FavoriteBadge({
+  c,
+  isAdmin,
+  inline = false,
+}: {
+  c: Candidate;
+  isAdmin: boolean;
+  inline?: boolean;
+}) {
+  const count = c.favoritesCount || 0;
+  const mine = !!c.isFavorite;
+  if (!mine && !(isAdmin && count > 0)) return null;
+
+  const others = (c.favoritedBy || []).join(", ");
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 ${inline ? "" : "mt-0.5"}`}
+      title={
+        isAdmin && others
+          ? `Coup de cœur de : ${others}`
+          : mine
+            ? "Votre coup de cœur"
+            : undefined
+      }
+    >
+      <Heart
+        size={12}
+        className={mine ? "text-rose-500" : "text-rose-300"}
+        fill={mine ? "currentColor" : "none"}
+      />
+      {isAdmin && count > 0 && (
+        <span className="text-[11px] font-bold text-rose-600">{count}</span>
+      )}
+    </span>
   );
 }

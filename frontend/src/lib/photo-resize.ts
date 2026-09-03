@@ -8,7 +8,9 @@
 // c'est la seule taille dont le trombinoscope a besoin, et ça tient largement
 // sous le plafond.
 
-import { PHOTO_TARGET_SIZE } from "./candidate-photo";
+// Défini ici et non dans lib/candidate-photo.ts : ce module-là est importé par
+// les routes serveur et manipule `Buffer`, qui n'existe pas dans le navigateur.
+const PHOTO_TARGET_SIZE = 512;
 
 export class PhotoResizeError extends Error {}
 

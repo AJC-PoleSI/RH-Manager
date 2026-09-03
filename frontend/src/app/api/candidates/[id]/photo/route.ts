@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import {
   decodePhotoDataUrl,
@@ -39,6 +39,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
     .maybeSingle();
 
   if (error) {
+    // Migration pas encore appliquée : personne n'a de photo, ce qui est
+    // exactement un 404. Les vignettes retombent sur les initiales.
+    if (isMissingTableError(error)) {
+      return Response.json({ error: "Aucune photo" }, { status: 404 });
+    }
     console.error("GET candidate photo error:", error);
     return Response.json({ error: "Photo indisponible" }, { status: 500 });
   }
@@ -139,6 +144,16 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   );
 
   if (error) {
+    if (isMissingTableError(error)) {
+      return Response.json(
+        {
+          error:
+            "Les photos ne sont pas encore activées : la migration SQL (supabase-migration-photos-coups-de-coeur.sql) reste à appliquer dans Supabase.",
+          migrationPending: true,
+        },
+        { status: 503 },
+      );
+    }
     console.error("Upsert candidate photo error:", error);
     return Response.json(
       { error: "Échec de l'enregistrement de la photo." },
@@ -175,7 +190,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     .delete()
     .eq("candidate_id", id);
 
-  if (error) {
+  if (error && !isMissingTableError(error)) {
     console.error("Delete candidate photo error:", error);
     return Response.json({ error: "Échec de la suppression." }, { status: 500 });
   }

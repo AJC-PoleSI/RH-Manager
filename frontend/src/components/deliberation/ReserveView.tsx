@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from 'react';
-import { Check, X, HelpCircle, Star, Award, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Check, X, HelpCircle, Star, Award, MessageSquare, ArrowLeft, Heart } from 'lucide-react';
 import clsx from 'clsx';
+import CandidatePhoto from '@/components/ui/CandidatePhoto';
 
 interface ReserveViewProps {
     candidates: any[];
@@ -81,10 +82,30 @@ export default function ReserveView({ candidates, selectedTour, onDecision, onBa
                         <div key={c.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                             {/* Header */}
                             <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-5 py-4 border-b border-orange-100">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h1 className="text-lg font-semibold text-gray-800">{c.firstName} {c.lastName}</h1>
-                                        <p className="text-sm text-gray-500">{c.email}</p>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <CandidatePhoto
+                                            candidateId={c.id}
+                                            firstName={c.firstName}
+                                            lastName={c.lastName}
+                                            hasPhoto={c.hasPhoto}
+                                            version={c.photoUpdatedAt}
+                                            size={44}
+                                            rounded="rounded-xl"
+                                        />
+                                        <div className="min-w-0">
+                                            <h1 className="text-lg font-semibold text-gray-800 truncate">{c.firstName} {c.lastName}</h1>
+                                            <p className="text-sm text-gray-500 truncate">{c.email}</p>
+                                            {(c.isFavorite || (isAdmin && c.favoritesCount > 0)) && (
+                                                <span
+                                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 mt-0.5"
+                                                    title={isAdmin && c.favoritedBy?.length ? `Coup de cœur de : ${c.favoritedBy.join(', ')}` : 'Votre coup de cœur'}
+                                                >
+                                                    <Heart size={11} fill={c.isFavorite ? 'currentColor' : 'none'} />
+                                                    {isAdmin && c.favoritesCount > 0 ? c.favoritesCount : 'Coup de cœur'}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <div className="text-center">

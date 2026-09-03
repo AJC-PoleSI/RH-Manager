@@ -17,14 +17,12 @@ export type PhotoMime = (typeof ALLOWED_PHOTO_MIME)[number];
 
 /**
  * Plafond après redimensionnement navigateur (512 px, JPEG qualité 0.82 →
- * typiquement 30-60 Ko). 800 Ko laisse une marge confortable tout en gardant
+ * typiquement 30-60 Ko ; cf. PHOTO_TARGET_SIZE dans lib/photo-resize.ts).
+ * 800 Ko laisse une marge confortable tout en gardant
  * la table `candidate_photos` de l'ordre de la dizaine de mégaoctets pour un
  * recrutement complet.
  */
 export const MAX_PHOTO_BYTES = 800 * 1024;
-
-/** Côté client : cible du redimensionnement avant envoi. */
-export const PHOTO_TARGET_SIZE = 512;
 
 export interface DecodedPhoto {
   mimeType: PhotoMime;

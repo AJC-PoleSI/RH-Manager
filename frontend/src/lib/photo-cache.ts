@@ -63,15 +63,30 @@ export async function getCandidatePhotoUrl(
   return request;
 }
 
-/** Libère les object URLs des autres versions du même candidat. */
+/**
+ * Libère les object URLs des autres versions du même candidat.
+ *
+ * La révocation est DIFFÉRÉE : au moment où une nouvelle version arrive, un
+ * `<img>` monté ailleurs (une autre vue de la même page) peut encore pointer
+ * sur l'ancienne URL — la révoquer sur-le-champ afficherait une image cassée.
+ * Une vignette pèse quelques dizaines de kilo-octets : attendre une minute ne
+ * coûte rien, se tromper coûte un trou dans le trombinoscope.
+ */
 function releaseOtherVersions(candidateId: string, keepKey: string) {
   const prefix = `${candidateId}:`;
   for (const [k, url] of Array.from(cache.entries())) {
     if (k !== keepKey && k.startsWith(prefix)) {
-      if (url) URL.revokeObjectURL(url);
       cache.delete(k);
+      revokeLater(url);
     }
   }
+}
+
+const REVOKE_DELAY_MS = 60_000;
+
+function revokeLater(url: string | null) {
+  if (!url) return;
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
 /**
@@ -82,8 +97,8 @@ export function invalidateCandidatePhoto(candidateId: string) {
   const prefix = `${candidateId}:`;
   for (const [k, url] of Array.from(cache.entries())) {
     if (k.startsWith(prefix)) {
-      if (url) URL.revokeObjectURL(url);
       cache.delete(k);
+      revokeLater(url);
     }
   }
   for (const k of Array.from(inflight.keys())) {

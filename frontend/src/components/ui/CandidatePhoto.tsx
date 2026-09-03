@@ -104,8 +104,9 @@ export default function CandidatePhoto({
       title={fullName || undefined}
     >
       {url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- object URL locale,
-        // next/image ne sait pas optimiser un blob et ajouterait une requête.
+        /* next/image ne sait pas optimiser une object URL locale : il
+           ajouterait un aller-retour serveur pour une image déjà en mémoire. */
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt={fullName ? `Photo de ${fullName}` : "Photo du candidat"}

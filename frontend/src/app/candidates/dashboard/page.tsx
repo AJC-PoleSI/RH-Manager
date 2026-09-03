@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import PhotoNudge from "@/components/candidates/PhotoNudge";
 import {
   Loader2, Calendar, Clock, MapPin, ChevronLeft, ChevronRight,
   X as XIcon, AlertTriangle, Bell, BookOpen, DoorOpen,
@@ -328,6 +329,9 @@ export default function CandidateCalendarPage() {
         <h1 className="text-2xl font-semibold text-gray-900">Mon calendrier</h1>
         <p className="text-sm text-gray-500 mt-1">Vos épreuves, créneaux d&apos;évaluation et événements</p>
       </div>
+
+      {/* Relance photo (disparaît une fois la photo déposée) */}
+      <PhotoNudge />
 
       {/* Upcoming events banner */}
       {upcomingEvents.length > 0 && (

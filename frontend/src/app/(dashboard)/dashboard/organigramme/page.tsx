@@ -17,7 +17,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
-import { Heart, Loader2, Search, Users, X } from "lucide-react";
+import { AlertTriangle, Heart, Loader2, Search, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OrganigrammeCandidate {
@@ -58,12 +58,16 @@ export default function OrganigrammePage() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [voters, setVoters] = useState<OrganigrammeCandidate | null>(null);
+  // Vrai tant que le SQL n'a pas été passé dans Supabase : la page reste
+  // lisible (identités + statuts) mais photos et cœurs sont inertes.
+  const [migrationPending, setMigrationPending] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await api.get("/organigramme");
       setCandidates(res.data.candidates || []);
       setQuota(res.data.favorites);
+      setMigrationPending(!!res.data.migrationPending);
     } catch (err: any) {
       toast(
         err?.response?.data?.error || "Échec du chargement de l'organigramme.",
@@ -202,6 +206,32 @@ export default function OrganigrammePage() {
           </div>
         </div>
       </div>
+
+      {/* La migration SQL de ce dépôt se pose à la main : le dire ici évite de
+          chercher pourquoi rien ne s'enregistre. */}
+      {migrationPending && (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <AlertTriangle
+            size={18}
+            className="text-amber-600 mt-0.5 flex-shrink-0"
+          />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-900">
+              Photos et coups de cœur pas encore activés
+            </p>
+            <p className="text-amber-800">
+              La migration{" "}
+              <code className="text-xs bg-amber-100 px-1 py-0.5 rounded">
+                supabase-migration-photos-coups-de-coeur.sql
+              </code>{" "}
+              reste à exécuter dans le SQL Editor de Supabase (elle est aussi
+              en section 6 de MIGRATIONS_A_APPLIQUER.sql). D&apos;ici là, les
+              candidats s&apos;affichent avec leurs initiales et les cœurs ne
+              s&apos;enregistrent pas.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Explication du quota */}
       <div className="bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 text-sm text-rose-900">

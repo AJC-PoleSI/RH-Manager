@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import {
   MAX_FAVORITES,
@@ -55,8 +55,20 @@ export async function GET(req: NextRequest) {
     ]);
 
     if (candidatesRes.error) throw candidatesRes.error;
-    if (photosRes.error) throw photosRes.error;
-    if (favoritesRes.error) throw favoritesRes.error;
+
+    // Les migrations de ce dépôt sont posées à la main : tant que le SQL n'est
+    // pas exécuté, on sert quand même le trombinoscope (identités + statuts) et
+    // on le dit, plutôt que de rendre la page inutilisable.
+    const migrationPending =
+      isMissingTableError(photosRes.error) ||
+      isMissingTableError(favoritesRes.error);
+
+    if (photosRes.error && !isMissingTableError(photosRes.error)) {
+      throw photosRes.error;
+    }
+    if (favoritesRes.error && !isMissingTableError(favoritesRes.error)) {
+      throw favoritesRes.error;
+    }
 
     const candidates = candidatesRes.data || [];
     const favorites = (favoritesRes.data || []) as any[];
@@ -145,6 +157,11 @@ export async function GET(req: NextRequest) {
         onEliminated: myFavoriteIds.size - usedFavorites,
       },
       isAdmin,
+      /**
+       * `true` = supabase-migration-photos-coups-de-coeur.sql n'a pas encore
+       * été exécuté. Photos et cœurs sont alors inertes.
+       */
+      migrationPending,
     });
   } catch (error) {
     console.error("GET /api/organigramme error:", error);
