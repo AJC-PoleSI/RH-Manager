@@ -95,11 +95,12 @@ export default function CandidatePhoto({
       className={cn(
         "relative overflow-hidden flex items-center justify-center flex-shrink-0 select-none",
         rounded,
+        fill && "w-full aspect-square",
         !url && colorFor(candidateId),
         grayscale && "grayscale opacity-60",
         className,
       )}
-      style={{ width: size, height: size }}
+      style={fill ? undefined : { width: size, height: size }}
       title={fullName || undefined}
     >
       {url ? (
