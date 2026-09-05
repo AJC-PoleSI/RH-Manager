@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import CandidatePhotoUpload from "@/components/forms/CandidatePhotoUpload";
+import DeleteAccountRequest from "@/components/candidates/DeleteAccountRequest";
 import { Loader2, ShieldCheck } from "lucide-react";
 
 export default function CandidateProfilePage() {
@@ -109,6 +110,8 @@ export default function CandidateProfilePage() {
           </span>
         </p>
       </section>
+
+      <DeleteAccountRequest />
     </div>
   );
 }

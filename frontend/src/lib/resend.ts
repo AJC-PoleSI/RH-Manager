@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { escapeHtml } from "./html";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -295,4 +296,70 @@ export async function sendPasswordResetEmail(
 </body></html>`.trim();
 
   return resend.emails.send({ from: FROM, to: email, subject, html });
+}
+
+// Demande de suppression de compte émise par un candidat. Rien n'est supprimé
+// ici : l'email prévient l'administration, qui traite la demande à la main.
+export async function sendAccountDeletionRequestEmail(opts: {
+  to: string;
+  candidateId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  motif: string | null;
+}) {
+  // Deux variantes : le sujet d'un email n'est pas du HTML, y placer une valeur
+  // échappée afficherait « &amp; » dans la ligne d'objet.
+  const rawFullName =
+    `${opts.firstName ?? ""} ${opts.lastName ?? ""}`.trim() || opts.email;
+  const fullName = escapeHtml(rawFullName);
+  const recu = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+
+  const lignes = [
+    `<strong>Candidat :</strong> ${fullName}`,
+    `<strong>Email :</strong> ${escapeHtml(opts.email)}`,
+    `<strong>Identifiant :</strong> ${escapeHtml(opts.candidateId)}`,
+    `<strong>Demande reçue le :</strong> ${escapeHtml(recu)}`,
+  ];
+  // Le motif est une saisie libre, souvent sur plusieurs lignes : sans cette
+  // conversion, la mise en forme disparaît dans le HTML.
+  if (opts.motif) {
+    lignes.push(
+      `<strong>Motif indiqué :</strong> ${escapeHtml(opts.motif).replace(/\n/g, "<br/>")}`,
+    );
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#E8446A;padding:32px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Audencia Junior Conseil</p>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Demande de suppression de compte</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px 28px;">
+          <p style="margin:0 0 20px;font-size:15px;color:#4b5563;line-height:1.6;">
+            Un candidat demande la suppression de son compte sur la plateforme de recrutement.
+            La suppression doit être effectuée manuellement.
+          </p>
+          ${lignes.map((l) => `<p style="margin:0 0 8px;font-size:14px;color:#111827;">${l}</p>`).join("")}
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+
+  return resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: `Demande de suppression de compte — ${rawFullName}`,
+    html,
+  });
 }
