@@ -1463,7 +1463,21 @@ export default function DeliberationsPage() {
                                           <span className="text-sm font-medium text-gray-800">{ev.epreuve?.name || "Epreuve"}</span>
                                           <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Tour {ev.epreuve?.tour}</span>
                                         </div>
-                                        <span className="text-lg font-bold text-blue-600">{getScoreTotal(ev.scores)}</span>
+                                        {(() => {
+                                          const { note, coef } = getNoteSur20(ev);
+                                          return (
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-lg font-bold text-blue-600">
+                                                {note !== null ? `${note}/20` : getScoreTotal(ev.scores)}
+                                              </span>
+                                              {note !== null && coef !== 1 && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-500 font-semibold whitespace-nowrap">
+                                                  coef x{formatCoef(coef)}
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                       <p className="text-xs text-gray-400 mb-1">
                                         Par {ev.member?.firstName || ev.member?.email || "Evaluateur"}
