@@ -6,7 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
-import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart } from "lucide-react";
+import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart, Maximize2, Minimize2 } from "lucide-react";
+import { getEpreuveCoefficient, toTwenty } from "@/lib/evaluation-criteria";
 
 interface Tour3Obligation {
   pole: string;
