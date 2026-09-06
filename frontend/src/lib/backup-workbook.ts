@@ -372,8 +372,12 @@ function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
     let cursor = 1;
 
     sortedRooms.forEach(([room, roomSlots]) => {
-      const days = [...new Set(roomSlots.map((s: any) => dayKey(s.date)))].sort();
-      const times = [...new Set(roomSlots.map((s: any) => s.start_time || ""))].sort();
+      const days = Array.from(
+        new Set(roomSlots.map((s: any) => dayKey(s.date) as string)),
+      ).sort();
+      const times = Array.from(
+        new Set(roomSlots.map((s: any) => (s.start_time || "") as string)),
+      ).sort();
 
       /* Titre du tableau */
       const titleRow = ws.getRow(cursor);
