@@ -189,6 +189,9 @@ export default function CreationPage() {
   const [tourToDelete, setTourToDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
 
+  /* ---- backup complet ---- */
+  const [exportingBackup, setExportingBackup] = useState(false);
+
   /* ================================================================ */
   /*  Data fetching                                                    */
   /* ================================================================ */
