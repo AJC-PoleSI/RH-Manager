@@ -513,228 +513,41 @@ export default function CreationPage() {
   const handleExportBackup = async () => {
     setExportingBackup(true);
     try {
-      const XLSX = await import("xlsx");
-      const res = await api.get("/backup/export");
-      const candidates: any[] = res.data?.candidates || [];
-      const members: any[] = res.data?.members || [];
-      const slots: any[] = res.data?.slots || [];
+      const [{ buildBackupWorkbook }, res] = await Promise.all([
+        import("@/lib/backup-workbook"),
+        api.get("/backup/export"),
+      ]);
 
-      const parseScores = (raw: any): Record<string, number> => {
-        try {
-          const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
-          if (!obj || typeof obj !== "object") return {};
-          const out: Record<string, number> = {};
-          Object.entries(obj).forEach(([k, v]) => {
-            const n = Number(v);
-            if (!isNaN(n)) out[k] = n;
-          });
-          return out;
-        } catch {
-          return {};
-        }
+      const data = {
+        candidates: res.data?.candidates || [],
+        members: res.data?.members || [],
+        slots: res.data?.slots || [],
       };
 
-      const avgOf = (nums: number[]) =>
-        nums.length === 0
-          ? null
-          : Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
-
-      const memberName = (m: any) =>
-        m?.first_name ? `${m.first_name} ${m.last_name || ""}`.trim() : m?.email || "";
-      const candidateName = (c: any) =>
-        c?.first_name ? `${c.first_name} ${c.last_name || ""}`.trim() : c?.email || "";
-
-      /* ───────── Onglet 1 : Candidats — Synthèse ───────── */
-      const candidateSynthRows = candidates.map((c: any) => {
-        const evals: any[] = c.candidate_evaluations || [];
-        const evalsByTour: Record<number, any[]> = {};
-        evals.forEach((e) => {
-          const t = e.epreuves?.tour ?? 0;
-          if (!evalsByTour[t]) evalsByTour[t] = [];
-          evalsByTour[t].push(e);
-        });
-
-        const tourAverage = (tour: number) => {
-          const all = (evalsByTour[tour] || []).flatMap((e) => Object.values(parseScores(e.scores)));
-          return avgOf(all as number[]);
-        };
-
-        const tourComments = (tour: number) =>
-          (evalsByTour[tour] || [])
-            .map((e) => {
-              const who = memberName(e.members) || "Évaluateur";
-              const ep = e.epreuves?.name || "";
-              return e.comment ? `[${ep} — ${who}] ${e.comment}` : "";
-            })
-            .filter(Boolean)
-            .join("\n");
-
-        const allScores = evals.flatMap((e) => Object.values(parseScores(e.scores))) as number[];
-        const globalAvg = avgOf(allScores);
-        const delib = Array.isArray(c.deliberation) ? c.deliberation[0] : c.deliberation;
-
-        return {
-          Prénom: c.first_name,
-          Nom: c.last_name,
-          Email: c.email,
-          "Email vérifié": c.email_verified ? "Oui" : "Non",
-          Téléphone: c.phone || "",
-          Formation: c.formation || "",
-          Établissement: c.etablissement || "",
-          "Note Tour 1": tourAverage(1),
-          "Commentaires Tour 1": tourComments(1),
-          "Note Tour 2": tourAverage(2),
-          "Commentaires Tour 2": tourComments(2),
-          "Note Tour 3": tourAverage(3),
-          "Commentaires Tour 3": tourComments(3),
-          "Note Globale": globalAvg,
-          "Points forts (délibération)": delib?.pros_comment || "",
-          "Points faibles (délibération)": delib?.cons_comment || "",
-          "Commentaire général": delib?.global_comments || c.comments || "",
-          "Statut Tour 1": delib?.tour1_status || "",
-          "Statut Tour 2": delib?.tour2_status || "",
-          "Statut Tour 3": delib?.tour3_status || "",
-        };
+      const wb = buildBackupWorkbook(data);
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-
-      /* ───────── Onglet 2 : Candidats — Détail évaluations ───────── */
-      const candidateDetailRows: any[] = [];
-      candidates.forEach((c: any) => {
-        (c.candidate_evaluations || []).forEach((e: any) => {
-          const scores = parseScores(e.scores);
-          const scoreEntries = Object.entries(scores);
-          candidateDetailRows.push({
-            Prénom: c.first_name,
-            Nom: c.last_name,
-            Tour: e.epreuves?.tour ?? "",
-            Épreuve: e.epreuves?.name || "",
-            Type: e.epreuves?.type || "",
-            Évaluateur: memberName(e.members),
-            "Détail des notes": scoreEntries.map(([k, v]) => `${k}: ${v}`).join(" | "),
-            Moyenne: avgOf(scoreEntries.map(([, v]) => v)),
-            Commentaire: e.comment || "",
-            Date: e.created_at ? new Date(e.created_at).toLocaleDateString("fr-FR") : "",
-          });
-        });
-      });
-
-      /* ───────── Onglet 3 : Examinateurs — Synthèse (charge) ───────── */
-      const memberSlotCounts: Record<string, number> = {};
-      slots.forEach((s: any) => {
-        (s.members || []).forEach((a: any) => {
-          const mid = a.member?.id || a.member_id;
-          if (mid) memberSlotCounts[mid] = (memberSlotCounts[mid] || 0) + 1;
-        });
-      });
-
-      const examinerSynthRows = members.map((m: any) => {
-        const evals: any[] = m.candidate_evaluations || [];
-        const distinctCandidates = new Set(evals.map((e) => e.candidates?.id).filter(Boolean));
-        return {
-          Prénom: m.first_name || "",
-          Nom: m.last_name || "",
-          Email: m.email,
-          Admin: m.is_admin ? "Oui" : "Non",
-          Pôle: m.pole_affiliation || "",
-          "Candidats évalués": distinctCandidates.size,
-          "Évaluations données": evals.length,
-          "Créneaux affectés": memberSlotCounts[m.id] || 0,
-        };
-      });
-
-      /* ───────── Onglet 4 : Examinateurs — Détail évaluations données ───────── */
-      const examinerDetailRows: any[] = [];
-      members.forEach((m: any) => {
-        (m.candidate_evaluations || []).forEach((e: any) => {
-          const scores = parseScores(e.scores);
-          const scoreEntries = Object.entries(scores);
-          examinerDetailRows.push({
-            Examinateur: memberName(m),
-            "Email examinateur": m.email,
-            Candidat: candidateName(e.candidates),
-            Tour: e.epreuves?.tour ?? "",
-            Épreuve: e.epreuves?.name || "",
-            Type: e.epreuves?.type || "",
-            "Détail des notes": scoreEntries.map(([k, v]) => `${k}: ${v}`).join(" | "),
-            Moyenne: avgOf(scoreEntries.map(([, v]) => v)),
-            Commentaire: e.comment || "",
-            Date: e.created_at ? new Date(e.created_at).toLocaleDateString("fr-FR") : "",
-          });
-        });
-      });
-
-      /* ───────── Onglet 5 : Planning — Créneaux (salles) ───────── */
-      const planningRows = slots.map((s: any) => {
-        const candidatesList = (s.enrollments || [])
-          .map((en: any) => `${candidateName(en.candidate)} (${en.candidate?.email || ""})`)
-          .join("\n");
-        const examinersList = (s.members || [])
-          .map((a: any) => `${memberName(a.member)} (${a.member?.email || ""})`)
-          .join("\n");
-        return {
-          Salle: s.room || "",
-          Épreuve: s.epreuve?.name || "",
-          Tour: s.epreuve?.tour ?? s.tour ?? "",
-          Type: s.epreuve?.type || "",
-          Label: s.label || "",
-          Date: s.date ? new Date(s.date).toLocaleDateString("fr-FR") : "",
-          Horaire: `${s.start_time || ""} - ${s.end_time || ""}`,
-          "Durée (min)": s.duration_minutes ?? "",
-          Statut: s.status || "",
-          "Candidats inscrits": candidatesList,
-          "Nb inscrits / max": `${(s.enrollments || []).length} / ${s.max_candidates ?? ""}`,
-          "Examinateurs affectés": examinersList,
-          "Nb examinateurs / min": `${(s.members || []).length} / ${s.min_members ?? ""}`,
-        };
-      });
-
-      const wb = XLSX.utils.book_new();
-
-      const ws1 = XLSX.utils.json_to_sheet(candidateSynthRows);
-      ws1["!cols"] = [
-        { wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 22 },
-        { wch: 11 }, { wch: 40 }, { wch: 11 }, { wch: 40 }, { wch: 11 }, { wch: 40 },
-        { wch: 13 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 13 }, { wch: 13 }, { wch: 13 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws1, "Candidats - Synthèse");
-
-      const ws2 = XLSX.utils.json_to_sheet(candidateDetailRows);
-      ws2["!cols"] = [
-        { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 14 },
-        { wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 60 }, { wch: 12 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws2, "Candidats - Détail");
-
-      const ws3 = XLSX.utils.json_to_sheet(examinerSynthRows);
-      ws3["!cols"] = [
-        { wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 8 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws3, "Examinateurs - Synthèse");
-
-      const ws4 = XLSX.utils.json_to_sheet(examinerDetailRows);
-      ws4["!cols"] = [
-        { wch: 20 }, { wch: 28 }, { wch: 20 }, { wch: 6 }, { wch: 22 }, { wch: 14 },
-        { wch: 50 }, { wch: 10 }, { wch: 60 }, { wch: 12 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws4, "Examinateurs - Détail");
-
-      const ws5 = XLSX.utils.json_to_sheet(planningRows);
-      ws5["!cols"] = [
-        { wch: 14 }, { wch: 22 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 14 },
-        { wch: 11 }, { wch: 10 }, { wch: 40 }, { wch: 14 }, { wch: 40 }, { wch: 16 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws5, "Planning - Créneaux");
 
       const today = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `backup_complet_${today}.xlsx`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `backup_complet_${today}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
 
       toast(
-        `Backup généré : ${candidateSynthRows.length} candidat(s), ${examinerSynthRows.length} examinateur(s), ${planningRows.length} créneau(x)`,
+        `Backup généré : ${data.candidates.length} candidat(s), ${data.members.length} examinateur(s), ${data.slots.length} créneau(x)`,
         "success",
       );
     } catch (e: any) {
       console.error(e);
-      toast(e?.response?.data?.error || "Erreur lors de la génération du backup", "error");
+      toast(
+        e?.response?.data?.error || "Erreur lors de la génération du backup",
+        "error",
+      );
     } finally {
       setExportingBackup(false);
     }

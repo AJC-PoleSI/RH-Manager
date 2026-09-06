@@ -365,7 +365,7 @@ function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
       rooms.get(room)!.push(s);
     });
 
-    const sortedRooms = [...rooms.entries()].sort((a, b) =>
+    const sortedRooms = Array.from(rooms.entries()).sort((a, b) =>
       a[0].localeCompare(b[0], "fr", { numeric: true }),
     );
 
