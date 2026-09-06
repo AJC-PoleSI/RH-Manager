@@ -755,6 +755,29 @@ export default function CreationPage() {
       </div>
 
       {/* ================================================================ */}
+      {/*  0. Backup complet                                                */}
+      {/* ================================================================ */}
+      <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">
+          💾 Backup complet
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Télécharge un classeur Excel avec tout l&apos;état actuel du recrutement :
+          candidats (notes, commentaires, délibérations), examinateurs (évaluations
+          données, charge de travail) et planning (salles, créneaux, inscriptions).
+          À utiliser régulièrement comme filet de sécurité, ou avant toute opération
+          risquée.
+        </p>
+        <button
+          onClick={handleExportBackup}
+          disabled={exportingBackup}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+        >
+          {exportingBackup ? "Génération..." : "Télécharger le backup complet"}
+        </button>
+      </div>
+
+      {/* ================================================================ */}
       {/*  1. Fenêtre d'inscription candidats                              */}
       {/* ================================================================ */}
       <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
