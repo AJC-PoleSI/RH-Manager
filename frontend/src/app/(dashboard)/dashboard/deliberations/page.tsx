@@ -1678,6 +1678,7 @@ export default function DeliberationsPage() {
       )}
 
       {/* Bottom Action Buttons */}
+      {!focusMode && (
       <div className="flex items-center justify-end gap-3">
         <button
           onClick={() => setShowReserveModal(true)}
@@ -1692,6 +1693,7 @@ export default function DeliberationsPage() {
           Valider et Envoyer
         </button>
       </div>
+      )}
 
       {/* Reserve Modal */}
       {showReserveModal && (
