@@ -231,113 +231,204 @@ function buildExaminersSheet(wb: ExcelJS.Workbook, data: BackupData) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Feuilles 3-5 : Tour 1 / Tour 2 / Tour 3                            */
+/*  Feuilles Tour 1 / Tour 2 / Tour 3                                  */
+/*                                                                     */
+/*  Tableau croisé : UNE ligne par candidat, et pour chaque épreuve du  */
+/*  tour un bloc de 4 colonnes (évaluateurs, notes, moyenne,            */
+/*  appréciation). Les blocs se suivent horizontalement.                */
 /* ------------------------------------------------------------------ */
 
-interface TourRow {
-  epreuve: string;
-  candidat: string;
-  examinateur: string;
-  notes: string;
-  moyenne: number | null;
-  appreciation: string;
-}
+const COLS_PER_EPREUVE = 4;
+const BLOCK_FILLS = ["FF1F2937", "FF374151"];
 
 function buildTourSheet(wb: ExcelJS.Workbook, data: BackupData, tour: number) {
-  const rows: TourRow[] = [];
+  const epreuves = new Map<string, string>();
+  const perCandidate = new Map<
+    string,
+    { candidate: any; cells: Map<string, any[]> }
+  >();
 
   data.candidates.forEach((c: any) => {
     (c.candidate_evaluations || []).forEach((e: any) => {
       if ((e.epreuves?.tour ?? null) !== tour) return;
-      const scores = parseScores(e.scores);
-      const entries = Object.entries(scores);
-      rows.push({
-        epreuve: e.epreuves?.name || "Épreuve inconnue",
-        candidat: personName(c),
-        examinateur: e.is_group
-          ? `${personName(e.members)} (éval. groupe)`
-          : personName(e.members),
-        notes: entries.map(([k, v]) => `${k} : ${v}`).join("\n"),
-        moyenne: avgOf(entries.map(([, v]) => v)),
-        appreciation: e.comment || "",
-      });
+      const epId = e.epreuves?.id || e.epreuves?.name || "inconnue";
+      epreuves.set(epId, e.epreuves?.name || "Épreuve inconnue");
+
+      if (!perCandidate.has(c.id)) {
+        perCandidate.set(c.id, { candidate: c, cells: new Map() });
+      }
+      const entry = perCandidate.get(c.id)!;
+      if (!entry.cells.has(epId)) entry.cells.set(epId, []);
+      entry.cells.get(epId)!.push(e);
     });
   });
 
-  if (rows.length === 0) return;
+  if (perCandidate.size === 0) return;
 
-  rows.sort(
-    (a, b) =>
-      a.epreuve.localeCompare(b.epreuve, "fr") ||
-      a.candidat.localeCompare(b.candidat, "fr") ||
-      a.examinateur.localeCompare(b.examinateur, "fr"),
+  const epreuveIds = Array.from(epreuves.keys()).sort((a, b) =>
+    (epreuves.get(a) || "").localeCompare(epreuves.get(b) || "", "fr"),
   );
 
   const ws = wb.addWorksheet(sheetName(wb, `Tour ${tour}`), {
-    views: [{ state: "frozen", ySplit: 1 }],
+    views: [{ state: "frozen", xSplit: 1, ySplit: 2 }],
   });
 
-  ws.columns = [
-    { header: "Épreuve", width: 26 },
-    { header: "Candidat", width: 22 },
-    { header: "Examinateur", width: 22 },
-    { header: "Notes", width: 30 },
-    { header: "Moyenne", width: 10 },
-    { header: "Appréciation", width: 70 },
-  ];
+  const lastCol = 1 + epreuveIds.length * COLS_PER_EPREUVE;
 
-  styleHeaderRow(ws.getRow(1));
+  ws.getColumn(1).width = 26;
+  epreuveIds.forEach((_, i) => {
+    const base = 2 + i * COLS_PER_EPREUVE;
+    ws.getColumn(base).width = 22;
+    ws.getColumn(base + 1).width = 26;
+    ws.getColumn(base + 2).width = 10;
+    ws.getColumn(base + 3).width = 50;
+  });
 
-  rows.forEach((r) => {
-    const row = ws.addRow([
-      r.epreuve,
-      r.candidat,
-      r.examinateur,
-      r.notes,
-      r.moyenne,
-      r.appreciation,
-    ]);
-    row.height = rowHeightFor([r.notes, r.appreciation], 65);
-    row.eachCell((cell, col) => {
-      cell.alignment = {
-        vertical: "middle",
-        wrapText: true,
-        horizontal: col === 5 ? "center" : "left",
+  /* ---- Ligne 1 : nom de l'épreuve, fusionné au-dessus de son bloc ---- */
+  const r1 = ws.getRow(1);
+  const r2 = ws.getRow(2);
+
+  r1.getCell(1).value = "Candidat";
+  ws.mergeCells(1, 1, 2, 1);
+  const candHeader = ws.getCell(1, 1);
+  candHeader.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+  candHeader.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF111827" },
+  };
+  candHeader.alignment = { vertical: "middle", horizontal: "center" };
+  candHeader.border = ALL_BORDERS;
+
+  epreuveIds.forEach((id, i) => {
+    const base = 2 + i * COLS_PER_EPREUVE;
+    const fill = BLOCK_FILLS[i % BLOCK_FILLS.length];
+
+    r1.getCell(base).value = epreuves.get(id) || "";
+    ws.mergeCells(1, base, 1, base + COLS_PER_EPREUVE - 1);
+    const titleCell = ws.getCell(1, base);
+    titleCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+    titleCell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    titleCell.border = ALL_BORDERS;
+
+    ["Évaluateur(s)", "Notes", "Moyenne", "Appréciation"].forEach((label, j) => {
+      const cell = r2.getCell(base + j);
+      cell.value = label;
+      cell.font = { bold: true, size: 10, color: { argb: "FF111827" } };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE5E7EB" },
       };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
       cell.border = ALL_BORDERS;
     });
   });
 
-  /* Fusion verticale des cellules répétées (épreuve, puis candidat) —
-     une seule grande cellule au lieu du même nom répété ligne après ligne. */
-  const mergeRuns = (
-    column: number,
-    keyOf: (r: TourRow) => string,
-    fill?: string,
-  ) => {
-    let start = 0;
-    for (let i = 1; i <= rows.length; i++) {
-      const same = i < rows.length && keyOf(rows[i]) === keyOf(rows[start]);
-      if (same) continue;
-      const firstRow = start + 2; // +1 en-tête, +1 index 1-based
-      const lastRow = i + 1;
-      if (lastRow > firstRow) ws.mergeCells(firstRow, column, lastRow, column);
-      const cell = ws.getCell(firstRow, column);
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-      cell.font = { bold: column === 1 };
-      if (fill) {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
-      }
-      start = i;
-    }
-  };
+  r1.height = 26;
+  r2.height = 22;
 
-  mergeRuns(1, (r) => r.epreuve, "FFF3F4F6");
-  mergeRuns(2, (r) => `${r.epreuve}||${r.candidat}`);
+  /* ---- Une ligne par candidat ---- */
+  const candidates = Array.from(perCandidate.values()).sort((a, b) =>
+    `${a.candidate.last_name || ""}${a.candidate.first_name || ""}`.localeCompare(
+      `${b.candidate.last_name || ""}${b.candidate.first_name || ""}`,
+      "fr",
+    ),
+  );
+
+  candidates.forEach(({ candidate, cells }) => {
+    const row = ws.addRow([]);
+    row.getCell(1).value = personName(candidate);
+    row.getCell(1).font = { bold: true };
+    row.getCell(1).alignment = { vertical: "middle", wrapText: true };
+    row.getCell(1).border = ALL_BORDERS;
+
+    const texts: string[] = [];
+
+    epreuveIds.forEach((id, i) => {
+      const base = 2 + i * COLS_PER_EPREUVE;
+      const evals = cells.get(id) || [];
+      const multiple = evals.length > 1;
+
+      const evaluateurs = evals
+        .map((e) => `${personName(e.members)}${e.is_group ? " (groupe)" : ""}`)
+        .filter(Boolean)
+        .join("\n");
+
+      const notes = evals
+        .map((e) => {
+          const detail = Object.entries(parseScores(e.scores))
+            .map(([k, v]) => `${k} : ${v}`)
+            .join("\n");
+          return multiple ? `[${personName(e.members)}]\n${detail}` : detail;
+        })
+        .filter(Boolean)
+        .join("\n");
+
+      const allScores = evals.flatMap((e) =>
+        Object.values(parseScores(e.scores)),
+      ) as number[];
+
+      const appreciation = evals
+        .map((e) =>
+          e.comment
+            ? multiple
+              ? `[${personName(e.members)}] ${e.comment}`
+              : e.comment
+            : "",
+        )
+        .filter(Boolean)
+        .join("\n");
+
+      const values: (string | number | null)[] = [
+        evaluateurs,
+        notes,
+        avgOf(allScores),
+        appreciation,
+      ];
+
+      texts.push(notes, appreciation, evaluateurs);
+
+      values.forEach((v, j) => {
+        const cell = row.getCell(base + j);
+        cell.value = v === "" ? null : v;
+        cell.alignment = {
+          vertical: "middle",
+          wrapText: true,
+          horizontal: j === 2 ? "center" : "left",
+        };
+        cell.border = {
+          ...ALL_BORDERS,
+          // trait plus marqué à la frontière entre deux épreuves
+          left:
+            j === 0
+              ? { style: "medium" as const, color: { argb: "FF9CA3AF" } }
+              : THIN,
+        };
+        // Épreuve non passée par ce candidat : case grisée
+        if (evals.length === 0) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF9FAFB" },
+          };
+        }
+      });
+    });
+
+    row.height = rowHeightFor(texts, 50);
+  });
+
+  ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: lastCol } };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Feuilles EDT : une par épreuve, un tableau par salle               */
+/*                                                                     */
+/*  Jours en LIGNES, créneaux horaires en COLONNES. Chaque case         */
+/*  contient uniquement le(s) candidat(s) inscrit(s) sur ce créneau —   */
+/*  l'objectif est de voir d'un coup d'œil qui passe quand et où.       */
 /* ------------------------------------------------------------------ */
 
 function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
@@ -356,7 +447,7 @@ function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
     const ws = wb.addWorksheet(sheetName(wb, `EDT ${label}`), {
       views: [{ state: "frozen", xSplit: 1 }],
     });
-    ws.getColumn(1).width = 16;
+    ws.getColumn(1).width = 20;
 
     const rooms = new Map<string, any[]>();
     slots.forEach((s: any) => {
@@ -382,29 +473,29 @@ function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
       /* Titre du tableau */
       const titleRow = ws.getRow(cursor);
       titleRow.getCell(1).value = `${room} — ${label}`;
-      ws.mergeCells(cursor, 1, cursor, Math.max(2, days.length + 1));
+      ws.mergeCells(cursor, 1, cursor, Math.max(2, times.length + 1));
       titleRow.height = 26;
       const titleCell = titleRow.getCell(1);
       titleCell.font = { bold: true, size: 13, color: { argb: "FF111827" } };
       titleCell.alignment = { vertical: "middle", horizontal: "left" };
       cursor++;
 
-      /* En-tête : Horaire + un jour par colonne */
+      /* En-tête : Date + un créneau horaire par colonne */
       const headerRow = ws.getRow(cursor);
-      headerRow.getCell(1).value = "Horaire";
-      days.forEach((d, i) => {
-        const sample = roomSlots.find((s: any) => dayKey(s.date) === d);
-        headerRow.getCell(i + 2).value = dayHeader(sample.date);
-        ws.getColumn(i + 2).width = 30;
+      headerRow.getCell(1).value = "Date";
+      times.forEach((time, i) => {
+        const end = roomSlots.find((s: any) => s.start_time === time)?.end_time;
+        headerRow.getCell(i + 2).value = end ? `${time}\n${end}` : time;
+        ws.getColumn(i + 2).width = 24;
       });
-      styleHeaderRow(headerRow, 34);
+      styleHeaderRow(headerRow, 32);
       cursor++;
 
-      /* Une ligne par horaire */
-      times.forEach((time) => {
+      /* Une ligne par jour */
+      days.forEach((day) => {
         const row = ws.getRow(cursor);
-        const sampleEnd = roomSlots.find((s: any) => s.start_time === time)?.end_time;
-        row.getCell(1).value = sampleEnd ? `${time} - ${sampleEnd}` : time;
+        const sample = roomSlots.find((s: any) => dayKey(s.date) === day);
+        row.getCell(1).value = dayHeader(sample.date).replace("\n", " ");
         row.getCell(1).font = { bold: true };
         row.getCell(1).alignment = { vertical: "middle", horizontal: "center" };
         row.getCell(1).fill = {
@@ -416,49 +507,44 @@ function buildTimetableSheets(wb: ExcelJS.Workbook, data: BackupData) {
 
         const contents: string[] = [];
 
-        days.forEach((d, i) => {
+        times.forEach((time, i) => {
           const cell = row.getCell(i + 2);
           const matching = roomSlots.filter(
-            (s: any) => dayKey(s.date) === d && (s.start_time || "") === time,
+            (s: any) => dayKey(s.date) === day && (s.start_time || "") === time,
           );
 
           if (matching.length === 0) {
+            // Aucun créneau ouvert ce jour-là à cette heure
             cell.border = ALL_BORDERS;
             cell.fill = {
               type: "pattern",
               pattern: "solid",
-              fgColor: { argb: "FFFAFAFA" },
+              fgColor: { argb: "FFF9FAFB" },
             };
             return;
           }
 
-          const text = matching
-            .map((s: any) => {
-              const exams = (s.members || [])
-                .map((a: any) => personName(a.member))
-                .filter(Boolean)
-                .join(", ");
-              const cands = (s.enrollments || [])
-                .map((en: any) => personName(en.candidate))
-                .filter(Boolean)
-                .join(", ");
-              return `Exam. : ${exams || "—"}\nCand. : ${cands || "—"}`;
-            })
-            .join("\n· · ·\n");
+          const names = matching.flatMap((s: any) =>
+            (s.enrollments || [])
+              .map((en: any) => personName(en.candidate))
+              .filter(Boolean),
+          );
 
-          contents.push(text);
-          cell.value = text;
-          cell.alignment = { vertical: "middle", wrapText: true };
-          // Trait diagonal : sépare visuellement la partie examinateurs (haut)
-          // de la partie candidats (bas). Le format xlsx ne permet pas de
-          // placer deux textes de part et d'autre, seulement la diagonale.
-          cell.border = {
-            ...ALL_BORDERS,
-            diagonal: { up: true, style: "hair", color: { argb: "FFB0B7C3" } },
-          };
+          cell.border = ALL_BORDERS;
+          cell.alignment = { vertical: "middle", wrapText: true, horizontal: "center" };
+
+          if (names.length === 0) {
+            // Créneau ouvert mais personne d'inscrit
+            cell.value = "(libre)";
+            cell.font = { italic: true, color: { argb: "FF9CA3AF" }, size: 10 };
+          } else {
+            const text = names.join("\n");
+            cell.value = text;
+            contents.push(text);
+          }
         });
 
-        row.height = rowHeightFor(contents, 34);
+        row.height = rowHeightFor(contents, 22);
         cursor++;
       });
 

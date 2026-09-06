@@ -535,8 +535,16 @@ export default function CreationPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = `backup_complet_${today}.xlsx`;
+      link.style.display = "none";
+      // L'ancre DOIT être dans le document : Firefox ignore un .click() sur un
+      // élément détaché. Et on ne révoque l'URL qu'après coup, sinon certains
+      // navigateurs annulent le téléchargement en cours.
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 1000);
 
       toast(
         `Backup généré : ${data.candidates.length} candidat(s), ${data.members.length} examinateur(s), ${data.slots.length} créneau(x)`,
