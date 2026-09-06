@@ -659,39 +659,70 @@ export default function DeliberationsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className={focusMode ? "fixed inset-0 z-[100] bg-gray-50 overflow-y-auto p-4 sm:p-6" : "space-y-6 pb-12"}>
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Soirée Délibération</h1>
-          <p className="text-sm text-gray-500 mt-1">Délibération de fin de tour</p>
-        </div>
-        {/* View toggle */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={() => setViewMode("tinder")}
-            className={`p-2 rounded-md transition-colors ${viewMode === "tinder" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-            title="Vue Tinder"
-          >
-            <Layers size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode("table")}
-            className={`p-2 rounded-md transition-colors ${viewMode === "table" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-            title="Vue Tableau"
-          >
-            <Table size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode("cards")}
-            className={`p-2 rounded-md transition-colors ${viewMode === "cards" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-            title="Vue Cartes"
-          >
-            <LayoutGrid size={18} />
-          </button>
-        </div>
+      <div className="flex items-center justify-between mb-6">
+        {focusMode ? (
+          <>
+            <div className="text-sm font-medium text-gray-500">
+              Tour {selectedTour} &middot; {filteredCandidates.length > 0 ? `${currentIndex + 1} / ${filteredCandidates.length}` : "0 / 0"}
+            </div>
+            <button
+              onClick={() => setFocusMode(false)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors shadow-sm"
+              title="Quitter le plein écran"
+            >
+              <Minimize2 size={15} /> Quitter le plein écran
+            </button>
+          </>
+        ) : (
+          <>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Soirée Délibération</h1>
+              <p className="text-sm text-gray-500 mt-1">Délibération de fin de tour</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode("tinder")}
+                  className={`p-2 rounded-md transition-colors ${viewMode === "tinder" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                  title="Vue Tinder"
+                >
+                  <Layers size={18} />
+                </button>
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`p-2 rounded-md transition-colors ${viewMode === "table" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                  title="Vue Tableau"
+                >
+                  <Table size={18} />
+                </button>
+                <button
+                  onClick={() => setViewMode("cards")}
+                  className={`p-2 rounded-md transition-colors ${viewMode === "cards" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+                  title="Vue Cartes"
+                >
+                  <LayoutGrid size={18} />
+                </button>
+              </div>
+              {/* Plein écran : uniquement pertinent pour le système match / pas match */}
+              {viewMode === "tinder" && (
+                <button
+                  onClick={() => setFocusMode(true)}
+                  className="p-2 rounded-lg bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+                  title="Plein écran (match / pas match uniquement)"
+                >
+                  <Maximize2 size={18} />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
+      {!focusMode && (
+      <>
       {/* Filters (Tour + Pole) */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {/* Tour Selector */}
