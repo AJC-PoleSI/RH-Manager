@@ -72,3 +72,19 @@ export function normalizeQuestions(raw: unknown): EvaluationCriterion[] {
 export function getTotalMaxPoints(raw: unknown): number {
   return parseQuestions(raw).reduce((sum, q) => sum + getMaxPoints(q), 0);
 }
+
+/**
+ * Coefficient d'une épreuve dans une moyenne pondérée, dérivé de son barème :
+ * une épreuve notée sur 40 pèse coefficient 2, sur 5 pèse 0,25, sur 20 pèse 1.
+ * Pas de champ dédié à gérer — le coefficient découle directement du barème.
+ */
+export function getEpreuveCoefficient(maxTotal: number): number {
+  return Number.isFinite(maxTotal) && maxTotal > 0 ? maxTotal / 20 : 1;
+}
+
+/** Convertit un total obtenu sur le barème d'une épreuve en note sur 20. */
+export function toTwenty(obtained: number, maxTotal: number): number {
+  if (!Number.isFinite(maxTotal) || maxTotal <= 0) return 0;
+  const ratio = Math.min(1, Math.max(0, obtained / maxTotal));
+  return Math.round(ratio * 20 * 10) / 10;
+}
