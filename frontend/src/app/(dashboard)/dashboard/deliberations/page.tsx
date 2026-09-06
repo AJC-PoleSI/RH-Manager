@@ -357,19 +357,24 @@ export default function DeliberationsPage() {
     }
   };
 
-  // Moyenne d'un candidat, ramenée sur 20.
+  // Moyenne pondérée d'un candidat, ramenée sur 20.
   //
   // Chaque évaluation est d'abord convertie en pourcentage de réussite
   // (total obtenu / total de points de l'épreuve), ce qui neutralise les
   // différences de barème entre épreuves. Les évaluations d'une MÊME épreuve
-  // sont ensuite moyennées entre elles avant d'être moyennées avec les autres
+  // sont ensuite moyennées entre elles avant d'être combinées aux autres
   // épreuves : sans cela, une épreuve notée par deux examinateurs compterait
   // double par rapport à une épreuve notée par un seul.
+  //
+  // Pondération : chaque épreuve pèse ensuite dans la moyenne finale au
+  // prorata de son barème (coefficient = barème / 20 — cf. getEpreuveCoefficient).
+  // Une épreuve notée sur 40 compte donc 2x plus qu'une épreuve notée sur 20,
+  // et une épreuve notée sur 5 compte 4x moins.
   const getAvgScore = (c: Candidate): number => {
     if (!c.evaluations || c.evaluations.length === 0) return 0;
 
-    // Ratios 0..1 regroupés par épreuve.
-    const byEpreuve = new Map<string, number[]>();
+    // Ratios 0..1 regroupés par épreuve, avec le barème de l'épreuve.
+    const byEpreuve = new Map<string, { ratios: number[]; maxTotal: number }>();
 
     c.evaluations.forEach((ev) => {
       const scores = parseScores(ev.scores);
@@ -386,22 +391,23 @@ export default function DeliberationsPage() {
       if (!Number.isFinite(maxTotal) || maxTotal <= 0) return;
 
       const key = ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve";
-      const ratios = byEpreuve.get(key) || [];
-      ratios.push(Math.min(1, Math.max(0, obtained / maxTotal)));
-      byEpreuve.set(key, ratios);
+      const entry = byEpreuve.get(key) || { ratios: [], maxTotal };
+      entry.ratios.push(Math.min(1, Math.max(0, obtained / maxTotal)));
+      byEpreuve.set(key, entry);
     });
 
     if (byEpreuve.size === 0) return 0;
 
-    const perEpreuve: number[] = [];
-    byEpreuve.forEach((ratios) => {
-      perEpreuve.push(
-        ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length,
-      );
+    let weightedSum = 0;
+    let totalCoef = 0;
+    byEpreuve.forEach(({ ratios, maxTotal }) => {
+      const avgRatio = ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length;
+      const coef = getEpreuveCoefficient(maxTotal);
+      weightedSum += avgRatio * coef;
+      totalCoef += coef;
     });
-    const overall =
-      perEpreuve.reduce((a: number, b: number) => a + b, 0) / perEpreuve.length;
 
+    const overall = totalCoef > 0 ? weightedSum / totalCoef : 0;
     return Math.round(overall * 20 * 10) / 10;
   };
 
@@ -413,6 +419,21 @@ export default function DeliberationsPage() {
       0,
     );
   };
+
+  // Note d'une évaluation individuelle ramenée sur 20 + son coefficient dans
+  // la moyenne pondérée du candidat (cf. getAvgScore). `note` est `null` si
+  // le barème de l'épreuve est inconnu (impossible à normaliser).
+  const getNoteSur20 = (ev: Evaluation): { note: number | null; coef: number } => {
+    const maxTotal = Number(ev.epreuve?.maxTotal);
+    if (!Number.isFinite(maxTotal) || maxTotal <= 0) return { note: null, coef: 1 };
+    return {
+      note: toTwenty(getScoreTotal(ev.scores), maxTotal),
+      coef: getEpreuveCoefficient(maxTotal),
+    };
+  };
+
+  const formatCoef = (coef: number): string =>
+    Number.isInteger(coef) ? String(coef) : coef.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 
   const getEvalCount = (c: Candidate): number => c.evaluations?.length || 0;
 
