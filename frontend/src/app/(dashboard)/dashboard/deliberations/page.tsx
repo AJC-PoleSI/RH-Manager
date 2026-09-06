@@ -1062,6 +1062,8 @@ export default function DeliberationsPage() {
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* ═══════════════════════════════════════════════ */}
       {/* VUE TABLEAU PAR POLE */}
