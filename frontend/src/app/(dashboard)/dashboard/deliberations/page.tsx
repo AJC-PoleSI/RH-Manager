@@ -1389,8 +1389,11 @@ export default function DeliberationsPage() {
                                     {ev.comment || "Pas de commentaire"}
                                   </p>
                                   <p className="text-xs text-gray-400 mt-0.5">
-                                    {ev.member?.firstName || ev.member?.email || "Evaluateur"} &middot; {ev.epreuve?.name || ""} &middot; Note: {getScoreTotal(ev.scores)}
-                                    {ev.epreuve?.maxTotal ? ` / ${ev.epreuve.maxTotal}` : ""}
+                                    {ev.member?.firstName || ev.member?.email || "Evaluateur"} &middot; {ev.epreuve?.name || ""} &middot; Note: {(() => {
+                                      const { note, coef } = getNoteSur20(ev);
+                                      if (note === null) return `${getScoreTotal(ev.scores)} (bareme inconnu)`;
+                                      return `${note}/20${coef !== 1 ? ` (coef x${formatCoef(coef)})` : ""}`;
+                                    })()}
                                   </p>
                                 </div>
                               </div>
