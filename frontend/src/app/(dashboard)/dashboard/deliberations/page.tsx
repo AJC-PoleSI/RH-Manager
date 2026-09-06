@@ -110,6 +110,9 @@ export default function DeliberationsPage() {
 
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>("tinder");
+  // Plein écran : n'affiche que le système match/pas match (vue Tinder), sans
+  // le reste du chrome de la page (onglets, filtres, stats, accordions).
+  const [focusMode, setFocusMode] = useState(false);
 
   // Filters
   const [filterPole, setFilterPole] = useState<string>("Tous");
