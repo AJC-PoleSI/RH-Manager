@@ -524,7 +524,7 @@ function AdminView() {
                                 const sameGroup = evaluations.filter(
                                     e => e.candidate?.id === ev.candidate?.id && e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour
                                 );
-                                const groupTotals = sameGroup.map(e => getScoreTotal(e.scores));
+                                const groupTotals = sameGroup.map(e => getScoreOn20(e));
                                 const collectiveScore = groupTotals.length > 0
                                     ? Math.round((groupTotals.reduce((a, b) => a + b, 0) / groupTotals.length) * 10) / 10
                                     : 0;
