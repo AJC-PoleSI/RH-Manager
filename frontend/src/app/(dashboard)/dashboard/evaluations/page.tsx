@@ -716,9 +716,10 @@ function MemberView() {
         }
     };
 
-    // Stats — moyenne globale des notes au lieu de moyenne par critère
+    // Stats — moyenne globale des notes /20 (chaque évaluation ramenée à /20
+    // selon le barème de son épreuve avant d'être moyennée)
     const totalEvals = evaluations.length;
-    const allTotals = evaluations.map(ev => getScoreTotal(ev.scores)).filter(v => v > 0);
+    const allTotals = evaluations.map(ev => getScoreOn20(ev)).filter(v => v > 0);
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
