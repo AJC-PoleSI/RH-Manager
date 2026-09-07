@@ -201,9 +201,34 @@ export async function POST(req: NextRequest) {
             .from("members")
             .select("id");
 
+          // Ne pas notifier les membres déjà affectés à un autre créneau qui
+          // chevauche cet horaire (même dans une autre salle) — ils ne
+          // peuvent de toute façon pas se porter volontaires.
+          const { data: otherAssignments } = await supabaseAdmin
+            .from("slot_member_assignments")
+            .select("member_id, slot:evaluation_slots(date, start_time, end_time)")
+            .neq("slot_id", slotId);
+
+          const slotDateStr = String(slot.date || "").substring(0, 10);
+          const slotStart = String(slot.start_time || "").substring(0, 5);
+          const slotEnd = String(slot.end_time || "").substring(0, 5);
+          const busyMemberIds = new Set(
+            (otherAssignments || [])
+              .filter((a: any) => {
+                const s = a.slot;
+                if (!s) return false;
+                if (String(s.date || "").substring(0, 10) !== slotDateStr)
+                  return false;
+                const oStart = String(s.start_time || "").substring(0, 5);
+                const oEnd = String(s.end_time || "").substring(0, 5);
+                return timeLt(slotStart, oEnd) && timeLt(oStart, slotEnd);
+              })
+              .map((a: any) => a.member_id),
+          );
+
           const targets = (allMembers || [])
             .map((m: any) => m.id)
-            .filter((id: string) => id !== memberId);
+            .filter((id: string) => id !== memberId && !busyMemberIds.has(id));
 
           const dateStr = slot.date
             ? new Date(slot.date).toLocaleDateString("fr-FR", {
