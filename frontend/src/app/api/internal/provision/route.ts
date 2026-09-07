@@ -105,6 +105,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      if (isMissingTableError(error)) {
+        return befastMigrationPending("provision", error);
+      }
+      console.error("[internal/provision] Insert candidat échoué:", error);
       return Response.json(
         { error: "Insert candidat échoué.", details: error.message },
         { status: 500 },
