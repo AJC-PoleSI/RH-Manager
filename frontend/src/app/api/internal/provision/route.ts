@@ -64,7 +64,11 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (existing) {
-      await supabaseAdmin
+      // Audit du 07/09/2026 : le retour de cet update n'était pas lu. Quand il
+      // échouait (colonnes befast_* absentes), la route répondait quand même
+      // 200 `created:false` — Befast considérait le lien RH établi alors que
+      // `befast_person_id` restait NULL pour toujours, sans aucune alerte.
+      const { error: updateError } = await supabaseAdmin
         .from("candidates")
         .update({
           befast_person_id: payload.befastPersonId ?? null,
@@ -72,6 +76,17 @@ export async function POST(req: NextRequest) {
           email_verified: true,
         })
         .eq("id", existing.id);
+
+      if (updateError) {
+        if (isMissingTableError(updateError)) {
+          return befastMigrationPending("provision", updateError);
+        }
+        console.error("[internal/provision] Update candidat échoué:", updateError);
+        return Response.json(
+          { error: "Update candidat échoué.", details: updateError.message },
+          { status: 500 },
+        );
+      }
       return Response.json({ candidateId: existing.id, created: false });
     }
 
