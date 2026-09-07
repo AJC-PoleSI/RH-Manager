@@ -15,6 +15,33 @@ export const dynamic = "force-dynamic";
 // Contrairement à /api/candidates/export, on inclut TOUS les candidats
 // (y compris email non vérifié) : un backup doit couvrir l'état réel de la
 // base, pas seulement les profils "propres".
+// PostgREST plafonne toute requête à 1000 lignes par défaut et TRONQUE
+// silencieusement au-delà — sur un backup, cela veut dire un classeur
+// incomplet sans le moindre avertissement (audit du 07/09/2026). On pagine
+// donc explicitement jusqu'à épuisement.
+const PAGE_SIZE = 1000;
+
+async function fetchAllPages<T = any>(
+  buildQuery: () => any,
+  label: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+    // Garde-fou : au-delà de 50 000 lignes, on arrête et on le signale plutôt
+    // que de boucler indéfiniment sur une requête qui ne converge pas.
+    if (rows.length >= 50 * PAGE_SIZE) {
+      console.warn(`[backup/export] ${label} : arrêt à ${rows.length} lignes.`);
+      break;
+    }
+  }
+  return rows;
+}
+
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -23,11 +50,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [candidatesRes, membersRes, slotsRes] = await Promise.all([
-      supabaseAdmin
-        .from("candidates")
-        .select(
-          `
+    const [candidatesData, membersData, slotsData] = await Promise.all([
+      fetchAllPages(
+        () =>
+          supabaseAdmin
+            .from("candidates")
+            .select(
+              `
           id, first_name, last_name, email, email_verified, phone,
           formation, etablissement, annee_integration, comments, created_at,
           deliberation:deliberations(pros_comment, cons_comment, global_comments, tour1_status, tour2_status, tour3_status),
@@ -37,12 +66,16 @@ export async function GET(req: NextRequest) {
             epreuves(id, name, tour, type)
           )
         `,
-        )
-        .order("last_name", { ascending: true }),
-      supabaseAdmin
-        .from("members")
-        .select(
-          `
+            )
+            .order("last_name", { ascending: true }),
+        "candidats",
+      ),
+      fetchAllPages(
+        () =>
+          supabaseAdmin
+            .from("members")
+            .select(
+              `
           id, email, first_name, last_name, is_admin, pole_affiliation,
           candidate_evaluations!member_id(
             id, scores, comment, created_at,
@@ -50,34 +83,36 @@ export async function GET(req: NextRequest) {
             epreuves(id, name, tour, type)
           )
         `,
-        )
-        .order("last_name", { ascending: true }),
-      supabaseAdmin
-        .from("evaluation_slots")
-        .select(
-          `
+            )
+            .order("last_name", { ascending: true }),
+        "membres",
+      ),
+      fetchAllPages(
+        () =>
+          supabaseAdmin
+            .from("evaluation_slots")
+            .select(
+              `
           *,
           epreuve:epreuves(id, name, tour, type),
           members:slot_member_assignments(*, member:members(id, email, first_name, last_name)),
           enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name, email))
         `,
-        )
-        .order("date", { ascending: true })
-        .order("start_time", { ascending: true }),
+            )
+            .order("date", { ascending: true })
+            .order("start_time", { ascending: true }),
+        "créneaux",
+      ),
     ]);
 
-    if (candidatesRes.error) throw candidatesRes.error;
-    if (membersRes.error) throw membersRes.error;
-    if (slotsRes.error) throw slotsRes.error;
-
-    const slots = (slotsRes.data || []).map((slot: any) => ({
+    const slots = slotsData.map((slot: any) => ({
       ...slot,
       enrollments: (slot.enrollments || []).filter(filterActiveEnrollments),
     }));
 
     return Response.json({
-      candidates: candidatesRes.data || [],
-      members: membersRes.data || [],
+      candidates: candidatesData,
+      members: membersData,
       slots,
     });
   } catch (e: any) {

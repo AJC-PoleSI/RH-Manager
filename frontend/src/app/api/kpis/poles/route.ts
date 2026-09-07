@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     > = {};
 
     // Compter les demandes par pôle et rang
-    (wishes || []).forEach((w: any) => {
+    currentWishes.forEach((w: any) => {
       const pole = w.pole || "Non défini";
       if (!poleStats[pole]) {
         poleStats[pole] = {
@@ -109,9 +109,9 @@ export async function GET(req: NextRequest) {
 
     return Response.json({
       poles: result,
-      totalWishes: (wishes || []).length,
+      totalWishes: currentWishes.length,
       totalCandidatesWithWishes: new Set(
-        (wishes || []).map((w: any) => w.candidate_id),
+        currentWishes.map((w: any) => w.candidate_id),
       ).size,
     });
   } catch (error) {
