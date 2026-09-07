@@ -46,6 +46,7 @@ interface SlotInfo {
   min_members: number;
   epreuve_id: string | null;
   enrollments?: Array<{ id: string; status?: string }>;
+  epreuve?: { is_group_epreuve?: boolean | null } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
