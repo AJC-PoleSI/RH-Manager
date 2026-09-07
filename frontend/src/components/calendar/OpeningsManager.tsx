@@ -376,84 +376,154 @@ export default function OpeningsManager({
     setF: (f: OpeningForm) => void,
     onSubmit: () => void,
     onCancel?: () => void,
+    allowRange = false,
   ) => {
-    const count = previewCount(f);
+    const perDayCount = previewCount(f);
+    const candidates = allowRange
+      ? openingDateCandidates(f.date, f.dateEnd)
+      : [f.date];
+    const finalDates = allowRange
+      ? resolveOpeningDates(f.date, f.dateEnd, f.excludedDates)
+      : [f.date];
+    const isRange = allowRange && candidates.length > 1;
+    const total = perDayCount * finalDates.length;
     const valid =
-      f.room.trim() && f.date && f.startTime < f.endTime && count > 0;
+      f.room.trim() &&
+      f.date &&
+      f.startTime < f.endTime &&
+      perDayCount > 0 &&
+      finalDates.length > 0;
     return (
-      <tr className="bg-blue-50/40">
-        <td className="px-3 py-2">
-          <input
-            type="text"
-            value={f.room}
-            onChange={(e) => setF({ ...f, room: e.target.value })}
-            placeholder="Salle"
-            className="w-24 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            type="date"
-            value={f.date}
-            min={dateMin || undefined}
-            max={dateMax || undefined}
-            onChange={(e) => setF({ ...f, date: e.target.value })}
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-          />
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap">
-          <input
-            type="time"
-            value={f.startTime}
-            onChange={(e) => setF({ ...f, startTime: e.target.value })}
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-          />
-          <span className="mx-1 text-gray-400">–</span>
-          <input
-            type="time"
-            value={f.endTime}
-            onChange={(e) => setF({ ...f, endTime: e.target.value })}
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-          />
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap">
-          <input
-            type="time"
-            value={f.breakStart}
-            onChange={(e) => setF({ ...f, breakStart: e.target.value })}
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-            title="Début de pause (optionnel)"
-          />
-          <span className="mx-1 text-gray-400">–</span>
-          <input
-            type="time"
-            value={f.breakEnd}
-            onChange={(e) => setF({ ...f, breakEnd: e.target.value })}
-            className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-            title="Fin de pause (optionnel)"
-          />
-        </td>
-        <td className="px-3 py-2 text-sm font-medium text-blue-700 whitespace-nowrap">
-          → {count} créneau{count > 1 ? "x" : ""}
-        </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <button
-            onClick={onSubmit}
-            disabled={busy || !valid}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {onCancel ? "✓ Enregistrer" : "+ Ajouter"}
-          </button>
-          {onCancel && (
+      <Fragment>
+        <tr className="bg-blue-50/40">
+          <td className="px-3 py-2">
+            <input
+              type="text"
+              value={f.room}
+              onChange={(e) => setF({ ...f, room: e.target.value })}
+              placeholder="Salle"
+              className="w-24 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </td>
+          <td className="px-3 py-2 whitespace-nowrap">
+            <input
+              type="date"
+              value={f.date}
+              min={dateMin || undefined}
+              max={dateMax || undefined}
+              onChange={(e) =>
+                setF({ ...f, date: e.target.value, excludedDates: new Set() })
+              }
+              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+              title="Date de début"
+            />
+            {allowRange && (
+              <>
+                <span className="mx-1 text-gray-400">→</span>
+                <input
+                  type="date"
+                  value={f.dateEnd}
+                  min={f.date || dateMin || undefined}
+                  max={dateMax || undefined}
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      dateEnd: e.target.value,
+                      excludedDates: new Set(),
+                    })
+                  }
+                  className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                  title="Date de fin (optionnel — plusieurs jours)"
+                />
+              </>
+            )}
+          </td>
+          <td className="px-3 py-2 whitespace-nowrap">
+            <input
+              type="time"
+              value={f.startTime}
+              onChange={(e) => setF({ ...f, startTime: e.target.value })}
+              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+            />
+            <span className="mx-1 text-gray-400">–</span>
+            <input
+              type="time"
+              value={f.endTime}
+              onChange={(e) => setF({ ...f, endTime: e.target.value })}
+              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+            />
+          </td>
+          <td className="px-3 py-2 whitespace-nowrap">
+            <input
+              type="time"
+              value={f.breakStart}
+              onChange={(e) => setF({ ...f, breakStart: e.target.value })}
+              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+              title="Début de pause (optionnel)"
+            />
+            <span className="mx-1 text-gray-400">–</span>
+            <input
+              type="time"
+              value={f.breakEnd}
+              onChange={(e) => setF({ ...f, breakEnd: e.target.value })}
+              className="border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+              title="Fin de pause (optionnel)"
+            />
+          </td>
+          <td className="px-3 py-2 text-sm font-medium text-blue-700 whitespace-nowrap">
+            {isRange
+              ? `→ ${perDayCount} créneau${perDayCount > 1 ? "x" : ""}/jour × ${finalDates.length} jour${finalDates.length > 1 ? "s" : ""} = ${total} créneaux`
+              : `→ ${perDayCount} créneau${perDayCount > 1 ? "x" : ""}`}
+          </td>
+          <td className="px-3 py-2 text-right whitespace-nowrap">
             <button
-              onClick={onCancel}
-              className="ml-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+              onClick={onSubmit}
+              disabled={busy || !valid}
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
             >
-              ✕
+              {onCancel ? "✓ Enregistrer" : "+ Ajouter"}
             </button>
-          )}
-        </td>
-      </tr>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="ml-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            )}
+          </td>
+        </tr>
+        {isRange && (
+          <tr className="bg-blue-50/40">
+            <td colSpan={6} className="px-3 pb-2.5 pt-0">
+              <div className="flex flex-wrap gap-1.5">
+                {candidates.map((d) => {
+                  const selected = !f.excludedDates.has(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        const next = new Set(f.excludedDates);
+                        if (selected) next.add(d);
+                        else next.delete(d);
+                        setF({ ...f, excludedDates: next });
+                      }}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors capitalize ${
+                        selected
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-400 border-gray-300 line-through hover:border-blue-400"
+                      }`}
+                    >
+                      {fmtDate(d)}
+                    </button>
+                  );
+                })}
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
     );
   };
 
