@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { latestTourWishes } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
           id,
           pole,
           rank,
+          tour,
           wants_bureau,
           poste_detail
         )
@@ -150,7 +152,9 @@ export async function GET(req: NextRequest) {
         };
       });
 
-      const wishes = (c.candidate_wishes || [])
+      // Tour le plus avancé uniquement : les vœux du tour 2 restent en base à
+      // côté de ceux du tour 3 et fausseraient le classement affiché.
+      const wishes = latestTourWishes(c.candidate_wishes as any[])
         .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))
         .map((w: any) => ({
           pole: w.pole,

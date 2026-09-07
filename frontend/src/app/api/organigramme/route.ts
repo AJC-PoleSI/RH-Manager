@@ -1,4 +1,5 @@
 import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
+import { latestTourWishes } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import {
   MAX_FAVORITES,
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     const [candidatesRes, photosRes, favoritesRes] = await Promise.all([
       supabaseAdmin
         .from("candidates")
-        .select("id, first_name, last_name, deliberations(*), candidate_wishes(pole, rank)")
+        .select("id, first_name, last_name, deliberations(*), candidate_wishes(pole, rank, tour)")
         // Même règle qu'en délibération : les inscriptions non confirmées ne
         // sont pas des candidats.
         .eq("email_verified", true)
@@ -110,7 +111,10 @@ export async function GET(req: NextRequest) {
         ? c.deliberations[0] || null
         : c.deliberations;
       const eliminated = eliminatedIds.has(c.id);
-      const wishes = (c.candidate_wishes || []) as any[];
+      // Le premier vœu affiché doit être celui du tour le plus avancé : sans
+      // ce filtre, un candidat ayant changé d'avis entre le tour 2 et le tour 3
+      // pouvait voir son ancien pôle au trombinoscope (audit du 07/09/2026).
+      const wishes = latestTourWishes(c.candidate_wishes as any[]);
       const firstWish =
         wishes.find((w) => w.rank === 1)?.pole || wishes[0]?.pole || null;
 

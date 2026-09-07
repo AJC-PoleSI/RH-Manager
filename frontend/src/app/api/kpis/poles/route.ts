@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { latestTourWishesByCandidate } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
@@ -31,16 +32,7 @@ export async function GET(req: NextRequest) {
     // `tour` n'est pas encore posée, toutes les lignes retombent sur 0 et le
     // comportement reste celui d'avant (aucune ligne perdue).
     // ────────────────────────────────────────────────────────────────────
-    const latestTourByCandidate = new Map<string, number>();
-    for (const w of wishes ?? []) {
-      const t = Number((w as any).tour ?? 0);
-      const known = latestTourByCandidate.get((w as any).candidate_id) ?? -1;
-      if (t > known) latestTourByCandidate.set((w as any).candidate_id, t);
-    }
-    const currentWishes = (wishes ?? []).filter(
-      (w: any) =>
-        Number(w.tour ?? 0) === latestTourByCandidate.get(w.candidate_id),
-    );
+    const currentWishes = latestTourWishesByCandidate(wishes as any[]);
 
     // Fetch accepted deliberations (pour compter les places acceptées).
     //
