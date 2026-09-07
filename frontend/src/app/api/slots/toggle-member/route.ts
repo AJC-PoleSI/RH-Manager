@@ -304,9 +304,34 @@ export async function POST(req: NextRequest) {
       }
 
       // Add assignment
-      const { error: insertError } = await supabaseAdmin
-        .from("slot_member_assignments")
-        .insert({ slot_id: slotId, member_id: memberId });
+      //
+      // `is_manual` : quand c'est un ADMIN qui place un examinateur, le choix
+      // est délibéré et le dispatch ne doit plus rebrasser ce créneau (audit du
+      // 07/09/2026 — une simple sauvegarde de disponibilités par n'importe quel
+      // membre relançait un recalcul global qui pouvait le défaire en silence).
+      // Un membre qui s'inscrit lui-même ne verrouille rien : le planning doit
+      // rester rééquilibrable.
+      const manual = payload.isAdmin === true;
+      let insertError: { code?: string } | null = null;
+      {
+        const res = await supabaseAdmin
+          .from("slot_member_assignments")
+          .insert({ slot_id: slotId, member_id: memberId, is_manual: manual });
+        insertError = res.error;
+
+        // Colonne pas encore posée : on retombe sur l'insertion d'origine.
+        if (insertError && isMissingTableError(insertError)) {
+          console.warn(
+            "[toggle-member] Colonne slot_member_assignments.is_manual absente — " +
+              "affectation enregistrée sans protection contre le rebrassage. " +
+              "Appliquez MIGRATIONS_A_APPLIQUER.sql.",
+          );
+          const retry = await supabaseAdmin
+            .from("slot_member_assignments")
+            .insert({ slot_id: slotId, member_id: memberId });
+          insertError = retry.error;
+        }
+      }
 
       if (insertError) {
         if (insertError.code === "23505") {

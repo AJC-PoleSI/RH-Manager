@@ -10,6 +10,7 @@ import { Loader2, Plus, Search, Trash2, Edit, X, ChevronRight, Save, ArrowLeft, 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
+import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -276,7 +277,11 @@ export default function CandidatesPage() {
 
             const wb = XLSX.utils.book_new();
 
-            const ws1 = XLSX.utils.json_to_sheet(synthRows);
+            // Les valeurs libres (prénom, nom, commentaires) sont neutralisées
+            // avant écriture : sans cela, un candidat inscrit sous
+            // `=HYPERLINK(...)` fait exécuter une formule à l'ouverture du
+            // fichier par le staff (audit sécurité du 07/09/2026).
+            const ws1 = XLSX.utils.json_to_sheet(synthRows.map(sanitizeSpreadsheetRow));
             ws1['!cols'] = [
                 { wch: 14 }, { wch: 16 }, { wch: 28 },
                 { wch: 11 }, { wch: 40 },
@@ -288,7 +293,7 @@ export default function CandidatesPage() {
             ];
             XLSX.utils.book_append_sheet(wb, ws1, 'Synthèse');
 
-            const ws2 = XLSX.utils.json_to_sheet(detailRows);
+            const ws2 = XLSX.utils.json_to_sheet(detailRows.map(sanitizeSpreadsheetRow));
             ws2['!cols'] = [
                 { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 14 },
                 { wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 60 }, { wch: 12 },

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { sanitizeSpreadsheetValue } from "./spreadsheet-safety";
 
 export interface BackupData {
   candidates: any[];

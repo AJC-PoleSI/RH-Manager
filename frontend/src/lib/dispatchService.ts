@@ -138,10 +138,49 @@ export async function runDispatch(opts?: {
 
   // 3. Fetch current assignments
   const slotIds = slots.map((s: any) => s.id);
-  const { data: currentAssigns } = await supabaseAdmin
-    .from("slot_member_assignments")
-    .select("slot_id, member_id")
-    .in("slot_id", slotIds);
+  // On lit aussi `is_manual` : un examinateur placé À LA MAIN par l'admin
+  // (toggle-member) épingle son créneau, que le dispatch ne doit plus
+  // rebrasser. Tant que la colonne n'est pas posée en base, on retombe sur la
+  // lecture d'origine et le comportement reste celui d'avant.
+  let currentAssigns: any[] | null = null;
+  {
+    const withManual = await supabaseAdmin
+      .from("slot_member_assignments")
+      .select("slot_id, member_id, is_manual")
+      .in("slot_id", slotIds);
+
+    if (withManual.error) {
+      const plain = await supabaseAdmin
+        .from("slot_member_assignments")
+        .select("slot_id, member_id")
+        .in("slot_id", slotIds);
+      currentAssigns = plain.data;
+      console.warn(
+        "[dispatch] Colonne slot_member_assignments.is_manual absente — les " +
+          "affectations manuelles ne sont PAS protégées du rebrassage. " +
+          "Appliquez la section « dispatch : affectations manuelles » de " +
+          "MIGRATIONS_A_APPLIQUER.sql.",
+      );
+    } else {
+      currentAssigns = withManual.data;
+    }
+  }
+
+  // Créneaux « épinglés » : au moins un examinateur y a été placé à la main.
+  //
+  // Audit fonctionnel du 07/09/2026 : sans cette notion, TOUTE sauvegarde de
+  // disponibilités par n'importe quel membre relançait un dispatch global qui
+  // pouvait défaire, sans prévenir l'admin, un jury qu'il avait composé
+  // manuellement pour une raison métier. Un créneau épinglé est désormais
+  // traité comme un créneau clôturé : son jury est conservé, on ne fait que le
+  // compléter s'il est en sous-effectif. Retirer l'affectation manuelle
+  // (toggle-member) le rend à nouveau rebrassable.
+  const manualSlotIds = new Set<string>();
+  (currentAssigns || []).forEach((a: any) => {
+    if (a?.is_manual) manualSlotIds.add(a.slot_id);
+  });
+  const isLocked = (slot: SlotInfo | { id: string; status?: string }): boolean =>
+    isCommitted(slot as SlotInfo) || manualSlotIds.has((slot as any).id);
 
   const currentBySlot: Record<string, Set<string>> = {};
   (currentAssigns || []).forEach((a: any) => {
@@ -209,7 +248,7 @@ export async function runDispatch(opts?: {
     });
   };
   for (const slot of sortedSlots) {
-    if (isFrozen(slot as SlotInfo) || isCommitted(slot as SlotInfo)) {
+    if (isFrozen(slot as SlotInfo) || isLocked(slot as SlotInfo)) {
       const existing = currentBySlot[slot.id] || new Set<string>();
       existing.forEach((memberId) => registerConflict(memberId, slot as SlotInfo));
     }
@@ -235,7 +274,7 @@ export async function runDispatch(opts?: {
 
     // Pré-charge de la charge depuis les créneaux gelés/clôturés de CETTE épreuve
     for (const slot of epreuveSlots) {
-      if (isFrozen(slot) || isCommitted(slot)) {
+      if (isFrozen(slot) || isLocked(slot)) {
         const existing = currentBySlot[slot.id] || new Set<string>();
         existing.forEach((memberId) => {
           memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
@@ -253,8 +292,10 @@ export async function runDispatch(opts?: {
         continue;
       }
 
-      // 9b. Committed (closed) slots — preserve jury, only add if understaffed
-      if (isCommitted(slotInfo)) {
+      // 9b. Créneaux verrouillés (clôturés OU jury composé à la main) :
+      //     on préserve le jury en place, on ne fait que compléter s'il manque
+      //     des examinateurs.
+      if (isLocked(slotInfo)) {
         const quota = slot.min_members || 2;
         if (existing.size < quota) {
           const eligible = matchSlotToMembers(slotInfo).filter(
@@ -365,7 +406,7 @@ export async function runDispatch(opts?: {
   // erreur est propagée (rien n'a changé) pour ne pas mettre à jour des statuts
   // désynchronisés à l'étape 11. Cf. dispatch-io.ts.
   const wipeableSlotIds = sortedSlots
-    .filter((s: any) => !isCommitted(s as SlotInfo) && !isFrozen(s as SlotInfo))
+    .filter((s: any) => !isLocked(s as SlotInfo) && !isFrozen(s as SlotInfo))
     .map((s: any) => s.id);
 
   await applyAssignments(
@@ -429,7 +470,7 @@ export async function runDispatch(opts?: {
   }
 
   for (const slot of sortedSlots) {
-    if (isCommitted(slot as SlotInfo) || isFrozen(slot as SlotInfo)) continue;
+    if (isLocked(slot as SlotInfo) || isFrozen(slot as SlotInfo)) continue;
 
     const assignedCount = assignmentsToInsert.filter(
       (a) => a.slot_id === slot.id,
