@@ -43,6 +43,8 @@ interface Opening {
 interface OpeningForm {
   room: string;
   date: string;
+  dateEnd: string;
+  excludedDates: Set<string>;
   startTime: string;
   endTime: string;
   breakStart: string;
@@ -52,6 +54,8 @@ interface OpeningForm {
 const EMPTY_FORM: OpeningForm = {
   room: "",
   date: "",
+  dateEnd: "",
+  excludedDates: new Set(),
   startTime: "09:00",
   endTime: "17:00",
   breakStart: "",
