@@ -334,6 +334,7 @@ export default function CreationPage() {
       roulementMinutes: String(ep.roulementMinutes || "10"),
       pole: ep.pole || "",
       groupSize: String(ep.groupSize || "4"),
+      minCandidates: String(ep.minCandidates ?? ""),
       minEvaluators: String(
         (ep as any).minEvaluatorsPerSalle ||
           (ep as any).min_evaluators_per_salle ||
