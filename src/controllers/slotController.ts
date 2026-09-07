@@ -586,6 +586,24 @@ export const enrollInSlot = async (req: Request, res: Response) => {
             }
         }
 
+        // Check for time conflicts with any other enrollment the same day (different epreuve included)
+        const sameDayEnrollments = await prisma.slotEnrollment.findMany({
+            where: {
+                candidateId,
+                status: { not: 'cancelled' },
+                slot: { date: slot.date }
+            },
+            include: { slot: { include: { epreuve: { select: { name: true } } } } }
+        });
+        const conflicting = sameDayEnrollments.find(e =>
+            slotsOverlap(slot.date, slot.startTime, slot.endTime, e.slot.date, e.slot.startTime, e.slot.endTime)
+        );
+        if (conflicting) {
+            return res.status(400).json({
+                error: `Ce cr\u00e9neau chevauche un autre cr\u00e9neau (${conflicting.slot.epreuve?.name || 'autre \u00e9preuve'}, ${conflicting.slot.startTime}-${conflicting.slot.endTime}) auquel vous \u00eates d\u00e9j\u00e0 inscrit`
+            });
+        }
+
         const enrollment = await prisma.slotEnrollment.create({
             data: { slotId, candidateId },
             include: {
