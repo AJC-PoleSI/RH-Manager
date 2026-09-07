@@ -55,6 +55,13 @@ export async function GET(req: NextRequest) {
       result = parsed.filter(
         (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
       );
+      // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour
+      // pas encore commencé (statut "a_venir") — ni leur existence, ni
+      // combien il en reste. Filtré côté serveur, pas seulement à l'affichage.
+      const toursByNumber = await getToursByNumber();
+      result = result.filter(
+        (e: any) => toursByNumber[e.tour]?.status !== "a_venir",
+      );
     } else if (payload.role === "member" && !payload.isAdmin) {
       // PÔLE : un membre non-admin ne voit les épreuves de pôle que de
       // SON pôle (il ne doit pas pouvoir s'inscrire comme examinateur
