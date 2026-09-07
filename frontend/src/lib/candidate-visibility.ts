@@ -50,8 +50,27 @@ export function projectCandidateForMember<T extends Record<string, any>>(
   if ("candidate_wishes" in candidate) {
     projected.candidate_wishes = candidate.candidate_wishes;
   }
+  // Délibérations : on ne laisse passer que les STATUTS de tour, jamais les
+  // champs de commentaire (pros/cons/global), réservés aux admins.
+  //
+  // Audit du 07/09/2026 : ce bloc recopiait l'objet `deliberations` entier.
+  // Aucun appelant ne le sélectionne aujourd'hui, donc rien ne fuitait — mais
+  // il aurait suffi qu'un développeur ajoute `deliberations(*)` à un `select()`
+  // pour que les commentaires de délibération partent vers tout membre, sans
+  // qu'aucun test ne le voie. La projection est désormais sûre par construction.
   if ("deliberations" in candidate) {
-    projected.deliberations = candidate.deliberations;
+    const raw = candidate.deliberations;
+    const projectDelib = (d: Record<string, any> | null) =>
+      d
+        ? {
+            tour1_status: d.tour1_status ?? null,
+            tour2_status: d.tour2_status ?? null,
+            tour3_status: d.tour3_status ?? null,
+          }
+        : d;
+    projected.deliberations = Array.isArray(raw)
+      ? raw.map(projectDelib)
+      : projectDelib(raw);
   }
 
   return projected;
