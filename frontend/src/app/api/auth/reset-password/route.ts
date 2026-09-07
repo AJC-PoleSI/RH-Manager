@@ -1,9 +1,30 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { signToken, isSuperAdminEmail } from "@/lib/auth";
-import { hashResetToken, validatePassword } from "@/lib/password";
+import { BCRYPT_COST, hashResetToken, validatePassword } from "@/lib/password";
 import { resetRateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
+
+/** Schéma incomplet : les colonnes password_reset_* ne sont pas encore posées. */
+class MissingResetSchemaError extends Error {
+  constructor() {
+    super("password_reset schema missing");
+    this.name = "MissingResetSchemaError";
+  }
+}
+
+/** 503 explicite plutôt qu'un « lien invalide » trompeur. */
+function migrationPendingResponse() {
+  return Response.json(
+    {
+      error:
+        "La réinitialisation de mot de passe est indisponible : une migration " +
+        "de base de données reste à appliquer. Contactez un administrateur.",
+      migrationPending: true,
+    },
+    { status: 503 },
+  );
+}
 
 /**
  * Retrouve le membre porteur d'un jeton encore valide.
