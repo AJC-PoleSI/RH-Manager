@@ -60,9 +60,9 @@ export async function POST(req: NextRequest) {
     // Sanitize: limit length
     const sanitizedMessage = message.trim().substring(0, 2000);
 
-    let role = "member";
-    if (user.role === "candidate") role = "candidate";
-    else if (user.isAdmin) role = "admin";
+    // Le garde plus haut (`user.role !== "member"`) exclut déjà les candidats :
+    // seuls des membres (admin ou non) atteignent ce point.
+    const role = user.isAdmin ? "admin" : "member";
 
     const { data, error } = await supabaseAdmin
       .from("chat_messages")
