@@ -167,7 +167,12 @@ export default function OpeningsManager({
 
   useEffect(() => {
     fetchCapacityCheck();
-  }, [fetchCapacityCheck, openings]);
+    // Le staffing des créneaux (dispatch, ajout manuel) peut changer sans
+    // que cette page en soit informée autrement — on rafraîchit l'alerte
+    // périodiquement, comme le reste du planning admin.
+    const interval = setInterval(fetchCapacityCheck, 5000);
+    return () => clearInterval(interval);
+  }, [fetchCapacityCheck]);
 
   // Aperçu live du nombre de créneaux pour un formulaire
   const previewCount = useCallback(
