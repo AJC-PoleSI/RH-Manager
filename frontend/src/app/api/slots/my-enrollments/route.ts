@@ -27,11 +27,19 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    // VISIBILITÉ TOURS : un candidat ne doit jamais voir une épreuve d'un
+    // tour "a_venir", même si une inscription existe déjà dessus (ne devrait
+    // pas arriver en usage normal — voir /slots/available pour le même filtre).
+    const toursByNumber = await getToursByNumber();
+
     // FIX M5: also expose slot.status and epreuve.id so the candidate UI
     // can tell when its slot got cancelled/downgraded and link properly.
     // FIX C2: hide cancelled enrollments from the candidate's own list.
     const safe = (enrollments || [])
       .filter(filterActiveEnrollments)
+      .filter(
+        (e: any) => toursByNumber[e.slot?.epreuve?.tour]?.status !== "a_venir",
+      )
       .map((e: any) => ({
         id: e.id,
         slotId: e.slot_id,
