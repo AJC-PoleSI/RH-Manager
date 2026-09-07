@@ -452,7 +452,7 @@ function AdminView() {
                                         </td>
                                         <td className="px-6 py-3 text-center">
                                             {mAvg !== null ? (
-                                                <span className="font-bold text-blue-600">{mAvg}</span>
+                                                <span className="font-bold text-blue-600">{mAvg}/20</span>
                                             ) : (
                                                 <span className="text-gray-400">-</span>
                                             )}
