@@ -113,3 +113,51 @@ export function diffOpeningSlots(
   );
   return { toCreate, toDeleteIds, keptIds, conflictIds };
 }
+
+/**
+ * Liste des jours ouvrés (Lun–Ven) entre deux dates "YYYY-MM-DD" incluses.
+ * Retourne [] si une date est vide/invalide ou si end < start.
+ */
+export function weekdaysBetween(start: string, end: string): string[] {
+  if (!start || !end) return [];
+  const s = new Date(start + "T12:00:00");
+  const e = new Date(end + "T12:00:00");
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s)
+    return [];
+  const out: string[] = [];
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) {
+      out.push(
+        `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
+      );
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+/**
+ * Dates candidates pour une ouverture (avant exclusions manuelles) :
+ * un seul jour (weekend inclus) si `dateEnd` est vide ou <= `date` —
+ * comportement identique à une création mono-jour ; sinon les jours
+ * ouvrés de la plage [date, dateEnd].
+ */
+export function openingDateCandidates(
+  date: string,
+  dateEnd: string,
+): string[] {
+  if (!date) return [];
+  if (!dateEnd || dateEnd <= date) return [date];
+  return weekdaysBetween(date, dateEnd);
+}
+
+/** Dates candidates moins celles explicitement exclues par l'utilisateur. */
+export function resolveOpeningDates(
+  date: string,
+  dateEnd: string,
+  excluded: Set<string>,
+): string[] {
+  return openingDateCandidates(date, dateEnd).filter((d) => !excluded.has(d));
+}
