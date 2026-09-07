@@ -292,6 +292,43 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // ──────────────────────────────────────────────────────────────
+      // SURPLUS EXAMINATEURS (épreuves de groupe uniquement) : un créneau
+      // ne doit recevoir plus que son minimum d'examinateurs que si les
+      // autres salles au même horaire (même épreuve, même date+heure)
+      // ont elles-mêmes déjà atteint leur minimum — sinon on invite à
+      // staffer l'autre salle en priorité plutôt que d'empiler ici.
+      // Voir docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md
+      // ──────────────────────────────────────────────────────────────
+      if (targetEpreuve?.is_group_epreuve) {
+        const { count: currentMemberCount } = await supabaseAdmin
+          .from("slot_member_assignments")
+          .select("id", { count: "exact", head: true })
+          .eq("slot_id", slotId);
+        const minMembers = (targetSlot as any).min_members || 0;
+        if ((currentMemberCount || 0) >= minMembers) {
+          const { data: siblings } = await supabaseAdmin
+            .from("evaluation_slots")
+            .select("id, room, min_members, members:slot_member_assignments(id)")
+            .eq("epreuve_id", (targetSlot as any).epreuve_id)
+            .eq("date", (targetSlot as any).date)
+            .eq("start_time", (targetSlot as any).start_time)
+            .neq("id", slotId);
+          const understaffed = (siblings || []).filter(
+            (s: any) => (s.members?.length || 0) < (s.min_members || 0),
+          );
+          if (understaffed.length > 0) {
+            return Response.json(
+              {
+                error: `Ce créneau a déjà son minimum d'examinateurs (${minMembers}). D'autres salles au même horaire ont besoin d'examinateurs en priorité : ${understaffed.map((s: any) => s.room).join(", ")}.`,
+                code: "SIBLING_SLOTS_UNDERSTAFFED",
+              },
+              { status: 409 },
+            );
+          }
+        }
+      }
+
       const conflict = await memberHasConflict(memberId, targetSlot, slotId);
       if (conflict) {
         return Response.json(
