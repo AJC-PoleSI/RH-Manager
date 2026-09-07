@@ -6,7 +6,7 @@ import {
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
 import { getCandidateWishedPoles } from "@/lib/admission";
-import { isTourLocked } from "@/lib/tour-status";
+import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
 import { NextRequest } from "next/server";
