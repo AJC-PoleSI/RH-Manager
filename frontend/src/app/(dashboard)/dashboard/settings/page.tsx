@@ -1039,47 +1039,72 @@ export default function CreationPage() {
                   />
                 </div>
                 {form.type === "groupe" && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre max de candidats par créneau
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={form.groupSize}
+                        onChange={(e) =>
+                          handleFormChange("groupSize", e.target.value)
+                        }
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="4"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        Limite d&apos;inscriptions candidat sur chaque créneau
+                        de cette épreuve. Le créneau se bloque automatiquement
+                        une fois plein.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre minimum de candidats par créneau
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={form.minCandidates}
+                        onChange={(e) =>
+                          handleFormChange("minCandidates", e.target.value)
+                        }
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="4"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        En dessous de ce minimum, le créneau est fusionné avec
+                        un autre à la clôture des inscriptions. Fixe aussi le
+                        nombre d&apos;examinateurs affectés (les deux sont
+                        toujours égaux pour une épreuve de groupe).
+                      </p>
+                    </div>
+                  </>
+                )}
+                {form.type !== "groupe" && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre max de candidats par créneau
+                      Nombre d&apos;examinateurs par créneau
                     </label>
                     <input
                       type="number"
                       min="1"
-                      value={form.groupSize}
+                      value={form.minEvaluators}
                       onChange={(e) =>
-                        handleFormChange("groupSize", e.target.value)
+                        handleFormChange("minEvaluators", e.target.value)
                       }
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="4"
+                      placeholder="2"
                     />
                     <p className="mt-1 text-xs text-gray-400">
-                      Limite d&apos;inscriptions candidat sur chaque créneau
-                      de cette épreuve. Le créneau se bloque automatiquement
-                      une fois plein.
+                      Nombre d&apos;examinateurs que le dispatch affecte à
+                      chaque créneau de cette épreuve. S&apos;applique aux
+                      nouveaux créneaux créés.
                     </p>
                   </div>
                 )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre d&apos;examinateurs par créneau
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.minEvaluators}
-                    onChange={(e) =>
-                      handleFormChange("minEvaluators", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="2"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Nombre d&apos;examinateurs que le dispatch affecte à chaque
-                    créneau de cette épreuve (ex. 4 pour une épreuve de groupe).
-                    S&apos;applique aux nouveaux créneaux créés.
-                  </p>
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Pôle (Optionnel)
