@@ -83,6 +83,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // TOUR PAS ENCORE COMMENCÉ : filet de sécurité si un créneau était
+    // publié par erreur avant l'heure (défense en profondeur — le slot est
+    // aussi masqué dans /slots/available et /epreuves).
+    if (epreuveTour != null && (await isTourUpcoming(Number(epreuveTour)))) {
+      return Response.json(
+        { error: "Ce tour n'a pas encore commencé." },
+        { status: 400 },
+      );
+    }
+
     // TOUR 3 : une épreuve de pôle n'est ouverte qu'aux candidats ayant
     // demandé ce pôle dans leurs vœux (défense en profondeur — le slot
     // est aussi masqué dans /slots/available).
