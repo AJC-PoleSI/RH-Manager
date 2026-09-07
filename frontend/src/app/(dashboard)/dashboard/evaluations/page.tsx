@@ -23,7 +23,7 @@ interface EvaluationData {
     comment?: string;
     createdAt: string;
     candidate: { id: string; firstName: string; lastName: string };
-    epreuve: { name: string; tour: number; type: string };
+    epreuve: { name: string; tour: number; type: string; maxTotal?: number };
     member?: { id: string; firstName?: string; lastName?: string; email: string };
 }
 
