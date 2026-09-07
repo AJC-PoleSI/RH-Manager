@@ -116,6 +116,13 @@ export async function GET(req: NextRequest) {
 
       // Si admin/membre: tout passe
       if (!isCandidate) return true;
+      // VISIBILITÉ TOURS : tour de l'épreuve pas encore commencé → invisible,
+      // MÊME si le candidat y est inscrit (ne devrait pas arriver en usage
+      // normal — l'inscription est bloquée pour un tour "a_venir" — mais ne
+      // doit jamais fuiter via une inscription historique/de test).
+      if (toursByNumber[slot.epreuve?.tour]?.status === "a_venir") {
+        return false;
+      }
       // Candidat inscrit: TOUJOURS visible (pour pouvoir se désinscrire),
       // quel que soit le statut du slot (open/closed/draft inclus).
       if (isEnrolled) return true;
@@ -125,10 +132,6 @@ export async function GET(req: NextRequest) {
         slot.epreuve?.pole &&
         !wishedPoles.includes(slot.epreuve.pole)
       ) {
-        return false;
-      }
-      // VISIBILITÉ TOURS : tour de l'épreuve pas encore commencé → invisible.
-      if (toursByNumber[slot.epreuve?.tour]?.status === "a_venir") {
         return false;
       }
       // Sinon: ne montrer que les statuts PUBLIÉS avec au moins
