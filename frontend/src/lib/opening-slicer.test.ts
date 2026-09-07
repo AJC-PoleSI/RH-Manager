@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sliceOpening, diffOpeningSlots } from "./opening-slicer";
+import {
+  sliceOpening,
+  diffOpeningSlots,
+  weekdaysBetween,
+  openingDateCandidates,
+  resolveOpeningDates,
+} from "./opening-slicer";
 
 const P = { durationMinutes: 30, roulementMinutes: 10 }; // spacing 40
 
