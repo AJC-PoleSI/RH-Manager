@@ -62,6 +62,9 @@ export function slotInsertRow(
     duration_minutes: epreuve.duration_minutes || 30,
     label: null,
     max_candidates: epreuve.is_group_epreuve ? epreuve.group_size || 1 : 1,
+    min_candidates: epreuve.is_group_epreuve
+      ? epreuve.min_candidates || null
+      : null,
     min_members: epreuve.min_evaluators_per_salle ?? 2,
     simultaneous_slots: 1,
     epreuve_id: epreuve.id,
