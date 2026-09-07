@@ -280,7 +280,9 @@ export default function OpeningsManager({
     )
       return;
     try {
-      await api.delete(`/slots/${slotId}`);
+      // Le message de confirmation ci-dessus annonce déjà la suppression d'un
+      // créneau OCCUPÉ : on assume donc explicitement le garde-fou serveur.
+      await api.delete(`/slots/${slotId}?force=true`);
       toast("Créneau supprimé, inscrits notifiés", "success");
       refreshAll();
     } catch (e: any) {

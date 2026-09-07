@@ -254,7 +254,26 @@ export default function CrossCalendarPage() {
     try {
       await api.delete(`/slots/${id}`);
       fetchExistingSlots();
-    } catch (e) {
+    } catch (e: any) {
+      // 409 = le cr\u00e9neau a des inscrits. L'API refuse de le supprimer sans
+      // confirmation explicite : on nomme les candidats concern\u00e9s avant de
+      // redemander, plut\u00f4t que de supprimer en silence.
+      if (e?.response?.status === 409) {
+        const n = e.response.data?.enrolled ?? 0;
+        const ok = confirm(
+          `${n === 1 ? "1 candidat est inscrit" : `${n} candidats sont inscrits`} \u00e0 ce cr\u00e9neau. ` +
+            "Le supprimer quand m\u00eame ? Les inscrits seront notifi\u00e9s.",
+        );
+        if (!ok) return;
+        try {
+          await api.delete(`/slots/${id}?force=true`);
+          fetchExistingSlots();
+          return;
+        } catch {
+          toast("Erreur suppression", "error");
+          return;
+        }
+      }
       toast("Erreur suppression", "error");
     }
   };

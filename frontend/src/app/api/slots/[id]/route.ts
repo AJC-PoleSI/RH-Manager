@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 import {
   fetchDayIntervals,
   findConflict,
