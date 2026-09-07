@@ -315,3 +315,42 @@ CREATE INDEX IF NOT EXISTS idx_candidate_favorites_candidate
   ON candidate_favorites (candidate_id);
 
 ALTER TABLE candidate_favorites ENABLE ROW LEVEL SECURITY;
+
+
+-- ------------------------------------------------------------
+-- 7) Dispatch : affectations manuelles protégées du rebrassage
+--    (audit fonctionnel du 07/09/2026)
+-- ------------------------------------------------------------
+-- Sans cette colonne, toute sauvegarde de disponibilité par n'importe quel
+-- membre relance un dispatch global qui peut défaire, sans prévenir l'admin,
+-- un jury qu'il a composé à la main (bouton "ajouter/retirer" du planning).
+-- `is_manual=true` épingle le créneau : le dispatch le traite comme clôturé
+-- (jury conservé, seulement complété si sous-effectif).
+
+ALTER TABLE slot_member_assignments
+  ADD COLUMN IF NOT EXISTS is_manual boolean NOT NULL DEFAULT false;
+
+
+-- ------------------------------------------------------------
+-- 8) Intégration Befast ↔ RH Manager
+--    (supabase-migration-befast-integration.sql — absente de ce fichier
+--    jusqu'ici, donc la plus exposée à l'oubli lors d'un prochain passage
+--    en SQL Editor ; audit du 07/09/2026)
+-- ------------------------------------------------------------
+-- Colonnes de liaison + miroir des documents poussés par Befast. Tant
+-- qu'elles manquent, POST /api/internal/provision et /api/internal/documents
+-- répondent désormais 503 explicite (au lieu d'un échec silencieux ou d'une
+-- 500 Postgres brute — voir ces deux routes).
+
+ALTER TABLE public.candidates
+  ADD COLUMN IF NOT EXISTS befast_person_id uuid,
+  -- provenance : 'onboarding' (hub), 'rh_direct', 'befast_direct', 'backfill'
+  ADD COLUMN IF NOT EXISTS onboarding_source text,
+  -- payload curé des documents poussés par Befast (références, pas les fichiers)
+  ADD COLUMN IF NOT EXISTS befast_documents jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS befast_documents_complete boolean NOT NULL DEFAULT false;
+
+-- Un candidat RH est lié à au plus une personne Befast.
+CREATE UNIQUE INDEX IF NOT EXISTS candidates_befast_person_id_key
+  ON public.candidates (befast_person_id)
+  WHERE befast_person_id IS NOT NULL;
