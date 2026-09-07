@@ -386,6 +386,23 @@ export const toggleMemberSlot = async (req: Request, res: Response) => {
 
             return res.json({ action: 'removed' });
         } else {
+            // Check for time conflicts with any other slot the member is already on, same day
+            const targetSlot = await prisma.evaluationSlot.findUnique({ where: { id: slotId } });
+            if (!targetSlot) return res.status(404).json({ error: 'Créneau non trouvé' });
+
+            const sameDayAssignments = await prisma.slotMemberAssignment.findMany({
+                where: { memberId, slot: { date: targetSlot.date } },
+                include: { slot: { include: { epreuve: { select: { name: true } } } } }
+            });
+            const conflicting = sameDayAssignments.find(a =>
+                slotsOverlap(targetSlot.date, targetSlot.startTime, targetSlot.endTime, a.slot.date, a.slot.startTime, a.slot.endTime)
+            );
+            if (conflicting) {
+                return res.status(400).json({
+                    error: `Ce créneau chevauche un autre créneau (${conflicting.slot.epreuve?.name || 'autre épreuve'}, ${conflicting.slot.startTime}-${conflicting.slot.endTime}) sur lequel vous êtes déjà affecté`
+                });
+            }
+
             // Add assignment
             await prisma.slotMemberAssignment.create({
                 data: { slotId, memberId }
