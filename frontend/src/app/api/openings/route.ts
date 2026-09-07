@@ -4,10 +4,9 @@ import { NextRequest } from "next/server";
 import { diffOpeningSlots } from "@/lib/opening-slicer";
 import {
   sliceOpeningRow,
-  slotInsertRow,
-  checkOpeningOverlap,
   isSlotOccupied,
   validateOpeningInput,
+  createOpeningWithSlots,
 } from "@/lib/openings-service";
 
 export const dynamic = "force-dynamic";
