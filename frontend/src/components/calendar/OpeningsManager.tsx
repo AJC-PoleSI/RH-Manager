@@ -699,7 +699,7 @@ export default function OpeningsManager({
                   </tr>
                 )}
                 {editingId === null &&
-                  renderFormRow(form, setForm, handleAdd)}
+                  renderFormRow(form, setForm, handleAdd, undefined, true)}
               </>
             )}
           </tbody>
