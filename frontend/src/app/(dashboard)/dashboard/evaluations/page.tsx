@@ -544,10 +544,10 @@ function AdminView() {
                                                 T{ev.epreuve?.tour || '?'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-3 text-center font-bold text-blue-600">{getScoreTotal(ev.scores)}</td>
+                                        <td className="px-6 py-3 text-center font-bold text-blue-600">{getScoreOn20(ev)}/20</td>
                                         <td className="px-6 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
-                                                <span className="font-bold text-green-700">{collectiveScore}</span>
+                                                <span className="font-bold text-green-700">{collectiveScore}/20</span>
                                                 <span className="text-xs text-gray-400">({groupCount} eval{groupCount > 1 ? 's' : ''})</span>
                                             </div>
                                         </td>
