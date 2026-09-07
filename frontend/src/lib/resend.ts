@@ -263,7 +263,8 @@ export async function sendPasswordResetEmail(
     ? "Si vous n'attendiez pas cet email, ignorez-le : votre mot de passe actuel reste valable."
     : "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email : votre mot de passe actuel reste inchangé.";
 
-  const safeName = (firstName || "").trim();
+  // Échappé : ce prénom vient d'une saisie libre (audit sécurité 07/09/2026).
+  const safeName = escapeHtml((firstName || "").trim());
 
   const html = `
 <!DOCTYPE html>
