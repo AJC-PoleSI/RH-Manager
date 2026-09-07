@@ -207,6 +207,8 @@ export default function OpeningsManager({
     setEditForm({
       room: o.room,
       date: o.date,
+      dateEnd: "",
+      excludedDates: new Set(),
       startTime: o.start_time,
       endTime: o.end_time,
       breakStart: o.break_start || "",
