@@ -40,6 +40,16 @@ function getScoreTotal(scores: Record<string, number | string>): number {
 }
 
 /**
+ * Convertit le total brut d'une évaluation en note /20, en se basant sur le
+ * barème réel de son épreuve (`epreuve.maxTotal`, somme des critères — ex.
+ * 3 critères /20 = 60 points max). Sans ça, comparer/moyenner des totaux
+ * bruts entre épreuves à barèmes différents n'a pas de sens (60 vs 20 vs 5).
+ */
+function getScoreOn20(ev: EvaluationData): number {
+    return toTwenty(getScoreTotal(ev.scores), ev.epreuve?.maxTotal || 20);
+}
+
+/**
  * Calcule la moyenne par critère (total / nombre de critères)
  */
 function getScoreAverage(scores: Record<string, number>): number {
