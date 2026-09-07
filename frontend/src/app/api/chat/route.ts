@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
+  if (user.role !== "member") return forbidden();
 
   try {
     const { message, senderName } = await req.json();
