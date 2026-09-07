@@ -152,22 +152,30 @@ export async function POST(req: NextRequest) {
 
     // Generate rooms per slot
     const generatedSlots = validSlots.map((slot) => {
-      const numberOfRooms = Math.floor(
-        slot.availableMembers.length / requiredMembers,
-      );
+      const roomSizes = epreuve.is_group_epreuve
+        ? packRoomSizes(
+            slot.availableMembers.length,
+            groupMinMembers,
+            groupMaxMembers,
+          )
+        : Array(
+            Math.floor(slot.availableMembers.length / requiredMembers),
+          ).fill(requiredMembers);
       const rooms = [];
 
-      for (let r = 0; r < numberOfRooms; r++) {
+      let cursor = 0;
+      roomSizes.forEach((size, r) => {
         const assignedMembers = slot.availableMembers.slice(
-          r * requiredMembers,
-          (r + 1) * requiredMembers,
+          cursor,
+          cursor + size,
         );
+        cursor += size;
         rooms.push({
           roomNumber: r + 1,
           members: assignedMembers,
           maxCandidates: candidateCapacity,
         });
-      }
+      });
 
       // end_time calculé : start_time + durée épreuve + buffer
       const computedEndTime = addMinutesToTime(slot.startTime, slotDuration);
