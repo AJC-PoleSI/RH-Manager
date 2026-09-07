@@ -47,13 +47,17 @@ export async function GET(req: NextRequest) {
             lastName: e.candidates.last_name,
           }
         : { id: "", firstName: "", lastName: "" },
+      // maxTotal : total de points de l'épreuve (somme des critères), pour
+      // convertir le total brut d'une évaluation en note /20 comparable
+      // entre épreuves — même calcul que /api/deliberations.
       epreuve: e.epreuves
         ? {
             name: e.epreuves.name,
             tour: e.epreuves.tour,
             type: e.epreuves.type,
+            maxTotal: getTotalMaxPoints(e.epreuves.evaluation_questions),
           }
-        : { name: "", tour: 0, type: "" },
+        : { name: "", tour: 0, type: "", maxTotal: 20 },
       member: e.members
         ? {
             id: e.members.id,
