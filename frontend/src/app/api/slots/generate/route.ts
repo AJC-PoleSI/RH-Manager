@@ -161,7 +161,11 @@ export async function POST(req: NextRequest) {
         : Array(
             Math.floor(slot.availableMembers.length / requiredMembers),
           ).fill(requiredMembers);
-      const rooms = [];
+      const rooms: {
+        roomNumber: number;
+        members: { id: string; email: string }[];
+        maxCandidates: number;
+      }[] = [];
 
       let cursor = 0;
       roomSizes.forEach((size, r) => {
