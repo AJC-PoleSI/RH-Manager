@@ -117,7 +117,7 @@ export async function runDispatch(opts?: {
   let slotQuery = supabaseAdmin
     .from("evaluation_slots")
     .select(
-      "id, date, start_time, end_time, status, min_members, epreuve_id, enrollments:slot_enrollments(id, status)",
+      "id, date, start_time, end_time, status, min_members, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve)",
     );
   if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
   const { data: slots, error: slotErr } = await slotQuery;
