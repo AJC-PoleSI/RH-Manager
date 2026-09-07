@@ -105,6 +105,14 @@ export async function POST(req: NextRequest) {
           ? Boolean(body.isGroupEpreuve)
           : body.type === "groupe",
       group_size: Math.max(1, Number(body.groupSize) || 1),
+      // Épreuve de groupe : le minimum d'examinateurs suit toujours le
+      // minimum de candidats (règle métier business game — voir
+      // docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md).
+      // Ne pas se fier uniquement au front pour synchroniser les deux valeurs.
+      min_candidates:
+        (body.isGroupEpreuve ?? body.type === "groupe")
+          ? Number(body.minCandidates) || null
+          : null,
       roulement_minutes: Number(body.roulementMinutes) || 10,
       min_evaluators_per_salle: Number(body.minEvaluatorsPerSalle) || 2,
       date_debut: body.dateDebut
