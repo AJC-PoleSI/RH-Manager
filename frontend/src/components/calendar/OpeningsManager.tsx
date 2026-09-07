@@ -7,7 +7,7 @@
 
 import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import api from "@/lib/api";
-import { sliceOpening } from "@/lib/opening-slicer";
+import { sliceOpening, weekdaysBetween } from "@/lib/opening-slicer";
 
 interface OpeningsManagerProps {
   selectedEpreuveId: string;
