@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
 
     // Filter for slots with enough members
     const validSlots = Object.entries(slotMap)
-      .filter(([, data]) => data.members.length >= requiredMembers)
+      .filter(([, data]) => data.members.length >= groupMinMembers)
       .map(([key, data]) => ({
         key,
         date: data.date,
