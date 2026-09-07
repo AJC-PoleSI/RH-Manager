@@ -213,21 +213,23 @@ function AdminView() {
     // ── Stats ──
     const evaluateurCount = members.filter(m => !m.isAdmin).length;
 
-    // Note moyenne GLOBALE = vraie moyenne des totaux (et plus la moyenne des moyennes qui était mathématiquement fausse)
-    const allTotals = evaluations.map(ev => getScoreTotal(ev.scores)).filter(v => v > 0);
+    // Note moyenne GLOBALE = vraie moyenne des notes /20 (chaque évaluation
+    // est d'abord ramenée à /20 selon le barème de son épreuve, sinon
+    // moyenner des totaux bruts d'épreuves à barèmes différents n'a pas de sens)
+    const allTotals = evaluations.map(ev => getScoreOn20(ev)).filter(v => v > 0);
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
     const evalCount = evaluations.length;
 
-    // Per-member stats: nombre d'évals + moyenne des totaux
+    // Per-member stats: nombre d'évals + moyenne des notes /20
     const memberEvalCounts: Record<string, number> = {};
     const memberEvalAverages: Record<string, number[]> = {};
     evaluations.forEach(ev => {
         const mId = ev.member?.id || '';
         memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
         if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
-        memberEvalAverages[mId].push(getScoreTotal(ev.scores));
+        memberEvalAverages[mId].push(getScoreOn20(ev));
     });
 
     if (loading) {
