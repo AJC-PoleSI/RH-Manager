@@ -102,6 +102,9 @@ export async function GET(req: NextRequest) {
     const wishedPoles = isCandidate
       ? await getCandidateWishedPoles(candidateId)
       : [];
+    // VISIBILITÉ TOURS : défense en profondeur, même si en pratique un
+    // créneau d'un tour "a_venir" n'est pas encore publié.
+    const toursByNumber = isCandidate ? await getToursByNumber() : {};
 
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
@@ -122,6 +125,10 @@ export async function GET(req: NextRequest) {
         slot.epreuve?.pole &&
         !wishedPoles.includes(slot.epreuve.pole)
       ) {
+        return false;
+      }
+      // VISIBILITÉ TOURS : tour de l'épreuve pas encore commencé → invisible.
+      if (toursByNumber[slot.epreuve?.tour]?.status === "a_venir") {
         return false;
       }
       // Sinon: ne montrer que les statuts PUBLIÉS avec au moins
