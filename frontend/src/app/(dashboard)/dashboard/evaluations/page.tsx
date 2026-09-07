@@ -748,7 +748,7 @@ function MemberView() {
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
-                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore || '-'}</p>
+                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore ? `${avgScore}/20` : '-'}</p>
                 </div>
             </div>
 
