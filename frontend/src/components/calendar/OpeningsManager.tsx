@@ -338,22 +338,10 @@ export default function OpeningsManager({
   const openingDates = Array.from(new Set(openings.map((o) => o.date))).sort();
 
   // Jours ouvrés de la période de l'épreuve (cibles de duplication)
-  const weekdaysInRange = useMemo(() => {
-    if (!dateMin || !dateMax) return [] as string[];
-    const out: string[] = [];
-    const cur = new Date(dateMin + "T12:00:00");
-    const end = new Date(dateMax + "T12:00:00");
-    while (cur <= end) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) {
-        out.push(
-          `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
-        );
-      }
-      cur.setDate(cur.getDate() + 1);
-    }
-    return out;
-  }, [dateMin, dateMax]);
+  const weekdaysInRange = useMemo(
+    () => weekdaysBetween(dateMin, dateMax),
+    [dateMin, dateMax],
+  );
 
   if (migrationMissing) {
     return (
