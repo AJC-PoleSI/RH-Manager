@@ -168,6 +168,9 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof MissingResetSchemaError) {
+      return migrationPendingResponse();
+    }
     console.error("reset-password error:", error);
     return Response.json(
       { error: "Erreur lors de la réinitialisation du mot de passe." },
