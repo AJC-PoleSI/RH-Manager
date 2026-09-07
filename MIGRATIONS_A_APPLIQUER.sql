@@ -354,3 +354,19 @@ ALTER TABLE public.candidates
 CREATE UNIQUE INDEX IF NOT EXISTS candidates_befast_person_id_key
   ON public.candidates (befast_person_id)
   WHERE befast_person_id IS NOT NULL;
+
+
+-- ------------------------------------------------------------
+-- 9) Minimum de candidats pour les épreuves de groupe (business game)
+--    (supabase-migration-min-candidates.sql)
+-- ------------------------------------------------------------
+-- Pour une épreuve de groupe, l'admin peut fixer un minimum de candidats par
+-- créneau (en plus du maximum déjà existant via group_size). La règle
+-- métier associée (min_evaluators_per_salle = min_candidates) est gérée par
+-- l'application, pas par une contrainte SQL.
+
+ALTER TABLE epreuves
+  ADD COLUMN IF NOT EXISTS min_candidates INTEGER;
+
+ALTER TABLE evaluation_slots
+  ADD COLUMN IF NOT EXISTS min_candidates INTEGER;
