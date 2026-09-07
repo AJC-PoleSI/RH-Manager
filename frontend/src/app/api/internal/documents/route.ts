@@ -60,6 +60,26 @@ export async function POST(req: NextRequest) {
       .eq("id", candidate.id);
 
     if (error) {
+      // Audit du 07/09/2026 : sans ce cas explicite, un schéma RH incomplet
+      // remontait une 500 Postgres brute jusqu'au candidat côté Befast
+      // (« push RH échoué »), sans indiquer que la cause est une migration.
+      if (isMissingTableError(error)) {
+        console.error(
+          "[internal/documents] Colonnes befast_documents* absentes — appliquer " +
+            "supabase-migration-befast-integration.sql sur la base RH.",
+          error,
+        );
+        return Response.json(
+          {
+            error:
+              "Intégration Be Fast indisponible : migration RH non appliquée " +
+              "(supabase-migration-befast-integration.sql).",
+            migrationPending: true,
+          },
+          { status: 503 },
+        );
+      }
+      console.error("[internal/documents] Update documents échoué:", error);
       return Response.json(
         { error: "Update documents échoué.", details: error.message },
         { status: 500 },
