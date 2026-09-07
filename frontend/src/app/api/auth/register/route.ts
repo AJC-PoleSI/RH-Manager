@@ -5,7 +5,7 @@ import {
   unauthorized,
   forbidden,
 } from "@/lib/auth";
-import { validatePassword } from "@/lib/password";
+import { BCRYPT_COST, validatePassword } from "@/lib/password";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const pwError = validatePassword(password);
     if (pwError) return Response.json({ error: pwError }, { status: 400 });
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_COST);
 
     const { data: member, error } = await supabaseAdmin
       .from("members")

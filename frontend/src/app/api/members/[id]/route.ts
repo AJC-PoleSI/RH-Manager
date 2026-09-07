@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth";
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
+import { BCRYPT_COST } from "@/lib/password";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -87,7 +88,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     if (lastName !== undefined) updateData.last_name = lastName;
     if (pole !== undefined) updateData.pole = pole;
     if (password) {
-      updateData.password_hash = await bcrypt.hash(password, 10);
+      updateData.password_hash = await bcrypt.hash(password, BCRYPT_COST);
     }
 
     const { data, error } = await supabaseAdmin

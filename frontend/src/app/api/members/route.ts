@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth";
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
+import { BCRYPT_COST } from "@/lib/password";
 
 // GET /api/members
 export async function GET(req: NextRequest) {
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Email already exists" }, { status: 400 });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
     const { data, error } = await supabaseAdmin
       .from("members")

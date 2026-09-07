@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
-import { validatePassword } from "@/lib/password";
+import { BCRYPT_COST, validatePassword } from "@/lib/password";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const { error: updateError } = await supabaseAdmin
       .from("members")
       .update({
-        password_hash: await bcrypt.hash(newPassword, 10),
+        password_hash: await bcrypt.hash(newPassword, BCRYPT_COST),
         must_change_password: false,
         password_changed_at: new Date().toISOString(),
         // Un changement en session invalide les liens de reset en circulation.

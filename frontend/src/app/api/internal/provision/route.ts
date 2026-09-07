@@ -1,6 +1,29 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { verifySignedRequest } from "@/lib/integration";
 import { NextRequest } from "next/server";
+
+/**
+ * Colonnes `befast_*` absentes : la migration
+ * `supabase-migration-befast-integration.sql` n'a pas encore été appliquée.
+ * On le dit franchement (503 + log nommant le fichier) plutôt que de laisser
+ * Befast interpréter une 500 Postgres brute.
+ */
+function befastMigrationPending(where: string, error: unknown) {
+  console.error(
+    `[internal/${where}] Colonnes befast_* absentes — appliquer ` +
+      "supabase-migration-befast-integration.sql sur la base RH.",
+    error,
+  );
+  return Response.json(
+    {
+      error:
+        "Intégration Be Fast indisponible : migration RH non appliquée " +
+        "(supabase-migration-befast-integration.sql).",
+      migrationPending: true,
+    },
+    { status: 503 },
+  );
+}
 
 // POST /api/internal/provision  (signé HMAC — appelé par Befast, le maître)
 // Crée ou met à jour le candidat RH miroir. Idempotent, keyé sur l'email.
