@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { toTwenty } from '@/lib/evaluation-criteria';
 import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
 
 interface MemberData {
