@@ -67,7 +67,7 @@ export async function sendResultEmail(
   </table>
 </body></html>`.trim();
 
-  return resend.emails.send({ from: FROM, to: email, subject, html });
+  return send({ from: FROM, to: email, subject, html });
 }
 
 export async function sendVerificationEmail(
@@ -144,7 +144,7 @@ export async function sendVerificationEmail(
 </html>
   `.trim();
 
-  return resend.emails.send({
+  return send({
     from: FROM,
     to: email,
     subject: "Vérifiez votre email — Audencia Junior Conseil",
@@ -237,7 +237,7 @@ export async function sendPoleNotificationEmail(
 </html>
   `.trim();
 
-  return resend.emails.send({
+  return send({
     from: FROM,
     to: email,
     subject: `Tour 3 — ${candidatsCount} candidat${candidatsCount > 1 ? "s" : ""} à faire passer pour le pôle ${pole}`,
@@ -309,7 +309,7 @@ export async function sendPasswordResetEmail(
   </table>
 </body></html>`.trim();
 
-  return resend.emails.send({ from: FROM, to: email, subject, html });
+  return send({ from: FROM, to: email, subject, html });
 }
 
 // Demande de suppression de compte émise par un candidat. Rien n'est supprimé
@@ -370,7 +370,7 @@ export async function sendAccountDeletionRequestEmail(opts: {
   </table>
 </body></html>`.trim();
 
-  return resend.emails.send({
+  return send({
     from: FROM,
     to: opts.to,
     subject: `Demande de suppression de compte — ${rawFullName}`,
