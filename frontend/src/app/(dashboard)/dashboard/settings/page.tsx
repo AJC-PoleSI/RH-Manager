@@ -104,6 +104,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   roulementMinutes: "10",
   pole: "",
   groupSize: "4",
+  minCandidates: "",
   minEvaluators: "2",
   inscriptionDeadline: "",
   description: "",
