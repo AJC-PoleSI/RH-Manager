@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { isCandidateAdmittedTour1 } from "@/lib/admission";
 import { getToursByNumber } from "@/lib/tour-status";

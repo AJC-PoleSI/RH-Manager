@@ -33,7 +33,12 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Profil introuvable" }, { status: 404 });
     }
 
-    await sendAccountDeletionRequestEmail({
+    // Cette demande RGPD n'est stockée nulle part : l'email est son UNIQUE
+    // canal de transmission. Le SDK Resend ne lève pas d'exception sur une
+    // erreur d'API (domaine non validé, quota, adresse refusée) — il renvoie
+    // `{ data, error }`. Avant l'audit du 07/09/2026, ce retour n'était jamais
+    // lu et le candidat recevait `ok:true` même quand rien n'était parti.
+    const sent = await sendAccountDeletionRequestEmail({
       to: ADMIN_EMAIL,
       candidateId: candidate.id,
       firstName: candidate.first_name,
@@ -41,6 +46,25 @@ export async function POST(req: NextRequest) {
       email: candidate.email,
       motif: motif || null,
     });
+
+    if (sent?.error) {
+      // Trace serveur exploitable : la demande reste récupérable dans les logs
+      // même si l'email n'est jamais arrivé.
+      console.error(
+        "[candidates/delete-request] ÉCHEC D'ENVOI — demande RGPD à traiter " +
+          `manuellement : candidat ${candidate.id} <${candidate.email}>` +
+          (motif ? ` — motif: ${motif}` : ""),
+        sent.error,
+      );
+      return Response.json(
+        {
+          error:
+            "Votre demande n'a pas pu être transmise. Réessayez dans quelques " +
+            "minutes ou écrivez directement à " + ADMIN_EMAIL + ".",
+        },
+        { status: 502 },
+      );
+    }
 
     return Response.json({ ok: true });
   } catch (e) {
