@@ -147,6 +147,28 @@ export default function OpeningsManager({
     fetchOpenings();
   }, [fetchOpenings]);
 
+  // Alerte capacité : compare les créneaux correctement staffés (ready/
+  // published/full) au nombre de candidats attendus sur cette épreuve.
+  const fetchCapacityCheck = useCallback(async () => {
+    if (!selectedEpreuveId) {
+      setCapacityCheck(null);
+      return;
+    }
+    try {
+      const res = await api.get(
+        `/epreuves/${selectedEpreuveId}/capacity-check`,
+      );
+      setCapacityCheck(res.data || null);
+    } catch (e) {
+      console.error("Erreur vérification capacité:", e);
+      setCapacityCheck(null);
+    }
+  }, [selectedEpreuveId]);
+
+  useEffect(() => {
+    fetchCapacityCheck();
+  }, [fetchCapacityCheck, openings]);
+
   // Aperçu live du nombre de créneaux pour un formulaire
   const previewCount = useCallback(
     (f: OpeningForm): number => {
