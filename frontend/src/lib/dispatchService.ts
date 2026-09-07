@@ -477,8 +477,16 @@ export async function runDispatch(opts?: {
       (a) => a.slot_id === slot.id,
     ).length;
 
+    // Épreuve de groupe (business game) : le créneau ne s'ouvre aux
+    // candidats qu'une fois le nombre d'examinateurs AU COMPLET (= son
+    // minimum, égal au minimum de candidats), pas dès le premier arrivé —
+    // voir docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md.
+    const requiredForPublish = (slot as any).epreuve?.is_group_epreuve
+      ? slot.min_members || 1
+      : 1;
+
     let newStatus: string;
-    if (planningVisibleToCandidates && assignedCount >= 1) {
+    if (planningVisibleToCandidates && assignedCount >= requiredForPublish) {
       newStatus = "published";
     } else if (assignedCount >= (slot.min_members || 2)) {
       newStatus = "ready";
