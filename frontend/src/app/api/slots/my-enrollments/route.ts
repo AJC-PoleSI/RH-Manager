@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/my-enrollments — candidate's enrollments
