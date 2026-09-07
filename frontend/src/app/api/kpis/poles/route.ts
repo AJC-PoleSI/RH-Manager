@@ -18,6 +18,30 @@ export async function GET(req: NextRequest) {
 
     if (wishError) throw wishError;
 
+    // ────────────────────────────────────────────────────────────────────
+    // Un candidat a DEUX jeux de vœux : provisoires (tour 2) et définitifs
+    // (tour 3), depuis `supabase-migration-wishes-tour.sql`. L'agrégation ne
+    // filtrait pas sur `tour` (audit du 07/09/2026) : un candidat qui
+    // confirmait le même pôle au tour 3 était compté DEUX fois dans
+    // totalDemandes et dans son rang — les chiffres de la Soirée
+    // Délibération étaient donc gonflés.
+    //
+    // On ne garde que le tour le plus avancé de CHAQUE candidat : ses choix
+    // définitifs s'ils existent, sinon ses choix provisoires. Si la colonne
+    // `tour` n'est pas encore posée, toutes les lignes retombent sur 0 et le
+    // comportement reste celui d'avant (aucune ligne perdue).
+    // ────────────────────────────────────────────────────────────────────
+    const latestTourByCandidate = new Map<string, number>();
+    for (const w of wishes ?? []) {
+      const t = Number((w as any).tour ?? 0);
+      const known = latestTourByCandidate.get((w as any).candidate_id) ?? -1;
+      if (t > known) latestTourByCandidate.set((w as any).candidate_id, t);
+    }
+    const currentWishes = (wishes ?? []).filter(
+      (w: any) =>
+        Number(w.tour ?? 0) === latestTourByCandidate.get(w.candidate_id),
+    );
+
     // Fetch accepted deliberations (pour compter les places acceptées).
     //
     // `assigned_pole` n'existe pas encore sur toutes les bases : la colonne
