@@ -176,6 +176,12 @@ export async function DELETE(
   if (!payload.isAdmin) return forbidden();
 
   const { id } = await params;
+  // Aligné sur DELETE /api/openings/[id] : un créneau qui a des inscrits ne
+  // part pas sans confirmation explicite portée par l'API elle-même. Avant
+  // l'audit du 07/09/2026, la seule protection était un `window.confirm()`
+  // côté client — un appel direct à l'API supprimait un créneau occupé sans
+  // le moindre filet côté serveur.
+  const force = req.nextUrl.searchParams.get("force") === "true";
 
   try {
     // 1. Récupérer les infos du créneau + ses candidats inscrits AVANT suppression
@@ -185,14 +191,35 @@ export async function DELETE(
         `
         id, date, start_time, end_time, room,
         epreuve:epreuves(name),
-        enrollments:slot_enrollments(candidate_id, candidate:candidates(id, first_name, last_name))
+        enrollments:slot_enrollments(candidate_id, status, candidate:candidates(id, first_name, last_name))
         `,
       )
       .eq("id", id)
       .single();
 
     // 2. Notifier les candidats inscrits via private_messages
-    const enrollments = (slot as any)?.enrollments || [];
+    const enrollments = ((slot as any)?.enrollments || []).filter(
+      filterActiveEnrollments,
+    );
+
+    if (enrollments.length > 0 && !force) {
+      return Response.json(
+        {
+          error:
+            enrollments.length === 1
+              ? "Ce créneau a 1 candidat inscrit."
+              : `Ce créneau a ${enrollments.length} candidats inscrits.`,
+          enrolled: enrollments.length,
+          candidates: enrollments.map((e: any) => ({
+            id: e.candidate?.id ?? e.candidate_id,
+            firstName: e.candidate?.first_name ?? null,
+            lastName: e.candidate?.last_name ?? null,
+          })),
+          requiresForce: true,
+        },
+        { status: 409 },
+      );
+    }
     if (enrollments.length > 0) {
       const dateStr = slot?.date
         ? new Date(slot.date).toLocaleDateString("fr-FR", {
