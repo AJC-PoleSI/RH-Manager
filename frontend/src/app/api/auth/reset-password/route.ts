@@ -10,11 +10,29 @@ import { NextRequest } from "next/server";
  * Renvoie `null` si le jeton est inconnu, déjà consommé ou expiré.
  */
 async function findMemberByResetToken(token: string) {
-  const { data: member } = await supabaseAdmin
+  const { data: member, error } = await supabaseAdmin
     .from("members")
     .select("id, email, first_name, is_admin, password_reset_expires_at")
     .eq("password_reset_token", hashResetToken(token))
     .maybeSingle();
+
+  // Audit du 07/09/2026 : l'erreur du select était ignorée. Tant que la
+  // migration `password-reset` n'est pas posée, les colonnes n'existent pas,
+  // Supabase renvoie une erreur, `member` vaut null — et TOUT lien de
+  // réinitialisation répondait « lien invalide ou expiré », y compris un jeton
+  // fraîchement émis, sans aucune trace exploitable côté serveur. On distingue
+  // désormais « schéma incomplet » (500 + log explicite) de « jeton invalide ».
+  if (error) {
+    if (isMissingTableError(error)) {
+      console.error(
+        "[auth/reset-password] Colonnes password_reset_* absentes : appliquer " +
+          "la section « password-reset » de MIGRATIONS_A_APPLIQUER.sql.",
+      );
+      throw new MissingResetSchemaError();
+    }
+    console.error("[auth/reset-password] Lecture du jeton échouée:", error);
+    throw error;
+  }
 
   if (!member) return null;
   if (
