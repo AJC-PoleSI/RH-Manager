@@ -6,8 +6,10 @@ import { NextRequest } from "next/server";
 export async function GET(req: NextRequest) {
   // SECURITY (audit #11): require auth. Les candidats ont besoin de connaître
   // le tour actif (pour débloquer le classement des vœux au Tour 2), donc ils
-  // peuvent lire les noms/statuts des tours — mais JAMAIS le nombre de
-  // candidats (candidateCount masqué à 0 pour eux).
+  // peuvent lire les noms/statuts des tours déjà commencés — mais JAMAIS le
+  // nombre de candidats (candidateCount masqué à 0 pour eux), NI les tours
+  // pas encore commencés (statut "a_venir", cf. visibilité tours 2026-09-07) :
+  // un candidat ne doit pas savoir combien de tours il reste après le sien.
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
   const isPrivileged = payload.role !== "candidate" || payload.isAdmin;
@@ -28,7 +30,11 @@ export async function GET(req: NextRequest) {
       totalCandidates = count || 0;
     }
 
-    const result = (tours || []).map((t: any) => ({
+    const visibleTours = isPrivileged
+      ? tours || []
+      : (tours || []).filter((t: any) => t.status !== "a_venir");
+
+    const result = visibleTours.map((t: any) => ({
       id: t.id,
       name: t.name,
       status: t.status,
