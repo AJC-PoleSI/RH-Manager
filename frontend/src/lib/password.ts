@@ -11,6 +11,15 @@ import crypto from "crypto";
 /** Durée de validité d'un lien de réinitialisation. */
 export const RESET_TOKEN_TTL_HOURS = 24;
 
+/**
+ * Coût bcrypt unique pour toute l'application.
+ *
+ * Audit du 07/09/2026 : la valeur variait selon la route (12 à l'inscription,
+ * 10 partout ailleurs). Les deux restent dans la fourchette recommandée, mais
+ * une constante partagée évite que l'écart se creuse en silence.
+ */
+export const BCRYPT_COST = 12;
+
 /** Règle unique : 8 caractères minimum, 1 majuscule, 1 chiffre. */
 export function validatePassword(password: string): string | null {
   if (!password || password.length < 8)
