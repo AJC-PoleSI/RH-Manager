@@ -781,8 +781,8 @@ function MemberView() {
 
                                 {/* Score */}
                                 <div className="flex flex-col items-center flex-shrink-0 px-3">
-                                    <span className="text-2xl font-bold text-blue-600">{getScoreTotal(ev.scores)}</span>
-                                    <span className="text-[10px] text-gray-400">total</span>
+                                    <span className="text-2xl font-bold text-blue-600">{getScoreOn20(ev)}</span>
+                                    <span className="text-[10px] text-gray-400">/20</span>
                                 </div>
 
                                 {/* Link */}
