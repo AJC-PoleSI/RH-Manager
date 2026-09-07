@@ -73,19 +73,30 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Lien invalide." }, { status: 400 });
   }
 
-  const member = await findMemberByResetToken(token);
-  if (!member) {
+  try {
+    const member = await findMemberByResetToken(token);
+    if (!member) {
+      return Response.json(
+        {
+          error:
+            "Ce lien est invalide ou a expiré. Demandez-en un nouveau depuis « Mot de passe oublié ? ».",
+          code: "TOKEN_INVALID",
+        },
+        { status: 400 },
+      );
+    }
+
+    return Response.json({ valid: true, email: member.email });
+  } catch (error) {
+    if (error instanceof MissingResetSchemaError) {
+      return migrationPendingResponse();
+    }
+    console.error("[auth/reset-password] GET error:", error);
     return Response.json(
-      {
-        error:
-          "Ce lien est invalide ou a expiré. Demandez-en un nouveau depuis « Mot de passe oublié ? ».",
-        code: "TOKEN_INVALID",
-      },
-      { status: 400 },
+      { error: "Vérification du lien impossible." },
+      { status: 500 },
     );
   }
-
-  return Response.json({ valid: true, email: member.email });
 }
 
 // POST /api/auth/reset-password  { token, password }
