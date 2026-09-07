@@ -4,6 +4,7 @@ import { canEvaluate } from "@/lib/evaluation-access";
 import {
   getCriterionLabel,
   getMaxPoints,
+  getTotalMaxPoints,
   parseQuestions,
 } from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
