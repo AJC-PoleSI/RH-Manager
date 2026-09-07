@@ -4,6 +4,22 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import { format } from 'date-fns';
 
 // =============================================
+// Helper: detect time overlap between two slots on the same day
+// =============================================
+const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+};
+
+const slotsOverlap = (
+    aDate: Date | string, aStart: string, aEnd: string,
+    bDate: Date | string, bStart: string, bEnd: string
+) => {
+    if (format(new Date(aDate), 'yyyy-MM-dd') !== format(new Date(bDate), 'yyyy-MM-dd')) return false;
+    return toMinutes(aStart) < toMinutes(bEnd) && toMinutes(bStart) < toMinutes(aEnd);
+};
+
+// =============================================
 // ADMIN: Create a slot on the planning grid
 // =============================================
 export const createSlot = async (req: Request, res: Response) => {
