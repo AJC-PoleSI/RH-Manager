@@ -1,12 +1,16 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { NextRequest } from "next/server";
 
 // GET /api/chat - Fetch all chat messages
-// SECURITY: Requires authentication
+// SECURITY (audit du 07/09/2026) : le canal `chat_messages` est un fil interne
+// au staff. Il n'était protégé que par « être authentifié », donc lisible et
+// alimentable par n'importe quel CANDIDAT connecté — le rôle le plus bas de
+// l'application. Réservé aux membres, comme /api/messages et /api/availability.
 export async function GET(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
+  if (user.role !== "member") return forbidden();
 
   try {
     const { data, error } = await supabaseAdmin
