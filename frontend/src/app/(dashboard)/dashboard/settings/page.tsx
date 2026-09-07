@@ -398,7 +398,14 @@ export default function CreationPage() {
         isGroupEpreuve: form.type === "groupe",
         groupSize:
           form.type === "groupe" ? parseInt(form.groupSize) || 1 : 1,
-        minEvaluatorsPerSalle: Math.max(1, parseInt(form.minEvaluators) || 2),
+        minCandidates:
+          form.type === "groupe" ? parseInt(form.minCandidates) || null : null,
+        // Épreuve de groupe : le nombre d'examinateurs suit toujours le
+        // minimum de candidats (le serveur le réimpose aussi, cf. epreuves/route.ts).
+        minEvaluatorsPerSalle:
+          form.type === "groupe"
+            ? Math.max(1, parseInt(form.minCandidates) || 1)
+            : Math.max(1, parseInt(form.minEvaluators) || 2),
         roulementMinutes: form.roulementMinutes
           ? parseInt(form.roulementMinutes)
           : 10,
