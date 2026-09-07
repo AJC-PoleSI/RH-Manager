@@ -6,6 +6,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@audencia-junior-conseil.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+// Le SDK Resend ne throw pas sur une erreur API (clé invalide, domaine non
+// vérifié, etc.) — il renvoie `{ data: null, error }`. Sans cette vérification,
+// un envoi qui échoue côté API est compté comme réussi par les appelants
+// (ex: Promise.allSettled le voit "fulfilled").
+async function send(params: Parameters<typeof resend.emails.send>[0]) {
+  const result = await resend.emails.send(params);
+  if (result.error) {
+    console.error("Resend send error:", result.error, "→", params.subject, params.to);
+    throw new Error(`Resend: ${result.error.message || result.error.name}`);
+  }
+  return result;
+}
+
 // Email de résultat de délibération (admis / refusé), avec un message
 // libre rédigé par l'équipe recrutement (identique pour tous ou
 // individualisé). `admis` pilote le ton et le sujet.
