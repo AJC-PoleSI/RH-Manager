@@ -251,6 +251,18 @@ export async function PUT(
         .eq("epreuve_id", id);
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // min_candidates modifié → répercuter sur les créneaux existants,
+    // pour que la fusion des créneaux sous-remplis (à la clôture des
+    // inscriptions) tienne compte du nouveau minimum.
+    // ══════════════════════════════════════════════════════════════════
+    if (updateData.min_candidates !== undefined) {
+      await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ min_candidates: updateData.min_candidates })
+        .eq("epreuve_id", id);
+    }
+
     return Response.json({ ...data, cascade });
   } catch (error) {
     console.error("PUT /epreuves/:id catch error:", error);
