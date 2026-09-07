@@ -47,3 +47,14 @@ export async function isTourLocked(tourNumber: number): Promise<boolean> {
   const map = await getToursByNumber();
   return map[tourNumber]?.status === "termine";
 }
+
+/**
+ * Un tour est "pas encore commencé" lorsque son statut est "a_venir". Dans
+ * ce cas, ses épreuves/créneaux restent invisibles aux candidats (voir
+ * docs/superpowers/specs — visibilité tours) et les inscriptions y sont
+ * refusées même si un créneau venait à être publié par erreur.
+ */
+export async function isTourUpcoming(tourNumber: number): Promise<boolean> {
+  const map = await getToursByNumber();
+  return map[tourNumber]?.status === "a_venir";
+}
