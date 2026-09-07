@@ -166,21 +166,33 @@ export default function OpeningsManager({
   }, [fetchOpenings, onUpdate]);
 
   const handleAdd = async () => {
+    const dates = resolveOpeningDates(form.date, form.dateEnd, form.excludedDates);
+    if (dates.length === 0) return;
     setBusy(true);
     try {
       const res = await api.post("/openings", {
         epreuveId: selectedEpreuveId,
         room: form.room,
-        date: form.date,
+        dates,
         startTime: form.startTime,
         endTime: form.endTime,
         breakStart: form.breakStart || null,
         breakEnd: form.breakEnd || null,
       });
-      toast(
-        `Ouverture créée — ${res.data?.slots_created || 0} créneau(x) générés ✅`,
-        "success",
-      );
+      const openingsCreated = res.data?.openings_created ?? 1;
+      const slotsCreated = res.data?.slots_created || 0;
+      const warnings: string[] = res.data?.warnings || [];
+      if (warnings.length === 0) {
+        toast(
+          `${openingsCreated > 1 ? `${openingsCreated} ouvertures créées` : "Ouverture créée"} — ${slotsCreated} créneau(x) générés ✅`,
+          "success",
+        );
+      } else {
+        toast(
+          `${openingsCreated} ouverture(s) créée(s), ${slotsCreated} créneau(x) générés · ${warnings.length} jour(s) ignoré(s) (conflit)`,
+          "info",
+        );
+      }
       setForm((prev) => ({ ...EMPTY_FORM, date: prev.date }));
       refreshAll();
     } catch (e: any) {
