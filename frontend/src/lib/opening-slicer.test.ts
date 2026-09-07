@@ -153,3 +153,91 @@ describe("diffOpeningSlots", () => {
     expect(d.keptIds).toEqual(["a"]);
   });
 });
+
+describe("weekdaysBetween", () => {
+  it("liste les jours ouvrés d'une semaine complète", () => {
+    // 2026-09-07 = lundi ... 2026-09-13 = dimanche
+    expect(weekdaysBetween("2026-09-07", "2026-09-13")).toEqual([
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+      "2026-09-10",
+      "2026-09-11",
+    ]);
+  });
+
+  it("exclut les weekends dans une plage qui les traverse", () => {
+    // 2026-09-11 = vendredi, 2026-09-14 = lundi
+    expect(weekdaysBetween("2026-09-11", "2026-09-14")).toEqual([
+      "2026-09-11",
+      "2026-09-14",
+    ]);
+  });
+
+  it("plage d'un seul jour ouvré", () => {
+    expect(weekdaysBetween("2026-09-07", "2026-09-07")).toEqual([
+      "2026-09-07",
+    ]);
+  });
+
+  it("plage d'un seul jour tombant un weekend → vide", () => {
+    // 2026-09-12 = samedi
+    expect(weekdaysBetween("2026-09-12", "2026-09-12")).toEqual([]);
+  });
+
+  it("end < start → vide", () => {
+    expect(weekdaysBetween("2026-09-10", "2026-09-07")).toEqual([]);
+  });
+
+  it("dates vides → vide", () => {
+    expect(weekdaysBetween("", "2026-09-07")).toEqual([]);
+    expect(weekdaysBetween("2026-09-07", "")).toEqual([]);
+  });
+});
+
+describe("openingDateCandidates", () => {
+  it("un seul jour si dateEnd vide", () => {
+    expect(openingDateCandidates("2026-09-12", "")).toEqual(["2026-09-12"]);
+  });
+
+  it("un seul jour (weekend inclus) si dateEnd <= date", () => {
+    // 2026-09-12 = samedi : autorisé car c'est un jour unique, pas une plage
+    expect(openingDateCandidates("2026-09-12", "2026-09-12")).toEqual([
+      "2026-09-12",
+    ]);
+    expect(openingDateCandidates("2026-09-12", "2026-09-10")).toEqual([
+      "2026-09-12",
+    ]);
+  });
+
+  it("jours ouvrés de la plage si dateEnd > date", () => {
+    expect(openingDateCandidates("2026-09-07", "2026-09-11")).toEqual([
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+      "2026-09-10",
+      "2026-09-11",
+    ]);
+  });
+});
+
+describe("resolveOpeningDates", () => {
+  it("retire les dates exclues", () => {
+    const excluded = new Set(["2026-09-09"]);
+    expect(resolveOpeningDates("2026-09-07", "2026-09-11", excluded)).toEqual(
+      ["2026-09-07", "2026-09-08", "2026-09-10", "2026-09-11"],
+    );
+  });
+
+  it("aucune exclusion → identique aux candidats", () => {
+    expect(
+      resolveOpeningDates("2026-09-07", "2026-09-11", new Set()),
+    ).toEqual(openingDateCandidates("2026-09-07", "2026-09-11"));
+  });
+
+  it("toutes exclues → vide", () => {
+    expect(
+      resolveOpeningDates("2026-09-07", "2026-09-07", new Set(["2026-09-07"])),
+    ).toEqual([]);
+  });
+});
