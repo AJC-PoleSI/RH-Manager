@@ -198,6 +198,66 @@ const HHMM = /^\d{2}:\d{2}$/;
  * Valide les champs d'une ouverture. Retourne un message d'erreur
  * français, ou null si tout est valide.
  */
+export type CreateOpeningResult =
+  | { ok: true; opening: OpeningRow; slotsCreated: number }
+  | { ok: false; error: string };
+
+/**
+ * Crée une ouverture (salle + date + plage horaire) et ses créneaux
+ * découpés, après vérification de chevauchement de salle. Compense
+ * (supprime l'ouverture) si l'insertion des créneaux échoue, pour ne
+ * jamais laisser une ouverture sans créneaux.
+ *
+ * Ne valide PAS le format des champs (room/horaires) ni que la plage est
+ * assez longue pour au moins un créneau — c'est à l'appelant de le faire
+ * une seule fois en amont quand ces champs sont partagés par plusieurs
+ * dates (cf. POST /api/openings).
+ */
+export async function createOpeningWithSlots(
+  epreuveId: string,
+  epreuve: any,
+  input: {
+    room: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    break_start: string | null;
+    break_end: string | null;
+  },
+): Promise<CreateOpeningResult> {
+  const overlapError = await checkOpeningOverlap(
+    input.date,
+    input.room,
+    input.start_time,
+    input.end_time,
+  );
+  if (overlapError) {
+    return { ok: false, error: overlapError };
+  }
+
+  const { data: opening, error: insertErr } = await supabaseAdmin
+    .from("room_openings")
+    .insert({ epreuve_id: epreuveId, ...input })
+    .select("*")
+    .single();
+  if (insertErr) throw insertErr;
+
+  const target = sliceOpeningRow(input, epreuve);
+  const rows = target.map((t) =>
+    slotInsertRow(t, input.date, input.room, epreuve, opening.id),
+  );
+
+  const { error: slotsErr } = await supabaseAdmin
+    .from("evaluation_slots")
+    .insert(rows);
+  if (slotsErr) {
+    await supabaseAdmin.from("room_openings").delete().eq("id", opening.id);
+    throw slotsErr;
+  }
+
+  return { ok: true, opening, slotsCreated: rows.length };
+}
+
 export function validateOpeningInput(o: {
   room?: string;
   date?: string;
