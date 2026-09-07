@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       pole: e.pole || null,
       isGroupEpreuve: e.is_group_epreuve ?? false,
       groupSize: e.group_size ?? 1,
+      minCandidates: e.min_candidates ?? null,
       isCommune: e.type === "commune",
       description: e.description || null,
       dateDebut: e.date_debut ? e.date_debut.split("T")[0] : null,
