@@ -636,6 +636,31 @@ export default function OpeningsManager({
         )}
       </div>
 
+      {/* Alerte capacité : pas assez de créneaux correctement staffés
+          (examinateurs au complet) pour couvrir les candidats attendus. */}
+      {capacityCheck && !capacityCheck.sufficient && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <p className="text-sm font-bold text-red-800">
+              Capacité insuffisante — {capacityCheck.readyCapacity} place
+              {capacityCheck.readyCapacity > 1 ? "s" : ""} prête
+              {capacityCheck.readyCapacity > 1 ? "s" : ""} pour{" "}
+              {capacityCheck.expectedCandidates} candidat
+              {capacityCheck.expectedCandidates > 1 ? "s" : ""} attendu
+              {capacityCheck.expectedCandidates > 1 ? "s" : ""}
+            </p>
+            <p className="text-xs text-red-700 mt-1">
+              Il manque {capacityCheck.missing} place
+              {capacityCheck.missing > 1 ? "s" : ""} dans des créneaux avec
+              le nombre d&apos;examinateurs au complet (les créneaux pas
+              encore staffés ne comptent pas). Ouvrez d&apos;autres
+              créneaux ou complétez les examinateurs manquants.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tableau */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full text-sm text-left border-collapse">
