@@ -5,6 +5,7 @@ import {
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
 import { getCandidateWishedPoles } from "@/lib/admission";
+import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/available — créneaux que le candidat peut voir
