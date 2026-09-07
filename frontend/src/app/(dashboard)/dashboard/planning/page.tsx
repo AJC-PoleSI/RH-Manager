@@ -747,6 +747,20 @@ export default function PlanningPage() {
   const handleFermerInscriptions = async () => {
     if (!selectedEpreuveId) return;
     try {
+      // Épreuves de groupe : fusionner les créneaux restés sous le minimum
+      // de candidats avant de fermer (no-op pour les autres épreuves).
+      let mergeInfo = "";
+      try {
+        const mergeRes = await api.post("/slots/merge-undersized", {
+          epreuveId: selectedEpreuveId,
+        });
+        if (mergeRes.data?.merged > 0) {
+          mergeInfo = ` · ${mergeRes.data.merged} créneau(x) sous le minimum fusionné(s)`;
+        }
+      } catch (e) {
+        console.error("Erreur fusion créneaux sous-remplis:", e);
+      }
+
       const res = await api.get("/slots/all");
       const publishedSlots = (res.data || []).filter(
         (s: any) =>
@@ -761,7 +775,7 @@ export default function PlanningPage() {
         });
       }
       setInscriptionsOuvertes(false);
-      toast(`${publishedSlots.length} creneau(x) fermes`, "success");
+      toast(`${publishedSlots.length} creneau(x) fermes${mergeInfo}`, "success");
       fetchSlotData();
     } catch {
       toast("Erreur fermeture inscriptions", "error");
