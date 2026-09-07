@@ -43,7 +43,7 @@ export async function sendResultEmail(
           <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">${titre}</h1>
         </td></tr>
         <tr><td style="padding:36px 40px 28px;">
-          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${firstName},</p>
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${escapeHtml(firstName)},</p>
           <div style="margin:0 0 8px;font-size:15px;color:#4b5563;line-height:1.6;">${safeMessage || (admis ? "Nous avons le plaisir de vous informer que votre candidature est retenue pour la suite du processus." : "Nous vous remercions pour votre candidature. Nous ne pourrons malheureusement pas y donner suite.")}</div>
         </td></tr>
         <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
@@ -88,7 +88,7 @@ export async function sendVerificationEmail(
           <!-- Body -->
           <tr>
             <td style="padding:40px 40px 32px;">
-              <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${firstName},</p>
+              <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${escapeHtml(firstName)},</p>
               <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
                 Merci de vous être inscrit sur la plateforme de recrutement d'Audencia Junior Conseil.<br/>
                 Pour accéder à votre espace candidat, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous.
@@ -182,7 +182,7 @@ export async function sendPoleNotificationEmail(
           <!-- Body -->
           <tr>
             <td style="padding:40px 40px 32px;">
-              <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${firstName},</p>
+              <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${escapeHtml(firstName)},</p>
               <p style="margin:0 0 16px;font-size:15px;color:#4b5563;line-height:1.6;">
                 <strong>${candidatsCount} candidat${candidatsCount > 1 ? "s" : ""}</strong> ${candidatsCount > 1 ? "ont" : "a"} demandé le pôle <strong>${pole}</strong> et ${candidatsCount > 1 ? "doivent" : "doit"} passer les épreuves du pôle.
               </p>
