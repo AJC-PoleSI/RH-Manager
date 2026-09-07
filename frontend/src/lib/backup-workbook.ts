@@ -567,5 +567,26 @@ export function buildBackupWorkbook(data: BackupData): ExcelJS.Workbook {
   [1, 2, 3].forEach((tour) => buildTourSheet(wb, data, tour));
   buildTimetableSheets(wb, data);
 
+  neutralizeFormulas(wb);
+
   return wb;
+}
+
+/**
+ * Dernière passe : aucune cellule texte du classeur ne doit pouvoir être
+ * interprétée comme une formule à l'ouverture (cf. lib/spreadsheet-safety.ts).
+ *
+ * Fait ici, en un seul endroit, plutôt qu'à chaque `addRow` : une feuille
+ * ajoutée plus tard est automatiquement couverte, sans qu'on ait à y penser.
+ */
+function neutralizeFormulas(wb: ExcelJS.Workbook) {
+  wb.eachSheet((ws) => {
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (typeof cell.value === "string") {
+          cell.value = sanitizeSpreadsheetValue(cell.value);
+        }
+      });
+    });
+  });
 }
