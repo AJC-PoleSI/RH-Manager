@@ -522,6 +522,9 @@ export default function CrossCalendarPage() {
   );
 
   // TAB: Generate
+  const selectedEpreuveObj = epreuves.find(
+    (x: any) => x.id === selectedEpreuve,
+  );
   const renderGenerate = () => (
     <div className="space-y-6">
       <div className="grid md:grid-cols-3 gap-6">
