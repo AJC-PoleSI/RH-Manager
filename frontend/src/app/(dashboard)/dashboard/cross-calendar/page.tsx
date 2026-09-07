@@ -583,15 +583,29 @@ export default function CrossCalendarPage() {
 
             <div>
               <Label>&Eacute;valuateurs par salle</Label>
-              <Input
-                type="number"
-                min={1}
-                max={5}
-                value={membersPerSlot}
-                onChange={(e) =>
-                  setMembersPerSlot(parseInt(e.target.value) || 2)
-                }
-              />
+              {selectedEpreuveObj?.isGroupEpreuve ? (
+                <>
+                  <div className="flex h-10 w-full items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-600">
+                    {selectedEpreuveObj.minCandidates || 1} &agrave;{" "}
+                    {selectedEpreuveObj.groupSize || 1} (auto)
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    &Eacute;preuve de groupe : calcul&eacute; automatiquement
+                    &agrave; partir du min/max de candidats. Le moins de
+                    salles possible, chacune remplie au maximum.
+                  </p>
+                </>
+              ) : (
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={membersPerSlot}
+                  onChange={(e) =>
+                    setMembersPerSlot(parseInt(e.target.value) || 2)
+                  }
+                />
+              )}
             </div>
 
             <div>
