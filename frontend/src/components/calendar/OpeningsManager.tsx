@@ -93,6 +93,12 @@ export default function OpeningsManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<OpeningForm>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
+  const [capacityCheck, setCapacityCheck] = useState<{
+    expectedCandidates: number;
+    readyCapacity: number;
+    sufficient: boolean;
+    missing: number;
+  } | null>(null);
   const [hiddenConflicts, setHiddenConflicts] = useState<Set<string>>(
     new Set(),
   );
