@@ -183,13 +183,33 @@ export async function PUT(
     // VERROU : si c'est une confirmation définitive d'un candidat au tour 3,
     // on fige les vœux. On vérifie côté serveur que le tour actif est bien le
     // tour 3 (≥ 3) pour qu'un client ne puisse pas verrouiller prématurément.
+    //
+    // Audit du 07/09/2026 : `locked` était fixé à true sans lire le résultat de
+    // l'update. Si la colonne `wishes_locked_at` n'existe pas encore (migration
+    // `wishes-lock` non posée), l'écriture échouait en silence mais le candidat
+    // recevait quand même « vos choix sont définitivement verrouillés » — alors
+    // qu'à la relecture suivante ils étaient rouverts. On ne confirme désormais
+    // le verrou que s'il a réellement été écrit.
     let locked = false;
     if (payload.role === "candidate" && definitive && activeTour >= 3) {
-      await supabaseAdmin
+      const { error: lockError } = await supabaseAdmin
         .from("candidates")
         .update({ wishes_locked_at: new Date().toISOString() })
         .eq("id", candidateId);
-      locked = true;
+
+      if (lockError) {
+        if (isMissingTableError(lockError)) {
+          console.error(
+            "[wishes] Colonne candidates.wishes_locked_at absente — appliquer la " +
+              "section « wishes-lock » de MIGRATIONS_A_APPLIQUER.sql. " +
+              "Les vœux ont bien été enregistrés mais NE SONT PAS verrouillés.",
+          );
+        } else {
+          console.error("[wishes] Verrouillage définitif échoué:", lockError);
+        }
+      } else {
+        locked = true;
+      }
     }
 
     // Return updated wishes

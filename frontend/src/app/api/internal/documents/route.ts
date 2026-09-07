@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { verifySignedRequest } from "@/lib/integration";
 import { NextRequest } from "next/server";
 
