@@ -70,6 +70,7 @@ interface NewEpreuveForm {
   roulementMinutes: string;
   pole: string;
   groupSize: string;
+  minCandidates: string;
   minEvaluators: string;
   inscriptionDeadline: string;
   /* shared */
