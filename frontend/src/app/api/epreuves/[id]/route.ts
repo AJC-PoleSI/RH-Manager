@@ -97,6 +97,8 @@ export async function PUT(
       updateData.is_group_epreuve = body.type === "groupe";
     if (body.groupSize !== undefined)
       updateData.group_size = Math.max(1, Number(body.groupSize) || 1);
+    if (body.minCandidates !== undefined)
+      updateData.min_candidates = Number(body.minCandidates) || null;
     // Épreuves sur table : heure / salle / présentateur
     if (body.heureDebut !== undefined)
       updateData.heure_debut = body.heureDebut || null;
