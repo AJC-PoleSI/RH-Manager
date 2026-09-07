@@ -55,7 +55,7 @@ export async function GET(
         .eq("pole", epreuve.pole);
       const wished = new Set((wishRows || []).map((r: any) => r.candidate_id));
       eligibleIds = eligibleIds
-        ? new Set([...eligibleIds].filter((cid) => wished.has(cid)))
+        ? new Set(Array.from(eligibleIds).filter((cid) => wished.has(cid)))
         : wished;
     }
 
