@@ -145,29 +145,26 @@ export async function POST(req: NextRequest) {
             availabilitiesDeleted = (deleted || []).length;
           }
 
-          // Fallback : si rien supprimé via le filtre date (peut arriver si
-          // la colonne date est null ou format différent), nettoyer aussi
-          // par weekday couvert par la plage de dates.
+          // ATTENTION — ne pas réintroduire de repli « par jour de semaine ».
+          //
+          // Audit fonctionnel du 07/09/2026 : quand le filtre par plage de
+          // dates ne supprimait rien, le code basculait sur un
+          // `DELETE ... WHERE weekday IN (...)` SANS aucun autre filtre — ni
+          // épreuve, ni membre, ni date. La table `availabilities` mélangeant
+          // des lignes datées et des lignes récurrentes par jour de semaine,
+          // réinitialiser une épreuve du lundi au vendredi pouvait effacer les
+          // disponibilités saisies par TOUS les membres pour un AUTRE tour se
+          // déroulant lui aussi en semaine.
+          //
+          // La plage de dates est le seul lien réel entre une disponibilité et
+          // une épreuve (`availabilities` ne porte pas d'`epreuve_id`). Si ce
+          // filtre ne trouve rien, la bonne réponse est de ne rien supprimer et
+          // de le dire, pas d'élargir la portée.
           if (availabilitiesDeleted === 0) {
-            const weekdayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-            const startD = new Date(startStr + "T12:00:00Z");
-            const endD = new Date(endStr + "T12:00:00Z");
-            const weekdaysInRange = new Set<string>();
-            for (
-              let d = new Date(startD);
-              d.getTime() <= endD.getTime();
-              d.setUTCDate(d.getUTCDate() + 1)
-            ) {
-              weekdaysInRange.add(weekdayMap[d.getUTCDay()]);
-            }
-            if (weekdaysInRange.size > 0) {
-              const { data: deleted2 } = await supabaseAdmin
-                .from("availabilities")
-                .delete()
-                .in("weekday", Array.from(weekdaysInRange))
-                .select("id");
-              availabilitiesDeleted = (deleted2 || []).length;
-            }
+            console.warn(
+              `[slots/reset] Épreuve ${epreuveId} (${startStr} → ${endStr}) : aucune disponibilité datée sur la plage. ` +
+                "Rien n'a été supprimé — les disponibilités récurrentes (sans date) se nettoient depuis l'écran Disponibilités.",
+            );
           }
         }
       } catch (err) {
