@@ -138,10 +138,33 @@ export async function resetRateLimit(key: string): Promise<void> {
 // compter toutes les tentatives, abouties ou non.
 // ════════════════════════════════════════════════════════════════════════════
 
-/** IP de l'appelant derrière le proxy Vercel. "unknown" si indéterminable. */
+/**
+ * IP de l'appelant derrière le proxy Vercel. "unknown" si indéterminable.
+ *
+ * Audit sécurité (07/09/2026) : lire le PREMIER segment de `x-forwarded-for`
+ * revenait à faire confiance à une valeur que l'appelant contrôle — chaque
+ * proxy AJOUTE son entrée à la suite, donc la seule digne de confiance est la
+ * DERNIÈRE, posée par l'edge le plus proche de nous. Un attaquant qui envoyait
+ * un `X-Forwarded-For` aléatoire à chaque requête contournait entièrement le
+ * quota par IP (seule protection de /api/auth/register-candidate, qui ne peut
+ * pas avoir de quota par email).
+ *
+ * Ordre de confiance : l'en-tête propriétaire de la plateforme d'abord (Vercel
+ * l'écrase systématiquement, il n'est pas falsifiable), puis le dernier
+ * segment de la chaîne standard, puis `x-real-ip`.
+ */
 export function clientIp(req: { headers: Headers }): string {
+  const vercelFwd = req.headers.get("x-vercel-forwarded-for")?.trim();
+  if (vercelFwd) return vercelFwd.split(",").pop()!.trim();
+
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
+  if (fwd) {
+    const hops = fwd
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1]!;
+  }
   return req.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
