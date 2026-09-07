@@ -85,7 +85,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/openings — admin : crée une ouverture ET ses créneaux découpés.
+// POST /api/openings — admin : crée une ou plusieurs ouvertures (une par
+// date de `dates`, mêmes salle/horaires/pause) ET leurs créneaux découpés.
+// Un chevauchement sur une date précise n'annule pas les autres : cette
+// date est ignorée et remontée dans `warnings`, comme pour /duplicate.
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -93,22 +96,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { epreuveId, room, date, startTime, endTime, breakStart, breakEnd } =
+    const { epreuveId, room, dates, startTime, endTime, breakStart, breakEnd } =
       body;
 
     if (!epreuveId) {
       return Response.json({ error: "epreuveId requis" }, { status: 400 });
     }
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return Response.json(
+        { error: "dates requis (tableau non vide)" },
+        { status: 400 },
+      );
+    }
+    for (const d of dates) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d))) {
+        return Response.json(
+          { error: `Date invalide dans la plage : "${d}" (format AAAA-MM-JJ).` },
+          { status: 400 },
+        );
+      }
+    }
 
-    const openingInput = {
-      room: String(room || "").trim(),
-      date,
+    const roomTrimmed = String(room || "").trim();
+    const breakStartVal = breakStart || null;
+    const breakEndVal = breakEnd || null;
+
+    // Valide le format commun à toutes les dates (salle, horaires, pause) une
+    // seule fois — ces champs sont partagés par toute la plage.
+    const validationError = validateOpeningInput({
+      room: roomTrimmed,
+      date: dates[0],
       start_time: startTime,
       end_time: endTime,
-      break_start: breakStart || null,
-      break_end: breakEnd || null,
-    };
-    const validationError = validateOpeningInput(openingInput);
+      break_start: breakStartVal,
+      break_end: breakEndVal,
+    });
     if (validationError) {
       return Response.json({ error: validationError }, { status: 400 });
     }
@@ -122,7 +144,15 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Épreuve introuvable" }, { status: 404 });
     }
 
-    const target = sliceOpeningRow(openingInput, epreuve);
+    const target = sliceOpeningRow(
+      {
+        start_time: startTime,
+        end_time: endTime,
+        break_start: breakStartVal,
+        break_end: breakEndVal,
+      },
+      epreuve,
+    );
     if (target.length === 0) {
       const dur = epreuve.duration_minutes || 30;
       const roul = epreuve.roulement_minutes ?? 10;
@@ -134,44 +164,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const overlapError = await checkOpeningOverlap(
-      date,
-      openingInput.room,
-      startTime,
-      endTime,
-    );
-    if (overlapError) {
-      return Response.json({ error: overlapError }, { status: 409 });
+    let openingsCreated = 0;
+    let slotsCreated = 0;
+    const warnings: string[] = [];
+
+    for (const date of dates as string[]) {
+      const result = await createOpeningWithSlots(epreuveId, epreuve, {
+        room: roomTrimmed,
+        date,
+        start_time: startTime,
+        end_time: endTime,
+        break_start: breakStartVal,
+        break_end: breakEndVal,
+      });
+      if (!result.ok) {
+        warnings.push(`${date} : ${result.error}`);
+        continue;
+      }
+      openingsCreated++;
+      slotsCreated += result.slotsCreated;
     }
 
-    const { data: opening, error: insertErr } = await supabaseAdmin
-      .from("room_openings")
-      .insert({ epreuve_id: epreuveId, ...openingInput })
-      .select("*")
-      .single();
-    if (insertErr) throw insertErr;
-
-    const rows = target.map((t) =>
-      slotInsertRow(t, date, openingInput.room, epreuve, opening.id),
-    );
-    const { error: slotsErr } = await supabaseAdmin
-      .from("evaluation_slots")
-      .insert(rows);
-
-    if (slotsErr) {
-      // Compensation : ne pas laisser une ouverture sans créneaux
-      await supabaseAdmin.from("room_openings").delete().eq("id", opening.id);
-      throw slotsErr;
+    if (openingsCreated === 0) {
+      return Response.json(
+        {
+          error: "Aucune ouverture créée — toutes les dates sont en conflit.",
+          warnings,
+        },
+        { status: 409 },
+      );
     }
 
     return Response.json(
-      { opening, slots_created: rows.length },
+      { openings_created: openingsCreated, slots_created: slotsCreated, warnings },
       { status: 201 },
     );
   } catch (error) {
     console.error("Create opening error:", error);
     return Response.json(
-      { error: "Échec de création de l'ouverture", details: (error as any)?.message || String(error) },
+      {
+        error: "Échec de création de l'ouverture",
+        details: (error as any)?.message || String(error),
+      },
       { status: 500 },
     );
   }
