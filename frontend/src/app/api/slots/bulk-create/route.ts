@@ -145,6 +145,9 @@ export async function POST(req: NextRequest) {
           duration_minutes: duration,
           label: null,
           max_candidates: epreuve.is_group_epreuve ? epreuve.group_size || 1 : 1,
+          min_candidates: epreuve.is_group_epreuve
+            ? epreuve.min_candidates || null
+            : null,
           min_members: minMembers,
           simultaneous_slots: 1,
           epreuve_id: epreuveId,
