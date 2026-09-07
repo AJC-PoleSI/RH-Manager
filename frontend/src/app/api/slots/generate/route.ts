@@ -42,6 +42,41 @@ export async function POST(req: NextRequest) {
       maxCandidates || (epreuve.is_group_epreuve ? epreuve.group_size : 1);
 
     // ══════════════════════════════════════════════════════════════════
+    // ÉPREUVE DE GROUPE (business game) : le nombre d'examinateurs par
+    // salle suit le même intervalle [min_candidates, group_size] que les
+    // candidats (cf. docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md).
+    // On privilégie le moins de salles possible, chacune remplie au
+    // maximum, plutôt qu'un nombre fixe d'examinateurs par salle qui
+    // gaspillerait des membres disponibles (ex: 12 dispos, min 4, max 6 →
+    // 2 salles de 6, pas 3 salles de 4).
+    // ══════════════════════════════════════════════════════════════════
+    const groupMinMembers = epreuve.is_group_epreuve
+      ? epreuve.min_evaluators_per_salle ||
+        epreuve.min_candidates ||
+        requiredMembers
+      : requiredMembers;
+    const groupMaxMembers = epreuve.is_group_epreuve
+      ? candidateCapacity
+      : requiredMembers;
+
+    /** Découpe `available` membres en le moins de salles possible, chacune dans [min, max]. */
+    const packRoomSizes = (
+      available: number,
+      min: number,
+      max: number,
+    ): number[] => {
+      const safeMin = Math.max(1, min);
+      const safeMax = Math.max(safeMin, max);
+      if (available < safeMin) return [];
+      const rooms = Math.max(1, Math.ceil(available / safeMax));
+      const base = Math.floor(available / rooms);
+      const remainder = available - base * rooms;
+      return Array.from({ length: rooms }, (_, i) =>
+        i < remainder ? base + 1 : base,
+      );
+    };
+
+    // ══════════════════════════════════════════════════════════════════
     // DURÉE DU CRÉNEAU = durée épreuve + 10 min de roulement (buffer)
     // ══════════════════════════════════════════════════════════════════
     const BUFFER_MINUTES = 10;
