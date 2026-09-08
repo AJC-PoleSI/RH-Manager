@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     return Response.json({
       message:
         skipped > 0
-          ? `${updated?.length || 0} créneau(x) publié(s) · ${skipped} en attente d'examinateur`
+          ? `${updated?.length || 0} créneau(x) publié(s) · ${skipped} en attente d'un jury complet`
           : `${updated?.length || 0} créneau(x) publié(s) aux candidats`,
       published: updated?.length || 0,
       skipped_no_examiner: skipped,
