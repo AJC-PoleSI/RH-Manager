@@ -280,3 +280,172 @@ describe("compareByTension — arbitrage entre épreuves simultanées", () => {
     expect(compareByTension(tendu, large)).toBeLessThan(0);
   });
 });
+
+// ─── Continuité de salle ──────────────────────────────────────────────
+// Cf. docs/superpowers/specs/2026-09-08-dispatch-continuite-salle-design.md
+// Un examinateur reste dans la même salle avec le même binôme jusqu'à
+// ROOM_STREAK_MAX créneaux consécutifs, puis tourne.
+
+describe("roomStreak (ancienneté d'un membre dans une salle)", () => {
+  // Une salle, 4 créneaux qui se suivent le même jour.
+  const chain = ["s1", "s2", "s3", "s4"];
+
+  it("vaut 0 sur le premier créneau de la salle", () => {
+    const members = new Map<string, Set<string>>();
+    expect(roomStreak("alice", chain, 0, members)).toBe(0);
+  });
+
+  it("compte les créneaux consécutifs précédents", () => {
+    const members = new Map([
+      ["s1", new Set(["alice", "bob"])],
+      ["s2", new Set(["alice", "bob"])],
+    ]);
+    // Alice arrive sur s3 après s1 et s2 → streak de 2.
+    expect(roomStreak("alice", chain, 2, members)).toBe(2);
+  });
+
+  it("s'arrête à la première interruption (le membre avait quitté la salle)", () => {
+    const members = new Map([
+      ["s1", new Set(["alice"])],
+      ["s2", new Set(["claire"])], // alice absente : la chaîne est rompue
+      ["s3", new Set(["alice"])],
+    ]);
+    expect(roomStreak("alice", chain, 3, members)).toBe(1);
+  });
+
+  it("ne compte pas un membre jamais passé dans la salle", () => {
+    const members = new Map([
+      ["s1", new Set(["bob"])],
+      ["s2", new Set(["bob"])],
+    ]);
+    expect(roomStreak("alice", chain, 2, members)).toBe(0);
+  });
+
+  it("plafonne à ROOM_STREAK_MAX (parcours borné)", () => {
+    const longChain = ["a", "b", "c", "d", "e", "f", "g"];
+    const members = new Map(
+      longChain.map((id) => [id, new Set(["alice"])] as const),
+    );
+    expect(roomStreak("alice", longChain, 6, members)).toBe(ROOM_STREAK_MAX);
+  });
+});
+
+describe("scoreMember — bonus de continuité", () => {
+  it("garde sur place un membre qui continue sa chaîne, même plus chargé", () => {
+    // Alice est dans la salle depuis 2 créneaux (donc plus chargée) ;
+    // Claire n'a rien fait. Sans continuité, Claire gagnerait.
+    const load = { alice: 2, claire: 0 };
+    const pairs = new Map<string, number>();
+    const continuity = { continuing: new Set(["alice"]) };
+
+    expect(scoreMember("alice", [], load, pairs, continuity)).toBeLessThan(
+      scoreMember("claire", [], load, pairs, continuity),
+    );
+  });
+
+  it("lâche le membre une fois son streak épuisé (rotation au 4ème créneau)", () => {
+    // Même situation, mais Alice a atteint le plafond : elle n'est plus dans
+    // `continuing` → la charge reprend la main et Claire passe devant.
+    const load = { alice: 3, claire: 0 };
+    const pairs = new Map<string, number>();
+    const continuity = { continuing: new Set<string>() };
+
+    expect(scoreMember("claire", [], load, pairs, continuity)).toBeLessThan(
+      scoreMember("alice", [], load, pairs, continuity),
+    );
+  });
+
+  it("garde Alice sur place quand son binôme Bob n'est plus disponible", () => {
+    // Bob a sauté ; le pool est Alice (sur place) et Claire (fraîche).
+    // Alice doit rester dans sa salle, Claire la rejoint.
+    const load = { alice: 1, claire: 0 };
+    const pairs = new Map<string, number>();
+    const continuity = { continuing: new Set(["alice"]) };
+
+    const pool = ["claire", "alice"].sort(
+      (a, b) =>
+        scoreMember(a, [], load, pairs, continuity) -
+        scoreMember(b, [], load, pairs, continuity),
+    );
+    expect(pool[0]).toBe("alice");
+  });
+
+  it("l'ancrage inter-run départage à égalité stricte", () => {
+    const load = { alice: 1, claire: 1 };
+    const pairs = new Map<string, number>();
+    const continuity = { anchored: new Set(["claire"]) };
+
+    expect(scoreMember("claire", [], load, pairs, continuity)).toBeLessThan(
+      scoreMember("alice", [], load, pairs, continuity),
+    );
+  });
+
+  it("l'ancrage inter-run ne renverse jamais un écart de charge", () => {
+    // Claire est ancrée mais a un créneau de plus qu'Alice : l'équité prime.
+    const load = { alice: 0, claire: 1 };
+    const pairs = new Map<string, number>();
+    const continuity = { anchored: new Set(["claire"]) };
+
+    expect(scoreMember("alice", [], load, pairs, continuity)).toBeLessThan(
+      scoreMember("claire", [], load, pairs, continuity),
+    );
+  });
+
+  it("sans info de continuité, le score est inchangé (rétro-compatibilité)", () => {
+    const load = { alice: 2, claire: 0 };
+    const pairs = new Map<string, number>();
+    expect(scoreMember("alice", [], load, pairs)).toBe(
+      scoreMember("alice", [], load, pairs, {}),
+    );
+  });
+});
+
+describe("orderPredecessorsFirst (un créneau après son prédécesseur de salle)", () => {
+  it("remonte le prédécesseur avant son successeur", () => {
+    // Ordre de tension : s2 (14h) avant s1 (13h), alors que s1 le précède
+    // dans la salle. s1 doit être décidé en premier pour servir d'ancre.
+    const slots = [{ id: "s2" }, { id: "s1" }];
+    const predecessor = new Map([["s2", "s1"]]);
+    expect(orderPredecessorsFirst(slots, predecessor).map((s) => s.id)).toEqual([
+      "s1",
+      "s2",
+    ]);
+  });
+
+  it("préserve l'ordre de tension entre créneaux sans lien de chaîne", () => {
+    const slots = [{ id: "b" }, { id: "a" }, { id: "c" }];
+    expect(
+      orderPredecessorsFirst(slots, new Map()).map((s) => s.id),
+    ).toEqual(["b", "a", "c"]);
+  });
+
+  it("déroule une chaîne complète dans l'ordre", () => {
+    const slots = [{ id: "s3" }, { id: "s1" }, { id: "s2" }];
+    const predecessor = new Map([
+      ["s3", "s2"],
+      ["s2", "s1"],
+    ]);
+    expect(orderPredecessorsFirst(slots, predecessor).map((s) => s.id)).toEqual([
+      "s1",
+      "s2",
+      "s3",
+    ]);
+  });
+
+  it("ignore un prédécesseur absent du lot (gelé ou hors périmètre)", () => {
+    const slots = [{ id: "s2" }];
+    const predecessor = new Map([["s2", "s1-gelé"]]);
+    expect(orderPredecessorsFirst(slots, predecessor).map((s) => s.id)).toEqual([
+      "s2",
+    ]);
+  });
+
+  it("n'émet chaque créneau qu'une fois", () => {
+    const slots = [{ id: "s3" }, { id: "s2" }, { id: "s1" }];
+    const predecessor = new Map([
+      ["s3", "s2"],
+      ["s2", "s1"],
+    ]);
+    expect(orderPredecessorsFirst(slots, predecessor)).toHaveLength(3);
+  });
+});
