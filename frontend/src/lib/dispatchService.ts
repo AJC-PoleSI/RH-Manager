@@ -676,7 +676,13 @@ export async function runDispatch(opts?: {
         const scored = eligible
           .map((id) => ({
             id,
-            score: scoreMember(id, Array.from(existing), memberLoad, pairHistory),
+            score: scoreMember(
+              id,
+              Array.from(existing),
+              memberLoad,
+              pairHistory,
+              continuity,
+            ),
           }))
           .sort((a, b) => a.score - b.score);
 
@@ -690,6 +696,11 @@ export async function runDispatch(opts?: {
             const key = pairKey(id, otherId);
             pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
           });
+          // Le complément fait partie du jury : il compte pour la chaîne.
+          membersBySlot.set(
+            slot.id,
+            new Set([...(membersBySlot.get(slot.id) || []), id]),
+          );
           added++;
         }
       }
