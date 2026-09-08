@@ -381,7 +381,9 @@ export default function CalendarMemberBuilder({
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             Cochez les tranches horaires où vous êtes libre dans la grille
-            ci-dessous.
+            ci-dessous. Vous pouvez cocher deux épreuves qui tombent au même
+            moment : l&apos;algorithme vous placera sur celle qui en a le plus
+            besoin.
           </p>
         </div>
 
