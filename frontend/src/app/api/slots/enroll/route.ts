@@ -380,7 +380,7 @@ export async function POST(req: NextRequest) {
       // would otherwise lock the candidate forever — a "ghost lock".
       const { data: existingEval } = await supabaseAdmin
         .from("candidate_evaluations")
-        .select("id, scores, comment, members(first_name, last_name, email)")
+        .select("id, scores, comment")
         .eq("candidate_id", candidateId)
         .eq("epreuve_id", slot.epreuve_id)
         .limit(1);
