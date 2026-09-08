@@ -45,9 +45,34 @@ interface SlotInfo {
   end_time: string;
   status: string;
   min_members: number;
+  max_candidates?: number | null;
   epreuve_id: string | null;
   enrollments?: Array<{ id: string; status?: string }>;
-  epreuve?: { is_group_epreuve?: boolean | null } | null;
+  epreuve?: {
+    is_group_epreuve?: boolean | null;
+    group_size?: number | null;
+    is_pole_test?: boolean | null;
+    pole?: string | null;
+  } | null;
+}
+
+/**
+ * Une évaluation ne compte que si elle porte de VRAIES notes : une ligne vide
+ * (créée puis abandonnée) ne veut pas dire que le candidat est passé. Même
+ * règle que la garde anti-double-évaluation de /api/slots/enroll.
+ */
+function hasRealScores(raw: unknown): boolean {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== "object") return false;
+    const values = Object.values(parsed as Record<string, unknown>);
+    return (
+      values.length > 0 &&
+      values.some((v) => v !== null && v !== undefined && v !== "")
+    );
+  } catch {
+    return false;
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -118,7 +143,7 @@ export async function runDispatch(opts?: {
   let slotQuery = supabaseAdmin
     .from("evaluation_slots")
     .select(
-      "id, date, start_time, end_time, status, min_members, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve)",
+      "id, date, start_time, end_time, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole)",
     );
   if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
   const { data: slots, error: slotErr } = await slotQuery;
@@ -331,16 +356,149 @@ export async function runDispatch(opts?: {
     stateByEpreuve.set(key, { memberLoad, pairHistory });
   }
 
-  const demandOf = (slot: SlotInfo) => ({
-    id: slot.id,
-    date: slot.date,
-    start_time: slot.start_time,
-    eligible: matchSlotToMembers(slot).length,
-    quota: slot.min_members || 2,
-  });
+  // ── PRÉVISION PAR ÉPREUVE : pourra-t-on faire passer tout le monde ? ──
+  //
+  // Le critère métier n'est pas « ce créneau a-t-il ses 2 examinateurs » mais
+  // « cette épreuve pourra-t-elle faire passer tous ses candidats ». Exemple
+  // vécu : un business game dont il manque des examinateurs laisserait 20
+  // candidats sur le carreau, alors que les entretiens individuels ont déjà
+  // largement assez de créneaux dotés. Le business game doit donc se servir en
+  // premier — c'est ce que calcule ce bloc, consommé par compareByTension.
+  //
+  //   demande  = candidats encore en lice qui n'ont pas encore passé l'épreuve
+  //              (filtrés sur le pôle demandé pour une épreuve de pôle)
+  //   capacité = places offertes par les créneaux qu'on peut RÉELLEMENT doter
+  //              (un créneau sans assez d'examinateurs disponibles ne compte
+  //              pas : il ne pourra pas se tenir)
+  //
+  // En cas d'échec de lecture, les deux Maps restent vides : l'ordonnancement
+  // retombe alors sur la tension par créneau, comme avant.
+  const epreuveDemandById = new Map<string, number>();
+  const epreuveCapacityById = new Map<string, number>();
+
+  /** Places candidats réellement exploitables sur un créneau (0 si non dotable). */
+  const staffableCapacity = (slot: SlotInfo): number => {
+    // Créneau clôturé : l'épreuve est passée, ses candidats sont déjà sortis
+    // de la demande — ne pas les recompter comme capacité disponible.
+    if (slot.status === "closed") return 0;
+    const quota = slot.min_members || 2;
+    const current = (currentBySlot[slot.id] || new Set<string>()).size;
+    // Un créneau gelé ne peut plus être complété : seul son jury actuel compte.
+    const potential = isFrozen(slot)
+      ? current
+      : Math.max(current, matchSlotToMembers(slot).length);
+    return potential >= quota ? effectiveMaxCandidates(slot) : 0;
+  };
+
+  try {
+    const epreuveIds = Array.from(
+      new Set(
+        (slots as any[]).map((s) => s.epreuve_id).filter(Boolean) as string[],
+      ),
+    );
+
+    if (epreuveIds.length > 0) {
+      const [candRes, delibRes, wishRes, evalRes] = await Promise.all([
+        supabaseAdmin.from("candidates").select("id"),
+        supabaseAdmin
+          .from("deliberations")
+          .select("candidate_id, tour1_status, tour2_status, tour3_status"),
+        supabaseAdmin.from("candidate_wishes").select("candidate_id, pole"),
+        supabaseAdmin
+          .from("candidate_evaluations")
+          .select("candidate_id, epreuve_id, scores")
+          .in("epreuve_id", epreuveIds),
+      ]);
+
+      // Candidats éliminés : plus aucune épreuve à leur faire passer.
+      const eliminated = new Set<string>();
+      (delibRes.data || []).forEach((d: any) => {
+        if (isEliminated(d)) eliminated.add(d.candidate_id);
+      });
+
+      const polesByCandidate = new Map<string, Set<string>>();
+      (wishRes.data || []).forEach((w: any) => {
+        if (!w.candidate_id || !w.pole) return;
+        if (!polesByCandidate.has(w.candidate_id)) {
+          polesByCandidate.set(w.candidate_id, new Set());
+        }
+        polesByCandidate.get(w.candidate_id)!.add(w.pole);
+      });
+
+      // Déjà passés (notes réelles) → hors demande.
+      const alreadyEvaluated = new Set<string>(); // `${epreuveId}|${candidateId}`
+      (evalRes.data || []).forEach((row: any) => {
+        if (!hasRealScores(row.scores)) return;
+        alreadyEvaluated.add(`${row.epreuve_id}|${row.candidate_id}`);
+      });
+
+      const activeCandidates = (candRes.data || [])
+        .map((c: any) => c.id as string)
+        .filter((id: string) => !eliminated.has(id));
+
+      const epreuveMeta = new Map<string, any>();
+      (slots as any[]).forEach((s) => {
+        if (s.epreuve_id && !epreuveMeta.has(s.epreuve_id)) {
+          epreuveMeta.set(s.epreuve_id, s.epreuve || {});
+        }
+      });
+
+      for (const epId of epreuveIds) {
+        const meta = epreuveMeta.get(epId) || {};
+        let demand = 0;
+        for (const candidateId of activeCandidates) {
+          if (alreadyEvaluated.has(`${epId}|${candidateId}`)) continue;
+          // Épreuve de pôle : seuls les candidats qui ont demandé ce pôle.
+          if (meta.is_pole_test && meta.pole) {
+            const poles = polesByCandidate.get(candidateId);
+            if (!poles || !poles.has(meta.pole)) continue;
+          }
+          demand++;
+        }
+        epreuveDemandById.set(epId, demand);
+      }
+
+      for (const slot of slots as SlotInfo[]) {
+        if (!slot.epreuve_id) continue;
+        epreuveCapacityById.set(
+          slot.epreuve_id,
+          (epreuveCapacityById.get(slot.epreuve_id) || 0) +
+            staffableCapacity(slot),
+        );
+      }
+    }
+  } catch (e) {
+    console.error(
+      "[dispatch] Prévision par épreuve indisponible — repli sur la tension par créneau:",
+      e,
+    );
+  }
+
+  const demandOf = (slot: SlotInfo) => {
+    const epId = slot.epreuve_id || "";
+    const demand = epreuveDemandById.get(epId);
+    const capacity = epreuveCapacityById.get(epId);
+    const shortfall =
+      demand === undefined || capacity === undefined
+        ? undefined
+        : epreuveShortfall(demand, capacity);
+    return {
+      id: slot.id,
+      date: slot.date,
+      start_time: slot.start_time,
+      eligible: matchSlotToMembers(slot).length,
+      quota: slot.min_members || 2,
+      epreuveDeficit: shortfall?.deficit,
+      epreuveCoverage: shortfall?.coverage,
+    };
+  };
+
+  // Précalcul : le comparateur est appelé O(n log n) fois, pas la prévision.
+  const demandBySlot = new Map<string, ReturnType<typeof demandOf>>();
+  (sortedSlots as SlotInfo[]).forEach((s) => demandBySlot.set(s.id, demandOf(s)));
 
   const orderedSlots = ([...sortedSlots] as SlotInfo[]).sort((a, b) =>
-    compareByTension(demandOf(a), demandOf(b)),
+    compareByTension(demandBySlot.get(a.id)!, demandBySlot.get(b.id)!),
   );
 
   for (const slot of orderedSlots) {
