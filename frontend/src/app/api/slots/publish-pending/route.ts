@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return Response.json({
         message:
           skipped > 0
-            ? `${skipped} créneau(x) ignoré(s) — pas d'examinateur. Ils seront publiés automatiquement dès qu'un examinateur s'inscrira.`
+            ? `${skipped} créneau(x) ignoré(s) — jury incomplet. Ils seront publiés automatiquement dès que leur effectif d'examinateurs sera atteint.`
             : "Aucun nouveau créneau à publier",
         published: 0,
         skipped_no_examiner: skipped,
