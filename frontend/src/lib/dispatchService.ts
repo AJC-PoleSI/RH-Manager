@@ -6,6 +6,10 @@ import {
   availabilityMatchesSlot,
   compareByTension,
   epreuveShortfall,
+  roomStreak,
+  orderPredecessorsFirst,
+  ROOM_STREAK_MAX,
+  type SlotContinuity,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
 import { effectiveMaxCandidates } from "@/lib/enrollment";
