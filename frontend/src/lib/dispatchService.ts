@@ -757,8 +757,8 @@ export async function runDispatch(opts?: {
       (id) => !picked.includes(id),
     );
     const byScore = (a: string, b: string) =>
-      scoreMember(a, picked, memberLoad, pairHistory) -
-      scoreMember(b, picked, memberLoad, pairHistory);
+      scoreMember(a, picked, memberLoad, pairHistory, continuity) -
+      scoreMember(b, picked, memberLoad, pairHistory, continuity);
 
     const freeBackups = remainingEligible
       .filter((id) => !wouldConflict(id, slotInfo, memberCommittedSlots))
