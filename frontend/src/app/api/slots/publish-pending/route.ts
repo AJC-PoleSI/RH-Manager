@@ -20,18 +20,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Trouver tous les créneaux non publiés pour cette épreuve
-    // ET qui ont AU MOINS 1 examinateur assigné
+    // ET dont le jury est AU COMPLET (>= min_members)
     const { data: pending, error: fetchErr } = await supabaseAdmin
       .from("evaluation_slots")
-      .select("id, status, members:slot_member_assignments(id)")
+      .select("id, status, min_members, members:slot_member_assignments(id)")
       .eq("epreuve_id", epreuveId)
       .in("status", ["draft", "open", "ready"]);
 
     if (fetchErr) throw fetchErr;
 
-    // Filtrer ceux qui ont au moins 1 examinateur
+    // Un créneau ne s'expose aux candidats qu'avec son effectif complet
+    // d'examinateurs, pas dès le premier arrivé.
     const ids = (pending || [])
-      .filter((s: any) => (s.members?.length || 0) >= 1)
+      .filter((s: any) => (s.members?.length || 0) >= (s.min_members || 2))
       .map((s: any) => s.id);
 
     const skipped = (pending || []).length - ids.length;
