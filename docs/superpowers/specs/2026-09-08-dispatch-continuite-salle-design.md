@@ -181,8 +181,9 @@ ce point — c'est un écart connu, indépendant, à traiter à part.
   affectations connues. Le parcours est borné par `ROOM_STREAK_MAX` (coût
   constant).
 - `scoreMember` étendue avec les deux bonus. La signature actuelle
-  (`memberId, alreadyPicked, memberLoad, pairHistory`) est utilisée à **quatre
-  endroits** dans `dispatchService.ts` (lignes 602, 637-638, 669-670) : les
+  (`memberId, alreadyPicked, memberLoad, pairHistory`) est appelée depuis
+  **trois endroits** dans `dispatchService.ts` (ligne 602 ; comparateur de tri
+  lignes 637-638 ; comparateur des remplaçants lignes 669-670) : les
   appels des remplaçants (9d) et du complément de créneau verrouillé (9b)
   doivent recevoir le même traitement que l'allocation principale, sinon un
   remplaçant serait proposé sans tenir compte de la continuité.
