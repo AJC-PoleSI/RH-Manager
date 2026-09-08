@@ -183,12 +183,28 @@ export function slotTension(eligible: number, quota: number): number {
  * sont servis en premier.
  *
  * C'est ce qui arbitre le cas « un examinateur a coché deux épreuves qui se
- * chevauchent » : le créneau qui a le moins d'examinateurs disponibles pour
- * son quota se sert avant l'autre, donc l'examinateur atterrit là où il
- * manque vraiment. À égalité de tension : le créneau qui a le moins de
- * candidats possibles, puis l'ordre chronologique (déterminisme).
+ * chevauchent ». Trois critères, dans cet ordre :
+ *
+ *   1. DÉFICIT DE L'ÉPREUVE — combien de candidats ne pourraient PAS passer
+ *      faute de créneaux staffables. Un business game qui laisserait 20
+ *      candidats sur le carreau passe avant un entretien individuel qui a
+ *      déjà largement de quoi faire passer tout le monde. C'est le critère
+ *      métier : on optimise le nombre de candidats évalués, pas le remplissage
+ *      des créneaux.
+ *   2. COUVERTURE DE L'ÉPREUVE — à déficit égal (typiquement 0 partout), la
+ *      moins confortable d'abord.
+ *   3. TENSION DU CRÉNEAU — examinateurs disponibles moins quota, puis
+ *      chronologie (déterminisme).
  */
 export function compareByTension(a: SlotDemand, b: SlotDemand): number {
+  const da = a.epreuveDeficit ?? 0;
+  const db = b.epreuveDeficit ?? 0;
+  if (da !== db) return db - da; // plus gros déficit servi en premier
+
+  const ca = a.epreuveCoverage ?? Number.POSITIVE_INFINITY;
+  const cb = b.epreuveCoverage ?? Number.POSITIVE_INFINITY;
+  if (ca !== cb) return ca - cb; // couverture la plus faible en premier
+
   const ta = slotTension(a.eligible, a.quota);
   const tb = slotTension(b.eligible, b.quota);
   if (ta !== tb) return ta - tb;
