@@ -94,20 +94,26 @@ export default function CalendarMemberBuilder({
       // 2. Fetch les disponibilités du membre
       const resMyAvail = await api.get("/availability", fetchOptions);
 
-      // Build a set of temporal keys (date|start|end) from existing availabilities,
-      // then expand them to per-épreuve keys by matching against adminSlots.
-      const temporalAvails = new Set<string>();
+      // Deux natures de dispos coexistent :
+      //  • celles enregistrées AVEC leur épreuve (nouveau modèle) → la case
+      //    cochée est restituée telle quelle, épreuve par épreuve ;
+      //  • celles héritées, purement horaires (grille hebdomadaire, données
+      //    antérieures à la migration) → étendues à toutes les épreuves qui
+      //    tombent sur ce créneau horaire, comme avant.
+      const exactAvails = new Set<string>(); // date|start|end|epreuveId
+      const temporalAvails = new Set<string>(); // date|start|end
       resMyAvail.data.forEach((av: any) => {
-        if (av.date) {
-          const dateOnly = av.date.split("T")[0];
-          const st = (av.start_time || "").slice(0, 5);
-          const et = (av.end_time || "").slice(0, 5);
+        if (!av.date) return;
+        const dateOnly = av.date.split("T")[0];
+        const st = (av.start_time || "").slice(0, 5);
+        const et = (av.end_time || "").slice(0, 5);
+        if (av.epreuve_id) {
+          exactAvails.add(`${dateOnly}|${st}|${et}|${av.epreuve_id}`);
+        } else {
           temporalAvails.add(`${dateOnly}|${st}|${et}`);
         }
       });
 
-      // Expand to per-épreuve keys: for each temporal key, find matching slots
-      // and create a key with epreuveId appended
       const initials = new Set<string>();
       filteredSlots.forEach((slot: any) => {
         if (!slot.date || !slot.start_time || !slot.end_time) return;
@@ -115,9 +121,10 @@ export default function CalendarMemberBuilder({
         const st = (slot.start_time || "").slice(0, 5);
         const et = (slot.end_time || "").slice(0, 5);
         const temporalKey = `${d}|${st}|${et}`;
-        if (temporalAvails.has(temporalKey)) {
-          const epreuveId = slot.epreuve_id || slot.epreuveId || "none";
-          initials.add(`${temporalKey}|${epreuveId}`);
+        const epreuveId = slot.epreuve_id || slot.epreuveId || "none";
+        const key = `${temporalKey}|${epreuveId}`;
+        if (exactAvails.has(key) || temporalAvails.has(temporalKey)) {
+          initials.add(key);
         }
       });
       setSelectedBlocks(initials);
@@ -260,24 +267,31 @@ export default function CalendarMemberBuilder({
       }
 
       // 4. Save new availabilities
-      // Keys are now "date|start|end|epreuveId" — strip epreuveId and
-      // deduplicate so we don't create duplicate temporal availabilities.
+      // Keys are "date|start|end|epreuveId". On envoie UNE ligne par épreuve
+      // cochée : c'est ce qui permet au dispatch de distinguer deux épreuves
+      // dont les horaires ne se recoupent que partiellement. Cocher deux
+      // épreuves au même moment est autorisé — l'algorithme tranchera.
       const daysOfWeekMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-      const seenTemporal = new Set<string>();
-      const payload: Array<{ weekday: string; date: string; startTime: string; endTime: string }> = [];
+      const seen = new Set<string>();
+      const payload: Array<{
+        weekday: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        epreuveId: string | null;
+      }> = [];
       Array.from(selectedBlocks).forEach((key) => {
-        const parts = key.split("|");
-        const [date, start, end] = parts; // ignore parts[3] (epreuveId)
-        const temporalKey = `${date}|${start}|${end}`;
-        if (seenTemporal.has(temporalKey)) return; // deduplicate
-        seenTemporal.add(temporalKey);
+        if (seen.has(key)) return; // deduplicate
+        seen.add(key);
+        const [date, start, end, epreuveId] = key.split("|");
         const weekdayInt = new Date(date).getDay();
         payload.push({
           weekday: daysOfWeekMap[weekdayInt],
           date: date,
           startTime: start,
           endTime: end,
+          epreuveId: epreuveId && epreuveId !== "none" ? epreuveId : null,
         });
       });
 
