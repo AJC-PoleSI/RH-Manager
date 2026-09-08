@@ -75,6 +75,31 @@ que rien de structurel ne change, le résultat doit rester identique au run
 précédent. Ce bonus est volontairement faible — il départage à situation égale,
 il ne doit pas figer une répartition devenue mauvaise.
 
+### Valeurs des bonus
+
+| Constante | Valeur | Justification |
+|---|---|---|
+| `ROOM_CONTINUITY_BONUS` | `1000` | Doit **dominer** systématiquement charge et pénalité de binôme, qui sont des petits entiers (charge : 0-10 ; pénalité : `pairHistory × 2`). Un bonus dominant rend le comportement prévisible : tant que le streak court, la personne reste. La souplesse est garantie structurellement — le pool ne contient que des membres réellement disponibles et sans conflit — et le dérapage d'équité est borné par le plafond de 3. Quand plusieurs membres de la chaîne sont en concurrence, ils reçoivent tous le même bonus : charge et binôme les départagent normalement. |
+| `SLOT_ANCHOR_BONUS` | `0.5` | Départage **uniquement** à égalité stricte. Strictement inférieur au plus petit écart significatif (1 pour la charge, 2 pour la pénalité de binôme), donc il ne peut jamais renverser une décision d'équité — il ne fait que rendre le résultat stable d'un run à l'autre quand rien n'a changé. |
+
+### Comptage du streak — attention à l'off-by-one
+
+Le streak d'un membre est le nombre de créneaux **précédents** consécutifs de
+cette salle sur lesquels il était affecté. Le bonus s'applique tant que
+`streak < ROOM_STREAK_MAX`.
+
+Déroulé sur une salle, pour un membre repris à chaque fois :
+
+| Créneau | Streak à l'entrée | Bonus ? |
+|---|---|---|
+| 1er | 0 | non (aucune chaîne, choix libre) |
+| 2ème | 1 | oui |
+| 3ème | 2 | oui |
+| 4ème | 3 | **non → rotation** |
+
+Le même groupe occupe donc bien **3 créneaux consécutifs au maximum**, et la
+recomposition intervient au 4ème.
+
 ### La rotation après 3 créneaux ne demande aucun code dédié
 
 Au 4ème créneau consécutif, le bonus de chaîne disparaît. À ce moment-là,
