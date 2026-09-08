@@ -433,12 +433,9 @@ export async function POST(req: NextRequest) {
           epreuvePublished = (count || 0) > 0;
         }
 
-        // Épreuve de groupe (business game) : le créneau ne s'ouvre aux
-        // candidats qu'une fois le nombre d'examinateurs AU COMPLET (son
-        // minimum), pas dès le premier arrivé.
-        const requiredForPublish = targetEpreuve?.is_group_epreuve
-          ? slot.min_members || 1
-          : 1;
+        // Le créneau ne s'ouvre aux candidats qu'une fois le nombre
+        // d'examinateurs AU COMPLET (son minimum), pas dès le premier arrivé.
+        const requiredForPublish = slot.min_members || 2;
 
         let newStatus: string | null = null;
         if (epreuvePublished && memberCount >= requiredForPublish) {
