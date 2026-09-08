@@ -10,6 +10,39 @@
 export const FREEZE_HOURS = 24;
 export const PAIR_PENALTY_WEIGHT = 2; // Multiplicateur pénalité binôme
 
+/**
+ * Nombre maximum de créneaux CONSÉCUTIFS qu'un examinateur enchaîne dans la
+ * même salle avant qu'on cherche à le faire tourner.
+ *
+ * C'est aussi le garde-fou d'équité : un bonus de continuité fort déséquilibre
+ * par construction la charge (un membre « campé » accumule des créneaux) ; ce
+ * plafond borne le déséquilibre, puis `memberLoad` reprend la main.
+ */
+export const ROOM_STREAK_MAX = 3;
+
+/**
+ * Bonus (soustrait du score) d'un membre qui continue sa chaîne dans une salle.
+ *
+ * Volontairement DOMINANT devant la charge (0-10) et la pénalité de binôme
+ * (`pairHistory × 2`) : tant que le streak court, la personne ne bouge pas.
+ * La souplesse est garantie structurellement — le pool ne contient que des
+ * membres réellement disponibles et sans conflit horaire. Quand plusieurs
+ * membres de la chaîne sont en concurrence, ils reçoivent tous ce même bonus :
+ * charge et binôme les départagent alors normalement.
+ */
+export const ROOM_CONTINUITY_BONUS = 1000;
+
+/**
+ * Bonus (soustrait du score) d'un membre DÉJÀ affecté à ce créneau lors du run
+ * précédent. Supprime le brassage gratuit : à situation égale, on ne rebat pas
+ * les cartes.
+ *
+ * Strictement inférieur au plus petit écart significatif (1 pour la charge,
+ * 2 pour la pénalité de binôme) : il départage les ex æquo sans jamais pouvoir
+ * renverser une décision d'équité.
+ */
+export const SLOT_ANCHOR_BONUS = 0.5;
+
 // ─── Types ────────────────────────────────────────────────────────────
 export interface SlotTiming {
   date?: string | null;
