@@ -533,6 +533,45 @@ export async function runDispatch(opts?: {
     }
   }
 
+  // 10bis. LISTE D'ATTENTE — les « perdants de l'arbitrage ».
+  //
+  // Un examinateur qui s'était inscrit sur deux épreuves au même moment n'a pu
+  // être placé que sur une seule. Sur l'autre créneau, on l'inscrit en liste
+  // d'attente (`slot_availability_requests`) : c'est la table que lit la
+  // promotion automatique de /api/slots/toggle-member. Si un titulaire se
+  // désiste et que l'horaire s'est libéré entre-temps, il peut être promu.
+  //
+  // `source` distingue ces lignes de celles qu'un membre s'est ajoutées
+  // lui-même (bouton « je suis dispo » → source = 'member') : le dispatch ne
+  // supprime JAMAIS que les siennes. Tant que la colonne n'existe pas en base,
+  // on ne touche à rien du tout (on ne peut pas distinguer les deux).
+  if (wipeableSlotIds.length > 0) {
+    const cleanup = await supabaseAdmin
+      .from("slot_availability_requests")
+      .delete()
+      .eq("source", "dispatch")
+      .in("slot_id", wipeableSlotIds);
+
+    if (cleanup.error) {
+      console.warn(
+        "[dispatch] Colonne slot_availability_requests.source absente — les " +
+          "examinateurs inscrits sur deux épreuves simultanées ne sont PAS " +
+          "mis en liste d'attente sur le créneau non retenu. Appliquez la " +
+          "section « dispos par épreuve » de MIGRATIONS_A_APPLIQUER.sql.",
+      );
+    } else if (arbitrationLosers.length > 0) {
+      const { error: waitlistErr } = await supabaseAdmin
+        .from("slot_availability_requests")
+        .upsert(
+          arbitrationLosers.map((r) => ({ ...r, source: "dispatch" })),
+          { onConflict: "slot_id,member_id", ignoreDuplicates: true },
+        );
+      if (waitlistErr) {
+        console.error("Waitlist (arbitrage) insert error:", waitlistErr);
+      }
+    }
+  }
+
   // 11. Update slot statuses
   let planningVisibleToCandidates = false;
   try {
