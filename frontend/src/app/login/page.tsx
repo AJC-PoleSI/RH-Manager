@@ -1,16 +1,28 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
 type View = 'landing' | 'login' | 'forgot-password' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
 
 export default function LoginPage() {
+    const searchParams = useSearchParams();
     const [view, setView] = useState<View>('landing');
     const [step, setStep] = useState(1);
     const { loginMember, loginCandidate } = useAuth();
     const [error, setError] = useState('');
+
+    // Redirection depuis l'intercepteur 401 (frontend/src/lib/api.ts) quand le
+    // JWT a expiré (2h) ou n'est plus valide : sans ce message, l'utilisateur
+    // ne comprend pas pourquoi il atterrit sur cette page — il vient de voir
+    // un "Non autorise" cryptique sur l'écran précédent.
+    useEffect(() => {
+        if (searchParams.get('session') !== 'expired') return;
+        setError('Votre session a expiré. Veuillez vous reconnecter.');
+        setView(searchParams.get('role') === 'candidate' ? 'candidate-login' : 'login');
+    }, [searchParams]);
     const [loading, setLoading] = useState(false);
     const cvInputRef = useRef<HTMLInputElement>(null);
 
