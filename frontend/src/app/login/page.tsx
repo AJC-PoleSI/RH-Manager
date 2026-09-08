@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
 type View = 'landing' | 'login' | 'forgot-password' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
 
-export default function LoginPage() {
+function LoginForm() {
     const searchParams = useSearchParams();
     const [view, setView] = useState<View>('landing');
     const [step, setStep] = useState(1);
