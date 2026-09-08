@@ -463,13 +463,25 @@ export default function CandidateEpreuvesPage() {
         });
       }
       setAllSlots((prev) =>
-        prev.map((s) =>
-          s.id === slot.id
-            ? { ...s, isEnrolled: false, enrolledCount: Math.max(0, s.enrolledCount - 1) }
-            : s
-        )
+        prev.map((s) => {
+          if (s.id !== slot.id) return s;
+          const enrolledCount = Math.max(0, s.enrolledCount - 1);
+          return {
+            ...s,
+            isEnrolled: false,
+            enrolledCount,
+            isFull: enrolledCount >= s.maxCandidates,
+          };
+        })
       );
       setSelectedSlot(null);
+      // Comme pour l'inscription : re-fetch pour refléter l'état serveur
+      // exact (statut du créneau, etc.) au lieu de compter uniquement sur
+      // le patch local + le polling 5s, qui laissait le créneau afficher
+      // "Complet" (isFull resté à true) pendant quelques secondes après
+      // une désinscription — donnant l'impression qu'il avait disparu.
+      await fetchData();
+      setTimeout(() => fetchData(), 600);
     } catch (err: any) {
       const msg = err?.response?.data?.error || "Erreur lors de la désinscription";
       setErrorMsg(msg);
