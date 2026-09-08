@@ -38,7 +38,7 @@ const Sidebar = () => {
         { href: "/dashboard", label: "Dashboard", icon: "📊" },
         { href: "/dashboard/settings", label: "Création", icon: "⚙️" },
         { href: "/dashboard/candidates", label: "Candidats", icon: "👥" },
-        { href: "/dashboard/organigramme", label: "Organigramme", icon: "🖼️" },
+        { href: "/dashboard/organigramme", label: "Trombinoscope", icon: "🖼️" },
         { href: "/dashboard/evaluations", label: "Évaluateurs", icon: "📝" },
         {
           href: "/dashboard/deliberations",
@@ -59,7 +59,7 @@ const Sidebar = () => {
       title: "Mon espace",
       items: [
         { href: "/dashboard/candidates", label: "Candidats", icon: "👥" },
-        { href: "/dashboard/organigramme", label: "Organigramme", icon: "🖼️" },
+        { href: "/dashboard/organigramme", label: "Trombinoscope", icon: "🖼️" },
         { href: "/dashboard", label: "Mon calendrier", icon: "📅" },
         {
           href: "/dashboard/evaluations",
