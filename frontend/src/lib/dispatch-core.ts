@@ -15,12 +15,19 @@ export interface SlotTiming {
   date?: string | null;
   start_time?: string | null;
   end_time?: string | null;
+  epreuve_id?: string | null;
 }
 
 export interface AvailabilityTiming {
   date?: string | null;
   start_time?: string | null;
   end_time?: string | null;
+  /**
+   * Épreuve pour laquelle la dispo a été cochée. NULL = dispo purement
+   * horaire (grille hebdomadaire, données antérieures à la migration
+   * `availabilities.epreuve_id`) → comportement historique.
+   */
+  epreuve_id?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -54,12 +61,20 @@ export function timeOverlaps(
  * Une disponibilité couvre-t-elle un créneau ?
  *
  * - Même jour obligatoire.
- * - Si la dispo a une heure de fin → on teste le CHEVAUCHEMENT (une dispo
- *   12h00–13h00 couvre un créneau 12h05–12h50). C'est ce qui évite qu'une
- *   épreuve de groupe se retrouve sous-staffée parce que les heures de début
- *   ne coïncident pas exactement.
- * - Sinon (ancienne donnée sans end_time) → repli sur l'égalité d'heure de
+ * - Pas d'heure de fin (ancienne donnée) → repli sur l'égalité d'heure de
  *   début (comportement historique, rétro-compatible).
+ * - HORAIRES STRICTEMENT IDENTIQUES (même début ET même fin) → la dispo vaut
+ *   pour TOUTES les épreuves de ce créneau horaire. Deux épreuves qui tombent
+ *   exactement au même moment sont interchangeables du point de vue de
+ *   l'examinateur : c'est au dispatch de trancher (cf. compareByTension).
+ * - HORAIRES SEULEMENT PARTIELLEMENT SUPERPOSÉS (ex. dispo 14h–15h vs créneau
+ *   14h30–15h30) → il faut que la dispo ait été cochée POUR CETTE ÉPREUVE.
+ *   Sinon on embarquerait l'examinateur sur une épreuve qu'il n'a pas choisie
+ *   et dont l'horaire ne correspond pas au sien.
+ * - Dispo sans épreuve (grille hebdomadaire, données historiques) → on garde
+ *   le matching par chevauchement d'origine : une dispo 12h00–13h00 couvre un
+ *   créneau 12h05–12h50 (c'est ce qui évite qu'une épreuve de groupe se
+ *   retrouve sous-staffée parce que les heures de début ne coïncident pas).
  */
 export function availabilityMatchesSlot(
   av: AvailabilityTiming,
@@ -71,7 +86,16 @@ export function availabilityMatchesSlot(
   if (!av.end_time) return avStart === sStart;
   const avEnd = hhmm(av.end_time);
   const sEnd = hhmm(slot.end_time) || sStart;
-  return timeOverlaps(avStart, avEnd, sStart, sEnd);
+
+  // Horaires identiques → l'épreuve n'entre pas en ligne de compte.
+  if (avStart === sStart && avEnd === sEnd) return true;
+
+  if (!timeOverlaps(avStart, avEnd, sStart, sEnd)) return false;
+
+  // Chevauchement partiel : l'épreuve doit correspondre (sauf dispo héritée
+  // sans épreuve, qui garde le comportement historique).
+  if (!av.epreuve_id) return true;
+  return av.epreuve_id === (slot.epreuve_id ?? null);
 }
 
 /** Un créneau est-il gelé (< FREEZE_HOURS avant son début) ? */
@@ -99,4 +123,49 @@ export function scoreMember(
     pairPenalty += (pairHistory.get(key) || 0) * PAIR_PENALTY_WEIGHT;
   }
   return loadScore + pairPenalty;
+}
+
+// ─── Tension (arbitrage entre épreuves simultanées) ───────────────────
+
+export interface SlotDemand {
+  id: string;
+  date?: string | null;
+  start_time?: string | null;
+  /** Nombre d'examinateurs disponibles pour ce créneau. */
+  eligible: number;
+  /** Nombre d'examinateurs requis (min_members). */
+  quota: number;
+}
+
+/**
+ * Tension d'un créneau : marge entre l'offre (examinateurs disponibles) et la
+ * demande (quota). Plus le nombre est BAS, plus le créneau est en tension.
+ *
+ * -1 → il manque un examinateur ; 0 → juste ce qu'il faut ; +5 → confortable.
+ */
+export function slotTension(eligible: number, quota: number): number {
+  return eligible - quota;
+}
+
+/**
+ * Comparateur d'ordonnancement du dispatch : les créneaux LES PLUS EN TENSION
+ * sont servis en premier.
+ *
+ * C'est ce qui arbitre le cas « un examinateur a coché deux épreuves qui se
+ * chevauchent » : le créneau qui a le moins d'examinateurs disponibles pour
+ * son quota se sert avant l'autre, donc l'examinateur atterrit là où il
+ * manque vraiment. À égalité de tension : le créneau qui a le moins de
+ * candidats possibles, puis l'ordre chronologique (déterminisme).
+ */
+export function compareByTension(a: SlotDemand, b: SlotDemand): number {
+  const ta = slotTension(a.eligible, a.quota);
+  const tb = slotTension(b.eligible, b.quota);
+  if (ta !== tb) return ta - tb;
+  if (a.eligible !== b.eligible) return a.eligible - b.eligible;
+  const ad = ymd(a.date);
+  const bd = ymd(b.date);
+  if (ad !== bd) return ad < bd ? -1 : 1;
+  const cmp = hhmm(a.start_time).localeCompare(hhmm(b.start_time));
+  if (cmp !== 0) return cmp;
+  return a.id.localeCompare(b.id);
 }

@@ -133,9 +133,33 @@ export async function runDispatch(opts?: {
 
   // 2. Fetch all availabilities (end_time inclus pour le matching par
   // chevauchement horaire — cf. availabilityMatchesSlot).
-  const { data: availabilities } = await supabaseAdmin
-    .from("availabilities")
-    .select("member_id, date, start_time, end_time");
+  //
+  // `epreuve_id` porte l'épreuve pour laquelle la dispo a été cochée. Elle
+  // départage deux épreuves dont les horaires ne coïncident que partiellement
+  // (cf. availabilityMatchesSlot). Tant que la colonne n'est pas posée en base,
+  // on retombe sur la lecture d'origine : toutes les dispos sont alors
+  // purement horaires et le comportement reste celui d'avant.
+  let availabilities: any[] | null = null;
+  {
+    const withEpreuve = await supabaseAdmin
+      .from("availabilities")
+      .select("member_id, date, start_time, end_time, epreuve_id");
+
+    if (withEpreuve.error) {
+      const plain = await supabaseAdmin
+        .from("availabilities")
+        .select("member_id, date, start_time, end_time");
+      availabilities = plain.data;
+      console.warn(
+        "[dispatch] Colonne availabilities.epreuve_id absente — une dispo " +
+          "cochée sur une épreuve rend disponible pour toute épreuve au même " +
+          "moment. Appliquez la section « dispos par épreuve » de " +
+          "MIGRATIONS_A_APPLIQUER.sql.",
+      );
+    } else {
+      availabilities = withEpreuve.data;
+    }
+  }
 
   // 3. Fetch current assignments
   const slotIds = slots.map((s: any) => s.id);
@@ -196,7 +220,12 @@ export async function runDispatch(opts?: {
 
   // 5. Match availabilities to slots par chevauchement horaire (une dispo qui
   // englobe le créneau compte, même si les heures de début diffèrent).
+  // Mémoïsé : la liste est relue plusieurs fois par créneau (titulaires,
+  // remplaçants, calcul de tension) et sert de base au tri global.
+  const eligibleBySlot = new Map<string, string[]>();
   const matchSlotToMembers = (slot: SlotInfo): string[] => {
+    const cached = eligibleBySlot.get(slot.id);
+    if (cached) return cached;
     const matches: string[] = [];
     (availabilities || []).forEach((av: any) => {
       if (!availabilityMatchesSlot(av, slot)) return;
@@ -204,6 +233,7 @@ export async function runDispatch(opts?: {
         matches.push(av.member_id);
       }
     });
+    eligibleBySlot.set(slot.id, matches);
     return matches;
   };
 

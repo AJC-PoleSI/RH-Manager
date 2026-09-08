@@ -5,6 +5,8 @@ import {
   availabilityMatchesSlot,
   isFrozen,
   scoreMember,
+  compareByTension,
+  slotTension,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
@@ -96,5 +98,110 @@ describe("scoreMember (équité + brassage)", () => {
     expect(scoreMember("a", ["x"], load, pairs)).toBeGreaterThan(
       scoreMember("c", ["x"], load, pairs),
     );
+  });
+});
+
+describe("availabilityMatchesSlot — épreuves simultanées", () => {
+  // Deux épreuves différentes, EXACTEMENT le même horaire : cocher l'une rend
+  // disponible pour l'autre — c'est au dispatch de trancher.
+  it("horaires identiques : la dispo vaut pour l'autre épreuve", () => {
+    const av = {
+      date: "2026-06-22",
+      start_time: "14:00",
+      end_time: "15:00",
+      epreuve_id: "epreuve-A",
+    };
+    const slotB = {
+      date: "2026-06-22",
+      start_time: "14:00",
+      end_time: "15:00",
+      epreuve_id: "epreuve-B",
+    };
+    expect(availabilityMatchesSlot(av, slotB)).toBe(true);
+  });
+
+  // Horaires seulement partiellement superposés : l'épreuve compte.
+  it("chevauchement partiel : ne matche PAS une autre épreuve", () => {
+    const av = {
+      date: "2026-06-22",
+      start_time: "14:00",
+      end_time: "15:00",
+      epreuve_id: "epreuve-A",
+    };
+    const slotB = {
+      date: "2026-06-22",
+      start_time: "14:30",
+      end_time: "15:30",
+      epreuve_id: "epreuve-B",
+    };
+    expect(availabilityMatchesSlot(av, slotB)).toBe(false);
+  });
+
+  it("chevauchement partiel : matche la MÊME épreuve", () => {
+    const av = {
+      date: "2026-06-22",
+      start_time: "14:00",
+      end_time: "15:00",
+      epreuve_id: "epreuve-A",
+    };
+    const slotA2 = {
+      date: "2026-06-22",
+      start_time: "14:30",
+      end_time: "15:30",
+      epreuve_id: "epreuve-A",
+    };
+    expect(availabilityMatchesSlot(av, slotA2)).toBe(true);
+  });
+
+  it("dispo héritée (sans épreuve) : comportement historique préservé", () => {
+    const av = { date: "2026-06-22", start_time: "14:00", end_time: "15:00" };
+    const slotB = {
+      date: "2026-06-22",
+      start_time: "14:30",
+      end_time: "15:30",
+      epreuve_id: "epreuve-B",
+    };
+    expect(availabilityMatchesSlot(av, slotB)).toBe(true);
+  });
+});
+
+describe("compareByTension (arbitrage entre créneaux simultanés)", () => {
+  const base = { date: "2026-06-22", start_time: "14:00" };
+
+  it("sert d'abord le créneau qui manque d'examinateurs", () => {
+    const tendu = { ...base, id: "tendu", eligible: 2, quota: 2 };
+    const confortable = { ...base, id: "conf", eligible: 8, quota: 2 };
+    expect(compareByTension(tendu, confortable)).toBeLessThan(0);
+  });
+
+  it("à tension égale, départage sur le nombre d'examinateurs disponibles", () => {
+    const a = { ...base, id: "a", eligible: 3, quota: 2 };
+    const b = { ...base, id: "b", eligible: 4, quota: 3 };
+    expect(compareByTension(a, b)).toBeLessThan(0);
+  });
+
+  it("à égalité complète, ordre chronologique (déterminisme)", () => {
+    const matin = { date: "2026-06-22", start_time: "09:00", id: "m", eligible: 4, quota: 2 };
+    const aprem = { date: "2026-06-22", start_time: "16:00", id: "a", eligible: 4, quota: 2 };
+    expect(compareByTension(matin, aprem)).toBeLessThan(0);
+  });
+
+  it("trie une liste : le plus en tension d'abord", () => {
+    const slots = [
+      { ...base, id: "large", eligible: 10, quota: 2 },
+      { ...base, id: "juste", eligible: 2, quota: 2 },
+      { ...base, id: "moyen", eligible: 5, quota: 2 },
+    ];
+    expect([...slots].sort(compareByTension).map((s) => s.id)).toEqual([
+      "juste",
+      "moyen",
+      "large",
+    ]);
+  });
+});
+
+describe("slotTension", () => {
+  it("est négative quand il manque des examinateurs", () => {
+    expect(slotTension(1, 2)).toBe(-1);
   });
 });
