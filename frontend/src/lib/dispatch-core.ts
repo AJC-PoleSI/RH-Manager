@@ -140,14 +140,33 @@ export function isFrozen(slot: SlotTiming, now: Date = new Date()): boolean {
 }
 
 /**
+ * Continuité applicable à UN créneau donné (calculée par l'appelant).
+ *
+ * `continuing` : membres présents sur le créneau précédent de la même salle et
+ * dont le streak n'a pas atteint ROOM_STREAK_MAX — on veut les garder sur place.
+ * `anchored`   : membres déjà affectés à ce créneau avant que le run l'efface.
+ */
+export interface SlotContinuity {
+  continuing?: Set<string>;
+  anchored?: Set<string>;
+}
+
+/**
  * Score d'un membre pour un créneau (plus bas = meilleur candidat).
- * Combine la charge (équité) et la pénalité de binôme (brassage).
+ *
+ * Combine la charge (équité), la pénalité de binôme (brassage) et les deux
+ * bonus de continuité (rester dans sa salle, ne pas rebrasser gratuitement).
+ *
+ * La rotation après ROOM_STREAK_MAX créneaux ne demande aucun code dédié : le
+ * bonus de chaîne disparaît, et la pénalité de binôme accumulée entre-temps
+ * (3 co-affectations = 6 points) sépare le duo d'elle-même.
  */
 export function scoreMember(
   memberId: string,
   alreadyPicked: string[],
   memberLoad: Record<string, number>,
   pairHistory: Map<string, number>,
+  continuity?: SlotContinuity,
 ): number {
   const loadScore = memberLoad[memberId] || 0;
   let pairPenalty = 0;
@@ -155,7 +174,72 @@ export function scoreMember(
     const key = pairKey(memberId, other);
     pairPenalty += (pairHistory.get(key) || 0) * PAIR_PENALTY_WEIGHT;
   }
-  return loadScore + pairPenalty;
+
+  let bonus = 0;
+  if (continuity?.continuing?.has(memberId)) bonus += ROOM_CONTINUITY_BONUS;
+  if (continuity?.anchored?.has(memberId)) bonus += SLOT_ANCHOR_BONUS;
+
+  return loadScore + pairPenalty - bonus;
+}
+
+/**
+ * Depuis combien de créneaux CONSÉCUTIFS ce membre occupe-t-il cette salle ?
+ *
+ * @param chain          créneaux de la salle ce jour-là, ordre chronologique
+ * @param index          position du créneau en cours de décision dans `chain`
+ * @param membersBySlot  affectations connues (décidées ou déjà en base)
+ *
+ * Le parcours remonte tant que le membre était présent, et s'arrête à la
+ * première interruption : s'il a quitté la salle, il n'y a plus de continuité
+ * à préserver. Borné par ROOM_STREAK_MAX — au-delà la valeur exacte n'a plus
+ * d'intérêt, seul le franchissement du plafond compte.
+ */
+export function roomStreak(
+  memberId: string,
+  chain: string[],
+  index: number,
+  membersBySlot: Map<string, Set<string>>,
+): number {
+  let streak = 0;
+  for (let i = index - 1; i >= 0 && streak < ROOM_STREAK_MAX; i--) {
+    if (!membersBySlot.get(chain[i])?.has(memberId)) break;
+    streak++;
+  }
+  return streak;
+}
+
+/**
+ * Réordonne les créneaux pour qu'aucun ne soit servi avant le créneau qui le
+ * précède dans sa salle — sans quoi on ne saurait pas qui garder sur place.
+ *
+ * L'ordre d'entrée (la tension, cf. compareByTension) est PRÉSERVÉ partout où
+ * il n'y a pas de lien de chaîne : l'arbitrage entre épreuves simultanées reste
+ * intact, on ne fait que remonter les prédécesseurs.
+ *
+ * Les chaînes d'une salle étant strictement chronologiques, aucun cycle n'est
+ * possible ; `emitted` protège malgré tout contre une double émission.
+ */
+export function orderPredecessorsFirst<T extends { id: string }>(
+  slots: T[],
+  predecessorOf: Map<string, string>,
+): T[] {
+  const byId = new Map(slots.map((s) => [s.id, s]));
+  const emitted = new Set<string>();
+  const ordered: T[] = [];
+
+  const emit = (slot: T) => {
+    if (emitted.has(slot.id)) return;
+    emitted.add(slot.id); // avant la récursion : coupe tout cycle éventuel
+    const predId = predecessorOf.get(slot.id);
+    // Un prédécesseur hors du lot (gelé, autre épreuve) n'est pas à servir :
+    // son jury est déjà figé et sera lu directement comme ancre.
+    const pred = predId ? byId.get(predId) : undefined;
+    if (pred) emit(pred);
+    ordered.push(slot);
+  };
+
+  slots.forEach(emit);
+  return ordered;
 }
 
 // ─── Tension (arbitrage entre épreuves simultanées) ───────────────────
