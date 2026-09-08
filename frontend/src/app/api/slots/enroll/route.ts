@@ -413,13 +413,11 @@ export async function POST(req: NextRequest) {
         const hasComment = !!(row.comment && String(row.comment).trim());
 
         if (hasRealScores || hasComment) {
-          const m = row.members;
-          const evaluerName = m
-            ? `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email
-            : "Un membre";
+          // Ne jamais révéler l'identité de l'examinateur au candidat
+          // (anonymat requis pour les épreuves de groupe / business game).
           return Response.json(
             {
-              error: `${evaluerName} a déjà évalué ce candidat pour cette épreuve. Inscription impossible.`,
+              error: `Ce candidat a déjà été évalué pour cette épreuve. Inscription impossible.`,
               code: "ALREADY_EVALUATED",
             },
             { status: 400 },
