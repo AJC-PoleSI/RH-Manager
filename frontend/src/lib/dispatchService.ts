@@ -697,10 +697,11 @@ export async function runDispatch(opts?: {
             pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
           });
           // Le complément fait partie du jury : il compte pour la chaîne.
-          membersBySlot.set(
-            slot.id,
-            new Set([...(membersBySlot.get(slot.id) || []), id]),
-          );
+          // (membersBySlot contient des copies — muter n'affecte pas
+          // currentBySlot, qui sert d'ancre inter-run.)
+          const chainMembers = membersBySlot.get(slot.id) || new Set<string>();
+          chainMembers.add(id);
+          membersBySlot.set(slot.id, chainMembers);
           added++;
         }
       }
