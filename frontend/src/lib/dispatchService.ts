@@ -5,8 +5,12 @@ import {
   scoreMember,
   availabilityMatchesSlot,
   compareByTension,
+  epreuveShortfall,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
+import { effectiveMaxCandidates } from "@/lib/enrollment";
+import { isEliminated } from "@/lib/favorites";
+import { getToursByNumber } from "@/lib/tour-status";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
@@ -17,6 +21,10 @@ import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
  *   3. Liste d'attente / Backup — 2 remplaçants par créneau
  *   4. Notifications — alerte quand un membre est désinscrit pour équité
  *   5. Gel à 24h — ne touche plus au planning dans les 24h avant l'épreuve
+ *   6. Arbitrage des épreuves simultanées — un examinateur peut se déclarer
+ *      disponible sur deux épreuves qui se chevauchent ; le dispatch le place
+ *      sur celle qui risque le plus de ne PAS pouvoir faire passer tous ses
+ *      candidats, et l'inscrit en liste d'attente sur l'autre.
  *
  * Déclencheurs :
  *   - Admin clique "Publier"
@@ -53,6 +61,7 @@ interface SlotInfo {
     group_size?: number | null;
     is_pole_test?: boolean | null;
     pole?: string | null;
+    tour?: number | null;
   } | null;
 }
 
@@ -97,21 +106,60 @@ function isCommitted(slot: SlotInfo): boolean {
   return slot.status === "closed";
 }
 
-/** Check temporal overlap between a member's committed slots and a candidate slot */
-function wouldConflict(
+/** Clé d'épreuve d'un créneau (les créneaux sans épreuve sont regroupés). */
+function epreuveKeyOf(slot: SlotInfo): string {
+  return slot.epreuve_id || "__sans_epreuve__";
+}
+
+/** Engagement horaire d'un examinateur, avec l'épreuve concernée. */
+interface Commitment {
+  date: string;
+  start: string;
+  end: string;
+  epreuve: string;
+}
+
+type CommittedSlots = Record<string, Commitment[]>;
+
+/** Engagements de ce membre qui chevauchent ce créneau. */
+function overlappingCommitments(
   memberId: string,
   slot: SlotInfo,
-  memberCommittedSlots: Record<
-    string,
-    Array<{ date: string; start: string; end: string }>
-  >,
-): boolean {
+  memberCommittedSlots: CommittedSlots,
+): Commitment[] {
   const committed = memberCommittedSlots[memberId] || [];
   const sDate = String(slot.date || "").substring(0, 10);
   const sStart = String(slot.start_time || "").substring(0, 5);
   const sEnd = String(slot.end_time || "").substring(0, 5);
-  return committed.some(
+  return committed.filter(
     (c) => c.date === sDate && c.start < sEnd && sStart < c.end,
+  );
+}
+
+/** Check temporal overlap between a member's committed slots and a candidate slot */
+function wouldConflict(
+  memberId: string,
+  slot: SlotInfo,
+  memberCommittedSlots: CommittedSlots,
+): boolean {
+  return overlappingCommitments(memberId, slot, memberCommittedSlots).length > 0;
+}
+
+/**
+ * Vrai si le conflit vient d'une AUTRE épreuve — c'est le seul cas où
+ * l'examinateur a réellement perdu un arbitrage (il s'était inscrit sur deux
+ * épreuves simultanées et n'a pu obtenir que l'une des deux). Deux salles de la
+ * MÊME épreuve au même horaire sont interchangeables : ne pas être dans l'une
+ * parce qu'on est dans l'autre n'a rien d'un choix subi.
+ */
+function lostArbitration(
+  memberId: string,
+  slot: SlotInfo,
+  memberCommittedSlots: CommittedSlots,
+): boolean {
+  const key = epreuveKeyOf(slot);
+  return overlappingCommitments(memberId, slot, memberCommittedSlots).some(
+    (c) => c.epreuve !== key,
   );
 }
 
@@ -120,10 +168,7 @@ function commitMember(
   memberId: string,
   slot: SlotInfo,
   memberLoad: Record<string, number>,
-  memberCommittedSlots: Record<
-    string,
-    Array<{ date: string; start: string; end: string }>
-  >,
+  memberCommittedSlots: CommittedSlots,
 ): void {
   memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
   if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
@@ -131,6 +176,7 @@ function commitMember(
     date: String(slot.date || "").substring(0, 10),
     start: String(slot.start_time || "").substring(0, 5),
     end: String(slot.end_time || "").substring(0, 5),
+    epreuve: epreuveKeyOf(slot),
   });
 }
 
@@ -143,7 +189,7 @@ export async function runDispatch(opts?: {
   let slotQuery = supabaseAdmin
     .from("evaluation_slots")
     .select(
-      "id, date, start_time, end_time, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole)",
+      "id, date, start_time, end_time, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour)",
     );
   if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
   const { data: slots, error: slotErr } = await slotQuery;
@@ -277,10 +323,7 @@ export async function runDispatch(opts?: {
   // empêcher le double-booking temporel — un examinateur ne peut pas être sur
   // deux créneaux qui se chevauchent, même s'ils relèvent d'épreuves
   // différentes.
-  const memberCommittedSlots: Record<
-    string,
-    Array<{ date: string; start: string; end: string }>
-  > = {};
+  const memberCommittedSlots: CommittedSlots = {};
 
   const assignmentsToInsert: Array<{ slot_id: string; member_id: string }> = [];
   const backupAssignments: Array<{ slot_id: string; member_id: string }> = [];
@@ -306,6 +349,7 @@ export async function runDispatch(opts?: {
       date: String(slot.date || "").substring(0, 10),
       start: String(slot.start_time || "").substring(0, 5),
       end: String(slot.end_time || "").substring(0, 5),
+      epreuve: epreuveKeyOf(slot),
     });
   };
   for (const slot of sortedSlots) {
@@ -326,9 +370,6 @@ export async function runDispatch(opts?: {
   // plus d'examinateurs choisit en premier. C'est ce qui tranche le cas « un
   // examinateur s'est inscrit sur deux épreuves qui se chevauchent » : il est
   // placé là où il manque vraiment, et reste remplaçant sur l'autre (étape 9d).
-  const epreuveKeyOf = (slot: SlotInfo): string =>
-    slot.epreuve_id || "__sans_epreuve__";
-
   const slotsByEpreuve = new Map<string, SlotInfo[]>();
   for (const slot of sortedSlots) {
     const key = epreuveKeyOf(slot as SlotInfo);
@@ -365,11 +406,20 @@ export async function runDispatch(opts?: {
   // largement assez de créneaux dotés. Le business game doit donc se servir en
   // premier — c'est ce que calcule ce bloc, consommé par compareByTension.
   //
-  //   demande  = candidats encore en lice qui n'ont pas encore passé l'épreuve
-  //              (filtrés sur le pôle demandé pour une épreuve de pôle)
+  //   demande  = candidats qui doivent ENCORE passer cette épreuve, c'est-à-dire
+  //              ceux qui sont admis au tour de l'épreuve, qui n'ont pas encore
+  //              de note dessus, et (épreuve de pôle) qui ont demandé ce pôle
   //   capacité = places offertes par les créneaux qu'on peut RÉELLEMENT doter
   //              (un créneau sans assez d'examinateurs disponibles ne compte
   //              pas : il ne pourra pas se tenir)
+  //
+  // PORTÉE PAR TOUR — indispensable : seules les épreuves du tour EN COURS ont
+  // une demande. Sans ce garde-fou, tant que les délibérations du tour 1 ne sont
+  // pas saisies, personne n'est encore éliminé : une épreuve de pôle du tour 3
+  // afficherait « 200 candidats à faire passer pour 40 places » et raflerait les
+  // examinateurs des entretiens du tour 1, qui eux ont lieu aujourd'hui. Une
+  // épreuve hors tour en cours garde une demande nulle : elle est servie en
+  // dernier, sans jamais bloquer le tour en cours.
   //
   // En cas d'échec de lecture, les deux Maps restent vides : l'ordonnancement
   // retombe alors sur la tension par créneau, comme avant.
@@ -398,23 +448,37 @@ export async function runDispatch(opts?: {
     );
 
     if (epreuveIds.length > 0) {
-      const [candRes, delibRes, wishRes, evalRes] = await Promise.all([
-        supabaseAdmin.from("candidates").select("id"),
-        supabaseAdmin
-          .from("deliberations")
-          .select("candidate_id, tour1_status, tour2_status, tour3_status"),
-        supabaseAdmin.from("candidate_wishes").select("candidate_id, pole"),
-        supabaseAdmin
-          .from("candidate_evaluations")
-          .select("candidate_id, epreuve_id, scores")
-          .in("epreuve_id", epreuveIds),
-      ]);
+      const [candRes, delibRes, wishRes, evalRes, toursByNumber] =
+        await Promise.all([
+          supabaseAdmin.from("candidates").select("id"),
+          supabaseAdmin
+            .from("deliberations")
+            .select("candidate_id, tour1_status, tour2_status, tour3_status"),
+          supabaseAdmin.from("candidate_wishes").select("candidate_id, pole"),
+          supabaseAdmin
+            .from("candidate_evaluations")
+            .select("candidate_id, epreuve_id, scores")
+            .in("epreuve_id", epreuveIds),
+          getToursByNumber(),
+        ]);
 
       // Candidats éliminés : plus aucune épreuve à leur faire passer.
       const eliminated = new Set<string>();
+      const delibByCandidate = new Map<string, any>();
       (delibRes.data || []).forEach((d: any) => {
+        delibByCandidate.set(d.candidate_id, d);
         if (isEliminated(d)) eliminated.add(d.candidate_id);
       });
+
+      /**
+       * Un candidat est attendu au tour N s'il a été ACCEPTÉ au tour N-1.
+       * Au tour 1, tout le monde est attendu (sauf refus déjà prononcé).
+       */
+      const isExpectedAtTour = (candidateId: string, tour: number): boolean => {
+        if (tour <= 1) return true;
+        const delib = delibByCandidate.get(candidateId);
+        return delib?.[`tour${tour - 1}_status`] === "accepted";
+      };
 
       const polesByCandidate = new Map<string, Set<string>>();
       (wishRes.data || []).forEach((w: any) => {
@@ -445,8 +509,19 @@ export async function runDispatch(opts?: {
 
       for (const epId of epreuveIds) {
         const meta = epreuveMeta.get(epId) || {};
+        const tour = Number(meta.tour) || 0;
+
+        // Hors tour en cours → aucune demande (cf. PORTÉE PAR TOUR ci-dessus).
+        // Si la table `tours` n'est pas renseignée, aucune épreuve n'est
+        // prioritaire et l'ordonnancement retombe sur la tension par créneau.
+        if (!tour || toursByNumber[tour]?.status !== "en_cours") {
+          epreuveDemandById.set(epId, 0);
+          continue;
+        }
+
         let demand = 0;
         for (const candidateId of activeCandidates) {
+          if (!isExpectedAtTour(candidateId, tour)) continue;
           if (alreadyEvaluated.has(`${epId}|${candidateId}`)) continue;
           // Épreuve de pôle : seuls les candidats qui ont demandé ce pôle.
           if (meta.is_pole_test && meta.pole) {
@@ -609,9 +684,13 @@ export async function runDispatch(opts?: {
     backups.forEach((memberId) => {
       backupAssignments.push({ slot_id: slot.id, member_id: memberId });
     });
-    conflictedBackups.forEach((memberId) => {
-      arbitrationLosers.push({ slot_id: slot.id, member_id: memberId });
-    });
+    conflictedBackups
+      .filter((memberId) =>
+        lostArbitration(memberId, slotInfo, memberCommittedSlots),
+      )
+      .forEach((memberId) => {
+        arbitrationLosers.push({ slot_id: slot.id, member_id: memberId });
+      });
 
     // 9e. Track unfilled slots
     if (picked.length < quota) {
@@ -633,6 +712,7 @@ export async function runDispatch(opts?: {
       }
     });
   }
+
   // 10. Write assignments to DB — ATOMIQUE.
   // delete (créneaux non gelés / non clôturés) + insert des titulaires se font
   // dans UNE seule transaction Postgres via la RPC replace_slot_assignments :

@@ -7,6 +7,7 @@ import {
   scoreMember,
   compareByTension,
   slotTension,
+  epreuveShortfall,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
@@ -203,5 +204,76 @@ describe("compareByTension (arbitrage entre créneaux simultanés)", () => {
 describe("slotTension", () => {
   it("est négative quand il manque des examinateurs", () => {
     expect(slotTension(1, 2)).toBe(-1);
+  });
+});
+
+describe("epreuveShortfall (prévision : peut-on faire passer tout le monde ?)", () => {
+  it("compte les candidats laissés sur le carreau", () => {
+    // 60 candidats à faire passer, 40 places réellement dotables → 20 restent.
+    expect(epreuveShortfall(60, 40).deficit).toBe(20);
+  });
+
+  it("ne compte pas de déficit quand la capacité suffit", () => {
+    expect(epreuveShortfall(60, 90).deficit).toBe(0);
+    expect(epreuveShortfall(60, 90).coverage).toBeCloseTo(1.5);
+  });
+
+  it("sans candidat à faire passer, la couverture est infinie (servie en dernier)", () => {
+    expect(epreuveShortfall(0, 30).coverage).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe("compareByTension — arbitrage entre épreuves simultanées", () => {
+  // Le cas métier : Anna est libre lundi 9h. Il y a un entretien individuel
+  // (9h–10h) et un business game (9h30–10h30). Les entretiens individuels ont
+  // déjà de quoi faire passer tout le monde ; le business game, non.
+  // → l'algorithme doit servir le business game en premier.
+  const entretien = {
+    id: "entretien-9h",
+    date: "2026-06-22",
+    start_time: "09:00",
+    eligible: 4,
+    quota: 2,
+    ...epreuveShortfall(60, 90), // 90 places dotables pour 60 candidats
+  };
+  const businessGame = {
+    id: "bg-9h30",
+    date: "2026-06-22",
+    start_time: "09:30",
+    eligible: 4,
+    quota: 2,
+    ...epreuveShortfall(60, 40), // seulement 40 places dotables
+  };
+
+  const withShortfall = (s: any) => ({
+    ...s,
+    epreuveDeficit: s.deficit,
+    epreuveCoverage: s.coverage,
+  });
+
+  it("privilégie l'épreuve qui laisserait des candidats sans passage", () => {
+    expect(
+      compareByTension(withShortfall(businessGame), withShortfall(entretien)),
+    ).toBeLessThan(0);
+  });
+
+  it("le déficit prime sur la tension du créneau", () => {
+    // L'entretien individuel est pourtant plus tendu en examinateurs (2 dispos
+    // pour 2 requis) — le business game passe quand même devant.
+    const entretienTendu = withShortfall({ ...entretien, eligible: 2 });
+    const bgConfortable = withShortfall({ ...businessGame, eligible: 9 });
+    expect(compareByTension(bgConfortable, entretienTendu)).toBeLessThan(0);
+  });
+
+  it("à déficit nul des deux côtés, la couverture la plus faible passe devant", () => {
+    const juste = withShortfall({ ...entretien, ...epreuveShortfall(60, 62) });
+    const large = withShortfall({ ...entretien, ...epreuveShortfall(60, 200) });
+    expect(compareByTension(juste, large)).toBeLessThan(0);
+  });
+
+  it("sans prévision disponible, retombe sur la tension par créneau", () => {
+    const tendu = { id: "a", date: "2026-06-22", start_time: "09:00", eligible: 2, quota: 2 };
+    const large = { id: "b", date: "2026-06-22", start_time: "09:00", eligible: 9, quota: 2 };
+    expect(compareByTension(tendu, large)).toBeLessThan(0);
   });
 });

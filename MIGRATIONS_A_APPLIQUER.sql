@@ -370,3 +370,31 @@ ALTER TABLE epreuves
 
 ALTER TABLE evaluation_slots
   ADD COLUMN IF NOT EXISTS min_candidates INTEGER;
+
+
+-- ------------------------------------------------------------
+-- 10) Dispos simultanées : l'examinateur coche, l'algorithme tranche
+--     (supabase-migration-dispos-simultanees.sql)
+-- ------------------------------------------------------------
+-- Un examinateur peut se déclarer disponible sur deux épreuves qui tombent au
+-- même moment ; le dispatch en choisit une (celle qui risque le plus de ne pas
+-- faire passer tous ses candidats) et le laisse remplaçant sur l'autre.
+--
+-- Tant que ces deux colonnes manquent, l'application fonctionne mais dégradée :
+--   • sans `availabilities.epreuve_id` : cocher une épreuve rend disponible
+--     pour toute épreuve au même moment (l'ancien comportement) ;
+--   • sans `slot_availability_requests.source` : le « perdant » de l'arbitrage
+--     n'est pas mis en liste d'attente sur le créneau non retenu.
+-- Les deux cas sont signalés par un console.warn au dispatch.
+
+ALTER TABLE public.availabilities
+  ADD COLUMN IF NOT EXISTS epreuve_id UUID REFERENCES public.epreuves(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_availability_epreuve
+  ON public.availabilities (epreuve_id);
+
+ALTER TABLE public.slot_availability_requests
+  ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'member';
+
+CREATE INDEX IF NOT EXISTS idx_slot_requests_source
+  ON public.slot_availability_requests (source);
