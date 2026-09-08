@@ -24,9 +24,18 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        // Optional: Redirect to login
-        // window.location.href = '/login';
+        localStorage.clear();
+        // Session expirée (JWT de 2h) ou invalide : sans cette redirection, la
+        // page reste affichée comme si de rien n'était et chaque action de
+        // l'utilisateur échoue silencieusement en 401, empilant des toasts
+        // "Non autorise" incompréhensibles à chaque nouvel essai (cf. capture
+        // du 08/09/2026 — clics répétés sur "Enregistrer mes disponibilités").
+        // Navigation dure (pas de router.push) : on veut repartir d'un état
+        // React totalement neuf, hors de tout composant déjà monté avec un
+        // token périmé en mémoire.
+        if (!window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login?session=expired";
+        }
       }
     }
     return Promise.reject(error);
