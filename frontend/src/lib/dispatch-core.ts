@@ -135,6 +135,37 @@ export interface SlotDemand {
   eligible: number;
   /** Nombre d'examinateurs requis (min_members). */
   quota: number;
+  /**
+   * Nombre de candidats qui NE POURRONT PAS passer l'épreuve de ce créneau
+   * faute de créneaux réellement staffables (cf. epreuveShortfall). 0 = tout
+   * le monde passe. C'est le critère PRIORITAIRE d'ordonnancement.
+   */
+  epreuveDeficit?: number;
+  /** Capacité réalisable / candidats à faire passer (1 = pile ce qu'il faut). */
+  epreuveCoverage?: number;
+}
+
+/**
+ * Tension d'une ÉPREUVE : est-elle en mesure de faire passer tous ses
+ * candidats avec les créneaux qu'on peut réellement doter en examinateurs ?
+ *
+ * @param demand   candidats restant à faire passer sur cette épreuve
+ * @param capacity places offertes par les créneaux staffables (assez
+ *                 d'examinateurs disponibles pour atteindre min_members)
+ *
+ * `deficit` = candidats laissés sur le carreau (0 si tout le monde passe).
+ * `coverage` = ratio de couverture, pour départager deux épreuves à déficit
+ * nul (0.9 est plus tendu que 3.0). Sans candidat à faire passer, la
+ * couverture est infinie : l'épreuve est servie en dernier.
+ */
+export function epreuveShortfall(
+  demand: number,
+  capacity: number,
+): { deficit: number; coverage: number } {
+  return {
+    deficit: Math.max(0, demand - capacity),
+    coverage: demand > 0 ? capacity / demand : Number.POSITIVE_INFINITY,
+  };
 }
 
 /**
