@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
             end_time: slot.endTime,
             room: roomLabel,
             max_candidates: room.maxCandidates || 1,
-            min_members: 1,
+            min_members: epreuve.min_evaluators_per_salle ?? 2,
             status: "open",
             tour: epreuve.tour,
           })
