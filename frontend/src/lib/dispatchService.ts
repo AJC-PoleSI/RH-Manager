@@ -722,8 +722,8 @@ export async function runDispatch(opts?: {
     while (picked.length < quota && pool.length > 0) {
       pool.sort(
         (a, b) =>
-          scoreMember(a, picked, memberLoad, pairHistory) -
-          scoreMember(b, picked, memberLoad, pairHistory),
+          scoreMember(a, picked, memberLoad, pairHistory, continuity) -
+          scoreMember(b, picked, memberLoad, pairHistory, continuity),
       );
       const chosen = pool.shift()!;
       picked.push(chosen);
@@ -737,6 +737,9 @@ export async function runDispatch(opts?: {
     picked.forEach((memberId) => {
       assignmentsToInsert.push({ slot_id: slot.id, member_id: memberId });
     });
+    // Décision fraîche : elle remplace l'état d'avant le run et devient l'ancre
+    // du créneau suivant de la salle.
+    membersBySlot.set(slot.id, new Set(picked));
 
     // 9d. Remplaçants (liste d'attente).
     //
