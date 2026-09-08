@@ -638,8 +638,15 @@ export async function runDispatch(opts?: {
   const demandBySlot = new Map<string, ReturnType<typeof demandOf>>();
   (sortedSlots as SlotInfo[]).forEach((s) => demandBySlot.set(s.id, demandOf(s)));
 
-  const orderedSlots = ([...sortedSlots] as SlotInfo[]).sort((a, b) =>
-    compareByTension(demandBySlot.get(a.id)!, demandBySlot.get(b.id)!),
+  // Ordre de tension, PUIS remontée des prédécesseurs de salle : on ne peut pas
+  // décider qui garder sur place tant que le créneau précédent de la salle n'est
+  // pas tranché. L'arbitrage entre épreuves simultanées est préservé — seuls les
+  // prédécesseurs remontent.
+  const orderedSlots = orderPredecessorsFirst(
+    ([...sortedSlots] as SlotInfo[]).sort((a, b) =>
+      compareByTension(demandBySlot.get(a.id)!, demandBySlot.get(b.id)!),
+    ),
+    predecessorOf,
   );
 
   for (const slot of orderedSlots) {
