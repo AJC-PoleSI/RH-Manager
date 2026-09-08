@@ -215,6 +215,45 @@ export default function CalendarMemberBuilder({
     });
   };
 
+  // Épreuves cochées qui tombent au même moment : c'est autorisé (c'est même
+  // le but — l'algorithme arbitre), on l'explique simplement pour que personne
+  // ne croie s'être engagé sur les deux.
+  const simultaneousWarnings = useMemo(() => {
+    const blocks = Array.from(selectedBlocks).map((k) => {
+      const [date, start, end, epreuveId] = k.split("|");
+      return { date, start, end, epreuveId };
+    });
+    const nameOf = (id: string) =>
+      epreuvesConfigured.find((e) => e.id === id)?.name || "Épreuve";
+    const messages: string[] = [];
+    const seen = new Set<string>();
+
+    for (let i = 0; i < blocks.length; i++) {
+      for (let j = i + 1; j < blocks.length; j++) {
+        const a = blocks[i];
+        const b = blocks[j];
+        if (a.date !== b.date) continue;
+        if (a.epreuveId === b.epreuveId) continue;
+        if (!(a.start < b.end && b.start < a.end)) continue;
+
+        const key = [a.date, ...[a.epreuveId, b.epreuveId].sort()].join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const dateLabel = new Date(`${a.date}T12:00:00`).toLocaleDateString(
+          "fr-FR",
+          { weekday: "long", day: "numeric", month: "long" },
+        );
+        messages.push(
+          `${dateLabel} — ${nameOf(a.epreuveId)} (${a.start}) et ${nameOf(
+            b.epreuveId,
+          )} (${b.start})`,
+        );
+      }
+    }
+    return messages;
+  }, [selectedBlocks, epreuvesConfigured]);
+
   const handleSave = async () => {
     try {
       // 1. Detect withdrawals from ASSIGNED slots
