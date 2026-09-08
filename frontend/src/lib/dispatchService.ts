@@ -653,10 +653,14 @@ export async function runDispatch(opts?: {
     const { memberLoad, pairHistory } = stateByEpreuve.get(epreuveKeyOf(slot))!;
     const existing = currentBySlot[slot.id] || new Set<string>();
     const slotInfo = slot;
+    // Qui garder sur place dans cette salle (cf. étape 6bis).
+    const continuity = continuityFor(slot.id);
 
     // 9a. Frozen slots — don't touch
     if (isFrozen(slotInfo)) {
       frozenCount++;
+      // Le jury gelé reste l'ancre du créneau suivant de la salle : on laisse
+      // membersBySlot sur l'état en base, qui est précisément ce jury.
       continue;
     }
 
