@@ -51,6 +51,8 @@ interface SlotInfo {
   date: string;
   start_time: string;
   end_time: string;
+  /** Salle physique. Porte la continuité : on évite de déplacer les jurys. */
+  room?: string | null;
   status: string;
   min_members: number;
   max_candidates?: number | null;
