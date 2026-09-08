@@ -396,6 +396,26 @@ export default function CalendarMemberBuilder({
         </button>
       </div>
 
+      {simultaneousWarnings.length > 0 && (
+        <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 text-sm text-amber-900">
+          <p className="font-medium">
+            ⚖️ Vous êtes inscrit·e sur {simultaneousWarnings.length} paire
+            {simultaneousWarnings.length > 1 ? "s" : ""} d&apos;épreuves qui se
+            chevauchent
+          </p>
+          <ul className="mt-1 space-y-0.5 text-amber-800">
+            {simultaneousWarnings.map((m) => (
+              <li key={m}>• {m}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-amber-700">
+            C&apos;est autorisé : l&apos;algorithme vous affectera à
+            l&apos;épreuve qui risque le plus de ne pas pouvoir faire passer
+            tous ses candidats, et vous restera remplaçant·e sur l&apos;autre.
+          </p>
+        </div>
+      )}
+
       <div className="p-4 overflow-x-auto">
         {uniqueDates.length === 0 ? (
           <div className="text-center py-12 text-gray-500 text-sm border-2 border-dashed border-gray-200 rounded-xl">
