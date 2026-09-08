@@ -24,6 +24,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
+        // Sert à ramener l'utilisateur sur le bon formulaire (staff ou
+        // candidat) après la redirection — capturé AVANT de vider le storage.
+        const role = localStorage.getItem("role");
         localStorage.clear();
         // Session expirée (JWT de 2h) ou invalide : sans cette redirection, la
         // page reste affichée comme si de rien n'était et chaque action de
@@ -34,7 +37,7 @@ api.interceptors.response.use(
         // React totalement neuf, hors de tout composant déjà monté avec un
         // token périmé en mémoire.
         if (!window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login?session=expired";
+          window.location.href = `/login?session=expired&role=${role || "member"}`;
         }
       }
     }
