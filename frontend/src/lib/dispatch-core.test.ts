@@ -8,6 +8,9 @@ import {
   compareByTension,
   slotTension,
   epreuveShortfall,
+  roomStreak,
+  orderPredecessorsFirst,
+  ROOM_STREAK_MAX,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
