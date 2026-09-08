@@ -319,6 +319,66 @@ export async function runDispatch(opts?: {
     return String(a.start_time).localeCompare(String(b.start_time));
   });
 
+  // 6bis. Chaînes de salle — continuité des jurys.
+  //
+  // Un examinateur doit rester dans la MÊME salle avec le MÊME binôme sur des
+  // créneaux qui se suivent (jusqu'à ROOM_STREAK_MAX), sans quoi il change de
+  // salle et de partenaire à chaque passage : déplacement + re-calibrage entre
+  // examinateurs = temps perdu. Cf. la spec
+  // docs/superpowers/specs/2026-09-08-dispatch-continuite-salle-design.md
+  //
+  // La chaîne est indexée par (jour, salle), TOUTES ÉPREUVES CONFONDUES :
+  // rester sur place est un gain de temps physique, même si deux épreuves
+  // différentes s'enchaînent dans la même salle. Une pause entre deux créneaux
+  // ne rompt pas la chaîne — la personne ne bouge pas pour autant.
+  const chainOf = new Map<string, { chain: string[]; index: number }>();
+  const predecessorOf = new Map<string, string>();
+  {
+    const chains = new Map<string, string[]>();
+    (sortedSlots as SlotInfo[]).forEach((s) => {
+      const room = String(s.room || "").trim();
+      if (!room) return; // sans salle identifiée, pas de continuité physique
+      const key = `${String(s.date).substring(0, 10)}|${room}`;
+      if (!chains.has(key)) chains.set(key, []);
+      chains.get(key)!.push(s.id);
+    });
+    // sortedSlots est déjà chronologique → chaque chaîne l'est aussi.
+    chains.forEach((chain) => {
+      chain.forEach((slotId, index) => {
+        chainOf.set(slotId, { chain, index });
+        if (index > 0) predecessorOf.set(slotId, chain[index - 1]);
+      });
+    });
+  }
+
+  // Affectations connues par créneau : l'état d'AVANT le run, écrasé au fur et
+  // à mesure des décisions. Comme un créneau n'est jamais servi avant son
+  // prédécesseur de salle (cf. orderPredecessorsFirst), lire le prédécesseur
+  // renvoie toujours une décision fraîche — ou le jury figé d'un créneau gelé
+  // ou verrouillé, qui doit précisément servir d'ancre.
+  const membersBySlot = new Map<string, Set<string>>();
+  Object.entries(currentBySlot).forEach(([slotId, members]) => {
+    membersBySlot.set(slotId, new Set(members));
+  });
+
+  /** Qui garder sur place sur ce créneau, et qui y était déjà avant le run. */
+  const continuityFor = (slotId: string): SlotContinuity => {
+    const entry = chainOf.get(slotId);
+    const continuing = new Set<string>();
+    if (entry && entry.index > 0) {
+      const previous = membersBySlot.get(entry.chain[entry.index - 1]);
+      previous?.forEach((memberId) => {
+        if (
+          roomStreak(memberId, entry.chain, entry.index, membersBySlot) <
+          ROOM_STREAK_MAX
+        ) {
+          continuing.add(memberId);
+        }
+      });
+    }
+    return { continuing, anchored: currentBySlot[slotId] };
+  };
+
   // 7. Tracking structures
   //
   // memberCommittedSlots est GLOBAL (toutes épreuves confondues) : il sert à
