@@ -568,6 +568,11 @@ export default function CrossCalendarPage() {
                   const ep = epreuves.find((x: any) => x.id === e.target.value);
                   if (ep) {
                     setMaxCandidates(ep.isGroupEpreuve ? ep.groupSize : 1);
+                    setMembersPerSlot(
+                      ep.isGroupEpreuve
+                        ? ep.minCandidates || 1
+                        : ep.minEvaluatorsPerSalle || 2,
+                    );
                   }
                 }}
               >
