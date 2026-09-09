@@ -299,7 +299,7 @@ export default function AvailabilityPage() {
           <span className="flex items-center gap-1.5">
             <CalendarCheck className="h-4 w-4" />
             {overlays.length} affectation{overlays.length > 1 ? "s" : ""} sur
-            cette semaine
+            cette semaine — cliquez sur une affectation pour le détail
           </span>
         )}
         {dirty && (
@@ -308,6 +308,19 @@ export default function AvailabilityPage() {
           </span>
         )}
       </div>
+
+      {overlays.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-[3px] border-2 border-dashed border-blue-300 bg-blue-50" />
+            Disponibilité déclarée
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-[3px] bg-blue-600" />
+            Affectation confirmée
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center text-gray-400">
@@ -319,9 +332,91 @@ export default function AvailabilityPage() {
           bands={bands}
           overlays={overlays}
           onChange={handleChange}
+          onOverlayClick={(o) => setSelectedSlotId(o.id)}
           readOnly={!saisieOuverte}
         />
       )}
+
+      {selectedSlotId &&
+        (() => {
+          const d = slotDetails.get(selectedSlotId);
+          if (!d) return null;
+          const dateLabel = new Date(`${d.date}T12:00:00`).toLocaleDateString(
+            "fr-FR",
+            { weekday: "long", day: "numeric", month: "long" },
+          );
+          return (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+              onClick={() => setSelectedSlotId(null)}
+            >
+              <div
+                className="w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {d.epreuveName}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {dateLabel} · {minutesToHHMMLocal(d.startMin)}–
+                      {minutesToHHMMLocal(d.endMin)}
+                      {d.room ? ` · salle ${d.room}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedSlotId(null)}
+                    className="rounded-lg bg-gray-100 p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-4 p-5">
+                  {d.status && (
+                    <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {STATUS_LABELS[d.status] || d.status}
+                    </span>
+                  )}
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                      <Users className="h-3.5 w-3.5" />
+                      Candidat{d.candidateNames.length > 1 ? "s" : ""} (
+                      {d.candidateNames.length})
+                    </p>
+                    {d.candidateNames.length > 0 ? (
+                      <ul className="space-y-1 text-sm text-gray-800">
+                        {d.candidateNames.map((n) => (
+                          <li key={n}>{n}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-400">
+                        Personne inscrit pour l&apos;instant.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-gray-600">
+                      Avec vous dans le jury
+                    </p>
+                    {d.coExaminerNames.length > 0 ? (
+                      <ul className="space-y-1 text-sm text-gray-800">
+                        {d.coExaminerNames.map((n) => (
+                          <li key={n}>{n}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-400">
+                        Vous êtes seul(e) affecté(e) pour l&apos;instant.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }
