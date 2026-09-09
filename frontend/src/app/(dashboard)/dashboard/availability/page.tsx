@@ -365,8 +365,8 @@ export default function AvailabilityPage() {
                       {d.epreuveName}
                     </h3>
                     <p className="mt-0.5 text-xs text-gray-500">
-                      {dateLabel} · {minutesToHHMMLocal(d.startMin)}–
-                      {minutesToHHMMLocal(d.endMin)}
+                      {dateLabel} · {minutesToHHMM(d.startMin)}–
+                      {minutesToHHMM(d.endMin)}
                       {d.room ? ` · salle ${d.room}` : ""}
                     </p>
                   </div>
