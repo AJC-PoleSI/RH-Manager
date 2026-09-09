@@ -134,24 +134,50 @@ export default function AvailabilityPage() {
 
       const dayIndexOf = new Map(days.map((d, i) => [localYmd(d), i]));
       const slots = Array.isArray(slotsRes.data) ? slotsRes.data : [];
-      setOverlays(
-        slots
-          .map((s: any): Overlay | null => {
-            const idx = dayIndexOf.get(String(s.date).slice(0, 10));
-            if (idx === undefined || !s.start_time || !s.end_time) return null;
-            return {
-              id: s.id,
-              dayIndex: idx,
-              laneId: "",
-              startMin: hhmmToMinutes(String(s.start_time)),
-              endMin: hhmmToMinutes(String(s.end_time)),
-              label: s.epreuve?.name?.trim() || "Épreuve",
-              sublabel: s.room ? `salle ${s.room}` : undefined,
-              color: colorFor(s.epreuve?.id || s.id),
-            };
-          })
-          .filter(Boolean) as Overlay[],
-      );
+      const nextOverlays: Overlay[] = [];
+      const nextDetails = new Map<string, SlotDetail>();
+      for (const s of slots) {
+        const idx = dayIndexOf.get(String(s.date).slice(0, 10));
+        if (idx === undefined || !s.start_time || !s.end_time) continue;
+
+        const candidateNames = ((s.enrollments || []) as any[])
+          .map((e) => fullName(e.candidate || {}))
+          .filter(Boolean);
+        const coExaminerNames = ((s.members || []) as any[])
+          .filter((m) => m.member_id !== user?.id)
+          .map((m) => fullName(m.member || {}))
+          .filter(Boolean);
+
+        const parts: string[] = [];
+        if (s.room) parts.push(`salle ${s.room}`);
+        if (candidateNames.length === 1) parts.push(candidateNames[0]);
+        else if (candidateNames.length > 1)
+          parts.push(`${candidateNames.length} candidats`);
+
+        nextOverlays.push({
+          id: s.id,
+          dayIndex: idx,
+          laneId: "",
+          startMin: hhmmToMinutes(String(s.start_time)),
+          endMin: hhmmToMinutes(String(s.end_time)),
+          label: s.epreuve?.name?.trim() || "Épreuve",
+          sublabel: parts.join(" · ") || undefined,
+          color: colorFor(s.epreuve?.id || s.id),
+        });
+        nextDetails.set(s.id, {
+          id: s.id,
+          epreuveName: s.epreuve?.name?.trim() || "Épreuve",
+          date: String(s.date).slice(0, 10),
+          startMin: hhmmToMinutes(String(s.start_time)),
+          endMin: hhmmToMinutes(String(s.end_time)),
+          room: s.room || undefined,
+          status: s.status,
+          candidateNames,
+          coExaminerNames,
+        });
+      }
+      setOverlays(nextOverlays);
+      setSlotDetails(nextDetails);
 
       setDirty(false);
     } catch (e) {
