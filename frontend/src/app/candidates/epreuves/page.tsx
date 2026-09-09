@@ -704,7 +704,7 @@ export default function CandidateEpreuvesPage() {
 
                         {/* Time rows */}
                         {calendarData.timeRows.map((time) => (
-                          <>
+                          <Fragment key={time}>
                             {/* Time label */}
                             <div
                               key={`label-${time}`}
