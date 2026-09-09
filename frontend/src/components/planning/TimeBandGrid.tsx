@@ -461,7 +461,12 @@ export default function TimeBandGrid({
     [bands, onChange],
   );
 
-  const selected = bands.find((b) => b.id === selectedId) ?? null;
+  // Une bande dont la piste vient d'être masquée (filtre de salle) ne doit plus
+  // garder son panneau de réglage ouvert : on éditerait quelque chose qu'on ne
+  // voit plus.
+  const visibleLaneIds = new Set((lanes.length ? lanes : SINGLE_LANE).map((l) => l.id));
+  const selected =
+    bands.find((b) => b.id === selectedId && visibleLaneIds.has(b.laneId)) ?? null;
 
   // ─── Rendu ─────────────────────────────────────────────────────────
 

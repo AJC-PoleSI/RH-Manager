@@ -10,6 +10,7 @@
 
 import { useMemo, useState } from "react";
 import TimeBandGrid, { type Lane, type Overlay } from "@/components/planning/TimeBandGrid";
+import LaneFilter from "@/components/planning/LaneFilter";
 import { hhmmToMinutes, minutesToHHMM, type Band } from "@/lib/time-bands";
 
 const ROOMS: Lane[] = [
@@ -30,6 +31,7 @@ function mondayOf(d: Date) {
 
 export default function DemoGrillePage() {
   const [mode, setMode] = useState<"membre" | "admin">("membre");
+  const [visibleRooms, setVisibleRooms] = useState<string[]>(ROOMS.map((r) => r.id));
   const [weekOffset, setWeekOffset] = useState(0);
   const [memberBands, setMemberBands] = useState<Band[]>([
     { id: "seed-1", dayIndex: 0, laneId: "", startMin: hhmmToMinutes("08:00"), endMin: hhmmToMinutes("09:55") },
@@ -61,6 +63,12 @@ export default function DemoGrillePage() {
 
   const bands = mode === "membre" ? memberBands : adminBands;
   const setBands = mode === "membre" ? setMemberBands : setAdminBands;
+
+  const shownRooms = ROOMS.filter((r) => visibleRooms.includes(r.id));
+  const roomCounts = adminBands.reduce<Record<string, number>>((acc, b) => {
+    acc[b.laneId] = (acc[b.laneId] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const totalMin = bands.reduce((s, b) => s + (b.endMin - b.startMin), 0);
 
@@ -110,13 +118,26 @@ export default function DemoGrillePage() {
         </span>
       </div>
 
+      {mode === "admin" && (
+        <div className="mb-3">
+          <LaneFilter
+            lanes={ROOMS}
+            visible={visibleRooms}
+            onChange={setVisibleRooms}
+            counts={roomCounts}
+          />
+        </div>
+      )}
+
       <TimeBandGrid
         days={days}
-        lanes={mode === "admin" ? ROOMS : undefined}
+        lanes={mode === "admin" ? shownRooms : undefined}
         bands={bands}
         overlays={mode === "membre" ? overlays : []}
         onChange={setBands}
-        pxPerMin={mode === "admin" ? 0.75 : 0.9}
+        // Plus il y a de salles côté à côté, plus les colonnes sont étroites :
+        // on rend la grille un peu moins haute pour compenser visuellement.
+        pxPerMin={mode === "admin" && shownRooms.length > 2 ? 0.75 : 0.9}
       />
 
       <details className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-3">
