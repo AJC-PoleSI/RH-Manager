@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
         type: "tour3",
         title: `Tour 3 — Pôle ${pole}`,
         body: `${candidatsCount} candidat${candidatsCount > 1 ? "s" : ""} ${candidatsCount > 1 ? "ont" : "a"} demandé votre pôle. Minimum ${creneauxParMembre} créneau${creneauxParMembre > 1 ? "x" : ""} d'entretien par membre.`,
-        link: "/dashboard/planning",
+        link: "/dashboard/availability",
       },
     );
 
