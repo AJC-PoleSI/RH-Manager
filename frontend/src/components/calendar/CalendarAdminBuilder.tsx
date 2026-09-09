@@ -45,6 +45,8 @@ interface SlotData {
   enrollments?: { candidate: { first_name: string; last_name: string } }[];
   maxCandidates?: number;
   max_candidates?: number;
+  minMembers?: number;
+  min_members?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -285,7 +287,17 @@ export default function CalendarAdminBuilder({
           members: slot.members || [],
           enrollments: slot.enrollments || [],
           maxCandidates: slot.maxCandidates || slot.max_candidates || 1,
+          minMembers: slot.minMembers || slot.min_members || 1,
         },
+        // Créneau incomplet côté examinateur (moins d'examinateurs affectés
+        // que le minimum requis) : plus transparent, pour repérer d'un coup
+        // d'œil ce qui manque encore de staff — indépendamment du statut
+        // d'occupation (🔒), qui ne dit que "au moins un examinateur ou
+        // candidat", pas "assez".
+        classNames:
+          (slot.members || []).length < (slot.minMembers || slot.min_members || 1)
+            ? ["fc-understaffed"]
+            : [],
       };
     });
   }, [slots, roomList, durationMinutes]);
@@ -849,6 +861,15 @@ export default function CalendarAdminBuilder({
           opacity: 0.85;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        /* Créneau incomplet côté examinateur : effectif < minimum requis.
+           Couleur de salle conservée, juste estompée, pour rester lisible au
+           survol tout en distinguant "prêt" de "il manque du monde". */
+        .fc-understaffed {
+          opacity: 0.35 !important;
+        }
+        .fc-understaffed:hover {
+          opacity: 0.6 !important;
         }
         /* Now indicator */
         .calendar-week-grid .fc .fc-timegrid-now-indicator-line {
