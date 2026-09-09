@@ -51,35 +51,13 @@ export async function isMemberAssignedToSlot(
 }
 
 /**
- * Épreuves « sur table » (type `commune`).
- *
- * Ce format fonctionne par convocation globale : tous les candidats sont
- * réunis au même moment, il n'y a donc NI créneau NI inscription (l'interface
- * candidat masque l'inscription pour ce type). Les rattacher à la règle du
- * créneau partagé les rendait ininscriptibles ET innotables : aucun
- * examinateur ne pouvait saisir de note, seul un admin y arrivait en
- * court-circuitant la vérification.
- *
- * Le cloisonnement par créneau garde tout son sens pour les entretiens et les
- * épreuves de groupe — il ne s'applique simplement pas à un format où le jury
- * n'est pas découpé par créneau.
- */
-async function listCommuneEpreuveIds(): Promise<string[]> {
-  const { data, error } = await supabaseAdmin
-    .from("epreuves")
-    .select("id")
-    .eq("type", "commune");
-
-  if (error || !data) return [];
-  return data.map((e: any) => e.id);
-}
-
-/**
  * Liste les épreuves qu'un membre est autorisé à évaluer POUR UN CANDIDAT
- * donné :
- *   • celles où il est assigné à un créneau sur lequel ce candidat a une
- *     inscription active (entretiens, épreuves de groupe) ;
- *   • les épreuves sur table, qui n'ont pas de créneau par construction.
+ * donné : celles où il est assigné à un créneau sur lequel ce candidat a une
+ * inscription active (entretiens, épreuves de groupe).
+ *
+ * Les épreuves sur table (type `commune`) n'ont NI créneau NI inscription
+ * (convocation globale) et ne sont donc jamais retournées ici : seul un
+ * admin peut les noter (`canEvaluate` court-circuite pour lui).
  *
  * C'est la règle unique qui gouverne l'accès aux évaluations (individuelles,
  * collectives, commentaires, cochage).
