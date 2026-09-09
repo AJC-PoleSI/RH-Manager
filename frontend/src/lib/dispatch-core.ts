@@ -260,6 +260,23 @@ export interface SlotDemand {
   epreuveDeficit?: number;
   /** Capacité réalisable / candidats à faire passer (1 = pile ce qu'il faut). */
   epreuveCoverage?: number;
+  /**
+   * Épreuve de groupe (business game...) plutôt qu'individuelle.
+   *
+   * Réunir 4 à 6 examinateurs en même temps dans la même salle est
+   * structurellement plus difficile que d'en réunir 2 pour un entretien
+   * individuel — avec le même vivier disponible, l'individuel dégage un
+   * créneau complet bien plus vite. `epreuveDeficit` est censé compenser ça,
+   * mais `staffableCapacity` (dispatchService.ts) compte la capacité de
+   * chaque créneau de groupe INDÉPENDAMMENT puis les additionne, alors que
+   * plusieurs créneaux de groupe simultanés se disputent le MÊME vivier —
+   * la capacité calculée d'une épreuve de groupe qui ouvre beaucoup de
+   * salles ressort donc gonflée, et son déficit artificiellement faible
+   * (audit du 09/09/2026, cf. spec dispatch-priorite-groupe). Ce champ sert
+   * de filet de secours explicite : un créneau de groupe passe TOUJOURS
+   * avant un individuel qui lui dispute le même horaire.
+   */
+  isGroupEpreuve?: boolean;
 }
 
 /**
