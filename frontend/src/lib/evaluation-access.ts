@@ -88,8 +88,6 @@ export async function listEvaluableEpreuveIds(
     }
   }
 
-  for (const id of await listCommuneEpreuveIds()) ids.add(id);
-
   return Array.from(ids);
 }
 
