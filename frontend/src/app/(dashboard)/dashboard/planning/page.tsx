@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
-import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
+import MemberAvailabilityGrid from "@/app/(dashboard)/dashboard/availability/page";
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
