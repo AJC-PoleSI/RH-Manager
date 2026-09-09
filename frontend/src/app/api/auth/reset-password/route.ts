@@ -33,7 +33,7 @@ function migrationPendingResponse() {
 async function findMemberByResetToken(token: string) {
   const { data: member, error } = await supabaseAdmin
     .from("members")
-    .select("id, email, first_name, is_admin, password_reset_expires_at")
+    .select("id, email, first_name, last_name, is_admin, password_reset_expires_at")
     .eq("password_reset_token", hashResetToken(token))
     .maybeSingle();
 
