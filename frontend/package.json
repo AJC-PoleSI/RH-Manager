@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:sandbox": "NEXT_DIST_DIR=.next-sandbox next dev -p 3002",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
