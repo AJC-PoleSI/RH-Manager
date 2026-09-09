@@ -981,28 +981,34 @@ export async function runDispatch(opts?: {
   }
 
   // 12. Send notifications for removed members
+  // Un seul insert en masse (même raison qu'aux étapes 10 et 11 : éviter un
+  // aller-retour réseau par notification quand le rééquilibrage global
+  // touche beaucoup de monde en une fois).
   let notificationCount = 0;
-  for (const removal of removedMembers) {
+  const notificationRows = removedMembers.map((removal) => {
+    const dateStr = String(removal.slot.date || "").substring(0, 10);
+    const startStr = String(removal.slot.start_time || "").substring(0, 5);
+    const dateObj = new Date(`${dateStr}T12:00:00`);
+    const dateDisplay = dateObj.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    return {
+      member_id: removal.member_id,
+      type: "dispatch_change",
+      title: "Changement d'affectation",
+      body: `Vous avez été retiré du créneau de ${startStr} le ${dateDisplay} (raison : ${removal.reason}). Un autre examinateur a été prioritairement affecté pour garantir l'équité de répartition.`,
+      link: "/dashboard",
+    };
+  });
+  if (notificationRows.length > 0) {
     try {
-      const dateStr = String(removal.slot.date || "").substring(0, 10);
-      const startStr = String(removal.slot.start_time || "").substring(0, 5);
-
-      // Format date for human display
-      const dateObj = new Date(`${dateStr}T12:00:00`);
-      const dateDisplay = dateObj.toLocaleDateString("fr-FR", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      });
-
-      await supabaseAdmin.from("notifications").insert({
-        member_id: removal.member_id,
-        type: "dispatch_change",
-        title: "Changement d'affectation",
-        body: `Vous avez été retiré du créneau de ${startStr} le ${dateDisplay} (raison : ${removal.reason}). Un autre examinateur a été prioritairement affecté pour garantir l'équité de répartition.`,
-        link: "/dashboard",
-      });
-      notificationCount++;
+      const { error } = await supabaseAdmin
+        .from("notifications")
+        .insert(notificationRows);
+      if (error) throw error;
+      notificationCount = notificationRows.length;
     } catch (e) {
       console.error("Notification insert error:", e);
     }
