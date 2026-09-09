@@ -738,7 +738,10 @@ export default function TimeBandGrid({
                         onOverlayClick ? () => onOverlayClick(o) : undefined
                       }
                     >
-                      <div className="flex items-center gap-1 truncate px-1.5 pt-1 text-[10px] font-semibold leading-tight text-white">
+                      {/* Heure exacte — toujours affichée, quelle que soit la
+                          durée du créneau (un entretien individuel de 25min
+                          doit rester aussi lisible qu'un Business Game d'1h). */}
+                      <div className="flex items-center gap-1 truncate px-1.5 pt-1 text-[10px] font-bold leading-tight tabular-nums text-white">
                         <svg
                           viewBox="0 0 20 20"
                           fill="currentColor"
@@ -750,13 +753,16 @@ export default function TimeBandGrid({
                             clipRule="evenodd"
                           />
                         </svg>
-                        <span className="truncate">{o.label}</span>
+                        <span>
+                          {minutesToHHMM(o.startMin)}–{minutesToHHMM(o.endMin)}
+                        </span>
                       </div>
-                      {o.sublabel && o.endMin - o.startMin >= 30 && (
-                        <div className="truncate px-1.5 text-[10px] leading-tight text-white/85">
-                          {o.sublabel}
-                        </div>
-                      )}
+                      {/* Épreuve + salle — sur la même ligne pour rester
+                          visible même sur un créneau très court. */}
+                      <div className="truncate px-1.5 text-[10px] font-semibold leading-tight text-white">
+                        {o.label}
+                        {o.sublabel ? ` · ${o.sublabel}` : ""}
+                      </div>
                     </div>
                   ))}
               </div>
