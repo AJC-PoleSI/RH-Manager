@@ -68,7 +68,6 @@ function LoginForm() {
             etablissement: '',
             anneeIntegration: '',
         });
-        setCvFile(null);
         setForgotEmail('');
         setForgotSent(false);
         setError('');
