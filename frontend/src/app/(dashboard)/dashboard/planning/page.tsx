@@ -1561,6 +1561,14 @@ export default function PlanningPage() {
                       ) as any;
                       return individuelle?.minEvaluatorsPerSalle ?? 2;
                     })()}
+                    durationMinutes={
+                      epreuves.find((e) => e.id === selectedEpreuveId)
+                        ?.durationMinutes ?? 30
+                    }
+                    roulementMinutes={
+                      epreuves.find((e) => e.id === selectedEpreuveId)
+                        ?.roulementMinutes ?? 10
+                    }
                     groupSize={
                       epreuves.find((e) => e.id === selectedEpreuveId)?.groupSize
                     }

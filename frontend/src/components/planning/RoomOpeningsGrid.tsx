@@ -30,9 +30,16 @@ import {
   openingsToBands,
   type OpeningRow,
 } from "@/lib/openings-diff";
-import { formatDuration, hhmmToMinutes, type Band } from "@/lib/time-bands";
+import {
+  formatDuration,
+  hhmmToMinutes,
+  mergeIntervals,
+  type Band,
+} from "@/lib/time-bands";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
-import { localYmd } from "@/lib/availability-bands";
+import { generateOpeningsFromCapacity } from "@/lib/auto-openings";
+import { Sparkles } from "lucide-react";
+import { localYmd, MERGE_TOLERANCE_MIN } from "@/lib/availability-bands";
 
 interface ApiOpening extends OpeningRow {
   slots_total?: number;
@@ -53,6 +60,9 @@ interface Props {
   /** Examinateurs requis par salle en collectif / en individuel (courbe « C »). */
   evaluatorsPerGroupRoom?: number;
   evaluatorsPerIndividualRoom?: number;
+  /** Durée d'un créneau et roulement — pour dimensionner la génération auto. */
+  durationMinutes?: number;
+  roulementMinutes?: number;
   onSaved?: () => void;
 }
 
@@ -69,6 +79,8 @@ export default function RoomOpeningsGrid({
   minCandidates,
   evaluatorsPerGroupRoom = 4,
   evaluatorsPerIndividualRoom = 2,
+  durationMinutes = 30,
+  roulementMinutes = 10,
   onSaved,
 }: Props) {
   const { toast } = useToast();
@@ -186,11 +198,34 @@ export default function RoomOpeningsGrid({
   };
 
   /**
+   * Changer de semaine avec des modifications non enregistrées est dangereux :
+   * `bands` porte un dayIndex RELATIF à la semaine affichée (0=lundi…4=vendredi),
+   * pas une date absolue. Si on change de semaine sans avertir, l'effet qui
+   * recharge les bandes depuis `openings` est bloqué par `dirty` — les bandes
+   * de l'ancienne semaine restent affichées, mais réinterprétées sur les
+   * dates de la NOUVELLE semaine. Un enregistrement à ce moment daterait les
+   * créneaux au mauvais jour, silencieusement.
+   */
+  const goToWeek = (next: number) => {
+    if (dirty) {
+      const keep = window.confirm(
+        "Cette semaine a des ouvertures non enregistrées. Changer de semaine les abandonnera. Continuer ?",
+      );
+      if (!keep) return;
+      setDirty(false);
+    }
+    setWeekOffset(next);
+  };
+
+  /**
    * Fenêtres de disponibilité par jour affiché.
    *
-   * On repart des lignes brutes plutôt que des bandes fusionnées : pour
-   * compter un effectif, deux créneaux cochés séparés d'un roulement ne
-   * doivent pas devenir une présence continue artificielle.
+   * Les lignes brutes sont FUSIONNÉES avant comptage (même tolérance que la
+   * grille de saisie). Sans cela, une dispo saisie créneau par créneau —
+   * 10:05-10:25, 10:30-10:50, 10:55-11:15… — ne couvre jamais une tranche de
+   * 30 minutes d'un seul tenant, et la courbe annonce zéro examinateur alors
+   * que la personne est là toute la matinée. Les trous de cinq minutes sont
+   * du roulement entre créneaux, pas des absences.
    */
   const capacityDays: CapacityDay[] = useMemo(() => {
     const openedPerDay = new Map<string, Set<string>>();
@@ -202,18 +237,31 @@ export default function RoomOpeningsGrid({
       openedPerDay.set(key, set);
     }
 
+    // Regroupement par (jour, membre) avant fusion.
+    const byDayMember = new Map<string, Map<string, { start: number; end: number }[]>>();
+    for (const r of staffRows) {
+      if (!r?.date || !r.start_time || !r.end_time) continue;
+      const key = String(r.date).slice(0, 10);
+      const memberId = String(r.member_id ?? r.member?.id ?? r.id);
+      const perMember = byDayMember.get(key) ?? new Map();
+      const list = perMember.get(memberId) ?? [];
+      list.push({
+        start: hhmmToMinutes(String(r.start_time)),
+        end: hhmmToMinutes(String(r.end_time)),
+      });
+      perMember.set(memberId, list);
+      byDayMember.set(key, perMember);
+    }
+
     return days.map((d, i) => {
       const key = dayKeys[i];
       const windows: AvailabilityWindow[] = [];
-      for (const r of staffRows) {
-        if (!r?.date || !r.start_time || !r.end_time) continue;
-        if (String(r.date).slice(0, 10) !== key) continue;
-        windows.push({
-          memberId: String(r.member_id ?? r.member?.id ?? r.id),
-          startMin: hhmmToMinutes(String(r.start_time)),
-          endMin: hhmmToMinutes(String(r.end_time)),
-        });
-      }
+      const perMember = byDayMember.get(key);
+      perMember?.forEach((intervals, memberId) => {
+        for (const iv of mergeIntervals(intervals, MERGE_TOLERANCE_MIN)) {
+          windows.push({ memberId, startMin: iv.start, endMin: iv.end });
+        }
+      });
       return {
         label: format(d, "EEE d", { locale: fr }),
         windows,
@@ -315,7 +363,7 @@ export default function RoomOpeningsGrid({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
           <button
-            onClick={() => setWeekOffset((w) => (w ?? 0) - 1)}
+            onClick={() => goToWeek((weekOffset ?? 0) - 1)}
             className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
             aria-label="Semaine précédente"
           >
@@ -326,7 +374,7 @@ export default function RoomOpeningsGrid({
             {format(days[4], "d MMM yyyy", { locale: fr })}
           </span>
           <button
-            onClick={() => setWeekOffset((w) => (w ?? 0) + 1)}
+            onClick={() => goToWeek((weekOffset ?? 0) + 1)}
             className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
             aria-label="Semaine suivante"
           >
@@ -433,6 +481,53 @@ export default function RoomOpeningsGrid({
                 {" "}
                 — il en manque <strong>{manque}</strong>.
               </>
+            )}
+            {!suffisant && (
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-7 border-amber-300 bg-white px-2.5 text-xs text-amber-900 hover:bg-amber-100"
+                  onClick={() => {
+                    const result = generateOpeningsFromCapacity({
+                      days: capacityDays.map((d, i) => ({
+                        dayIndex: i,
+                        windows: d.windows,
+                      })),
+                      rooms: visibleRooms.length ? visibleRooms : rooms,
+                      evaluatorsPerGroupRoom,
+                      evaluatorsPerIndividualRoom,
+                      slotSpanMin: durationMinutes + roulementMinutes,
+                      targetSlots: manque,
+                    });
+                    if (result.bands.length === 0) {
+                      toast(
+                        "Aucun examinateur disponible cette semaine ne permet d'ouvrir de salle. Essayez une autre semaine, ou complétez manuellement.",
+                        "error",
+                      );
+                      return;
+                    }
+                    // Ajoutées aux bandes existantes, pas en remplacement : on
+                    // complète le manque, on n'efface rien de déjà tracé.
+                    setBands((prev) => [...prev, ...result.bands]);
+                    setDirty(true);
+                    toast(
+                      result.reachedTarget
+                        ? `${result.bands.length} ouverture(s) proposée(s), ~${result.estimatedSlots} créneaux. Relisez avant d'enregistrer.`
+                        : `${result.bands.length} ouverture(s) proposée(s) — l'effectif de la semaine ne couvre pas tout le manque (~${result.estimatedSlots}/${manque} créneaux). Relisez avant d'enregistrer.`,
+                      result.reachedTarget ? "success" : "error",
+                    );
+                  }}
+                >
+                  <Sparkles className="mr-1 h-3 w-3" />
+                  Générer selon la capacité de cette semaine
+                </Button>
+                <span className="text-xs text-amber-700">
+                  Propose des ouvertures là où l&apos;effectif le permet —
+                  rien n&apos;est enregistré tant que vous ne cliquez pas
+                  « Enregistrer ».
+                </span>
+              </div>
             )}
           </div>
         );
