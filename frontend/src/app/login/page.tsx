@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
