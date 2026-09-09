@@ -777,7 +777,7 @@ export default function CandidateEpreuvesPage() {
                                 </div>
                               );
                             })}
-                          </>
+                          </Fragment>
                         ))}
                       </div>
                     </div>
