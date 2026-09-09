@@ -1537,6 +1537,30 @@ export default function PlanningPage() {
                       epreuves.find((e) => e.id === selectedEpreuveId)
                         ?.isGroupEpreuve
                     }
+                    // Courbe « C » : ce qu'un effectif permet de tenir. Le
+                    // besoin en collectif vient de l'épreuve de groupe
+                    // configurée ; l'individuel de l'épreuve courante.
+                    evaluatorsPerGroupRoom={
+                      (epreuves.find((e) => e.isGroupEpreuve) as any)
+                        ?.minEvaluatorsPerSalle ?? 4
+                    }
+                    evaluatorsPerIndividualRoom={(() => {
+                      // Le repli individuel doit se mesurer sur une épreuve
+                      // INDIVIDUELLE. Prendre l'épreuve courante donnait 4
+                      // partout quand on ouvrait les salles d'un business
+                      // game — le repli devenait alors identique au collectif
+                      // et ne voulait plus rien dire.
+                      const courante = epreuves.find(
+                        (e) => e.id === selectedEpreuveId,
+                      ) as any;
+                      if (courante && !courante.isGroupEpreuve) {
+                        return courante.minEvaluatorsPerSalle ?? 2;
+                      }
+                      const individuelle = epreuves.find(
+                        (e) => !e.isGroupEpreuve,
+                      ) as any;
+                      return individuelle?.minEvaluatorsPerSalle ?? 2;
+                    })()}
                     groupSize={
                       epreuves.find((e) => e.id === selectedEpreuveId)?.groupSize
                     }

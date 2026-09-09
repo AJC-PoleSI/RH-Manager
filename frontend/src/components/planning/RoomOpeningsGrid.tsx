@@ -23,12 +23,14 @@ import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import TimeBandGrid, { type Lane } from "./TimeBandGrid";
 import LaneFilter from "./LaneFilter";
+import CapacityCurve, { type CapacityDay } from "./CapacityCurve";
+import type { AvailabilityWindow } from "@/lib/room-capacity";
 import {
   diffOpenings,
   openingsToBands,
   type OpeningRow,
 } from "@/lib/openings-diff";
-import { formatDuration, type Band } from "@/lib/time-bands";
+import { formatDuration, hhmmToMinutes, type Band } from "@/lib/time-bands";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
 import { localYmd } from "@/lib/availability-bands";
 
@@ -48,6 +50,9 @@ interface Props {
   isGroupEpreuve?: boolean;
   groupSize?: number | null;
   minCandidates?: number | null;
+  /** Examinateurs requis par salle en collectif / en individuel (courbe « C »). */
+  evaluatorsPerGroupRoom?: number;
+  evaluatorsPerIndividualRoom?: number;
   onSaved?: () => void;
 }
 
@@ -62,6 +67,8 @@ export default function RoomOpeningsGrid({
   isGroupEpreuve,
   groupSize,
   minCandidates,
+  evaluatorsPerGroupRoom = 4,
+  evaluatorsPerIndividualRoom = 2,
   onSaved,
 }: Props) {
   const { toast } = useToast();
@@ -74,6 +81,8 @@ export default function RoomOpeningsGrid({
   const [rooms, setRooms] = useState<string[]>(FALLBACK_ROOMS);
   const [visibleRooms, setVisibleRooms] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  /** Dispos de TOUS les examinateurs sur la semaine, pour la courbe « C ». */
+  const [staffRows, setStaffRows] = useState<any[]>([]);
   const [dirty, setDirty] = useState(false);
 
   const thisMonday = useMemo(
@@ -97,10 +106,17 @@ export default function RoomOpeningsGrid({
     setLoading(true);
     try {
       const noCache = { headers: { "Cache-Control": "no-store" }, params: { t: Date.now() } };
-      const [openRes, settingsRes] = await Promise.all([
+      const [openRes, settingsRes, staffRes] = await Promise.all([
         api.get("/openings", { ...noCache, params: { ...noCache.params, epreuveId } }),
         api.get("/settings", noCache).catch(() => ({ data: {} })),
+        // Dispos de tous les examinateurs : alimente la courbe « C ». Un
+        // échec ici ne doit pas empêcher de tracer des ouvertures.
+        api
+          .get("/availability/all", noCache)
+          .catch(() => ({ data: [] as any[] })),
       ]);
+
+      setStaffRows(Array.isArray(staffRes.data) ? staffRes.data : []);
 
       const list: ApiOpening[] = Array.isArray(openRes.data) ? openRes.data : [];
       setOpenings(list);
@@ -168,6 +184,43 @@ export default function RoomOpeningsGrid({
     setBands(next);
     setDirty(true);
   };
+
+  /**
+   * Fenêtres de disponibilité par jour affiché.
+   *
+   * On repart des lignes brutes plutôt que des bandes fusionnées : pour
+   * compter un effectif, deux créneaux cochés séparés d'un roulement ne
+   * doivent pas devenir une présence continue artificielle.
+   */
+  const capacityDays: CapacityDay[] = useMemo(() => {
+    const openedPerDay = new Map<string, Set<string>>();
+    for (const b of bands) {
+      const key = dayKeys[b.dayIndex];
+      if (!key) continue;
+      const set = openedPerDay.get(key) ?? new Set<string>();
+      set.add(b.laneId);
+      openedPerDay.set(key, set);
+    }
+
+    return days.map((d, i) => {
+      const key = dayKeys[i];
+      const windows: AvailabilityWindow[] = [];
+      for (const r of staffRows) {
+        if (!r?.date || !r.start_time || !r.end_time) continue;
+        if (String(r.date).slice(0, 10) !== key) continue;
+        windows.push({
+          memberId: String(r.member_id ?? r.member?.id ?? r.id),
+          startMin: hhmmToMinutes(String(r.start_time)),
+          endMin: hhmmToMinutes(String(r.end_time)),
+        });
+      }
+      return {
+        label: format(d, "EEE d", { locale: fr }),
+        windows,
+        roomsOpened: openedPerDay.get(key)?.size ?? 0,
+      };
+    });
+  }, [days, dayKeys, staffRows, bands]);
 
   const diff = useMemo(
     () => diffOpenings(openings, bands, dayKeys),
@@ -302,7 +355,13 @@ export default function RoomOpeningsGrid({
         </div>
       </div>
 
-      <div className="mb-3">
+      <div className="mb-3 flex items-start gap-2">
+        <CapacityCurve
+          days={capacityDays}
+          totalRooms={(visibleRooms.length ? visibleRooms : rooms).length}
+          evaluatorsPerGroupRoom={evaluatorsPerGroupRoom}
+          evaluatorsPerIndividualRoom={evaluatorsPerIndividualRoom}
+        />
         <LaneFilter
           lanes={lanes}
           visible={visibleRooms.length ? visibleRooms : rooms}
