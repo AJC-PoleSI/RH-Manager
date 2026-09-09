@@ -86,10 +86,13 @@ function colorFor(id: string): string {
   return EPREUVE_COLORS[h % EPREUVE_COLORS.length];
 }
 
+type Tab = "dispo" | "planning";
+
 export default function AvailabilityPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  const [tab, setTab] = useState<Tab>("dispo");
   const [weekOffset, setWeekOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
