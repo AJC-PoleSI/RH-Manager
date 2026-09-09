@@ -940,12 +940,19 @@ export async function runDispatch(opts?: {
     planningVisibleToCandidates = false;
   }
 
+  // Un aller-retour réseau par salle (regroupé par statut cible) plutôt qu'un
+  // par créneau : même raison que le repli plus haut sur les remplaçants —
+  // avec ~1100 créneaux, la boucle séquentielle d'origine dominait le temps
+  // de réponse de chaque enregistrement de dispo.
+  const assignedCountBySlot = new Map<string, number>();
+  assignmentsToInsert.forEach((a) => {
+    assignedCountBySlot.set(a.slot_id, (assignedCountBySlot.get(a.slot_id) || 0) + 1);
+  });
+  const idsByNewStatus = new Map<string, string[]>();
   for (const slot of sortedSlots) {
     if (isLocked(slot as SlotInfo) || isFrozen(slot as SlotInfo)) continue;
 
-    const assignedCount = assignmentsToInsert.filter(
-      (a) => a.slot_id === slot.id,
-    ).length;
+    const assignedCount = assignedCountBySlot.get(slot.id) || 0;
 
     // Le créneau ne s'ouvre aux candidats qu'une fois le nombre
     // d'examinateurs AU COMPLET (= son minimum), pas dès le premier arrivé.
@@ -961,11 +968,16 @@ export async function runDispatch(opts?: {
     }
 
     if (slot.status !== newStatus) {
-      await supabaseAdmin
-        .from("evaluation_slots")
-        .update({ status: newStatus })
-        .eq("id", slot.id);
+      const ids = idsByNewStatus.get(newStatus) || [];
+      ids.push(slot.id);
+      idsByNewStatus.set(newStatus, ids);
     }
+  }
+  for (const [newStatus, ids] of Array.from(idsByNewStatus.entries())) {
+    await supabaseAdmin
+      .from("evaluation_slots")
+      .update({ status: newStatus })
+      .in("id", ids);
   }
 
   // 12. Send notifications for removed members
