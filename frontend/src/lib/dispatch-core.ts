@@ -319,18 +319,31 @@ export function slotTension(eligible: number, quota: number): number {
  * C'est ce qui arbitre le cas « un examinateur a coché deux épreuves qui se
  * chevauchent ». Trois critères, dans cet ordre :
  *
- *   1. DÉFICIT DE L'ÉPREUVE — combien de candidats ne pourraient PAS passer
+ *   1. TYPE D'ÉPREUVE — un créneau de groupe passe TOUJOURS avant un
+ *      individuel qui lui dispute le même vivier d'examinateurs. Réunir 4 à
+ *      6 personnes en même temps est structurellement plus dur que d'en
+ *      réunir 2 ; sans cette priorité explicite, l'individuel — nombreux
+ *      créneaux, quota vite atteint — siphonne le vivier avant que le groupe
+ *      n'ait sa vraie chance (observé sur données réelles le 09/09/2026 :
+ *      9 examinateurs disponibles, 3 salles business game à 0 examinateur,
+ *      pendant que les mêmes personnes tournaient sur des entretiens
+ *      individuels au même horaire).
+ *   2. DÉFICIT DE L'ÉPREUVE — combien de candidats ne pourraient PAS passer
  *      faute de créneaux staffables. Un business game qui laisserait 20
  *      candidats sur le carreau passe avant un entretien individuel qui a
  *      déjà largement de quoi faire passer tout le monde. C'est le critère
  *      métier : on optimise le nombre de candidats évalués, pas le remplissage
  *      des créneaux.
- *   2. COUVERTURE DE L'ÉPREUVE — à déficit égal (typiquement 0 partout), la
+ *   3. COUVERTURE DE L'ÉPREUVE — à déficit égal (typiquement 0 partout), la
  *      moins confortable d'abord.
- *   3. TENSION DU CRÉNEAU — examinateurs disponibles moins quota, puis
+ *   4. TENSION DU CRÉNEAU — examinateurs disponibles moins quota, puis
  *      chronologie (déterminisme).
  */
 export function compareByTension(a: SlotDemand, b: SlotDemand): number {
+  const ga = a.isGroupEpreuve ? 1 : 0;
+  const gb = b.isGroupEpreuve ? 1 : 0;
+  if (ga !== gb) return gb - ga; // groupe d'abord
+
   const da = a.epreuveDeficit ?? 0;
   const db = b.epreuveDeficit ?? 0;
   if (da !== db) return db - da; // plus gros déficit servi en premier
