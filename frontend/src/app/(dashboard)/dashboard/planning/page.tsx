@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import OpeningsManager from "@/components/calendar/OpeningsManager";
+import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
@@ -239,6 +240,9 @@ export default function PlanningPage() {
   // Compteur pour forcer le re-fetch du calendrier de contrôle après
   // une mutation d'ouverture (création/modif/suppression/duplication)
   const [calRefreshKey, setCalRefreshKey] = useState(0);
+  // Deux façons de déclarer les ouvertures de salles : la grille à bandes
+  // (nouvelle) et le formulaire historique, gardé le temps de valider.
+  const [openingsMode, setOpeningsMode] = useState<"grille" | "formulaire">("grille");
 
   // Calendrier admin — vue propre (même design que candidat)
   const [adminCalView, setAdminCalView] = useState<"month" | "week">("month");
@@ -1485,16 +1489,61 @@ export default function PlanningPage() {
             {/* Ouvertures de salles : l'admin déclare les plages, le système
                 découpe en créneaux — le calendrier devient une vue de contrôle */}
             {activeTab === "creation" && (
-              <OpeningsManager
-                selectedEpreuveId={selectedEpreuveId}
-                epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
-                toast={toast}
-                onUpdate={() => {
-                  fetchSlotData();
-                  fetchAllSlotsGlobal();
-                  setCalRefreshKey((k) => k + 1);
-                }}
-              />
+              <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Ouverture des salles
+                  </h3>
+                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5">
+                    {(["grille", "formulaire"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setOpeningsMode(m)}
+                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+                          openingsMode === m
+                            ? "bg-gray-900 text-white"
+                            : "text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        {m === "grille" ? "Grille" : "Formulaire"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {!selectedEpreuveId ? (
+                  <p className="text-sm text-gray-500">
+                    Sélectionnez une épreuve pour déclarer ses ouvertures de salles.
+                  </p>
+                ) : openingsMode === "grille" ? (
+                  <RoomOpeningsGrid
+                    key={selectedEpreuveId}
+                    epreuveId={selectedEpreuveId}
+                    epreuveName={
+                      epreuves.find((e) => e.id === selectedEpreuveId)?.name
+                    }
+                    dateDebut={
+                      epreuves.find((e) => e.id === selectedEpreuveId)?.dateDebut
+                    }
+                    onSaved={() => {
+                      fetchSlotData();
+                      fetchAllSlotsGlobal();
+                      setCalRefreshKey((k) => k + 1);
+                    }}
+                  />
+                ) : (
+                  <OpeningsManager
+                    selectedEpreuveId={selectedEpreuveId}
+                    epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
+                    toast={toast}
+                    onUpdate={() => {
+                      fetchSlotData();
+                      fetchAllSlotsGlobal();
+                      setCalRefreshKey((k) => k + 1);
+                    }}
+                  />
+                )}
+              </div>
             )}
 
             <CalendarAdminBuilder

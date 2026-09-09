@@ -1,0 +1,360 @@
+"use client";
+
+/**
+ * RoomOpeningsGrid — ouverture des salles à la souris, pour une épreuve.
+ *
+ * L'admin trace une bande dans la colonne d'une salle : c'est une
+ * `room_opening`, que l'API découpe ensuite en créneaux (sliceOpening) selon
+ * la durée et le roulement de l'épreuve.
+ *
+ * Rien n'est écrit tant qu'on n'a pas cliqué « Enregistrer » : la grille
+ * calcule un diff (openings-diff.ts) et n'envoie que ce qui a bougé. Les
+ * ouvertures des autres semaines ne sont jamais touchées.
+ *
+ * Spec : docs/superpowers/specs/2026-09-09-refonte-creneaux-bandes-design.md
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { addDays, format, startOfWeek } from "date-fns";
+import { fr } from "date-fns/locale";
+import { ChevronLeft, ChevronRight, Loader2, Save, AlertTriangle } from "lucide-react";
+import api from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
+import TimeBandGrid, { type Lane } from "./TimeBandGrid";
+import LaneFilter from "./LaneFilter";
+import {
+  diffOpenings,
+  openingsToBands,
+  type OpeningRow,
+} from "@/lib/openings-diff";
+import { formatDuration, type Band } from "@/lib/time-bands";
+import { localYmd } from "@/lib/availability-bands";
+
+interface ApiOpening extends OpeningRow {
+  slots_total?: number;
+  slots_occupied?: number;
+}
+
+interface Props {
+  epreuveId: string;
+  epreuveName?: string;
+  /** Date de début de l'épreuve, pour ouvrir la grille sur la bonne semaine. */
+  dateDebut?: string | null;
+  onSaved?: () => void;
+}
+
+const FALLBACK_ROOMS = ["205", "217", "219", "235", "238-240", "242-244"];
+
+export default function RoomOpeningsGrid({
+  epreuveId,
+  epreuveName,
+  dateDebut,
+  onSaved,
+}: Props) {
+  const { toast } = useToast();
+
+  const [weekOffset, setWeekOffset] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [openings, setOpenings] = useState<ApiOpening[]>([]);
+  const [bands, setBands] = useState<Band[]>([]);
+  const [rooms, setRooms] = useState<string[]>(FALLBACK_ROOMS);
+  const [visibleRooms, setVisibleRooms] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [dirty, setDirty] = useState(false);
+
+  const thisMonday = useMemo(
+    () => startOfWeek(new Date(), { weekStartsOn: 1 }),
+    [],
+  );
+
+  const days = useMemo(() => {
+    const monday = addDays(thisMonday, (weekOffset ?? 0) * 7);
+    return Array.from({ length: 5 }, (_, i) => addDays(monday, i));
+  }, [thisMonday, weekOffset]);
+
+  const dayKeys = useMemo(() => days.map(localYmd), [days]);
+
+  const lanes: Lane[] = useMemo(
+    () => rooms.map((r) => ({ id: r, label: r })),
+    [rooms],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const noCache = { headers: { "Cache-Control": "no-store" }, params: { t: Date.now() } };
+      const [openRes, settingsRes] = await Promise.all([
+        api.get("/openings", { ...noCache, params: { ...noCache.params, epreuveId } }),
+        api.get("/settings", noCache).catch(() => ({ data: {} })),
+      ]);
+
+      const list: ApiOpening[] = Array.isArray(openRes.data) ? openRes.data : [];
+      setOpenings(list);
+
+      // Les salles connues : celles déclarées en réglages, plus celles déjà
+      // utilisées par des ouvertures (on n'efface jamais une salle qui porte
+      // des données, même si elle n'est plus dans la liste).
+      const declared = String(settingsRes.data?.rooms || "")
+        .split(",")
+        .map((r: string) => r.trim())
+        .filter(Boolean);
+      // Array.from plutôt que le spread : la cible TypeScript du projet
+      // n'autorise pas l'itération directe d'un Set.
+      const used = Array.from(new Set(list.map((o) => o.room).filter(Boolean)));
+      const merged = Array.from(
+        new Set([...(declared.length ? declared : FALLBACK_ROOMS), ...used]),
+      );
+      setRooms(merged);
+      setVisibleRooms((prev) => (prev.length ? prev.filter((r) => merged.includes(r)) : merged));
+
+      setDirty(false);
+      setWarnings([]);
+      return list;
+    } catch (e: any) {
+      console.error(e);
+      toast(e?.response?.data?.error || "Échec du chargement des ouvertures", "error");
+      return [] as ApiOpening[];
+    } finally {
+      setLoading(false);
+    }
+  }, [epreuveId, toast]);
+
+  // Première ouverture de la grille : on se place sur la semaine qui contient
+  // le début de l'épreuve, ou la première ouverture existante — plutôt que sur
+  // la semaine courante, souvent vide.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await load();
+      if (cancelled || weekOffset !== null) return;
+      const dates = list.map((o) => String(o.date).slice(0, 10)).sort();
+      const anchor = dates[0] || (dateDebut ? String(dateDebut).slice(0, 10) : null);
+      if (!anchor) {
+        setWeekOffset(0);
+        return;
+      }
+      const [y, m, d] = anchor.split("-").map(Number);
+      const target = startOfWeek(new Date(y, m - 1, d, 12), { weekStartsOn: 1 });
+      setWeekOffset(Math.round((target.getTime() - thisMonday.getTime()) / (7 * 864e5)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epreuveId]);
+
+  // Les bandes se recalculent depuis les ouvertures à chaque changement de
+  // semaine — sauf si l'admin a des modifications non enregistrées.
+  useEffect(() => {
+    if (dirty) return;
+    setBands(openingsToBands(openings, dayKeys));
+  }, [openings, dayKeys, dirty]);
+
+  const handleChange = (next: Band[]) => {
+    setBands(next);
+    setDirty(true);
+  };
+
+  const diff = useMemo(
+    () => diffOpenings(openings, bands, dayKeys),
+    [openings, bands, dayKeys],
+  );
+
+  const handleSave = async () => {
+    setSaving(true);
+    setWarnings([]);
+    const problems: string[] = [];
+    try {
+      // Ordre imposé : on libère d'abord la place (suppressions), on ajuste
+      // ensuite, on crée en dernier. L'inverse ferait échouer des créations
+      // sur un chevauchement avec une ouverture qu'on s'apprêtait à retirer.
+      for (const id of diff.toDelete) {
+        try {
+          await api.delete(`/openings/${id}`);
+        } catch (e: any) {
+          const occupied = e?.response?.data?.occupied;
+          problems.push(
+            occupied?.length
+              ? `Suppression refusée : ${occupied.length} créneau(x) ont déjà des inscrits.`
+              : e?.response?.data?.error || "Échec d'une suppression",
+          );
+        }
+      }
+
+      for (const u of diff.toUpdate) {
+        try {
+          await api.put(`/openings/${u.id}`, {
+            room: u.room,
+            date: u.date,
+            startTime: u.startTime,
+            endTime: u.endTime,
+          });
+        } catch (e: any) {
+          problems.push(
+            `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification"}`,
+          );
+        }
+      }
+
+      for (const c of diff.toCreate) {
+        try {
+          const res = await api.post("/openings", {
+            epreuveId,
+            room: c.room,
+            dates: [c.date],
+            startTime: c.startTime,
+            endTime: c.endTime,
+          });
+          for (const w of res.data?.warnings || []) problems.push(w);
+        } catch (e: any) {
+          problems.push(
+            `${c.room} le ${c.date} : ${e?.response?.data?.error || "échec de la création"}`,
+          );
+        }
+      }
+
+      setDirty(false);
+      await load();
+      onSaved?.();
+
+      if (problems.length) {
+        setWarnings(problems);
+        toast(`Enregistré, avec ${problems.length} avertissement(s)`, "error");
+      } else {
+        toast("Ouvertures enregistrées", "success");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const weekOpenings = openings.filter((o) =>
+    dayKeys.includes(String(o.date).slice(0, 10)),
+  );
+  const slotsThisWeek = weekOpenings.reduce((s, o) => s + (o.slots_total ?? 0), 0);
+  const slotsTotal = openings.reduce((s, o) => s + (o.slots_total ?? 0), 0);
+  const occupiedTotal = openings.reduce((s, o) => s + (o.slots_occupied ?? 0), 0);
+  const bandMinutes = bands.reduce((s, b) => s + (b.endMin - b.startMin), 0);
+  const pending =
+    diff.toCreate.length + diff.toUpdate.length + diff.toDelete.length;
+
+  const roomCounts = bands.reduce<Record<string, number>>((acc, b) => {
+    acc[b.laneId] = (acc[b.laneId] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
+          <button
+            onClick={() => setWeekOffset((w) => (w ?? 0) - 1)}
+            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
+            aria-label="Semaine précédente"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="px-2 text-sm font-medium text-gray-700">
+            {format(days[0], "d MMM", { locale: fr })} –{" "}
+            {format(days[4], "d MMM yyyy", { locale: fr })}
+          </span>
+          <button
+            onClick={() => setWeekOffset((w) => (w ?? 0) + 1)}
+            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
+            aria-label="Semaine suivante"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {pending > 0 && (
+            <span className="text-xs text-amber-700">
+              {diff.toCreate.length > 0 && `${diff.toCreate.length} à créer`}
+              {diff.toUpdate.length > 0 &&
+                `${diff.toCreate.length ? " · " : ""}${diff.toUpdate.length} à modifier`}
+              {diff.toDelete.length > 0 &&
+                `${diff.toCreate.length || diff.toUpdate.length ? " · " : ""}${diff.toDelete.length} à supprimer`}
+            </span>
+          )}
+          <Button onClick={handleSave} disabled={saving || loading || pending === 0}>
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Enregistrer
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <LaneFilter
+          lanes={lanes}
+          visible={visibleRooms.length ? visibleRooms : rooms}
+          onChange={setVisibleRooms}
+          counts={roomCounts}
+        />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-gray-500">
+        <span>
+          <strong className="text-gray-900">{bands.length}</strong> ouverture
+          {bands.length > 1 ? "s" : ""} cette semaine · {formatDuration(bandMinutes)}
+        </span>
+        <span>
+          <strong className="text-gray-900">{slotsThisWeek}</strong> créneau
+          {slotsThisWeek > 1 ? "x" : ""} générés cette semaine
+        </span>
+        <span className="text-gray-400">
+          {slotsTotal} au total sur l&apos;épreuve
+          {occupiedTotal > 0 && ` · ${occupiedTotal} déjà occupé${occupiedTotal > 1 ? "s" : ""}`}
+        </span>
+        {dirty && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+            non enregistré
+          </span>
+        )}
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className="mb-1 flex items-center gap-1.5 font-medium">
+            <AlertTriangle className="h-4 w-4" />
+            Certaines opérations n&apos;ont pas abouti
+          </div>
+          <ul className="list-inside list-disc space-y-0.5 text-xs">
+            {warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {loading || weekOffset === null ? (
+        <div className="flex h-64 items-center justify-center text-gray-400">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : (
+        <TimeBandGrid
+          days={days}
+          lanes={lanes.filter((l) =>
+            (visibleRooms.length ? visibleRooms : rooms).includes(l.id),
+          )}
+          bands={bands}
+          onChange={handleChange}
+          pxPerMin={(visibleRooms.length || rooms.length) > 2 ? 0.75 : 0.9}
+        />
+      )}
+
+      <p className="mt-2 text-xs text-gray-400">
+        Une bande = une plage d&apos;ouverture de salle{epreuveName ? ` pour « ${epreuveName.trim()} »` : ""}.
+        Les créneaux sont découpés automatiquement à l&apos;enregistrement, selon
+        la durée et le roulement de l&apos;épreuve. Les créneaux déjà occupés ne
+        sont jamais supprimés.
+      </p>
+    </div>
+  );
+}
