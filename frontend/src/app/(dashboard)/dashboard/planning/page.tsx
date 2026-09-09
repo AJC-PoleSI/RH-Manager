@@ -1994,13 +1994,8 @@ export default function PlanningPage() {
         </div>
       )}
 
-      {/* ─── Grille d&apos;inscription (toujours visible) ─── */}
-      <CalendarMemberBuilder
-        memberId={user?.id || ""}
-        toast={toast}
-        epreuvesConfigured={epreuves}
-        onSlotsChange={fetchMySlots}
-      />
+      {/* ─── Grille de disponibilités (identique à ce que voit un membre) ─── */}
+      <MemberAvailabilityGrid />
 
       {/* ─── Emploi du temps (créneaux déjà assignés) ─── */}
       {mySlots.length > 0 && (
