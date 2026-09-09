@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
-import OpeningsManager from "@/components/calendar/OpeningsManager";
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
@@ -176,6 +175,16 @@ export default function PlanningPage() {
 
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
   const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
+  /**
+   * Effectif du TOUR de l'épreuve sélectionnée — candidats attendus / marge
+   * vivent au niveau du tour (partagés entre ses épreuves), pas de l'épreuve.
+   * Rechargé à chaque changement d'épreuve ; la grille d'ouvertures et le
+   * panneau du tour en dérivent tous les deux leur estimation.
+   */
+  const [tourCapacity, setTourCapacity] = useState<{
+    candidatsAttendus: number | null;
+    margePct: number;
+  }>({ candidatsAttendus: null, margePct: 25 });
   const [loading, setLoading] = useState(true);
 
   // Admin state
@@ -243,7 +252,6 @@ export default function PlanningPage() {
   const [calRefreshKey, setCalRefreshKey] = useState(0);
   // Deux façons de déclarer les ouvertures de salles : la grille à bandes
   // (nouvelle) et le formulaire historique, gardé le temps de valider.
-  const [openingsMode, setOpeningsMode] = useState<"grille" | "formulaire">("grille");
 
   // Calendrier admin — vue propre (même design que candidat)
   const [adminCalView, setAdminCalView] = useState<"month" | "week">("month");
@@ -580,6 +588,33 @@ export default function PlanningPage() {
   useEffect(() => {
     fetchSaisieStatus();
   }, [fetchSaisieStatus]);
+
+  // Effectif du tour de l'épreuve sélectionnée (candidats attendus / marge),
+  // partagé par toutes ses épreuves. Un échec ne doit pas empêcher de
+  // travailler : on retombe silencieusement sur "non applicable".
+  useEffect(() => {
+    const tour = epreuves.find((e) => e.id === selectedEpreuveId)?.tour;
+    if (!tour) {
+      setTourCapacity({ candidatsAttendus: null, margePct: 25 });
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/tour-settings/${tour}`, { headers: { "Cache-Control": "no-store" } })
+      .then((res) => {
+        if (cancelled) return;
+        setTourCapacity({
+          candidatsAttendus: res.data?.candidatsAttendus ?? null,
+          margePct: res.data?.margePct ?? 25,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setTourCapacity({ candidatsAttendus: null, margePct: 25 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEpreuveId, epreuves]);
 
   // Charger les créneaux assignés au membre dès le montage (sans condition sur la saisie)
   // Ainsi, dès qu'un examinateur s'inscrit ou est assigné, ses créneaux apparaissent.
@@ -1488,35 +1523,22 @@ export default function PlanningPage() {
             </div>
 
             {/* Ouvertures de salles : l'admin déclare les plages, le système
-                découpe en créneaux — le calendrier devient une vue de contrôle */}
+                découpe en créneaux — le calendrier devient une vue de contrôle.
+                Ancien formulaire (fenêtre par fenêtre, prompt() pour la salle)
+                retiré après validation : la grille par bandes couvre tout ce
+                qu'il faisait, en plus rapide (cf. docs/superpowers/specs/
+                2026-09-09-refonte-creneaux-bandes-design.md). */}
             {activeTab === "creation" && (
               <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-base font-semibold text-gray-900">
-                    Ouverture des salles
-                  </h3>
-                  <div className="inline-flex rounded-lg border border-gray-200 p-0.5">
-                    {(["grille", "formulaire"] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setOpeningsMode(m)}
-                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
-                          openingsMode === m
-                            ? "bg-gray-900 text-white"
-                            : "text-gray-500 hover:bg-gray-50"
-                        }`}
-                      >
-                        {m === "grille" ? "Grille" : "Formulaire"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <h3 className="mb-4 text-base font-semibold text-gray-900">
+                  Ouverture des salles
+                </h3>
 
                 {!selectedEpreuveId ? (
                   <p className="text-sm text-gray-500">
                     Sélectionnez une épreuve pour déclarer ses ouvertures de salles.
                   </p>
-                ) : openingsMode === "grille" ? (
+                ) : (
                   <>
                     {(() => {
                       const courante = epreuves.find((e) => e.id === selectedEpreuveId);
@@ -1561,14 +1583,8 @@ export default function PlanningPage() {
                     dateDebut={
                       epreuves.find((e) => e.id === selectedEpreuveId)?.dateDebut
                     }
-                    candidatsAttendus={
-                      (epreuves.find((e) => e.id === selectedEpreuveId) as any)
-                        ?.candidatsAttendus
-                    }
-                    margePct={
-                      (epreuves.find((e) => e.id === selectedEpreuveId) as any)
-                        ?.margePct
-                    }
+                    candidatsAttendus={tourCapacity.candidatsAttendus}
+                    margePct={tourCapacity.margePct}
                     isGroupEpreuve={
                       epreuves.find((e) => e.id === selectedEpreuveId)
                         ?.isGroupEpreuve
@@ -1619,17 +1635,6 @@ export default function PlanningPage() {
                     }}
                   />
                   </>
-                ) : (
-                  <OpeningsManager
-                    selectedEpreuveId={selectedEpreuveId}
-                    epreuve={epreuves.find((e) => e.id === selectedEpreuveId)}
-                    toast={toast}
-                    onUpdate={() => {
-                      fetchSlotData();
-                      fetchAllSlotsGlobal();
-                      setCalRefreshKey((k) => k + 1);
-                    }}
-                  />
                 )}
               </div>
             )}

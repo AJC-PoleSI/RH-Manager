@@ -143,8 +143,9 @@ function memberName(m: any): string {
 // ─── Component ───────────────────────────────────────────────────────
 /**
  * Vue de CONTRÔLE du planning d'une épreuve. Les créneaux sont créés et
- * modifiés via le tableau des ouvertures de salles (OpeningsManager) : ce
- * calendrier ne fait que les afficher, avec un détail au clic.
+ * modifiés via la grille des ouvertures de salles (RoomOpeningsGrid) : ce
+ * calendrier ne fait que les afficher, avec un détail au clic. Sert aussi
+ * d'affichage pour les vues "evaluators" et "candidates" (viewMode).
  */
 export default function CalendarAdminBuilder({
   selectedEpreuveId,
