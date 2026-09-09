@@ -67,7 +67,7 @@ const Sidebar = () => {
           icon: "📊",
         },
         {
-          href: "/dashboard/planning",
+          href: "/dashboard/availability",
           label: "Mes disponibilités",
           icon: "✅",
         },
