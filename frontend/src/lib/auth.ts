@@ -29,7 +29,11 @@ export function isSuperAdminEmail(email: string | null | undefined): boolean {
 }
 
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "2h" });
+  // 8h : couvre une journée de travail sans reconnexion forcée. Une session
+  // qui expire déclenche une redirection dure vers /login (cf. l'intercepteur
+  // 401 de api.ts) — les 2h précédentes coupaient trop souvent des sessions
+  // de saisie encore actives (constaté en prod le 09/09/2026).
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "8h" });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
