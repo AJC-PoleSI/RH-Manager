@@ -194,8 +194,9 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
+      console.error("registerCandidate insert error:", error);
       return Response.json(
-        { error: "Échec de l'inscription.", details: error.message },
+        { error: "Échec de l'inscription." },
         { status: 400 },
       );
     }
