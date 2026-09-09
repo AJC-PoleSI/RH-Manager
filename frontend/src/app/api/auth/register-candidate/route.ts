@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
       anneeIntegration,
     } = await req.json();
 
-    if (!firstName || !lastName || !email || !dateOfBirth) {
+    const firstNameTrimmed = String(firstName || "").trim();
+    const lastNameTrimmed = String(lastName || "").trim();
+
+    if (!firstNameTrimmed || !lastNameTrimmed || !email || !dateOfBirth) {
       return Response.json(
         {
           error:
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
     // audencia-bs.com domain are accepted.
     // ══════════════════════════════════════════════════════════════════
     const emailLower = String(email).trim().toLowerCase();
-    const audenciaDomainRe = /@(audencia\.com|audencia-bs\.com)$/;
+    const audenciaDomainRe = /^[^\s@]+@(audencia\.com|audencia-bs\.com)$/;
     if (!audenciaDomainRe.test(emailLower)) {
       return Response.json(
         {
