@@ -16,8 +16,7 @@ export async function POST(req: NextRequest) {
   if (!payload.isAdmin) return forbidden();
 
   try {
-    const { epreuveId, startDate, endDate, membersPerSlot, maxCandidates } =
-      await req.json();
+    const { epreuveId, startDate, endDate, maxCandidates } = await req.json();
 
     if (!epreuveId || !startDate || !endDate) {
       return Response.json(
