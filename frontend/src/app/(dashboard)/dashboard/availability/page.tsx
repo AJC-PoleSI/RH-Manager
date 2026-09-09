@@ -186,7 +186,7 @@ export default function AvailabilityPage() {
     } finally {
       setLoading(false);
     }
-  }, [days, toast]);
+  }, [days, toast, user?.id]);
 
   useEffect(() => {
     load();
