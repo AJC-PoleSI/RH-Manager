@@ -23,8 +23,11 @@ import {
   Save,
   Info,
   CalendarCheck,
+  Users,
+  X,
 } from "lucide-react";
 import api from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import TimeBandGrid, { type Overlay } from "@/components/planning/TimeBandGrid";
@@ -35,6 +38,33 @@ import {
   type AvailabilityRow,
 } from "@/lib/availability-bands";
 import { formatDuration, hhmmToMinutes, type Band } from "@/lib/time-bands";
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Pas encore publié",
+  open: "En attente de complément de jury",
+  ready: "Jury complet — en attente de publication",
+  published: "Publié aux candidats",
+  full: "Complet",
+  closed: "Clôturé",
+};
+
+/** Détail d'une affectation, tenu à part de l'Overlay générique du grid. */
+interface SlotDetail {
+  id: string;
+  epreuveName: string;
+  date: string;
+  startMin: number;
+  endMin: number;
+  room?: string;
+  status?: string;
+  candidateNames: string[];
+  coExaminerNames: string[];
+}
+
+function fullName(p: { first_name?: string; last_name?: string; email?: string }) {
+  const name = `${p.first_name || ""} ${p.last_name || ""}`.trim();
+  return name || p.email || "";
+}
 
 /** Palette stable par épreuve, pour que les affectations se reconnaissent. */
 const EPREUVE_COLORS = [
