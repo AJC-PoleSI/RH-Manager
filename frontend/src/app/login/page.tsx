@@ -781,35 +781,9 @@ function LoginForm() {
                         </>
                     )}
 
-                    {/* Step 3: Documents */}
+                    {/* Step 3: Confirmation */}
                     {step === 3 && (
                         <>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    CV (PDF)
-                                </label>
-                                <div
-                                    onClick={() => cvInputRef.current?.click()}
-                                    className="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-6 text-center cursor-pointer hover:border-blue-400 transition"
-                                >
-                                    <input
-                                        ref={cvInputRef}
-                                        type="file"
-                                        accept=".pdf"
-                                        className="hidden"
-                                        onChange={(e) => {
-                                            if (e.target.files?.[0]) setCvFile(e.target.files[0]);
-                                        }}
-                                    />
-                                    {cvFile ? (
-                                        <span className="text-sm text-blue-600 font-medium">{cvFile.name}</span>
-                                    ) : (
-                                        <span className="text-sm text-gray-400">
-                                            Cliquer pour sélectionner un fichier PDF
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
                             <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
                                 Votre compte sera créé et vous pourrez accéder à votre espace candidat immédiatement.
                                 Votre date de naissance servira de mot de passe pour vous reconnecter.
