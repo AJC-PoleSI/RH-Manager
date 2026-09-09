@@ -37,7 +37,12 @@ import {
   localYmd,
   type AvailabilityRow,
 } from "@/lib/availability-bands";
-import { formatDuration, hhmmToMinutes, type Band } from "@/lib/time-bands";
+import {
+  formatDuration,
+  hhmmToMinutes,
+  minutesToHHMM,
+  type Band,
+} from "@/lib/time-bands";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Pas encore publié",
