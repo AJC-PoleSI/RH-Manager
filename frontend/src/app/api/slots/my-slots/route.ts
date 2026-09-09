@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
           *,
           epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size),
           enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
-          members:slot_member_assignments(*, member:members(email))
+          members:slot_member_assignments(*, member:members(id, email, first_name, last_name))
         )
       `,
       )
