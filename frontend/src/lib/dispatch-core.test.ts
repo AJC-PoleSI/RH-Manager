@@ -7,6 +7,7 @@ import {
   scoreMember,
   compareByTension,
   slotTension,
+  slotFillTarget,
   epreuveShortfall,
   roomStreak,
   orderPredecessorsFirst,
