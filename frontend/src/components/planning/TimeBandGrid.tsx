@@ -60,6 +60,8 @@ interface Props {
   bands: Band[];
   overlays?: Overlay[];
   onChange?: (bands: Band[]) => void;
+  /** Clic sur une affectation (overlay) — le détail est géré par l'appelant. */
+  onOverlayClick?: (overlay: Overlay) => void;
   readOnly?: boolean;
   pxPerMin?: number;
 }
