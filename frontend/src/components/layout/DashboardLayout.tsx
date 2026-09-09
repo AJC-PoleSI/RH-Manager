@@ -12,9 +12,15 @@ import { useEffect, useState } from "react";
 function TopNav({ onChangePassword }: { onChangePassword: () => void }) {
   const { user, role, logout } = useAuth();
 
-  const displayName = user?.firstName
-    ? `${user.firstName} ${user.lastName}`
-    : user?.email || "Utilisateur";
+  // Filter+join plutôt qu'un template littéral : un lastName manquant (pas
+  // juste vide — un endpoint de connexion qui omet la clé) ne doit jamais
+  // s'afficher comme le mot "undefined" à l'écran ("Clemence undefined",
+  // trouvé en audit du 09/09/2026 — la session d'un membre qui avait
+  // réinitialisé son mot de passe en portait la trace).
+  const displayName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    user?.email ||
+    "Utilisateur";
 
   const roleLabel =
     role === "candidate" ? "Candidat" : user?.isAdmin ? "Admin" : "Membre JE";
