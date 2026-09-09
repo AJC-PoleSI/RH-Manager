@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import OpeningsManager from "@/components/calendar/OpeningsManager";
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
+import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
@@ -1516,7 +1517,42 @@ export default function PlanningPage() {
                     Sélectionnez une épreuve pour déclarer ses ouvertures de salles.
                   </p>
                 ) : openingsMode === "grille" ? (
-                  <RoomOpeningsGrid
+                  <>
+                    {(() => {
+                      const courante = epreuves.find((e) => e.id === selectedEpreuveId);
+                      if (!courante) return null;
+                      const memeTour = epreuves.filter(
+                        (e) => e.tour === courante.tour && !e.isCommune,
+                      );
+                      if (memeTour.length < 2) return null;
+                      return (
+                        <TourOpeningsPanel
+                          tour={courante.tour}
+                          epreuves={memeTour.map((e) => ({
+                            id: e.id,
+                            name: e.name,
+                            isGroupEpreuve: !!e.isGroupEpreuve,
+                            durationMinutes:
+                              e.durationMinutes ?? e.duration_minutes ?? 30,
+                            roulementMinutes:
+                              e.roulementMinutes ?? e.roulement_minutes ?? 10,
+                            minEvaluatorsPerSalle:
+                              (e as any).minEvaluatorsPerSalle ??
+                              (e as any).min_evaluators_per_salle ??
+                              (e.isGroupEpreuve ? 4 : 2),
+                            groupSize: (e as any).groupSize ?? null,
+                            minCandidates: (e as any).minCandidates ?? null,
+                            dateDebut: e.dateDebut ?? null,
+                          }))}
+                          onSaved={() => {
+                            fetchSlotData();
+                            fetchAllSlotsGlobal();
+                            setCalRefreshKey((k) => k + 1);
+                          }}
+                        />
+                      );
+                    })()}
+                    <RoomOpeningsGrid
                     key={selectedEpreuveId}
                     epreuveId={selectedEpreuveId}
                     epreuveName={
@@ -1582,6 +1618,7 @@ export default function PlanningPage() {
                       setCalRefreshKey((k) => k + 1);
                     }}
                   />
+                  </>
                 ) : (
                   <OpeningsManager
                     selectedEpreuveId={selectedEpreuveId}

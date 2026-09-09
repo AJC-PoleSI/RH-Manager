@@ -177,6 +177,17 @@ export default function CreationPage() {
 
   /* ---- tours ---- */
   const [tours, setTours] = useState<Tour[]>([]);
+  /**
+   * Candidats attendus : niveau TOUR, pas épreuve. L'Entretien individuel et
+   * le Business Game d'un même tour ont le même effectif — ce sont les mêmes
+   * candidats. Chargé/enregistré à part du formulaire d'épreuve, sur
+   * /api/tour-settings/[tour].
+   */
+  const [tourCapacity, setTourCapacity] = useState<{
+    candidatsAttendus: string;
+    margePct: string;
+  }>({ candidatsAttendus: "", margePct: "25" });
+  const [tourCapacitySaving, setTourCapacitySaving] = useState(false);
 
   /* ---- épreuves ---- */
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
@@ -210,6 +221,47 @@ export default function CreationPage() {
     fetchTour3Estimates();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!form.tourId) {
+      setTourCapacity({ candidatsAttendus: "", margePct: "25" });
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/tour-settings/${form.tourId}`)
+      .then((res) => {
+        if (cancelled) return;
+        setTourCapacity({
+          candidatsAttendus: String(res.data?.candidatsAttendus ?? ""),
+          margePct: String(res.data?.margePct ?? 25),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setTourCapacity({ candidatsAttendus: "", margePct: "25" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.tourId]);
+
+  const saveTourCapacity = async (next: { candidatsAttendus: string; margePct: string }) => {
+    if (!form.tourId) return;
+    setTourCapacitySaving(true);
+    try {
+      await api.put(`/tour-settings/${form.tourId}`, {
+        candidatsAttendus: next.candidatsAttendus ? parseInt(next.candidatsAttendus) : null,
+        margePct: next.margePct !== "" ? parseInt(next.margePct) || 0 : 25,
+      });
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Échec de l'enregistrement de l'effectif du tour",
+        "error",
+      );
+    } finally {
+      setTourCapacitySaving(false);
+    }
+  };
 
   // Estimation du nombre de candidats (admis Tour 2) par pôle, pour aider
   // à dimensionner les créneaux des épreuves de Tour 3.
@@ -1095,50 +1147,61 @@ export default function CreationPage() {
                   </>
                 )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Candidats attendus
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.candidatsAttendus}
-                    onChange={(e) =>
-                      handleFormChange("candidatsAttendus", e.target.value)
-                    }
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="100"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Utilisé pour estimer le nombre de créneaux à ouvrir. Laisser
-                    vide si vous ne le savez pas encore.
-                  </p>
+                <div className="sm:col-span-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">
+                      Candidats attendus pour ce tour
+                      {form.tourId && (
+                        <span className="ml-1 font-normal text-gray-400">
+                          (Tour {form.tourId})
+                        </span>
+                      )}
+                    </label>
+                    {tourCapacitySaving && (
+                      <span className="text-xs text-gray-400">enregistrement…</span>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!form.tourId}
+                        value={tourCapacity.candidatsAttendus}
+                        onChange={(e) => setTourCapacity((c) => ({ ...c, candidatsAttendus: e.target.value }))}
+                        onBlur={() => saveTourCapacity(tourCapacity)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                        placeholder="100"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        {form.tourId
+                          ? "Partagé par TOUTES les épreuves de ce tour — l'Entretien individuel et le Business Game ont le même effectif, ce sont les mêmes candidats."
+                          : "Choisissez d'abord un tour."}
+                      </p>
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        disabled={!form.tourId}
+                        value={tourCapacity.margePct}
+                        onChange={(e) => setTourCapacity((c) => ({ ...c, margePct: e.target.value }))}
+                        onBlur={() => saveTourCapacity(tourCapacity)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                        placeholder="25"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">marge %</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Marge de choix (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="200"
-                    value={form.margePct}
-                    onChange={(e) => handleFormChange("margePct", e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="25"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Créneaux en plus des candidats attendus, pour que les
-                    derniers inscrits aient encore un choix compatible avec
-                    leurs disponibilités.
-                  </p>
-                </div>
+
                 {(() => {
                   const est = estimateSlotsNeeded({
-                    candidatsAttendus: form.candidatsAttendus
-                      ? parseInt(form.candidatsAttendus)
+                    candidatsAttendus: tourCapacity.candidatsAttendus
+                      ? parseInt(tourCapacity.candidatsAttendus)
                       : null,
-                    margePct: form.margePct ? parseInt(form.margePct) : 25,
+                    margePct: tourCapacity.margePct ? parseInt(tourCapacity.margePct) : 25,
                     isGroupEpreuve: form.type === "groupe",
                     groupSize: form.groupSize ? parseInt(form.groupSize) : null,
                     minCandidates: form.minCandidates

@@ -427,3 +427,13 @@ CREATE INDEX IF NOT EXISTS idx_candidates_verification_token
 ALTER TABLE public.epreuves
   ADD COLUMN IF NOT EXISTS candidats_attendus INTEGER,
   ADD COLUMN IF NOT EXISTS marge_pct INTEGER NOT NULL DEFAULT 25;
+
+-- ═══════════════════════════════════════════════════════════════
+-- REFONTE CRÉNEAUX : candidats attendus au niveau du TOUR
+-- (septembre 2026 — voir supabase-migration-tour-settings.sql)
+-- ═══════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.tour_settings (
+  tour INTEGER PRIMARY KEY,
+  candidats_attendus INTEGER,
+  marge_pct INTEGER NOT NULL DEFAULT 25
+);
