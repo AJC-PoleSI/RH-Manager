@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import CalendarMemberBuilder from "@/components/calendar/CalendarMemberBuilder";
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
+import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
@@ -1458,6 +1459,13 @@ export default function PlanningPage() {
         )}
 
         <hr className="my-2 border-gray-200" />
+
+        {/* Vue globale des inscrits (examinateurs + candidats), filtrable —
+            complète le clic-sur-créneau du calendrier de contrôle, qui ne
+            montre qu'UN créneau à la fois. */}
+        <EnrollmentsTable
+          epreuves={epreuves.map((e) => ({ id: e.id, name: e.name, tour: e.tour }))}
+        />
 
         {/* Epreuve selector pour le paramétrage */}
         <div>
