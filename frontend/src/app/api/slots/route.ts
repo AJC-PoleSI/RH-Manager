@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
         duration_minutes: computedDuration,
         label: label || null,
         max_candidates: maxCandidates || 1,
-        min_members: minMembers || 1,
+        min_members: minMembers,
         simultaneous_slots: simultaneousSlots ?? 1,
         epreuve_id: epreuveId,
         tour: tour || 1,
