@@ -1461,6 +1461,11 @@ export default function PlanningPage() {
 
         <hr className="my-2 border-gray-200" />
 
+        {/* Combien de créneaux sont réellement staffés (≥ min examinateurs),
+            par épreuve — réponse directe à « combien j'en ai vraiment ? »
+            sans avoir à compter salle par salle dans le calendrier. */}
+        <EpreuveSlotsSummary />
+
         {/* Vue globale des inscrits (examinateurs + candidats), filtrable —
             complète le clic-sur-créneau du calendrier de contrôle, qui ne
             montre qu'UN créneau à la fois. */}
