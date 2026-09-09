@@ -711,6 +711,54 @@ export default function TimeBandGrid({
                         </div>
                       </div>
                     ))}
+
+                {/* Affectations confirmées — au-dessus des bandes déclarées,
+                    rendu plein/saturé pour trancher nettement avec le pointillé
+                    pâle des disponibilités : c'est ce qu'on vous a réellement
+                    confié, pas juste ce que vous avez proposé. */}
+                {overlays
+                  .filter((o) => o.dayIndex === dayIndex && o.laneId === lane.id)
+                  .map((o) => (
+                    <div
+                      key={o.id}
+                      className={cn(
+                        "absolute left-[3px] right-[3px] z-20 overflow-hidden rounded-[5px]",
+                        "shadow-[0_1px_3px_rgba(0,0,0,0.18)]",
+                        onOverlayClick
+                          ? "cursor-pointer transition-[filter] duration-150 hover:brightness-110"
+                          : "pointer-events-none",
+                      )}
+                      style={{
+                        top: topOf(o.startMin),
+                        height: heightOf(o.startMin, o.endMin),
+                        backgroundColor: o.color ?? "#475569",
+                      }}
+                      title={`${minutesToHHMM(o.startMin)}–${minutesToHHMM(o.endMin)} · ${o.label}${o.sublabel ? ` · ${o.sublabel}` : ""}`}
+                      onClick={
+                        onOverlayClick ? () => onOverlayClick(o) : undefined
+                      }
+                    >
+                      <div className="flex items-center gap-1 truncate px-1.5 pt-1 text-[10px] font-semibold leading-tight text-white">
+                        <svg
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="h-2.5 w-2.5 shrink-0 opacity-90"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span className="truncate">{o.label}</span>
+                      </div>
+                      {o.sublabel && o.endMin - o.startMin >= 30 && (
+                        <div className="truncate px-1.5 text-[10px] leading-tight text-white/85">
+                          {o.sublabel}
+                        </div>
+                      )}
+                    </div>
+                  ))}
               </div>
             ))}
           </div>
