@@ -869,18 +869,32 @@ export async function runDispatch(opts?: {
         .from("evaluator_allocations")
         .upsert(backupRows, { onConflict: "slot_id,member_id" });
       if (error && error.code !== "23505") {
-        console.error(
-          "Backup allocation bulk upsert error, repli ligne par ligne:",
-          error,
-        );
-        for (const row of backupRows) {
-          try {
-            await supabaseAdmin
-              .from("evaluator_allocations")
-              .upsert(row, { onConflict: "slot_id,member_id" });
-          } catch (e: any) {
-            if (e?.code !== "23505") {
-              console.error("Backup allocation insert error:", e);
+        if (isMissingTableError(error)) {
+          // Migration supabase-migration-allocation.sql pas encore posée :
+          // la table n'existe pas. Un repli ligne par ligne échouerait sur
+          // CHAQUE ligne pour la même raison — avec ~1100 créneaux ouverts,
+          // c'est exactement ce qui a fait dépasser les 300s de timeout
+          // Vercel sur /api/availability en prod. On log une fois et on
+          // passe : les remplaçants ne sont pas persistés tant que la
+          // migration n'est pas appliquée, mais la dispo elle-même est déjà
+          // enregistrée (étape précédente) et le dispatch continue.
+          console.warn(
+            "[dispatch] Table evaluator_allocations absente — remplaçants non enregistrés. Appliquez supabase-migration-allocation.sql.",
+          );
+        } else {
+          console.error(
+            "Backup allocation bulk upsert error, repli ligne par ligne:",
+            error,
+          );
+          for (const row of backupRows) {
+            try {
+              await supabaseAdmin
+                .from("evaluator_allocations")
+                .upsert(row, { onConflict: "slot_id,member_id" });
+            } catch (e: any) {
+              if (e?.code !== "23505") {
+                console.error("Backup allocation insert error:", e);
+              }
             }
           }
         }
