@@ -632,6 +632,7 @@ export async function runDispatch(opts?: {
       quota: slot.min_members || 2,
       epreuveDeficit: shortfall?.deficit,
       epreuveCoverage: shortfall?.coverage,
+      isGroupEpreuve: slot.epreuve?.is_group_epreuve ?? false,
     };
   };
 
