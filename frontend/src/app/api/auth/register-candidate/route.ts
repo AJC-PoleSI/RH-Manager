@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("registerCandidate error:", error);
     return Response.json(
-      { error: "Échec de l'inscription.", details: String(error) },
+      { error: "Échec de l'inscription." },
       { status: 400 },
     );
   }
