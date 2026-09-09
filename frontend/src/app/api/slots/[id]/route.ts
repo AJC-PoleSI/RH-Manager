@@ -112,9 +112,9 @@ export async function PUT(
         `
         *,
         epreuve:epreuves(name, tour, type),
-        members:slot_member_assignments(*, member:members(id, email)),
+        members:slot_member_assignments(*, member:members(id, email, first_name, last_name)),
         enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
-        requests:slot_availability_requests(*, member:members(id, email))
+        requests:slot_availability_requests(*, member:members(id, email, first_name, last_name))
       `,
       )
       .single();
