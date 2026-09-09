@@ -9,6 +9,7 @@ import MemberAvailabilityGrid from "@/app/(dashboard)/dashboard/availability/pag
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
+import EpreuveSlotsSummary from "@/components/planning/EpreuveSlotsSummary";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
