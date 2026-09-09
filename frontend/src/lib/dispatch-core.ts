@@ -152,6 +152,32 @@ export interface SlotContinuity {
 }
 
 /**
+ * Effectif CIBLE du jury pour un créneau — jusqu'où pousser la boucle
+ * d'affectation gloutonne avant de s'arrêter.
+ *
+ * Une épreuve individuelle garde son quota fixe (min_members). Une épreuve
+ * de groupe, elle, MONTE avec le vivier réellement disponible : plus il y a
+ * d'examinateurs libres, plus le jury grossit — jusqu'au plafond `groupSize`
+ * (le nombre max de candidats par groupe, réutilisé comme plafond de jury :
+ * pas de champ séparé à configurer). En dessous du minimum, la cible reste
+ * le minimum — la boucle d'affectation s'arrêtera de toute façon quand le
+ * vivier sera épuisé, sans jamais produire un jury en dessous de ce qui est
+ * réellement disponible.
+ *
+ * Fonction pure : ne regarde PAS combien de personnes sont réellement dans
+ * le vivier — c'est au niveau du site d'appel (la boucle gloutonne) que la
+ * cible et la disponibilité réelle se rencontrent naturellement.
+ */
+export function slotFillTarget(
+  minMembers: number,
+  isGroupEpreuve: boolean | null | undefined,
+  groupSize: number | null | undefined,
+): number {
+  if (!isGroupEpreuve) return minMembers;
+  return Math.max(minMembers, groupSize || minMembers);
+}
+
+/**
  * Score d'un membre pour un créneau (plus bas = meilleur candidat).
  *
  * Combine la charge (équité), la pénalité de binôme (brassage) et les deux
