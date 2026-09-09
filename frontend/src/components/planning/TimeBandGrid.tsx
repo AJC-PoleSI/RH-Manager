@@ -157,6 +157,8 @@ export default function TimeBandGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
+  /** Repère de survol : montre où le tracé commencerait, avant même de cliquer. */
+  const hoverRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -231,10 +233,35 @@ export default function TimeBandGrid({
     }
   }, [paintDrag]);
 
+  /** Repère de survol — masqué dès qu'un geste commence. */
+  const paintHover = useCallback(
+    (clientY: number, laneEl: HTMLElement) => {
+      const el = hoverRef.current;
+      if (!el || dragRef.current) return;
+      const box = boxOfRef.current(laneEl);
+      const r = laneEl.getBoundingClientRect();
+      const min = clampToGrid(
+        snap(ratioToMin((clientY - r.top) / r.height), SNAP_DRAG),
+      );
+      el.style.display = "block";
+      el.style.left = `${box.left}px`;
+      el.style.width = `${box.width}px`;
+      el.style.top = `${box.top + topOf(min)}px`;
+      const chip = el.firstElementChild as HTMLElement | null;
+      if (chip) chip.textContent = minutesToHHMM(min);
+    },
+    [topOf],
+  );
+
+  const hideHover = useCallback(() => {
+    if (hoverRef.current) hoverRef.current.style.display = "none";
+  }, []);
+
   const hideDragChrome = useCallback(() => {
+    hideHover();
     if (ghostRef.current) ghostRef.current.style.display = "none";
     if (labelRef.current) labelRef.current.style.display = "none";
-  }, []);
+  }, [hideHover]);
 
   /** Minute visée par le curseur dans une piste donnée. */
   const minuteAt = useCallback(
@@ -246,6 +273,12 @@ export default function TimeBandGrid({
   );
 
   /** Position d'une piste dans le repère du conteneur. */
+  const boxOfRef = useRef<(el: HTMLElement) => DragState["box"]>(() => ({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  }));
   const boxOf = useCallback((laneEl: HTMLElement) => {
     const lr = laneEl.getBoundingClientRect();
     const cr = containerRef.current!.getBoundingClientRect();
@@ -256,6 +289,7 @@ export default function TimeBandGrid({
       height: lr.height,
     };
   }, []);
+  boxOfRef.current = boxOf;
 
   // ─── Démarrage d'un geste ──────────────────────────────────────────
 
@@ -284,7 +318,16 @@ export default function TimeBandGrid({
         bandId,
         moved: false,
       };
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      // On capture sur la PISTE, pas sur e.target : la cible peut être une
+      // poignée qui disparaît au premier re-render, ce qui perdrait la capture.
+      // setPointerCapture lève si le pointeur n'est plus actif (geste annulé
+      // par le système, pointeur synthétique) — le geste continue très bien
+      // sans capture puisqu'on écoute au niveau du document.
+      try {
+        laneEl.setPointerCapture?.(e.pointerId);
+      } catch {
+        /* capture indisponible : les écouteurs document prennent le relais */
+      }
       schedulePaint();
     },
     [editable, minuteAt, boxOf, schedulePaint],
@@ -425,6 +468,16 @@ export default function TimeBandGrid({
   const laneList = lanes.length ? lanes : SINGLE_LANE;
   const showLaneLabels = laneList.length > 1;
 
+  // Repères de lecture : la journée en cours, et celles déjà passées — on ne
+  // peut pas se déclarer disponible hier.
+  const todayKey = new Date().toDateString();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const dayFlags = days.map((d) => ({
+    isToday: d.toDateString() === todayKey,
+    isPast: d.getTime() < startOfToday.getTime(),
+  }));
+
   return (
     <div
       ref={containerRef}
@@ -441,19 +494,40 @@ export default function TimeBandGrid({
         }}
       >
         {/* Coin haut-gauche */}
-        <div className="bg-gray-50" style={{ height: 46 }} />
+        <div className="bg-gray-50/80" style={{ height: 48 }} />
 
         {/* En-têtes de journée */}
         {days.map((d, i) => (
           <div
             key={`head-${i}`}
-            className="bg-gray-50 flex flex-col items-center justify-center"
-            style={{ height: 46 }}
+            className={cn(
+              "flex flex-col items-center justify-center gap-0.5",
+              dayFlags[i].isToday ? "bg-blue-50/70" : "bg-gray-50/80",
+            )}
+            style={{ height: 48 }}
           >
-            <span className="text-[11px] uppercase tracking-wide text-gray-500">
+            <span
+              className={cn(
+                "text-[10px] font-medium uppercase tracking-[0.08em]",
+                dayFlags[i].isToday
+                  ? "text-blue-600"
+                  : dayFlags[i].isPast
+                    ? "text-gray-300"
+                    : "text-gray-400",
+              )}
+            >
               {DAY_LABELS[(d.getDay() + 6) % 7]}
             </span>
-            <span className="text-sm font-semibold text-gray-900">
+            <span
+              className={cn(
+                "text-[15px] font-semibold leading-none tabular-nums",
+                dayFlags[i].isToday
+                  ? "flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white"
+                  : dayFlags[i].isPast
+                    ? "text-gray-300"
+                    : "text-gray-800",
+              )}
+            >
               {d.getDate()}
             </span>
           </div>
@@ -480,12 +554,17 @@ export default function TimeBandGrid({
         )}
 
         {/* Colonne des heures */}
-        <div className="relative bg-gray-50" style={{ height }}>
+        <div className="relative bg-gray-50/80" style={{ height }}>
           {hourLines.map((l) =>
             l.major ? (
               <span
                 key={l.min}
-                className="absolute right-1.5 -translate-y-1/2 text-[11px] tabular-nums text-gray-400"
+                className={cn(
+                  "absolute right-2 -translate-y-1/2 text-[10px] tabular-nums",
+                  l.min === 12 * 60
+                    ? "font-medium text-gray-500"
+                    : "text-gray-400",
+                )}
                 style={{ top: topOf(l.min) }}
               >
                 {l.label}
@@ -498,19 +577,33 @@ export default function TimeBandGrid({
         {days.map((_, dayIndex) => (
           <div
             key={`col-${dayIndex}`}
-            className="relative bg-white flex"
+            className={cn(
+              "relative flex",
+              dayFlags[dayIndex].isToday
+                ? "bg-blue-50/25"
+                : dayFlags[dayIndex].isPast
+                  ? "bg-gray-50/60"
+                  : "bg-white",
+            )}
             style={{ height }}
           >
-            {laneList.map((lane) => (
+            {laneList.map((lane, laneIndex) => (
               <div
                 key={lane.id || "solo"}
                 data-lane
                 className={cn(
-                  "relative flex-1 min-w-0 border-l border-gray-100 first:border-l-0",
+                  "group/lane relative flex-1 min-w-0 border-l border-gray-100 first:border-l-0",
+                  // En multi-salles les pistes sont étroites : une alternance
+                  // très légère suffit à les distinguer sans faire du zèbre.
+                  showLaneLabels && laneIndex % 2 === 1 && "bg-gray-50/40",
                   editable && "cursor-crosshair",
                 )}
                 style={{ touchAction: "none" }}
                 onPointerDown={(e) => onLanePointerDown(e, dayIndex, lane.id)}
+                onPointerMove={(e) => {
+                  if (editable) paintHover(e.clientY, e.currentTarget);
+                }}
+                onPointerLeave={hideHover}
               >
                 {/* Traits horaires */}
                 {hourLines.map((l) => (
@@ -518,7 +611,7 @@ export default function TimeBandGrid({
                     key={l.min}
                     className={cn(
                       "pointer-events-none absolute inset-x-0 border-t",
-                      l.major ? "border-gray-200" : "border-gray-100",
+                      l.major ? "border-gray-200/90" : "border-gray-100/70",
                     )}
                     style={{ top: topOf(l.min) }}
                   />
@@ -530,7 +623,7 @@ export default function TimeBandGrid({
                   .map((o) => (
                     <div
                       key={o.id}
-                      className="pointer-events-none absolute left-3 right-0.5 z-20 overflow-hidden rounded border border-gray-200 border-l-[3px] bg-white px-1 py-0.5 shadow-sm"
+                      className="pointer-events-none absolute left-3 right-[3px] z-20 overflow-hidden rounded-[4px] border border-gray-200/80 border-l-[3px] bg-white px-1.5 py-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                       style={{
                         top: topOf(o.startMin),
                         height: heightOf(o.startMin, o.endMin),
@@ -558,10 +651,13 @@ export default function TimeBandGrid({
                       <div
                         key={b.id}
                         className={cn(
-                          "absolute inset-x-0.5 rounded-md bg-blue-500/85 transition-shadow",
+                          "absolute inset-x-[3px] overflow-hidden rounded-[5px]",
+                          "bg-gradient-to-b from-blue-500 to-blue-600",
+                          "shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]",
+                          "transition-[box-shadow,filter] duration-150",
                           isSel
-                            ? "z-30 ring-2 ring-blue-700 shadow-md"
-                            : "hover:bg-blue-500",
+                            ? "z-10 shadow-[0_0_0_2px_#1d4ed8,0_6px_16px_-4px_rgba(29,78,216,0.5)]"
+                            : "hover:brightness-105 hover:shadow-[0_2px_8px_-2px_rgba(29,78,216,0.45)]",
                           editable ? "cursor-pointer" : "cursor-default",
                         )}
                         style={{
@@ -579,67 +675,91 @@ export default function TimeBandGrid({
                           setSelectedId(b.id);
                         }}
                       >
-                        <div className="px-1 py-0.5 text-[10px] font-semibold leading-tight text-white">
+                        <div className="px-1.5 pt-1 text-[10px] font-semibold leading-none tabular-nums text-white">
                           {minutesToHHMM(b.startMin)}
                         </div>
-                        {b.endMin - b.startMin >= 45 && (
-                          <div className="absolute bottom-0 left-0 px-1 py-0.5 text-[10px] leading-tight text-white/90">
+                        {b.endMin - b.startMin >= 50 && (
+                          <div className="absolute inset-x-0 bottom-0 px-1.5 pb-1 text-[10px] leading-none tabular-nums text-white/75">
                             {minutesToHHMM(b.endMin)}
                           </div>
                         )}
 
-                        {/* Poignées de redimensionnement */}
-                        {isSel && editable && (
-                          <>
-                            <div
-                              className="absolute -top-1 inset-x-0 h-3 cursor-ns-resize"
-                              onPointerDown={(e) => {
-                                const laneEl = (e.currentTarget as HTMLElement)
-                                  .closest("[data-lane]") as HTMLElement;
-                                beginDrag(e, laneEl, dayIndex, lane.id, "resize-start", b.id, b.endMin);
-                              }}
-                            >
-                              <div className="mx-auto h-1 w-8 rounded-full bg-white shadow" />
-                            </div>
-                            <div
-                              className="absolute -bottom-1 inset-x-0 h-3 cursor-ns-resize"
-                              onPointerDown={(e) => {
-                                const laneEl = (e.currentTarget as HTMLElement)
-                                  .closest("[data-lane]") as HTMLElement;
-                                beginDrag(e, laneEl, dayIndex, lane.id, "resize-end", b.id, b.startMin);
-                              }}
-                            >
-                              <div className="mx-auto mt-2 h-1 w-8 rounded-full bg-white shadow" />
-                            </div>
-                          </>
-                        )}
                       </div>
                     );
                   })}
+
+                {/* Poignées de la bande sélectionnée — sœurs des bandes, donc
+                    au-dessus des affectations et toujours attrapables. */}
+                {editable &&
+                  bands
+                    .filter(
+                      (b) =>
+                        b.id === selectedId &&
+                        b.dayIndex === dayIndex &&
+                        b.laneId === lane.id,
+                    )
+                    .map((b) => (
+                      <div key={`h-${b.id}`}>
+                        <div
+                          className="absolute inset-x-0 z-30 flex h-3.5 cursor-ns-resize items-center"
+                          style={{ top: topOf(b.startMin) - 7, touchAction: "none" }}
+                          onPointerDown={(e) => {
+                            const laneEl = (e.currentTarget as HTMLElement).closest(
+                              "[data-lane]",
+                            ) as HTMLElement;
+                            beginDrag(e, laneEl, dayIndex, lane.id, "resize-start", b.id, b.endMin);
+                          }}
+                        >
+                          <div className="mx-auto h-[3px] w-7 rounded-full bg-white shadow ring-1 ring-blue-700/30" />
+                        </div>
+                        <div
+                          className="absolute inset-x-0 z-30 flex h-3.5 cursor-ns-resize items-center"
+                          style={{ top: topOf(b.endMin) - 7, touchAction: "none" }}
+                          onPointerDown={(e) => {
+                            const laneEl = (e.currentTarget as HTMLElement).closest(
+                              "[data-lane]",
+                            ) as HTMLElement;
+                            beginDrag(e, laneEl, dayIndex, lane.id, "resize-end", b.id, b.startMin);
+                          }}
+                        >
+                          <div className="mx-auto h-[3px] w-7 rounded-full bg-white shadow ring-1 ring-blue-700/30" />
+                        </div>
+                      </div>
+                    ))}
               </div>
             ))}
           </div>
         ))}
       </div>
 
+      {/* Repère de survol : où commencerait le tracé */}
+      <div
+        ref={hoverRef}
+        className="pointer-events-none absolute z-10 hidden"
+        style={{ display: "none" }}
+      >
+        <span className="absolute -top-2 left-1 rounded bg-gray-900/85 px-1 py-px text-[9px] font-medium tabular-nums leading-tight text-white" />
+        <div className="h-px w-full bg-blue-400/70" />
+      </div>
+
       {/* Bande fantôme du geste en cours */}
       <div
         ref={ghostRef}
-        className="pointer-events-none absolute z-20 hidden rounded-md border-2 border-blue-600 bg-blue-500/35"
+        className="pointer-events-none absolute z-40 hidden rounded-[5px] border-2 border-dashed border-blue-600 bg-blue-500/25"
         style={{ display: "none" }}
       />
 
       {/* Étiquette qui suit le curseur */}
       <div
         ref={labelRef}
-        className="pointer-events-none absolute left-0 top-0 z-30 hidden whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium tabular-nums text-white shadow-lg"
+        className="pointer-events-none absolute left-0 top-0 z-50 hidden whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-medium tabular-nums text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
         style={{ display: "none" }}
       />
 
       {/* Réglage fin — ancré à côté de la bande, pas relégué sous la grille */}
       {selected && editable && selectedBox && (
         <div
-          className="absolute z-40 w-[248px] rounded-lg border border-gray-200 bg-white p-3 shadow-xl"
+          className="absolute z-50 w-[236px] rounded-xl border border-gray-200/90 bg-white p-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.28),0_2px_8px_-2px_rgba(15,23,42,0.12)]"
           style={{
             top: Math.min(
               Math.max(0, topOf(selected.startMin) + selectedBox.top - 8),
@@ -651,24 +771,26 @@ export default function TimeBandGrid({
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="mb-2 text-sm font-semibold text-gray-900">
-            {DAY_LABELS[(days[selected.dayIndex]?.getDay() + 6) % 7]}{" "}
-            {days[selected.dayIndex]?.getDate()}
+          <div className="mb-2.5 flex items-baseline gap-1.5 border-b border-gray-100 pb-2">
+            <span className="text-[13px] font-semibold text-gray-900">
+              {DAY_LABELS[(days[selected.dayIndex]?.getDay() + 6) % 7]}{" "}
+              {days[selected.dayIndex]?.getDate()}
+            </span>
             {selected.laneId && (
-              <span className="font-normal text-gray-500"> · salle {selected.laneId}</span>
+              <span className="text-[11px] text-gray-400">salle {selected.laneId}</span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             <label className="flex flex-col gap-0.5">
-              <span className="text-[11px] text-gray-500">de</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">de</span>
               <TimeSelect
                 valueMin={selected.startMin}
                 onChange={(min) => updateBand(selected.id, { startMin: min })}
               />
             </label>
             <label className="flex flex-col gap-0.5">
-              <span className="text-[11px] text-gray-500">à</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">à</span>
               <TimeSelect
                 valueMin={selected.endMin}
                 onChange={(min) => updateBand(selected.id, { endMin: min })}
@@ -676,14 +798,14 @@ export default function TimeBandGrid({
             </label>
           </div>
 
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-gray-500">
+          <div className="mt-2.5 flex items-center justify-between border-t border-gray-100 pt-2">
+            <span className="text-[11px] font-medium tabular-nums text-gray-500">
               {formatDuration(selected.endMin - selected.startMin)}
             </span>
             <button
               type="button"
               onClick={() => removeBand(selected.id)}
-              className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-50"
             >
               Supprimer
             </button>
