@@ -46,6 +46,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // GUARD: minMembers ne doit jamais retomber sur une valeur par défaut
+    // silencieuse — l'appelant doit explicitement fournir le minimum
+    // (typiquement epreuve.minEvaluatorsPerSalle).
+    if (!minMembers || minMembers < 1) {
+      return Response.json(
+        { error: "minMembers est requis et doit être ≥ 1" },
+        { status: 400 },
+      );
+    }
+
     // Verify the épreuve actually exists (prevents stale UUIDs)
     const { data: epreuveExists } = await supabaseAdmin
       .from("epreuves")

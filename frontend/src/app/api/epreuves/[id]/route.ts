@@ -88,6 +88,12 @@ export async function PUT(
     if (body.inscriptionDeadline) {
       updateData.inscription_deadline = new Date(body.inscriptionDeadline).toISOString();
     }
+    if (body.candidatsAttendus !== undefined)
+      updateData.candidats_attendus = body.candidatsAttendus
+        ? Number(body.candidatsAttendus)
+        : null;
+    if (body.margePct !== undefined)
+      updateData.marge_pct = Number(body.margePct) || 0;
     if (body.isPoleTest !== undefined)
       updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;

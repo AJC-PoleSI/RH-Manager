@@ -1525,6 +1525,25 @@ export default function PlanningPage() {
                     dateDebut={
                       epreuves.find((e) => e.id === selectedEpreuveId)?.dateDebut
                     }
+                    candidatsAttendus={
+                      (epreuves.find((e) => e.id === selectedEpreuveId) as any)
+                        ?.candidatsAttendus
+                    }
+                    margePct={
+                      (epreuves.find((e) => e.id === selectedEpreuveId) as any)
+                        ?.margePct
+                    }
+                    isGroupEpreuve={
+                      epreuves.find((e) => e.id === selectedEpreuveId)
+                        ?.isGroupEpreuve
+                    }
+                    groupSize={
+                      epreuves.find((e) => e.id === selectedEpreuveId)?.groupSize
+                    }
+                    minCandidates={
+                      (epreuves.find((e) => e.id === selectedEpreuveId) as any)
+                        ?.minCandidates
+                    }
                     onSaved={() => {
                       fetchSlotData();
                       fetchAllSlotsGlobal();

@@ -419,3 +419,11 @@ ALTER TABLE candidates
 CREATE INDEX IF NOT EXISTS idx_candidates_verification_token
   ON candidates (verification_token)
   WHERE verification_token IS NOT NULL;
+
+-- ═══════════════════════════════════════════════════════════════
+-- REFONTE CRÉNEAUX : estimation du nombre de créneaux nécessaires
+-- (septembre 2026 — voir supabase-migration-estimation-creneaux.sql)
+-- ═══════════════════════════════════════════════════════════════
+ALTER TABLE public.epreuves
+  ADD COLUMN IF NOT EXISTS candidats_attendus INTEGER,
+  ADD COLUMN IF NOT EXISTS marge_pct INTEGER NOT NULL DEFAULT 25;

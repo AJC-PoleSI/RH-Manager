@@ -29,6 +29,7 @@ import {
   type OpeningRow,
 } from "@/lib/openings-diff";
 import { formatDuration, type Band } from "@/lib/time-bands";
+import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
 import { localYmd } from "@/lib/availability-bands";
 
 interface ApiOpening extends OpeningRow {
@@ -41,6 +42,12 @@ interface Props {
   epreuveName?: string;
   /** Date de début de l'épreuve, pour ouvrir la grille sur la bonne semaine. */
   dateDebut?: string | null;
+  /** Paramètres d'estimation du nombre de créneaux nécessaires. */
+  candidatsAttendus?: number | null;
+  margePct?: number | null;
+  isGroupEpreuve?: boolean;
+  groupSize?: number | null;
+  minCandidates?: number | null;
   onSaved?: () => void;
 }
 
@@ -50,6 +57,11 @@ export default function RoomOpeningsGrid({
   epreuveId,
   epreuveName,
   dateDebut,
+  candidatsAttendus,
+  margePct,
+  isGroupEpreuve,
+  groupSize,
+  minCandidates,
   onSaved,
 }: Props) {
   const { toast } = useToast();
@@ -318,6 +330,54 @@ export default function RoomOpeningsGrid({
           </span>
         )}
       </div>
+
+      {(() => {
+        const est = estimateSlotsNeeded({
+          candidatsAttendus,
+          margePct,
+          isGroupEpreuve,
+          groupSize,
+          minCandidates,
+        });
+        if (!est.applicable) {
+          return (
+            <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+              Renseignez « candidats attendus » dans la configuration de
+              l&apos;épreuve pour savoir combien de créneaux ouvrir.
+            </div>
+          );
+        }
+        // On compare au total de l'épreuve, pas à la semaine : l'admin ouvre
+        // ses salles sur plusieurs semaines, c'est le cumul qui compte.
+        const manque = est.min - slotsTotal;
+        const suffisant = slotsTotal >= est.min;
+        return (
+          <div
+            className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
+              suffisant
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            <strong>{candidatsAttendus}</strong> candidats attendus
+            {margePct ? `, marge +${margePct}%` : ""} →{" "}
+            <strong>{formatSlotEstimate(est)}</strong> nécessaires. Vos
+            ouvertures en produisent <strong>{slotsTotal}</strong>
+            {suffisant ? (
+              est.max > est.min && slotsTotal < est.max ? (
+                <> — de quoi passer tout le monde, avec peu de marge.</>
+              ) : (
+                <> — c&apos;est suffisant.</>
+              )
+            ) : (
+              <>
+                {" "}
+                — il en manque <strong>{manque}</strong>.
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {warnings.length > 0 && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
       isGroupEpreuve: e.is_group_epreuve ?? false,
       groupSize: e.group_size ?? 1,
       minCandidates: e.min_candidates ?? null,
+      candidatsAttendus: e.candidats_attendus ?? null,
+      margePct: e.marge_pct ?? 25,
       isCommune: e.type === "commune",
       description: e.description || null,
       dateDebut: e.date_debut ? e.date_debut.split("T")[0] : null,
@@ -140,6 +142,15 @@ export async function POST(req: NextRequest) {
       ...(body.salle !== undefined ? { salle: body.salle || null } : {}),
       ...(body.presentedBy !== undefined
         ? { presented_by: body.presentedBy || null }
+        : {}),
+      // Estimation du nombre de créneaux — colonnes ajoutées par migration
+      // (supabase-migration-estimation-creneaux.sql), incluses seulement si
+      // fournies pour ne pas casser avant application.
+      ...(body.candidatsAttendus !== undefined
+        ? { candidats_attendus: body.candidatsAttendus ? Number(body.candidatsAttendus) : null }
+        : {}),
+      ...(body.margePct !== undefined
+        ? { marge_pct: Number(body.margePct) || 0 }
         : {}),
       description: body.description || null,
       color: body.color || "#3B82F6",

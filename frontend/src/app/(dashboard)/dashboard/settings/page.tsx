@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
+import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -72,6 +73,8 @@ interface NewEpreuveForm {
   groupSize: string;
   minCandidates: string;
   minEvaluators: string;
+  candidatsAttendus: string;
+  margePct: string;
   inscriptionDeadline: string;
   /* shared */
   description: string;
@@ -106,6 +109,8 @@ const EMPTY_FORM: NewEpreuveForm = {
   groupSize: "4",
   minCandidates: "",
   minEvaluators: "2",
+  candidatsAttendus: "",
+  margePct: "25",
   inscriptionDeadline: "",
   description: "",
   color: "#3B82F6",
@@ -335,6 +340,8 @@ export default function CreationPage() {
       pole: ep.pole || "",
       groupSize: String(ep.groupSize || "4"),
       minCandidates: String(ep.minCandidates ?? ""),
+      candidatsAttendus: String((ep as any).candidatsAttendus ?? ""),
+      margePct: String((ep as any).margePct ?? 25),
       minEvaluators: String(
         (ep as any).minEvaluatorsPerSalle ||
           (ep as any).min_evaluators_per_salle ||
@@ -400,6 +407,10 @@ export default function CreationPage() {
           form.type === "groupe" ? parseInt(form.groupSize) || 1 : 1,
         minCandidates:
           form.type === "groupe" ? parseInt(form.minCandidates) || null : null,
+        candidatsAttendus: form.candidatsAttendus
+          ? parseInt(form.candidatsAttendus)
+          : null,
+        margePct: form.margePct !== "" ? parseInt(form.margePct) || 0 : 25,
         // Épreuve de groupe : le nombre d'examinateurs suit toujours le
         // minimum de candidats (le serveur le réimpose aussi, cf. epreuves/route.ts).
         minEvaluatorsPerSalle:
@@ -1083,6 +1094,66 @@ export default function CreationPage() {
                     </div>
                   </>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Candidats attendus
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.candidatsAttendus}
+                    onChange={(e) =>
+                      handleFormChange("candidatsAttendus", e.target.value)
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="100"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Utilisé pour estimer le nombre de créneaux à ouvrir. Laisser
+                    vide si vous ne le savez pas encore.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Marge de choix (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="200"
+                    value={form.margePct}
+                    onChange={(e) => handleFormChange("margePct", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="25"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Créneaux en plus des candidats attendus, pour que les
+                    derniers inscrits aient encore un choix compatible avec
+                    leurs disponibilités.
+                  </p>
+                </div>
+                {(() => {
+                  const est = estimateSlotsNeeded({
+                    candidatsAttendus: form.candidatsAttendus
+                      ? parseInt(form.candidatsAttendus)
+                      : null,
+                    margePct: form.margePct ? parseInt(form.margePct) : 25,
+                    isGroupEpreuve: form.type === "groupe",
+                    groupSize: form.groupSize ? parseInt(form.groupSize) : null,
+                    minCandidates: form.minCandidates
+                      ? parseInt(form.minCandidates)
+                      : null,
+                  });
+                  if (!est.applicable) return null;
+                  return (
+                    <div className="sm:col-span-2 rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-sm text-blue-800">
+                      Il faudra environ{" "}
+                      <strong>{formatSlotEstimate(est)}</strong> pour cette
+                      épreuve.
+                    </div>
+                  );
+                })()}
                 {form.type !== "groupe" && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
