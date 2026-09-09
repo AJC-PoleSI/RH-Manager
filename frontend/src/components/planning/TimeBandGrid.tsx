@@ -153,6 +153,7 @@ export default function TimeBandGrid({
   bands,
   overlays = [],
   onChange,
+  onOverlayClick,
   readOnly = false,
   pxPerMin = 0.9,
 }: Props) {
