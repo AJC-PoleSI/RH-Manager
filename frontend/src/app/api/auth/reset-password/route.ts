@@ -162,6 +162,12 @@ export async function POST(req: NextRequest) {
         id: member.id,
         email: member.email,
         firstName: member.first_name || "",
+        // Manquait ici : le prénom seul suffisait à déclencher la branche
+        // "affiche le nom" de l'en-tête (DashboardLayout.tsx), qui calcule
+        // `${firstName} ${lastName}` — un lastName absent (pas juste vide)
+        // s'affichait littéralement "undefined" à l'écran ("Clemence
+        // undefined", trouvé en audit du 09/09/2026).
+        lastName: member.last_name || "",
         isAdmin: member.is_admin,
         isSuperAdmin: isSuperAdminEmail(member.email),
         mustChangePassword: false,
