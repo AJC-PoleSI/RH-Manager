@@ -17,7 +17,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
 import api from "@/lib/api";
-import { isActiveEnrollment } from "@/lib/enrollment";
 import { cn } from "@/lib/utils";
 
 interface EpreuveOption {
@@ -44,7 +43,6 @@ interface Row {
   role: Role;
   name: string;
   email: string;
-  cancelled: boolean;
 }
 
 function personName(p: any): string {
@@ -103,16 +101,17 @@ export default function EnrollmentsTable({ epreuves }: Props) {
             role: "examinateur",
             name: personName(m.member),
             email: m.member?.email || "",
-            cancelled: false,
           });
         }
+        // /api/slots/all retire déjà les inscriptions annulées avant de
+        // répondre (capacité affichée cohérente avec les autres écrans) :
+        // tout ce qui arrive ici est actif, pas besoin de le vérifier.
         for (const e of s.enrollments || []) {
           next.push({
             ...base,
             role: "candidat",
             name: personName(e.candidate),
             email: e.candidate?.email || "",
-            cancelled: !isActiveEnrollment(e.status),
           });
         }
       }
@@ -152,9 +151,7 @@ export default function EnrollmentsTable({ epreuves }: Props) {
   }, [rows, tourFilter, epreuveFilter, roleFilter, search]);
 
   const examCount = filtered.filter((r) => r.role === "examinateur").length;
-  const candCount = filtered.filter(
-    (r) => r.role === "candidat" && !r.cancelled,
-  ).length;
+  const candCount = filtered.filter((r) => r.role === "candidat").length;
 
   return (
     <div className="mb-4 rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -272,10 +269,7 @@ export default function EnrollmentsTable({ epreuves }: Props) {
                   {filtered.map((r, i) => (
                     <tr
                       key={`${r.slotId}-${r.role}-${r.email}-${i}`}
-                      className={cn(
-                        "border-t border-gray-50",
-                        r.cancelled && "opacity-40",
-                      )}
+                      className="border-t border-gray-50"
                     >
                       <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">
                         {r.date}
@@ -297,11 +291,6 @@ export default function EnrollmentsTable({ epreuves }: Props) {
                         >
                           {r.role === "examinateur" ? "Examinateur" : "Candidat"}
                         </span>
-                        {r.cancelled && (
-                          <span className="ml-1.5 text-xs text-red-500">
-                            désinscrit
-                          </span>
-                        )}
                       </td>
                       <td className="px-3 py-1.5 font-medium text-gray-900">
                         {r.name}
