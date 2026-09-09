@@ -239,14 +239,45 @@ export default function AvailabilityPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mes disponibilités</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {tab === "dispo" ? "Mes disponibilités" : "Mon planning"}
+          </h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Clique et fais glisser pour tracer une plage. Reclique dessus pour
-            l&apos;ajuster.
+            {tab === "dispo"
+              ? "Clique et fais glisser pour tracer une plage. Reclique dessus pour l'ajuster."
+              : "Les créneaux où vous êtes affecté(e). Cliquez sur un créneau pour le détail."}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5">
+            <button
+              onClick={() => setTab("dispo")}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "dispo"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Mes disponibilités
+            </button>
+            <button
+              onClick={() => setTab("planning")}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "planning"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Mon planning
+              {overlays.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                  {overlays.length}
+                </span>
+              )}
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
             <button
               onClick={() => setWeekOffset((w) => w - 1)}
@@ -268,25 +299,27 @@ export default function AvailabilityPage() {
             </button>
           </div>
 
-          <Button onClick={handleSave} disabled={saving || loading || !saisieOuverte}>
-            {saving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Enregistrer
-          </Button>
+          {tab === "dispo" && (
+            <Button onClick={handleSave} disabled={saving || loading || !saisieOuverte}>
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Enregistrer
+            </Button>
+          )}
         </div>
       </div>
 
-      {!saisieOuverte && (
+      {tab === "dispo" && !saisieOuverte && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           La saisie des disponibilités est fermée par l&apos;administrateur.
           Vous pouvez consulter vos plages, mais pas les modifier.
         </div>
       )}
 
-      {wasMerged && (
+      {tab === "dispo" && wasMerged && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
@@ -298,34 +331,24 @@ export default function AvailabilityPage() {
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-4 text-sm text-gray-500">
-        <span>
-          <strong className="text-gray-900">{bands.length}</strong> plage
-          {bands.length > 1 ? "s" : ""} · {formatDuration(totalMin)} au total
-        </span>
-        {overlays.length > 0 && (
+      {tab === "dispo" ? (
+        <div className="mb-3 flex flex-wrap items-center gap-4 text-sm text-gray-500">
+          <span>
+            <strong className="text-gray-900">{bands.length}</strong> plage
+            {bands.length > 1 ? "s" : ""} · {formatDuration(totalMin)} au total
+          </span>
+          {dirty && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              modifications non enregistrées
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1.5">
             <CalendarCheck className="h-4 w-4" />
-            {overlays.length} affectation{overlays.length > 1 ? "s" : ""} sur
-            cette semaine — cliquez sur une affectation pour le détail
-          </span>
-        )}
-        {dirty && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-            modifications non enregistrées
-          </span>
-        )}
-      </div>
-
-      {overlays.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-[3px] border-2 border-dashed border-blue-300 bg-blue-50" />
-            Disponibilité déclarée
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-[3px] bg-blue-600" />
-            Affectation confirmée
+            <strong className="text-gray-900">{overlays.length}</strong>{" "}
+            affectation{overlays.length > 1 ? "s" : ""} cette semaine
           </span>
         </div>
       )}
@@ -334,14 +357,27 @@ export default function AvailabilityPage() {
         <div className="flex h-64 items-center justify-center text-gray-400">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-      ) : (
+      ) : tab === "dispo" ? (
         <TimeBandGrid
           days={days}
           bands={bands}
-          overlays={overlays}
+          overlays={[]}
           onChange={handleChange}
-          onOverlayClick={(o) => setSelectedSlotId(o.id)}
           readOnly={!saisieOuverte}
+        />
+      ) : overlays.length === 0 ? (
+        <div className="flex h-64 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 text-gray-400">
+          <CalendarCheck className="h-6 w-6" />
+          <p className="text-sm">Aucune affectation cette semaine.</p>
+        </div>
+      ) : (
+        <TimeBandGrid
+          days={days}
+          bands={[]}
+          overlays={overlays}
+          onOverlayClick={(o) => setSelectedSlotId(o.id)}
+          readOnly
+          pxPerMin={1.3}
         />
       )}
 
