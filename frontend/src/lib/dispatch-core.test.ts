@@ -281,6 +281,78 @@ describe("compareByTension — arbitrage entre épreuves simultanées", () => {
   });
 });
 
+// ─── Priorité groupe (spec du 09/09/2026) ──────────────────────────────
+// Cas réel qui a motivé le correctif : 9 examinateurs disponibles à 18h10 le
+// 15 septembre, 3 salles business game ouvertes à cette heure, 0 examinateur
+// affecté sur 2 d'entre elles — les mêmes personnes tournaient sur des
+// entretiens individuels au même horaire. `staffableCapacity` compte la
+// capacité de chaque créneau de groupe indépendamment puis les additionne :
+// avec plusieurs salles simultanées, la capacité calculée de l'épreuve
+// ressort gonflée et son déficit artificiellement bas. Le critère de TYPE
+// (ajouté en tier 0) sert de filet de secours qui ne dépend pas de ce calcul.
+describe("compareByTension — priorité de type (groupe avant individuel)", () => {
+  it("un créneau de groupe passe avant un individuel, même déficit affiché", () => {
+    const groupe = { id: "bg", date: "2026-09-15", start_time: "18:10", eligible: 9, quota: 4, isGroupEpreuve: true };
+    const individuel = { id: "ei", date: "2026-09-15", start_time: "18:00", eligible: 9, quota: 2, isGroupEpreuve: false };
+    expect(compareByTension(groupe, individuel)).toBeLessThan(0);
+    expect(compareByTension(individuel, groupe)).toBeGreaterThan(0);
+  });
+
+  it("passe MÊME QUAND le déficit calculé favoriserait l'individuel — c'est précisément le bug réel", () => {
+    // Capacité de l'épreuve de groupe sur-comptée (plusieurs salles
+    // simultanées comptées comme indépendantes) → déficit calculé à 0,
+    // alors qu'en réalité une seule salle peut être staffée avec 9 personnes
+    // partagées entre 3 salles de 4. L'individuel, lui, affiche un vrai
+    // déficit. Sans le tier de type, l'individuel gagnerait à tort.
+    const groupeSurCompte = {
+      id: "bg", date: "2026-09-15", start_time: "18:10", eligible: 9, quota: 4,
+      isGroupEpreuve: true, epreuveDeficit: 0, epreuveCoverage: 3,
+    };
+    const individuelTendu = {
+      id: "ei", date: "2026-09-15", start_time: "18:00", eligible: 9, quota: 2,
+      isGroupEpreuve: false, epreuveDeficit: 12, epreuveCoverage: 0.4,
+    };
+    expect(compareByTension(groupeSurCompte, individuelTendu)).toBeLessThan(0);
+  });
+
+  it("entre deux créneaux de MÊME type, le déficit tranche normalement (tier de type neutre)", () => {
+    const groupeTendu = { id: "a", date: "2026-06-22", start_time: "09:00", eligible: 4, quota: 4, isGroupEpreuve: true, epreuveDeficit: 20, epreuveCoverage: 0.3 };
+    const groupeConfortable = { id: "b", date: "2026-06-22", start_time: "09:00", eligible: 4, quota: 4, isGroupEpreuve: true, epreuveDeficit: 0, epreuveCoverage: 2 };
+    expect(compareByTension(groupeTendu, groupeConfortable)).toBeLessThan(0);
+  });
+
+  it("isGroupEpreuve absent des deux côtés (anciennes données) : comportement inchangé", () => {
+    const a = { id: "a", date: "2026-06-22", start_time: "09:00", eligible: 4, quota: 2 };
+    const b = { id: "b", date: "2026-06-22", start_time: "09:00", eligible: 9, quota: 2 };
+    expect(compareByTension(a, b)).toBeLessThan(0); // retombe sur slotTension, comme avant
+  });
+});
+
+describe("slotFillTarget (effectif cible du jury)", () => {
+  it("épreuve individuelle : cible toujours le minimum, quel que soit group_size", () => {
+    expect(slotFillTarget(2, false, 6)).toBe(2);
+    expect(slotFillTarget(2, false, null)).toBe(2);
+  });
+
+  it("épreuve de groupe : cible le plafond group_size", () => {
+    expect(slotFillTarget(4, true, 6)).toBe(6);
+  });
+
+  it("cas réel : 9 dispo, minimum 4, group_size 6 → cible 6 (la boucle s'arrêtera à 6, pas 9)", () => {
+    expect(slotFillTarget(4, true, 6)).toBe(6);
+  });
+
+  it("group_size absent ou inférieur au minimum : replié sur le minimum, jamais en dessous", () => {
+    expect(slotFillTarget(4, true, null)).toBe(4);
+    expect(slotFillTarget(4, true, undefined)).toBe(4);
+    expect(slotFillTarget(4, true, 2)).toBe(4); // group_size incohérent (< minimum) : le minimum prime
+  });
+
+  it("group_size au-dessus du minimum : la cible suit group_size", () => {
+    expect(slotFillTarget(4, true, 5)).toBe(5);
+  });
+});
+
 // ─── Continuité de salle ──────────────────────────────────────────────
 // Cf. docs/superpowers/specs/2026-09-08-dispatch-continuite-salle-design.md
 // Un examinateur reste dans la même salle avec le même binôme jusqu'à
