@@ -845,30 +845,44 @@ export async function runDispatch(opts?: {
         .eq("statut", "en_attente");
     }
 
-    const backupRows = backupAssignments.map((ba, idx) => {
-      // Find the epreuve_id for this slot
-      const slot = sortedSlots.find((s: any) => s.id === ba.slot_id);
-      return {
-        epreuve_id: (slot as any)?.epreuve_id || null,
-        member_id: ba.member_id,
-        slot_id: ba.slot_id,
-        rang_priorite: idx + 1,
-        score_priorite: 0,
-        statut: "en_attente",
-      };
-    });
+    const slotById = new Map(sortedSlots.map((s: any) => [s.id, s]));
+    const backupRows = backupAssignments
+      .map((ba, idx) => {
+        const slot = slotById.get(ba.slot_id);
+        return {
+          epreuve_id: (slot as any)?.epreuve_id || null,
+          member_id: ba.member_id,
+          slot_id: ba.slot_id,
+          rang_priorite: idx + 1,
+          score_priorite: 0,
+          statut: "en_attente",
+        };
+      })
+      .filter((row) => row.epreuve_id);
 
-    // Insert one by one to handle potential conflicts gracefully
-    for (const row of backupRows) {
-      try {
-        if (row.epreuve_id) {
-          await supabaseAdmin
-            .from("evaluator_allocations")
-            .upsert(row, { onConflict: "slot_id,member_id" });
-        }
-      } catch (e: any) {
-        if (e?.code !== "23505") {
-          console.error("Backup allocation insert error:", e);
+    // Un seul aller-retour réseau pour tous les remplaçants (au lieu d'un par
+    // ligne) : avec ~1100 créneaux ouverts en prod, l'ancienne boucle
+    // séquentielle multipliait les latences réseau et rendait chaque
+    // enregistrement de dispo perceptiblement bloqué côté examinateur.
+    if (backupRows.length > 0) {
+      const { error } = await supabaseAdmin
+        .from("evaluator_allocations")
+        .upsert(backupRows, { onConflict: "slot_id,member_id" });
+      if (error && error.code !== "23505") {
+        console.error(
+          "Backup allocation bulk upsert error, repli ligne par ligne:",
+          error,
+        );
+        for (const row of backupRows) {
+          try {
+            await supabaseAdmin
+              .from("evaluator_allocations")
+              .upsert(row, { onConflict: "slot_id,member_id" });
+          } catch (e: any) {
+            if (e?.code !== "23505") {
+              console.error("Backup allocation insert error:", e);
+            }
+          }
         }
       }
     }
