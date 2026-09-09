@@ -625,32 +625,10 @@ export default function TimeBandGrid({
                   />
                 ))}
 
-                {/* Affectations, en lecture seule, derrière les bandes */}
-                {overlays
-                  .filter((o) => o.dayIndex === dayIndex && o.laneId === lane.id)
-                  .map((o) => (
-                    <div
-                      key={o.id}
-                      className="pointer-events-none absolute left-3 right-[3px] z-20 overflow-hidden rounded-[4px] border border-gray-200/80 border-l-[3px] bg-white px-1.5 py-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                      style={{
-                        top: topOf(o.startMin),
-                        height: heightOf(o.startMin, o.endMin),
-                        borderLeftColor: o.color ?? "#64748b",
-                      }}
-                      title={`${minutesToHHMM(o.startMin)}–${minutesToHHMM(o.endMin)} · ${o.label}${o.sublabel ? ` · ${o.sublabel}` : ""}`}
-                    >
-                      <div className="truncate text-[10px] font-semibold leading-tight text-gray-800">
-                        {o.label}
-                      </div>
-                      {o.sublabel && o.endMin - o.startMin >= 30 && (
-                        <div className="truncate text-[10px] leading-tight text-gray-500">
-                          {o.sublabel}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                {/* Bandes de disponibilité */}
+                {/* Bandes de disponibilité — déclarées mais pas (encore)
+                    affectées : rendu volontairement pâle/pointillé, pour
+                    contraster nettement avec les affectations confirmées
+                    ci-dessous. */}
                 {bands
                   .filter((b) => b.dayIndex === dayIndex && b.laneId === lane.id)
                   .map((b) => {
@@ -660,12 +638,11 @@ export default function TimeBandGrid({
                         key={b.id}
                         className={cn(
                           "absolute inset-x-[3px] overflow-hidden rounded-[5px]",
-                          "bg-gradient-to-b from-blue-500 to-blue-600",
-                          "shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]",
-                          "transition-[box-shadow,filter] duration-150",
+                          "border-2 border-dashed border-blue-300 bg-blue-50/80",
+                          "transition-[box-shadow,filter,background-color] duration-150",
                           isSel
-                            ? "z-10 shadow-[0_0_0_2px_#1d4ed8,0_6px_16px_-4px_rgba(29,78,216,0.5)]"
-                            : "hover:brightness-105 hover:shadow-[0_2px_8px_-2px_rgba(29,78,216,0.45)]",
+                            ? "z-10 border-blue-500 bg-blue-100 shadow-[0_0_0_2px_#1d4ed8,0_6px_16px_-4px_rgba(29,78,216,0.35)]"
+                            : "hover:bg-blue-100/80 hover:border-blue-400",
                           editable ? "cursor-pointer" : "cursor-default",
                         )}
                         style={{
@@ -683,11 +660,11 @@ export default function TimeBandGrid({
                           setSelectedId(b.id);
                         }}
                       >
-                        <div className="px-1.5 pt-1 text-[10px] font-semibold leading-none tabular-nums text-white">
+                        <div className="px-1.5 pt-1 text-[10px] font-semibold leading-none tabular-nums text-blue-700">
                           {minutesToHHMM(b.startMin)}
                         </div>
                         {b.endMin - b.startMin >= 50 && (
-                          <div className="absolute inset-x-0 bottom-0 px-1.5 pb-1 text-[10px] leading-none tabular-nums text-white/75">
+                          <div className="absolute inset-x-0 bottom-0 px-1.5 pb-1 text-[10px] leading-none tabular-nums text-blue-700/70">
                             {minutesToHHMM(b.endMin)}
                           </div>
                         )}
