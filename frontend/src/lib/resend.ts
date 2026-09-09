@@ -169,7 +169,7 @@ export async function sendPoleNotificationEmail(
   candidatsCount: number,
   creneauxParMembre: number,
 ) {
-  const planningUrl = `${APP_URL}/dashboard/planning`;
+  const planningUrl = `${APP_URL}/dashboard/availability`;
 
   const html = `
 <!DOCTYPE html>
