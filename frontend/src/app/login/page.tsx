@@ -49,7 +49,6 @@ function LoginForm() {
         etablissement: '',
         anneeIntegration: '',
     });
-    const [cvFile, setCvFile] = useState<File | null>(null);
     const [pendingEmail, setPendingEmail] = useState('');
     const [resendLoading, setResendLoading] = useState(false);
     const [resendDone, setResendDone] = useState(false);
