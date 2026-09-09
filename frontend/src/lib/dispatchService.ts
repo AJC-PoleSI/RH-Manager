@@ -6,6 +6,7 @@ import {
   availabilityMatchesSlot,
   compareByTension,
   epreuveShortfall,
+  slotFillTarget,
   roomStreak,
   orderPredecessorsFirst,
   ROOM_STREAK_MAX,
