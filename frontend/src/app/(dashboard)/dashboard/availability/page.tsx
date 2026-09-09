@@ -83,6 +83,7 @@ function colorFor(id: string): string {
 
 export default function AvailabilityPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -91,6 +92,8 @@ export default function AvailabilityPage() {
 
   const [bands, setBands] = useState<Band[]>([]);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [slotDetails, setSlotDetails] = useState<Map<string, SlotDetail>>(new Map());
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   /** Nombre de lignes en base avant fusion, pour expliquer le regroupement. */
   const [rowCount, setRowCount] = useState(0);
