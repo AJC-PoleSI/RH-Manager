@@ -24,7 +24,6 @@ function LoginForm() {
         setView(searchParams.get('role') === 'candidate' ? 'candidate-login' : 'login');
     }, [searchParams]);
     const [loading, setLoading] = useState(false);
-    const cvInputRef = useRef<HTMLInputElement>(null);
 
     // Member login form
     const [memberEmail, setMemberEmail] = useState('');
