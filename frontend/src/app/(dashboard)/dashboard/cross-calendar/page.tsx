@@ -202,7 +202,6 @@ export default function CrossCalendarPage() {
         epreuveId: selectedEpreuve,
         startDate: startStr,
         endDate: endStr,
-        membersPerSlot,
         maxCandidates,
       });
       setGeneratedResult(res.data);
