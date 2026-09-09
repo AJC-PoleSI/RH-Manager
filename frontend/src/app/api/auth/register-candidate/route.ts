@@ -145,13 +145,13 @@ export async function POST(req: NextRequest) {
     const { data: candidate, error } = await supabaseAdmin
       .from("candidates")
       .insert({
-        first_name: firstName,
-        last_name: lastName,
+        first_name: firstNameTrimmed,
+        last_name: lastNameTrimmed,
         email: emailLower, // SECURITY (audit SEC-008): stocker en minuscules
-        phone: phone || null,
+        phone: phone ? String(phone).trim() || null : null,
         date_of_birth: dateOfBirth,
-        formation: formation || null,
-        etablissement: etablissement || null,
+        formation: formation ? String(formation).trim() || null : null,
+        etablissement: etablissement ? String(etablissement).trim() || null : null,
         annee_integration: anneeIntegration || null,
         email_verified: false,
         verification_token: verificationToken,
