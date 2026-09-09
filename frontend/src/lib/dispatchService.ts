@@ -716,7 +716,16 @@ export async function runDispatch(opts?: {
     // selon (charge + pénalité de binôme vis-à-vis des déjà-choisis). C'est
     // ce qui fait réellement varier les duos — l'ancien tri unique (calculé
     // avant le premier pick) laissait la pénalité de binôme inopérante.
-    const quota = slot.min_members || 2;
+    //
+    // Pour une épreuve de groupe, la cible n'est pas figée au minimum : elle
+    // monte avec le vivier réellement libre à cet instant, jusqu'au plafond
+    // group_size (cf. slotFillTarget). La boucle s'arrête d'elle-même quand
+    // le vivier est épuisé — inutile de plafonner ici par avance.
+    const quota = slotFillTarget(
+      slot.min_members || 2,
+      slot.epreuve?.is_group_epreuve,
+      slot.epreuve?.group_size,
+    );
     const picked: string[] = [];
     const pool = matchSlotToMembers(slotInfo).filter(
       (id) => !wouldConflict(id, slotInfo, memberCommittedSlots),
