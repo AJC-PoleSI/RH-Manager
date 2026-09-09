@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Epreuve not found" }, { status: 404 });
     }
 
-    const requiredMembers = membersPerSlot || 2;
+    const requiredMembers = epreuve.min_evaluators_per_salle ?? 2;
     const candidateCapacity =
       maxCandidates || (epreuve.is_group_epreuve ? epreuve.group_size : 1);
 
