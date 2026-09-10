@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       .select(
         `
         *,
-        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size, is_pole_test, pole),
+        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size, min_candidates, is_pole_test, pole),
         enrollments:slot_enrollments(candidate_id, status),
         members:slot_member_assignments(id)
       `,
