@@ -143,19 +143,13 @@ export async function POST(req: NextRequest) {
     // Note: min_members check removed — status published/ready is the source of truth
 
     // ══════════════════════════════════════════════════════════════════
-    // CAPACITÉ EFFECTIVE : pour une épreuve de groupe, la vraie limite est
-    // group_size. Certains anciens créneaux ont max_candidates=1 (créés
-    // avant la persistance de group_size) → ils passaient "full" dès le
-    // 1er inscrit. On dérive la capacité de l'épreuve et on auto-répare.
+    // CAPACITÉ EFFECTIVE : pour un entretien individuel, `max_candidates`.
+    // Pour une épreuve de groupe, plafonnée par le nombre d'examinateurs
+    // réellement affectés à la salle (voir enrollment.ts) — PAS persistée
+    // dans `max_candidates` : elle varie avec le staffing, donc l'écrire en
+    // base la rendrait immédiatement obsolète au prochain changement de jury.
     // ══════════════════════════════════════════════════════════════════
     const effectiveMax = effectiveMaxCandidates(slot);
-    if (effectiveMax !== slot.max_candidates) {
-      // Self-heal : aligne le créneau sur la capacité de l'épreuve.
-      await supabaseAdmin
-        .from("evaluation_slots")
-        .update({ max_candidates: effectiveMax })
-        .eq("id", slotId);
-    }
 
     // FIX C2: only count ACTIVE enrollments for capacity (cancelled rows,
     // if any soft-cancel path ever exists, must not block new candidates).
