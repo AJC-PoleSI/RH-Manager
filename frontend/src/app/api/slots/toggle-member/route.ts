@@ -54,11 +54,11 @@ export async function POST(req: NextRequest) {
       //   • removing this member would drop us below min_members
       //   • there is no waitlist replacement available
       // Admins bypass this safety to be able to force-remove.
-      if (!payload.isAdmin) {
+      {
         const { data: slotPreCheck } = await supabaseAdmin
           .from("evaluation_slots")
           .select(
-            "id, date, start_time, end_time, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id)",
+            "id, date, start_time, end_time, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id), epreuve:epreuves(is_group_epreuve, group_size)",
           )
           .eq("id", slotId)
           .single();
@@ -70,6 +70,36 @@ export async function POST(req: NextRequest) {
           const memberCountAfter =
             (slotPreCheck.members || []).length - 1;
           const minMembers = slotPreCheck.min_members || 0;
+
+          // ──────────────────────────────────────────────────────────
+          // SUR-EFFECTIF CANDIDATS (épreuves de groupe, TOUS rôles y
+          // compris admin) : la capacité candidats est plafonnée par le
+          // nombre d'examinateurs (enrollment.ts::effectiveMaxCandidates).
+          // Retirer cet examinateur ne doit jamais laisser plus de
+          // candidats inscrits que la nouvelle capacité — sinon la salle
+          // se retrouve avec, par ex., 6 candidats pour 3 examinateurs.
+          // ──────────────────────────────────────────────────────────
+          const epreuveForSlot = (slotPreCheck as any).epreuve;
+          if (epreuveForSlot?.is_group_epreuve) {
+            const groupSize = Math.max(
+              1,
+              Number(epreuveForSlot.group_size) || 1,
+            );
+            const newEffectiveMax = Math.max(
+              0,
+              Math.min(groupSize, memberCountAfter),
+            );
+            if (activeEnrolls.length > newEffectiveMax) {
+              return Response.json(
+                {
+                  error: `Impossible de retirer cet examinateur : ${activeEnrolls.length} candidat(s) sont déjà inscrits sur ce créneau, retirer ce membre ferait tomber la capacité à ${newEffectiveMax}. Trouvez un remplaçant avant de retirer, ou déplacez d'abord des candidats.`,
+                  code: "WOULD_OVERBOOK_CANDIDATES",
+                },
+                { status: 409 },
+              );
+            }
+          }
+
           const assignedIds = new Set(
             (slotPreCheck.members || []).map((m: any) => m.member_id),
           );
