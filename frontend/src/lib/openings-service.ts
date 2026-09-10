@@ -112,11 +112,14 @@ export function isSlotStaffed(s: any): boolean {
   return ["ready", "published", "full"].includes(s.status);
 }
 
-export function isSlotOccupied(s: any): boolean {
-  const activeEnrollments = (s.enrollments || []).filter(
+export function activeEnrollmentsOf(s: any): any[] {
+  return (s.enrollments || []).filter(
     (e: any) => !e.status || e.status === "active",
   );
-  return (s.members || []).length > 0 || activeEnrollments.length > 0;
+}
+
+export function isSlotOccupied(s: any): boolean {
+  return (s.members || []).length > 0 || activeEnrollmentsOf(s).length > 0;
 }
 
 export type OpeningSlot = ExistingSlot & { raw: any };
