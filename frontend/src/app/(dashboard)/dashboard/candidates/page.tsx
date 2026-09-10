@@ -695,8 +695,8 @@ export default function CandidatesPage() {
                                                             return (
                                                                 <div key={idx} className="flex items-center justify-between text-sm">
                                                                     <span className="text-gray-600">
-                                                                        {q.q || `Critère ${idx + 1}`}
-                                                                        <span className="text-xs text-gray-400 ml-1">(coeff. {q.weight || 1})</span>
+                                                                        {getCriterionLabel(q) || `Critère ${idx + 1}`}
+                                                                        <span className="text-xs text-gray-400 ml-1">(/ {getMaxPoints(q)})</span>
                                                                     </span>
                                                                     {isEditing ? (
                                                                         <Input
