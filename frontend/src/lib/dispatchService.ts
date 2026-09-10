@@ -456,6 +456,16 @@ export async function runDispatch(opts?: {
     }
   }
 
+  // 8bis. Affectations sur des créneaux HORS du lot traité par ce run (autre
+  // épreuve, cf. `externalAssigns` étape 3) : ce run ne les recalcule jamais,
+  // donc elles comptent TOUJOURS comme engagement fixe — peu importe qu'elles
+  // soient gelées ou non. Sans ça, un dispatch scoped-épreuve peut réaffecter
+  // un examinateur déjà engagé au même horaire sur une épreuve qu'il ne
+  // traite pas (cf. commentaire étape 3).
+  externalAssigns.forEach((a: any) => {
+    if (a.member_id && a.slot) registerConflict(a.member_id, a.slot as SlotInfo);
+  });
+
   // 9. Allocation : état d'équité PAR ÉPREUVE, ordre de passage GLOBAL.
   //
   // Équité (charge) et brassage (binômes) restent calculés au sein d'une même
