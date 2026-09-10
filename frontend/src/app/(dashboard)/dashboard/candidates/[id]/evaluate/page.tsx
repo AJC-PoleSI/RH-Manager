@@ -354,6 +354,23 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       toast("Corrigez les notes avant de soumettre", "error");
       return;
     }
+    // Critères laissés vides : comptés comme 0 plutôt que de bloquer
+    // l'enregistrement (25 critères sur certaines épreuves, un oubli ne
+    // doit pas empêcher de sauvegarder). On prévient une seule fois.
+    const finalScores: Record<number, string> = { ...indivScores };
+    let missingCount = 0;
+    questions.forEach((_, idx) => {
+      if (finalScores[idx] === undefined || finalScores[idx] === "") {
+        finalScores[idx] = "0";
+        missingCount += 1;
+      }
+    });
+    if (missingCount > 0) {
+      toast(
+        `${missingCount} critère${missingCount > 1 ? "s" : ""} non noté${missingCount > 1 ? "s" : ""}, compté${missingCount > 1 ? "s" : ""} comme 0.`,
+        "info",
+      );
+    }
     try {
       // For group épreuves, ensure group eval exists/saved before submitting individual
       if (isGroupEpreuve && !groupEvalId) {
@@ -362,7 +379,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       await api.post("/evaluations", {
         candidateId: id,
         epreuveId: selectedEpreuveId,
-        scores: indivScores,
+        scores: finalScores,
         comment: indivComment,
         isGroup: false,
       });
