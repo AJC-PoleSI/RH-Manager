@@ -1134,9 +1134,7 @@ export default function CreationPage() {
                       />
                       <p className="mt-1 text-xs text-gray-400">
                         En dessous de ce minimum, le créneau est fusionné avec
-                        un autre à la clôture des inscriptions. Fixe aussi le
-                        nombre d&apos;examinateurs affectés (les deux sont
-                        toujours égaux pour une épreuve de groupe).
+                        un autre à la clôture des inscriptions.
                       </p>
                     </div>
                   </>
