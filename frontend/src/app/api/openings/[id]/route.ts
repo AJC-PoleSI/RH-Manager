@@ -101,6 +101,35 @@ export async function PUT(
 
     const diff = diffOpeningSlots(next.date, target, existing);
 
+    // 0. Créneaux occupés qui sortiraient de la nouvelle plage : refusés par
+    // défaut (comme DELETE), sinon annulés + inscrits notifiés si `force`.
+    // Sans cette garde, ils restaient liés à CETTE ouverture mais hors de
+    // son horaire affiché — la salle avait l'air fermée sur le planning
+    // alors qu'un entretien y restait programmé.
+    if (diff.conflictIds.length > 0) {
+      const conflictSet = new Set(diff.conflictIds);
+      const conflictSlots = existing.filter((s) => conflictSet.has(s.id));
+
+      if (!force) {
+        return Response.json(
+          {
+            error:
+              "Des créneaux de cette ouverture ont des inscrits en dehors de la nouvelle plage",
+            occupied: conflictSlots.map((s) => ({
+              id: s.id,
+              date: s.date,
+              start_time: s.start_time,
+              end_time: s.end_time,
+            })),
+          },
+          { status: 409 },
+        );
+      }
+
+      await notifySlotDeletion(conflictSlots.map((s) => s.raw));
+      await deleteSlotsByIds(diff.conflictIds);
+    }
+
     // 1. Supprimer les créneaux libres hors cible (aucune inscription → pas de notification)
     await deleteSlotsByIds(diff.toDeleteIds);
 
