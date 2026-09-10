@@ -52,6 +52,7 @@ function LoginForm() {
     const [pendingEmail, setPendingEmail] = useState('');
     const [resendLoading, setResendLoading] = useState(false);
     const [resendDone, setResendDone] = useState(false);
+    const [resendError, setResendError] = useState('');
 
     const resetForms = () => {
         setMemberEmail('');
