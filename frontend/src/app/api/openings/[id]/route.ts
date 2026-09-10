@@ -161,23 +161,12 @@ export async function PUT(
       .single();
     if (updErr) throw updErr;
 
-    const conflictSet = new Set(diff.conflictIds);
-    const conflicts = existing
-      .filter((s) => conflictSet.has(s.id))
-      .map((s) => ({
-        id: s.id,
-        date: s.date,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        room: (s.raw && s.raw.room) || next.room,
-      }));
-
     return Response.json({
       opening,
       created: diff.toCreate.length,
       deleted: diff.toDeleteIds.length,
       kept: diff.keptIds.length,
-      conflicts,
+      cancelled: diff.conflictIds.length,
     });
   } catch (error) {
     console.error("Update opening error:", error);
