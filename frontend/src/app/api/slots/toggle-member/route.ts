@@ -200,12 +200,27 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Status downgrade si toujours en dessous du min après promotion
+        // Status downgrade si toujours en dessous du min après promotion.
+        // BUG FIX #1 : ne couvrait que "ready" (visible staff seulement) — un
+        // créneau déjà "published"/"full" (visible candidats) qui perdait un
+        // examinateur sans remplaçant restait affiché comme si de rien
+        // n'était, avec moins que le minimum d'examinateurs requis. On
+        // repasse aussi ces statuts à "open" pour le retirer de la liste
+        // des créneaux proposés aux NOUVEAUX candidats (ceux déjà inscrits
+        // continuent de le voir via la règle "isEnrolled toujours visible"
+        // dans /api/slots/available).
+        // BUG FIX #2 (trouvé en testant le fix #1) : `slot` est refetché
+        // APRÈS le DELETE (ligne ~155) — `slot.members.length` est donc
+        // DÉJÀ le compte post-retrait, pas besoin d'un `-1` supplémentaire.
+        // Cet off-by-one préexistait (masqué : sur "ready" seul, une salle à
+        // min+1 qui retombait à min repassait à tort "open" — impact limité
+        // côté staff). Une fois étendu à "published"/"full" il aurait fait
+        // disparaître aux candidats des salles pourtant encore au complet.
         const newCount =
-          (slot.members?.length || 0) - 1 + (promotedMemberId ? 1 : 0);
+          (slot.members?.length || 0) + (promotedMemberId ? 1 : 0);
 
         if (
-          slot.status === "ready" &&
+          ["ready", "published", "full"].includes(slot.status) &&
           newCount < (slot.min_members || 0)
         ) {
           await supabaseAdmin
