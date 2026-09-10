@@ -479,3 +479,62 @@ CREATE TABLE IF NOT EXISTS allocation_history (
   triggered_by TEXT DEFAULT 'allocation_initiale',
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ═══════════════════════════════════════════════════════════════
+-- URGENT — garde-fou anti double-booking examinateur (10/09/2026)
+-- Constat en prod : des examinateurs inscrits sur DEUX créneaux qui se
+-- chevauchent, MÊME ÉPREUVE (ex. salles 205 et 217 le lundi 14/09 à la même
+-- heure). Cause probable : race condition check-then-insert entre deux
+-- requêtes concurrentes (double-clic, deux dispatch en parallèle...) — voir
+-- supabase-migration-examiner-overlap-guard.sql pour le détail. Ce trigger
+-- ferme la fenêtre de race au niveau base et rejette tout INSERT qui
+-- créerait un chevauchement, quel que soit le code appelant.
+-- ═══════════════════════════════════════════════════════════════
+create or replace function check_member_slot_overlap()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_date date;
+  v_start time;
+  v_end time;
+  v_conflict_count int;
+begin
+  perform pg_advisory_xact_lock(hashtext(new.member_id::text));
+
+  select date, start_time, end_time
+    into v_date, v_start, v_end
+    from evaluation_slots
+    where id = new.slot_id;
+
+  if v_date is null then
+    return new;
+  end if;
+
+  select count(*)
+    into v_conflict_count
+    from slot_member_assignments sma
+    join evaluation_slots es on es.id = sma.slot_id
+    where sma.member_id = new.member_id
+      and sma.slot_id <> new.slot_id
+      and es.date = v_date
+      and es.start_time < v_end
+      and v_start < es.end_time;
+
+  if v_conflict_count > 0 then
+    raise exception
+      'Conflit horaire : ce membre a déjà un créneau qui chevauche % %-%',
+      v_date, v_start, v_end
+      using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_check_member_slot_overlap on slot_member_assignments;
+
+create trigger trg_check_member_slot_overlap
+  before insert on slot_member_assignments
+  for each row
+  execute function check_member_slot_overlap();
