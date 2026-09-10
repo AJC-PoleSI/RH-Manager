@@ -476,8 +476,8 @@ export default function RoomOpeningsGrid({
           {slotsThisWeek > 1 ? "x" : ""} générés cette semaine
         </span>
         <span className="text-gray-400">
-          {slotsTotal} au total sur l&apos;épreuve
-          {occupiedTotal > 0 && ` · ${occupiedTotal} déjà occupé${occupiedTotal > 1 ? "s" : ""}`}
+          {slotsTotal} au total sur l&apos;épreuve · {readyTotal} avec assez
+          d&apos;examinateur{readyTotal > 1 ? "s" : ""}
         </span>
         {dirty && (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
