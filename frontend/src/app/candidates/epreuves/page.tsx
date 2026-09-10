@@ -591,6 +591,17 @@ export default function CandidateEpreuvesPage() {
         </div>
       )}
 
+      {/* Bandeau : créneaux de groupe sous leur minimum de candidats */}
+      {slotsNeedingCandidates.length > 0 && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+          <Users size={18} className="flex-shrink-0 mt-0.5 text-amber-500" />
+          <span className="flex-1">
+            Certains créneaux de groupe n&apos;ont pas encore atteint leur nombre minimum de candidats.
+            Merci de privilégier ces créneaux déjà entamés plutôt que d&apos;en choisir un nouveau, afin de les remplir en priorité.
+          </span>
+        </div>
+      )}
+
       {/* Tour progress bar */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <div className="flex items-center gap-0">
