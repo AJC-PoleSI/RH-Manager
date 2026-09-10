@@ -100,42 +100,46 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          const assignedIds = new Set(
-            (slotPreCheck.members || []).map((m: any) => m.member_id),
-          );
-          // BUG FIX (trouvé en test local) : ce filtre n'excluait que les
-          // membres déjà affectés, pas ceux en conflit horaire — alors que
-          // la promotion réelle plus bas (memberHasConflict) les exclut.
-          // Résultat : la garde laissait passer une désinscription en
-          // pensant qu'un remplaçant existait, puis personne n'était
-          // promu → créneau sous l'effectif minimum avec un candidat
-          // inscrit et aucun garde-fou déclenché.
-          const waitlistCandidates = (slotPreCheck.waitlist || []).filter(
-            (w: any) => w.member_id && !assignedIds.has(w.member_id),
-          );
-          const eligibleWaitlist = [];
-          for (const w of waitlistCandidates) {
-            const hasConflict = await memberHasConflict(
-              w.member_id,
-              slotPreCheck as any,
-              slotId,
+          // Admins bypass CETTE garde (pas celle du sur-effectif ci-dessus)
+          // pour pouvoir force-retirer même sans remplaçant en file.
+          if (!payload.isAdmin) {
+            const assignedIds = new Set(
+              (slotPreCheck.members || []).map((m: any) => m.member_id),
             );
-            if (!hasConflict) eligibleWaitlist.push(w);
-          }
+            // BUG FIX (trouvé en test local) : ce filtre n'excluait que les
+            // membres déjà affectés, pas ceux en conflit horaire — alors que
+            // la promotion réelle plus bas (memberHasConflict) les exclut.
+            // Résultat : la garde laissait passer une désinscription en
+            // pensant qu'un remplaçant existait, puis personne n'était
+            // promu → créneau sous l'effectif minimum avec un candidat
+            // inscrit et aucun garde-fou déclenché.
+            const waitlistCandidates = (slotPreCheck.waitlist || []).filter(
+              (w: any) => w.member_id && !assignedIds.has(w.member_id),
+            );
+            const eligibleWaitlist = [];
+            for (const w of waitlistCandidates) {
+              const hasConflict = await memberHasConflict(
+                w.member_id,
+                slotPreCheck as any,
+                slotId,
+              );
+              if (!hasConflict) eligibleWaitlist.push(w);
+            }
 
-          if (
-            activeEnrolls.length > 0 &&
-            memberCountAfter < minMembers &&
-            eligibleWaitlist.length === 0
-          ) {
-            return Response.json(
-              {
-                error:
-                  "Désinscription impossible : un candidat est déjà inscrit sur ce créneau et aucun examinateur n'est en file d'attente pour vous remplacer. Contactez l'administrateur.",
-                code: "CANDIDATE_ENROLLED_NO_REPLACEMENT",
-              },
-              { status: 409 },
-            );
+            if (
+              activeEnrolls.length > 0 &&
+              memberCountAfter < minMembers &&
+              eligibleWaitlist.length === 0
+            ) {
+              return Response.json(
+                {
+                  error:
+                    "Désinscription impossible : un candidat est déjà inscrit sur ce créneau et aucun examinateur n'est en file d'attente pour vous remplacer. Contactez l'administrateur.",
+                  code: "CANDIDATE_ENROLLED_NO_REPLACEMENT",
+                },
+                { status: 409 },
+              );
+            }
           }
         }
       }
