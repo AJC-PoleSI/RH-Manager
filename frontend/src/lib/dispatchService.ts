@@ -455,12 +455,7 @@ export async function runDispatch(opts?: {
   // touche PAS à la charge ici — la charge est recalculée par épreuve.)
   const registerConflict = (memberId: string, slot: SlotInfo) => {
     if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
-    memberCommittedSlots[memberId].push({
-      date: String(slot.date || "").substring(0, 10),
-      start: String(slot.start_time || "").substring(0, 5),
-      end: String(slot.end_time || "").substring(0, 5),
-      epreuve: epreuveKeyOf(slot),
-    });
+    memberCommittedSlots[memberId].push(commitmentOf(slot));
   };
   for (const slot of sortedSlots) {
     if (isFrozen(slot as SlotInfo) || isLocked(slot as SlotInfo)) {
