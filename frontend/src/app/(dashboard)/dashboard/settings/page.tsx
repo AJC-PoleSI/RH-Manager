@@ -1210,28 +1210,29 @@ export default function CreationPage() {
                     </div>
                   );
                 })()}
-                {form.type !== "groupe" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre d&apos;examinateurs par créneau
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={form.minEvaluators}
-                      onChange={(e) =>
-                        handleFormChange("minEvaluators", e.target.value)
-                      }
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="2"
-                    />
-                    <p className="mt-1 text-xs text-gray-400">
-                      Nombre d&apos;examinateurs que le dispatch affecte à
-                      chaque créneau de cette épreuve. S&apos;applique aux
-                      nouveaux créneaux créés.
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre d&apos;examinateurs minimum par créneau
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.minEvaluators}
+                    onChange={(e) =>
+                      handleFormChange("minEvaluators", e.target.value)
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="2"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Nombre d&apos;examinateurs minimum pour qu&apos;un
+                    créneau soit considéré comme staffé et puisse ouvrir.
+                    Le dispatch n&apos;affecte jamais moins ; pour une
+                    épreuve de groupe il peut monter jusqu&apos;au nombre
+                    max de candidats par créneau si assez d&apos;examinateurs
+                    sont disponibles.
+                  </p>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Pôle (Optionnel)
