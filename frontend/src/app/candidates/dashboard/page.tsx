@@ -377,15 +377,15 @@ export default function CandidateCalendarPage() {
       )}
 
       {/* Controls row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 gap-x-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={viewMode === "month" ? prevMonth : prevWeek}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors shrink-0"
           >
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm sm:text-lg font-semibold text-gray-900 min-w-[120px] sm:min-w-[180px] text-center">
+          <span className="text-xs sm:text-lg font-semibold text-gray-900 min-w-[90px] sm:min-w-[180px] text-center">
             {viewMode === "month"
               ? `${MONTHS[month]} ${year}`
               : `${weekDates[0].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} - ${weekDates[6].toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
@@ -393,19 +393,19 @@ export default function CandidateCalendarPage() {
           </span>
           <button
             onClick={viewMode === "month" ? nextMonth : nextWeek}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors shrink-0"
           >
             <ChevronRight size={16} />
           </button>
           <button
             onClick={goToday}
-            className="ml-2 px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors"
+            className="ml-1 sm:ml-2 px-2 sm:px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors shrink-0 whitespace-nowrap"
           >
             Aujourd&apos;hui
           </button>
         </div>
 
-        <div className="flex bg-gray-100 rounded-full p-0.5">
+        <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0">
           {(["month", "week"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
