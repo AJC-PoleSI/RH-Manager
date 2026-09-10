@@ -340,6 +340,14 @@ export default function RoomOpeningsGrid({
         );
       }
 
+      // Rétrécir/déplacer une bande peut laisser des créneaux déjà occupés
+      // (examinateurs affectés, voire candidats inscrits) hors de la nouvelle
+      // plage : l'API les refuse par défaut (409) plutôt que de les laisser
+      // orphelins d'une ouverture visible — c'est précisément ce qui faisait
+      // apparaître une salle comme « non ouverte » alors qu'un entretien y
+      // restait programmé. Même traitement groupé que les suppressions
+      // occupées ci-dessus : une confirmation, puis un retry en `force`.
+      const updateOccupiedBlocked: { u: (typeof diff.toUpdate)[number]; occupiedCount: number }[] = [];
       await Promise.all(
         diff.toUpdate.map(async (u) => {
           try {
@@ -350,12 +358,50 @@ export default function RoomOpeningsGrid({
               endTime: u.endTime,
             });
           } catch (e: any) {
-            problems.push(
-              `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification"}`,
-            );
+            const occupied = e?.response?.data?.occupied;
+            if (occupied?.length) {
+              updateOccupiedBlocked.push({ u, occupiedCount: occupied.length });
+            } else {
+              problems.push(
+                `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification"}`,
+              );
+            }
           }
         }),
       );
+
+      if (updateOccupiedBlocked.length > 0) {
+        const totalOccupied = updateOccupiedBlocked.reduce(
+          (s, o) => s + o.occupiedCount,
+          0,
+        );
+        const confirmForce = window.confirm(
+          `${updateOccupiedBlocked.length} salle(s) réduite(s)/déplacée(s) laisseraient ${totalOccupied} créneau(x) déjà occupé(s) hors de la nouvelle plage. ` +
+            `Annuler ces créneaux quand même ? Les candidats concernés seront prévenus.`,
+        );
+        await Promise.all(
+          updateOccupiedBlocked.map(async ({ u, occupiedCount }) => {
+            if (!confirmForce) {
+              problems.push(
+                `${u.room} le ${u.date} : réduction refusée, ${occupiedCount} créneau(x) occupé(s) hors de la nouvelle plage.`,
+              );
+              return;
+            }
+            try {
+              await api.put(`/openings/${u.id}?force=true`, {
+                room: u.room,
+                date: u.date,
+                startTime: u.startTime,
+                endTime: u.endTime,
+              });
+            } catch (e: any) {
+              problems.push(
+                `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification forcée"}`,
+              );
+            }
+          }),
+        );
+      }
 
       await Promise.all(
         diff.toCreate.map(async (c) => {
