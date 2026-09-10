@@ -248,6 +248,17 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
           }
         }
       }
+      // Global (sans epreuveId) : ce panneau crée des créneaux sur PLUSIEURS
+      // épreuves qui se partagent le même pool d'examinateurs — un dispatch
+      // scopé à une seule épreuve ne verrait pas les nouvelles ouvertures
+      // des autres. Cf. RoomOpeningsGrid.handleSave pour le même principe à
+      // l'échelle d'une seule épreuve.
+      try {
+        await api.post("/dispatch/run", {});
+      } catch (e: any) {
+        console.error("Dispatch after tour openings save failed:", e);
+      }
+
       setPreview(null);
       onSaved?.();
       if (problems.length) {
