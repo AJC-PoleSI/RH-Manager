@@ -107,7 +107,14 @@ export default function CandidatesPage() {
                 scores: ev.scores || {},
                 comment: ev.comment || '',
                 created_at: ev.createdAt || ev.created_at,
-                epreuves: ev.epreuves || ev.epreuve || null,
+                // BUG FIX : ev.epreuve (API) porte evaluationQuestions en
+                // camelCase — sans ce mapping, parseQuestions() ne trouvait
+                // jamais evaluation_questions et retombait sur "Critère N".
+                epreuves: ev.epreuves
+                    ? ev.epreuves
+                    : ev.epreuve
+                        ? { ...ev.epreuve, evaluation_questions: ev.epreuve.evaluationQuestions ?? ev.epreuve.evaluation_questions }
+                        : null,
                 members: ev.members || (ev.member ? { email: ev.member.email } : null),
             }));
             setEvaluations(evalsData);
