@@ -654,6 +654,7 @@ function LoginForm() {
                     onSubmit={(e) => {
                         e.preventDefault();
                         if (step < 3) {
+                            setError('');
                             setStep(step + 1);
                         } else {
                             handleCandidateRegister(e);
