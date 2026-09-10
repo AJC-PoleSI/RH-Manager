@@ -299,6 +299,20 @@ export default function CandidateEpreuvesPage() {
     [allSlots, isTourLocked],
   );
 
+  // ═══ Créneaux de groupe sous leur minimum de candidats ═══
+  // Sert à afficher un bandeau incitant les candidats à rejoindre un
+  // créneau déjà entamé plutôt que d'en ouvrir un nouveau.
+  const slotsNeedingCandidates = useMemo(
+    () =>
+      visibleSlots.filter(
+        (s) =>
+          !s.isFull &&
+          s.minCandidates != null &&
+          s.enrolledCount < s.minCandidates,
+      ),
+    [visibleSlots],
+  );
+
   // ═══ Epreuve color mapping ═══
   const epreuveColorMap = useMemo(() => {
     const map = new Map<string, (typeof EPREUVE_COLORS)[0]>();
