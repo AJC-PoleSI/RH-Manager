@@ -54,12 +54,16 @@ export async function GET(
         scoreTotal: total,
         comment: canSeeAllComments || isOwnEval ? e.comment : null,
         createdAt: e.created_at,
+        // BUG FIX : l'intitulé des critères (evaluation_questions) manquait
+        // ici — le panneau candidat retombait sur "Critère 1, Critère 2…"
+        // faute de pouvoir associer les scores à leur libellé.
         epreuve: e.epreuves
           ? {
               id: e.epreuves.id,
               name: e.epreuves.name,
               tour: e.epreuves.tour,
               type: e.epreuves.type,
+              evaluationQuestions: e.epreuves.evaluation_questions,
             }
           : null,
         member: e.members
