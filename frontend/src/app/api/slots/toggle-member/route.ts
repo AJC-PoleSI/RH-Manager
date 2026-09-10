@@ -448,6 +448,20 @@ export async function POST(req: NextRequest) {
         if (insertError.code === "23505") {
           return Response.json({ error: "Already assigned" }, { status: 400 });
         }
+        // 23514 : rejeté par le trigger DB anti-chevauchement
+        // (check_member_slot_overlap, cf. MIGRATIONS_A_APPLIQUER.sql). Le
+        // pré-check `memberHasConflict` ci-dessus ferme la majorité des cas,
+        // mais pas la race entre deux requêtes concurrentes pour le même
+        // membre — c'est précisément ce que ce trigger rattrape.
+        if (insertError.code === "23514") {
+          return Response.json(
+            {
+              error:
+                "Conflit horaire : ce membre est déjà sur un autre créneau au même moment",
+            },
+            { status: 409 },
+          );
+        }
         throw insertError;
       }
 
