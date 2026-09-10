@@ -422,6 +422,19 @@ export default function RoomOpeningsGrid({
         }),
       );
 
+      // Le dispatch ne se relance pas tout seul quand les CRÉNEAUX changent
+      // (contrairement à la sauvegarde de dispos, cf. PUT /api/availability)
+      // : sans cet appel, un examinateur libéré par une salle réduite (ou
+      // une salle nouvellement ouverte) reste sans affectation tant que
+      // personne ne resauvegarde ses dispos. Un échec ici ne doit pas faire
+      // paraître l'enregistrement en échec : les ouvertures sont déjà
+      // sauvegardées à ce stade.
+      try {
+        await api.post("/dispatch/run", { epreuveId });
+      } catch (e: any) {
+        console.error("Dispatch after openings save failed:", e);
+      }
+
       setDirty(false);
       await load();
       onSaved?.();
