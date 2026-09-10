@@ -171,6 +171,13 @@ export async function GET(req: NextRequest) {
         room: slot.room || null,
         tour: slot.tour,
         maxCandidates: effectiveMax,
+        // Minimum de candidats visé pour cette épreuve de groupe (business
+        // game, etc.) — null si non applicable (épreuve individuelle ou
+        // minimum non configuré). Sert à inciter les candidats à rejoindre
+        // un créneau déjà entamé plutôt que d'en ouvrir un nouveau.
+        minCandidates: slot.epreuve?.is_group_epreuve
+          ? slot.epreuve?.min_candidates ?? null
+          : null,
         enrolledCount,
         isFull,
         isEnrolled,
