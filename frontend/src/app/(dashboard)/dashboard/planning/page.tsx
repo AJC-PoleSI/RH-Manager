@@ -627,7 +627,10 @@ export default function PlanningPage() {
   useEffect(() => {
     if (isAdmin) return;
     fetchMySlots();
-    const interval = setInterval(fetchMySlots, 5000);
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      fetchMySlots();
+    }, 5000);
     const onFocus = () => fetchMySlots();
     window.addEventListener("focus", onFocus);
     return () => {
