@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const { data: slots, error: slotsErr } = await supabaseAdmin
       .from("evaluation_slots")
       .select(
-        "id, date, start_time, end_time, room, max_candidates, enrollments:slot_enrollments(id, candidate_id, status)",
+        "id, date, start_time, end_time, room, max_candidates, enrollments:slot_enrollments(id, candidate_id, status), members:slot_member_assignments(id)",
       )
       .eq("epreuve_id", epreuveId)
       .eq("status", "published")
