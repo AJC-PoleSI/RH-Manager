@@ -120,38 +120,54 @@ function epreuveKeyOf(slot: SlotInfo): string {
   return slot.epreuve_id || "__sans_epreuve__";
 }
 
-/** Engagement horaire d'un examinateur, avec l'épreuve concernée. */
+/** Engagement horaire d'un examinateur, avec l'épreuve et la salle concernées. */
 interface Commitment {
   date: string;
   start: string;
   end: string;
   epreuve: string;
+  room: string | null;
+  roulementMinutes: number;
 }
 
 type CommittedSlots = Record<string, Commitment[]>;
 
-/** Engagements de ce membre qui chevauchent ce créneau. */
-function overlappingCommitments(
+/** Convertit un SlotInfo en engagement horaire (salle + roulement inclus). */
+function commitmentOf(slot: SlotInfo): Commitment {
+  return {
+    date: String(slot.date || "").substring(0, 10),
+    start: String(slot.start_time || "").substring(0, 5),
+    end: String(slot.end_time || "").substring(0, 5),
+    epreuve: epreuveKeyOf(slot),
+    room: slot.room ? String(slot.room) : null,
+    roulementMinutes: slot.epreuve?.roulement_minutes ?? 0,
+  };
+}
+
+/**
+ * Engagements de ce membre qui BLOQUENT ce créneau : chevauchement horaire
+ * strict, ou changement de salle sans le temps de roulement minimum entre les
+ * deux (cf. `blocksSlot`, dispatch-core.ts — bug remonté par Felix le
+ * 10/09/2026 : un examinateur enchaînait Business Game et entretien
+ * individuel dans deux salles différentes à la minute près).
+ */
+function blockingCommitments(
   memberId: string,
   slot: SlotInfo,
   memberCommittedSlots: CommittedSlots,
 ): Commitment[] {
   const committed = memberCommittedSlots[memberId] || [];
-  const sDate = String(slot.date || "").substring(0, 10);
-  const sStart = String(slot.start_time || "").substring(0, 5);
-  const sEnd = String(slot.end_time || "").substring(0, 5);
-  return committed.filter(
-    (c) => c.date === sDate && c.start < sEnd && sStart < c.end,
-  );
+  const target = commitmentOf(slot);
+  return committed.filter((c) => blocksSlot(c, target));
 }
 
-/** Check temporal overlap between a member's committed slots and a candidate slot */
+/** Check temporal overlap (ou battement insuffisant) between a member's committed slots and a candidate slot */
 function wouldConflict(
   memberId: string,
   slot: SlotInfo,
   memberCommittedSlots: CommittedSlots,
 ): boolean {
-  return overlappingCommitments(memberId, slot, memberCommittedSlots).length > 0;
+  return blockingCommitments(memberId, slot, memberCommittedSlots).length > 0;
 }
 
 /**
@@ -167,7 +183,7 @@ function lostArbitration(
   memberCommittedSlots: CommittedSlots,
 ): boolean {
   const key = epreuveKeyOf(slot);
-  return overlappingCommitments(memberId, slot, memberCommittedSlots).some(
+  return blockingCommitments(memberId, slot, memberCommittedSlots).some(
     (c) => c.epreuve !== key,
   );
 }
@@ -181,11 +197,7 @@ function commitMember(
 ): void {
   memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
   if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
-  memberCommittedSlots[memberId].push({
-    date: String(slot.date || "").substring(0, 10),
-    start: String(slot.start_time || "").substring(0, 5),
-    end: String(slot.end_time || "").substring(0, 5),
-    epreuve: epreuveKeyOf(slot),
+  memberCommittedSlots[memberId].push(commitmentOf(slot));
   });
 }
 
