@@ -727,8 +727,11 @@ export default function TimeBandGrid({
                         "absolute left-[3px] right-[3px] z-20 overflow-hidden rounded-[5px]",
                         "shadow-[0_1px_3px_rgba(0,0,0,0.18)]",
                         onOverlayClick
-                          ? "cursor-pointer transition-[filter] duration-150 hover:brightness-110"
+                          ? "cursor-pointer transition-[filter,opacity] duration-150 hover:brightness-110"
                           : "pointer-events-none",
+                        // Créneau sans candidat inscrit : atténué pour le distinguer
+                        // des affectations réellement confirmées.
+                        o.hasCandidates === false && "opacity-55",
                       )}
                       style={{
                         top: topOf(o.startMin),
