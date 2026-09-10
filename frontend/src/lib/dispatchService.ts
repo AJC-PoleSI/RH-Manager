@@ -9,6 +9,7 @@ import {
   slotFillTarget,
   roomStreak,
   orderPredecessorsFirst,
+  blocksSlot,
   ROOM_STREAK_MAX,
   type SlotContinuity,
 } from "@/lib/dispatch-core";
