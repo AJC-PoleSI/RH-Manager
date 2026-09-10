@@ -11,6 +11,7 @@ import {
   epreuveShortfall,
   roomStreak,
   orderPredecessorsFirst,
+  blocksSlot,
   ROOM_STREAK_MAX,
 } from "./dispatch-core";
 
