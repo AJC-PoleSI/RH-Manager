@@ -184,11 +184,12 @@ function LoginForm() {
         if (!pendingEmail) return;
         setResendLoading(true);
         setResendDone(false);
+        setResendError('');
         try {
             await api.post('/auth/resend-verification', { email: pendingEmail });
             setResendDone(true);
-        } catch {
-            /* silent */
+        } catch (err: any) {
+            setResendError(err.response?.data?.error ?? "Échec de l'envoi. Réessayez.");
         } finally {
             setResendLoading(false);
         }
