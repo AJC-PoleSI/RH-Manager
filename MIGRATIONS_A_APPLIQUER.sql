@@ -496,13 +496,16 @@ language plpgsql
 as $$
 declare
   v_date date;
-  v_start time;
-  v_end time;
+  -- TEXT "HH:MM" (pas `time`), comme evaluation_slots.start_time/end_time —
+  -- testé en local, la version `time` casse tout insert (text < time
+  -- without time zone n'existe pas).
+  v_start text;
+  v_end text;
   v_conflict_count int;
 begin
   perform pg_advisory_xact_lock(hashtext(new.member_id::text));
 
-  select date, start_time, end_time
+  select date::date, start_time, end_time
     into v_date, v_start, v_end
     from evaluation_slots
     where id = new.slot_id;
@@ -517,7 +520,7 @@ begin
     join evaluation_slots es on es.id = sma.slot_id
     where sma.member_id = new.member_id
       and sma.slot_id <> new.slot_id
-      and es.date = v_date
+      and es.date::date = v_date
       and es.start_time < v_end
       and v_start < es.end_time;
 
