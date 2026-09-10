@@ -803,7 +803,7 @@ function LoginForm() {
                         {step > 1 && (
                             <button
                                 type="button"
-                                onClick={() => setStep(step - 1)}
+                                onClick={() => { setError(''); setStep(step - 1); }}
                                 className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
                             >
                                 Précédent
