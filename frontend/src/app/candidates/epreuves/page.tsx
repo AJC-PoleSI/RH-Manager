@@ -797,6 +797,15 @@ export default function CandidateEpreuvesPage() {
                                             </span>
                                           )}
                                         </div>
+                                        {!isSlotEnrolled &&
+                                          !slot.isFull &&
+                                          slot.minCandidates != null &&
+                                          slot.enrolledCount < slot.minCandidates && (
+                                            <p className="mt-1 text-amber-700 font-medium">
+                                              Il manque {slot.minCandidates - slot.enrolledCount} candidat
+                                              {slot.minCandidates - slot.enrolledCount > 1 ? "s" : ""} (minimum {slot.minCandidates})
+                                            </p>
+                                          )}
                                       </button>
                                     );
                                   })}
@@ -1152,6 +1161,14 @@ export default function CandidateEpreuvesPage() {
                               ({spotsLeft > 0 ? `${spotsLeft} place${spotsLeft > 1 ? "s" : ""} restante${spotsLeft > 1 ? "s" : ""}` : "Complet"})
                             </span>
                           </p>
+                          {!selectedSlot.isFull &&
+                            selectedSlot.minCandidates != null &&
+                            selectedSlot.enrolledCount < selectedSlot.minCandidates && (
+                              <p className="text-xs font-medium text-amber-700 mt-0.5">
+                                Il manque {selectedSlot.minCandidates - selectedSlot.enrolledCount} candidat
+                                {selectedSlot.minCandidates - selectedSlot.enrolledCount > 1 ? "s" : ""} pour atteindre le minimum de {selectedSlot.minCandidates}.
+                              </p>
+                            )}
                         </div>
                       </div>
                     </div>
