@@ -47,7 +47,11 @@ export async function POST(req: NextRequest) {
 
     const withCapacity = (slots || []).map((s: any) => {
       const active = (s.enrollments || []).filter(filterActiveEnrollments);
-      const max = effectiveMaxCandidates({ max_candidates: s.max_candidates, epreuve });
+      const max = effectiveMaxCandidates({
+        max_candidates: s.max_candidates,
+        epreuve,
+        members: s.members,
+      });
       return { ...s, active, remaining: max - active.length };
     });
 
