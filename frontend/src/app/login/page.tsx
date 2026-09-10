@@ -574,14 +574,21 @@ function LoginForm() {
                             Email renvoyé avec succès !
                         </div>
                     ) : (
-                        <button
-                            onClick={handleResendVerification}
-                            disabled={resendLoading}
-                            className="mt-4 text-sm font-medium underline disabled:opacity-50"
-                            style={{ color: '#E8446A' }}
-                        >
-                            {resendLoading ? 'Envoi…' : "Renvoyer l'email"}
-                        </button>
+                        <>
+                            {resendError && (
+                                <div className="mt-4 rounded-lg px-4 py-3 text-sm font-medium" style={{ backgroundColor: '#FFF0F3', color: '#E8446A' }}>
+                                    {resendError}
+                                </div>
+                            )}
+                            <button
+                                onClick={handleResendVerification}
+                                disabled={resendLoading}
+                                className="mt-4 text-sm font-medium underline disabled:opacity-50"
+                                style={{ color: '#E8446A' }}
+                            >
+                                {resendLoading ? 'Envoi…' : "Renvoyer l'email"}
+                            </button>
+                        </>
                     )}
 
                     <div className="mt-6">
