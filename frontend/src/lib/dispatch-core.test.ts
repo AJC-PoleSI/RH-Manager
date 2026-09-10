@@ -33,6 +33,59 @@ describe("timeOverlaps", () => {
   });
 });
 
+describe("blocksSlot", () => {
+  const day = "2026-09-16";
+
+  it("bloque un chevauchement strict, même salle", () => {
+    const c = { date: day, start: "18:00", end: "19:00", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "18:30", end: "19:30", room: "235", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(true);
+  });
+
+  it("bloque un chevauchement strict, salles différentes", () => {
+    const c = { date: day, start: "18:00", end: "19:00", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "18:30", end: "19:30", room: "219", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(true);
+  });
+
+  it("n'autorise AUCUNE pause si c'est la même salle (continuité) — cas réel du 10/09/2026", () => {
+    const c = { date: day, start: "16:00", end: "16:45", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "16:45", end: "17:30", room: "235", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(false);
+  });
+
+  it("bloque un enchaînement à la minute près sur une AUTRE salle (bug remonté par Felix)", () => {
+    const c = { date: day, start: "18:45", end: "19:30", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "19:30", end: "19:55", room: "219", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(true);
+  });
+
+  it("laisse passer un changement de salle si le battement atteint le roulement requis", () => {
+    const c = { date: day, start: "18:45", end: "19:30", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "19:40", end: "20:05", room: "219", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(false);
+  });
+
+  it("prend le roulement le PLUS EXIGEANT des deux créneaux", () => {
+    const c = { date: day, start: "18:00", end: "18:45", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "19:00", end: "19:30", room: "219", roulementMinutes: 20 };
+    // battement de 15min < roulement requis (max(10,20)=20) → bloqué
+    expect(blocksSlot(c, slot)).toBe(true);
+  });
+
+  it("ne bloque jamais sur un autre jour", () => {
+    const c = { date: "2026-09-15", start: "18:45", end: "19:30", room: "235", roulementMinutes: 10 };
+    const slot = { date: day, start: "19:30", end: "19:55", room: "219", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(false);
+  });
+
+  it("ne bloque pas sur une contrainte de pause si une salle est inconnue", () => {
+    const c = { date: day, start: "18:45", end: "19:30", room: null, roulementMinutes: 10 };
+    const slot = { date: day, start: "19:30", end: "19:55", room: "219", roulementMinutes: 10 };
+    expect(blocksSlot(c, slot)).toBe(false);
+  });
+});
+
 describe("availabilityMatchesSlot", () => {
   const slot = { date: "2026-06-22", start_time: "12:05", end_time: "12:50" };
 
