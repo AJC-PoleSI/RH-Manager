@@ -160,10 +160,6 @@ export async function POST(req: NextRequest) {
       // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };
 
-    if (insertData.is_group_epreuve && insertData.min_candidates) {
-      insertData.min_evaluators_per_salle = insertData.min_candidates;
-    }
-
     const { data, error } = await supabaseAdmin
       .from("epreuves")
       .insert(insertData)
