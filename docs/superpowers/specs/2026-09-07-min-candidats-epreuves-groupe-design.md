@@ -4,6 +4,17 @@
 **Statut** : validé par Felix (brainstorming du 2026-09-07)
 **Périmètre** : épreuves de groupe (`is_group_epreuve = true`) uniquement — pas de changement pour les épreuves individuelles/communes.
 
+> **⚠️ Mise à jour du 2026-09-10** : la règle « le minimum d'examinateurs
+> suit toujours le minimum de candidats » (section 2, 3 ci-dessous) est
+> **abandonnée**. Felix veut pouvoir fixer le nombre d'examinateurs minimum
+> indépendamment, comme avant cette spec. Le champ `minEvaluators` est de
+> nouveau affiché et éditable pour les épreuves de groupe, sans synchro
+> automatique ni validation croisée avec `minCandidates`. Tout le reste de
+> cette spec (minimum de candidats, fusion des créneaux sous-remplis,
+> garde-fou salles simultanées) reste inchangé. Le reste du document décrit
+> l'état historique au 07/09 ; ne pas s'y fier pour le comportement du champ
+> examinateurs.
+
 ## Contexte
 
 Aujourd'hui, une épreuve de groupe (ex. business game) n'a qu'un **maximum** de candidats par créneau (`group_size` → `evaluation_slots.max_candidates`). Il n'existe aucun minimum : un créneau peut tourner avec un seul candidat inscrit. Le nombre d'examinateurs (`min_evaluators_per_salle` → `evaluation_slots.min_members`) est un réglage complètement indépendant.
