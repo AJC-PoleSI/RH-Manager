@@ -283,14 +283,14 @@ export async function runDispatch(opts?: {
     const withManual = await supabaseAdmin
       .from("slot_member_assignments")
       .select(
-        "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id)",
+        "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
       );
 
     if (withManual.error) {
       const plain = await supabaseAdmin
         .from("slot_member_assignments")
         .select(
-          "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id)",
+          "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
         );
       allAssigns = plain.data;
       console.warn(
