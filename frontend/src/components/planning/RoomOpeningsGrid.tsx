@@ -396,7 +396,7 @@ export default function RoomOpeningsGrid({
   );
   const slotsThisWeek = weekOpenings.reduce((s, o) => s + (o.slots_total ?? 0), 0);
   const slotsTotal = openings.reduce((s, o) => s + (o.slots_total ?? 0), 0);
-  const occupiedTotal = openings.reduce((s, o) => s + (o.slots_occupied ?? 0), 0);
+  const readyTotal = openings.reduce((s, o) => s + (o.slots_ready ?? 0), 0);
   const bandMinutes = bands.reduce((s, b) => s + (b.endMin - b.startMin), 0);
   const pending =
     diff.toCreate.length + diff.toUpdate.length + diff.toDelete.length;
