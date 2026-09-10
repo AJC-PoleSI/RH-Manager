@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
 import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
+import { getCriterionLabel, getMaxPoints } from '@/lib/evaluation-criteria';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
