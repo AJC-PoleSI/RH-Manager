@@ -119,6 +119,11 @@ export default function VerifyEmailPage() {
 
           {!resendDone ? (
             <div className="mt-6 flex flex-col gap-3">
+              {resendError && (
+                <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {resendError}
+                </div>
+              )}
               <input
                 type="email"
                 value={email}
