@@ -63,7 +63,19 @@ export async function POST(req: NextRequest) {
       .update({ verification_token: token, verification_token_expires_at: expiresAt })
       .eq("id", candidate.id);
 
-    await sendResendVerificationEmail(candidate.email, candidate.first_name, token);
+    // Best-effort : le token est déjà régénéré en base. Si l'envoi échoue
+    // (Resend en panne, clé invalide...), le candidat doit quand même
+    // pouvoir réessayer plutôt que de recevoir une 500 qui masque le fait
+    // que son ancien lien vient d'être invalidé pour rien.
+    try {
+      await sendResendVerificationEmail(candidate.email, candidate.first_name, token);
+    } catch (emailErr) {
+      console.error("resend-verification: email send failed:", emailErr);
+      return Response.json(
+        { error: "Échec de l'envoi de l'email. Réessayez dans quelques instants." },
+        { status: 502 },
+      );
+    }
 
     return Response.json({ success: true });
   } catch (error) {
