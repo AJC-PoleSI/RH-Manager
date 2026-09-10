@@ -70,6 +70,7 @@ interface SlotInfo {
     is_pole_test?: boolean | null;
     pole?: string | null;
     tour?: number | null;
+    roulement_minutes?: number | null;
   } | null;
 }
 
