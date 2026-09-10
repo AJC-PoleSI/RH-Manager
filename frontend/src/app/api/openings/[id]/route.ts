@@ -15,8 +15,13 @@ import {
 export const dynamic = "force-dynamic";
 
 // PUT /api/openings/[id] — admin : modifie une ouverture et recalcule ses
-// créneaux. Règles : libres recréés selon la nouvelle plage, occupés jamais
-// touchés, occupés hors plage signalés en conflit (spec §3).
+// créneaux. Règles : libres recréés selon la nouvelle plage ; un occupé hors
+// plage est refusé (409) sauf ?force=true, qui l'annule et notifie ses
+// inscrits — même garde-fou que DELETE. Avant ce garde-fou, un rétrécissement
+// (ou déplacement) laissait ces créneaux occupés orphelins de toute
+// ouverture visible : la salle apparaissait « non ouverte » sur le planning
+// alors qu'un entretien (souvent collectif, examinateurs déjà affectés) y
+// restait bel et bien programmé — bug remonté par Felix le 10/09/2026.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -26,6 +31,7 @@ export async function PUT(
   if (!payload.isAdmin) return forbidden();
 
   const { id } = await params;
+  const force = req.nextUrl.searchParams.get("force") === "true";
 
   try {
     const body = await req.json();
