@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { listEvaluableEpreuveIds } from "@/lib/evaluation-access";
+import {
+  getSlotExaminerIds,
+  listEvaluableEpreuveIds,
+  resolveCandidateSlot,
+} from "@/lib/evaluation-access";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/allowed-epreuves?candidateId=X
@@ -42,12 +46,29 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
+    // Nombre d'examinateurs assignés au créneau du candidat, par épreuve —
+    // sert au frontend à savoir si une épreuve individuelle est en binôme
+    // (2+ examinateurs sur le créneau => note partagée, un seul la saisit).
+    // Non pertinent pour les épreuves "de groupe" (déjà à note collective).
+    const examinerCounts: Record<string, number> = {};
+    await Promise.all(
+      (data || [])
+        .filter((e: any) => e.is_group_epreuve !== true)
+        .map(async (e: any) => {
+          const slot = await resolveCandidateSlot(candidateId, e.id);
+          examinerCounts[e.id] = slot
+            ? (await getSlotExaminerIds(slot.slotId)).length
+            : 0;
+        }),
+    );
+
     const epreuves = (data || []).map((e: any) => ({
       id: e.id,
       name: e.name,
       type: e.type,
       tour: e.tour,
       isGroupEpreuve: e.is_group_epreuve ?? false,
+      examinerCount: examinerCounts[e.id] ?? null,
       evaluationQuestions:
         typeof e.evaluation_questions === "string"
           ? (() => {

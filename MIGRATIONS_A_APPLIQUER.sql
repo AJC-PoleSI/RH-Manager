@@ -541,3 +541,32 @@ create trigger trg_check_member_slot_overlap
   before insert on slot_member_assignments
   for each row
   execute function check_member_slot_overlap();
+
+
+-- ------------------------------------------------------------
+-- N) Verrouillage des évaluations + attribution binôme
+--    (supabase-migration-evaluation-lock.sql)
+-- ------------------------------------------------------------
+-- Une évaluation à auteur unique (is_group=false) se clôture automatiquement
+-- dès sa soumission ; seul un admin peut la rouvrir (POST .../reopen). Sur
+-- une épreuve individuelle dont le créneau du candidat a 2 examinateurs
+-- assignés ou plus, une seule note partagée est créée (is_group=true), un
+-- seul examinateur la saisit, elle reste ouverte jusqu'à validation
+-- explicite (POST .../close), et elle est attribuée à CHAQUE examinateur du
+-- créneau (evaluator_tracking multi-lignes par évaluation).
+
+ALTER TABLE candidate_evaluations
+  ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS closed_by UUID REFERENCES members(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS reopened_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS reopened_by UUID REFERENCES members(id) ON DELETE SET NULL;
+
+ALTER TABLE evaluator_tracking
+  DROP CONSTRAINT IF EXISTS evaluator_tracking_evaluation_id_key;
+
+ALTER TABLE evaluator_tracking
+  DROP CONSTRAINT IF EXISTS uniq_evaluator_tracking_member_evaluation;
+
+ALTER TABLE evaluator_tracking
+  ADD CONSTRAINT uniq_evaluator_tracking_member_evaluation
+  UNIQUE (member_id, evaluation_id);
