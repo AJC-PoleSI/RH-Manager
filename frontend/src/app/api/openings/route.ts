@@ -168,15 +168,23 @@ export async function POST(req: NextRequest) {
     let slotsCreated = 0;
     const warnings: string[] = [];
 
-    for (const date of dates as string[]) {
-      const result = await createOpeningWithSlots(epreuveId, epreuve, {
-        room: roomTrimmed,
-        date,
-        start_time: startTime,
-        end_time: endTime,
-        break_start: breakStartVal,
-        break_end: breakEndVal,
-      });
+    // Dates indépendantes (aucun chevauchement possible entre deux jours
+    // distincts) : paralléliser au lieu d'enchaîner une par une raccourcit
+    // nettement l'enregistrement quand plusieurs dates sont soumises d'un
+    // coup.
+    const results = await Promise.all(
+      (dates as string[]).map((date) =>
+        createOpeningWithSlots(epreuveId, epreuve, {
+          room: roomTrimmed,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          break_start: breakStartVal,
+          break_end: breakEndVal,
+        }).then((result) => ({ date, result })),
+      ),
+    );
+    for (const { date, result } of results) {
       if (!result.ok) {
         warnings.push(`${date} : ${result.error}`);
         continue;
