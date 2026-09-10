@@ -5,6 +5,7 @@ import { diffOpeningSlots } from "@/lib/opening-slicer";
 import {
   sliceOpeningRow,
   isSlotOccupied,
+  isSlotStaffed,
   validateOpeningInput,
   createOpeningWithSlots,
 } from "@/lib/openings-service";
