@@ -209,7 +209,7 @@ export async function runDispatch(opts?: {
   let slotQuery = supabaseAdmin
     .from("evaluation_slots")
     .select(
-      "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour)",
+      "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour, roulement_minutes)",
     );
   if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
   const { data: slots, error: slotErr } = await slotQuery;
