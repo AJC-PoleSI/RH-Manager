@@ -283,7 +283,7 @@ export async function POST(req: NextRequest) {
       const { data: targetSlot } = await supabaseAdmin
         .from("evaluation_slots")
         .select(
-          "id, date, start_time, end_time, epreuve_id, min_members, epreuve:epreuves(is_pole_test, pole, is_group_epreuve)",
+          "id, date, start_time, end_time, epreuve_id, min_members, epreuve:epreuves(is_pole_test, pole, is_group_epreuve, group_size)",
         )
         .eq("id", slotId)
         .single();
