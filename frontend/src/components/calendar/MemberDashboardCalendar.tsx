@@ -502,11 +502,12 @@ export default function MemberDashboardCalendar({
                                             const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff", borderColor: "transparent" } : {};
                                             const borderClass = style.border ? style.border : "border-transparent";
                                             const classes = ev.color ? "" : `${style.bg} ${style.text}`;
+                                            const emptyOpacity = ev.type === "slot_empty" ? "opacity-60" : "";
                                             return (
                                                 <button
                                                     key={ev.id}
                                                     onClick={() => setSelectedMemberSlot(ev)}
-                                                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${classes} ${borderClass}`}
+                                                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:shadow-sm ${emptyOpacity} ${classes} ${borderClass}`}
                                                     style={customStyle}
                                                 >
                                                     <p className="font-semibold truncate">{ev.title}</p>
