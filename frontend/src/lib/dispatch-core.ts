@@ -90,6 +90,64 @@ export function timeOverlaps(
   return aStart < bEnd && bStart < aEnd;
 }
 
+/** "HH:MM" → minutes depuis minuit. */
+function minutesOf(v: string): number {
+  const [h, m] = String(v || "").substring(0, 5).split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** Un engagement (créneau déjà tenu) horodaté, situé dans une salle. */
+export interface RoomedCommitment {
+  date?: string | null;
+  start: string;
+  end: string;
+  /** Salle physique. Null/absent = inconnue (traitée comme "différente" par prudence, sauf chevauchement strict). */
+  room?: string | null;
+  /** Roulement (minutes) de l'épreuve de CE créneau — sert de pause minimale exigée en cas de changement de salle. */
+  roulementMinutes?: number | null;
+}
+
+/**
+ * Un engagement bloque-t-il ce créneau pour le même examinateur ?
+ *
+ * Deux cas :
+ *   1. Chevauchement horaire strict → toujours bloqué (impossible physiquement).
+ *   2. Pas de chevauchement, mais changement de salle avec un battement
+ *      inférieur au roulement le plus exigeant des deux créneaux → bloqué.
+ *      Rester dans la MÊME salle ne demande AUCUNE pause : c'est la
+ *      continuité voulue (cf. ROOM_STREAK_MAX), pas un enchaînement à éviter.
+ *      Salle inconnue d'un côté ou de l'autre → pas de contrainte de pause
+ *      (on ne bloque jamais sur une donnée qu'on n'a pas).
+ *
+ * Bug remonté par Felix le 10/09/2026 : un examinateur enchaînait un Business
+ * Game et un entretien individuel dans deux salles différentes à la minute
+ * près (créneau A finit à 19:30, créneau B commence à 19:30 ailleurs) — le
+ * seul garde-fou existant (`timeOverlaps`) ne voit aucun problème puisque les
+ * horaires ne se chevauchent pas.
+ */
+export function blocksSlot(
+  commitment: RoomedCommitment,
+  slot: RoomedCommitment,
+): boolean {
+  if (ymd(commitment.date) !== ymd(slot.date)) return false;
+  if (timeOverlaps(commitment.start, commitment.end, slot.start, slot.end))
+    return true;
+  if (!commitment.room || !slot.room || commitment.room === slot.room)
+    return false;
+
+  const requiredGap = Math.max(
+    commitment.roulementMinutes || 0,
+    slot.roulementMinutes || 0,
+  );
+  if (requiredGap <= 0) return false;
+
+  const gap =
+    commitment.end <= slot.start
+      ? minutesOf(slot.start) - minutesOf(commitment.end)
+      : minutesOf(commitment.start) - minutesOf(slot.end);
+  return gap < requiredGap;
+}
+
 /**
  * Une disponibilité couvre-t-elle un créneau ?
  *
