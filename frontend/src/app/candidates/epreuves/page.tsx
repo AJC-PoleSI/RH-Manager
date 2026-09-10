@@ -38,6 +38,7 @@ interface AvailableSlot {
   label?: string;
   enrolledCount: number;
   maxCandidates: number;
+  minCandidates?: number | null;
   isFull: boolean;
   isEnrolled: boolean;
   epreuve?: { id?: string; name: string; tour: number; type?: string; durationMinutes?: number } | null;
