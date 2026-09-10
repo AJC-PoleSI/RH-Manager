@@ -463,12 +463,7 @@ export default function CreationPage() {
           ? parseInt(form.candidatsAttendus)
           : null,
         margePct: form.margePct !== "" ? parseInt(form.margePct) || 0 : 25,
-        // Épreuve de groupe : le nombre d'examinateurs suit toujours le
-        // minimum de candidats (le serveur le réimpose aussi, cf. epreuves/route.ts).
-        minEvaluatorsPerSalle:
-          form.type === "groupe"
-            ? Math.max(1, parseInt(form.minCandidates) || 1)
-            : Math.max(1, parseInt(form.minEvaluators) || 2),
+        minEvaluatorsPerSalle: Math.max(1, parseInt(form.minEvaluators) || 2),
         roulementMinutes: form.roulementMinutes
           ? parseInt(form.roulementMinutes)
           : 10,
