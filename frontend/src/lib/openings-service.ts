@@ -107,6 +107,11 @@ export async function checkOpeningOverlap(
     : null;
 }
 
+/** Créneau avec son quota d'examinateurs atteint (statut posé par le dispatch). */
+export function isSlotStaffed(s: any): boolean {
+  return ["ready", "published", "full"].includes(s.status);
+}
+
 export function isSlotOccupied(s: any): boolean {
   const activeEnrollments = (s.enrollments || []).filter(
     (e: any) => !e.status || e.status === "active",
