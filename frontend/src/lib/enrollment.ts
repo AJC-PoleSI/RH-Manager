@@ -41,15 +41,24 @@ export const filterActiveEnrollments = (
 /**
  * Capacité EFFECTIVE d'un créneau — source unique de vérité.
  *
- * Pour une épreuve de groupe, la vraie limite est `group_size` (le
- * `max_candidates` stocké peut être périmé : d'anciens créneaux ont été
- * créés avec max_candidates=1 avant la persistance de group_size, et
- * passaient "complet" dès le 1er inscrit). Pour un entretien individuel,
- * c'est `max_candidates` (défaut 1).
+ * Pour un entretien individuel, c'est `max_candidates` (défaut 1).
+ *
+ * Pour une épreuve de groupe (ex. business game), la limite candidats est
+ * plafonnée par le nombre d'examinateurs RÉELLEMENT affectés à la salle
+ * (`slot.members`), jamais plus que `group_size` : une salle avec 3
+ * examinateurs sur un business game à 6 ne doit pas recevoir 6 candidats.
+ * Voir docs/superpowers/specs/2026-09-10-limite-candidats-examinateurs-design.md
+ *
+ * Quand `slot.members` n'est pas fourni par l'appelant (routes qui ne
+ * chargent pas les affectations d'examinateurs, ex. dispatch, capacity-check
+ * prévisionnel), on retombe sur l'ancien comportement (`group_size` fixe) —
+ * ces routes raisonnent sur une capacité planifiée, pas sur le staffing réel
+ * instantané.
  *
  * DOIT être utilisé par TOUTES les routes qui exposent ou vérifient la
- * capacité (enroll, available, all, my-slots) pour que "X/Y inscrits" et
- * "complet" s'affichent de façon identique côté candidat, membre et admin.
+ * capacité (enroll, available, all, my-slots, merge-undersized) pour que
+ * "X/Y inscrits" et "complet" s'affichent de façon identique côté candidat,
+ * membre et admin.
  */
 export function effectiveMaxCandidates(slot: {
   max_candidates?: number | null;
@@ -57,10 +66,14 @@ export function effectiveMaxCandidates(slot: {
     is_group_epreuve?: boolean | null;
     group_size?: number | null;
   } | null;
+  members?: { id?: unknown }[] | null;
 }): number {
   const base = Number(slot.max_candidates) || 1;
-  if (slot.epreuve?.is_group_epreuve) {
-    return Math.max(base, Number(slot.epreuve.group_size) || 1);
+  if (!slot.epreuve?.is_group_epreuve) return base;
+
+  const groupSize = Math.max(1, Number(slot.epreuve.group_size) || 1);
+  if (slot.members) {
+    return Math.max(0, Math.min(groupSize, slot.members.length));
   }
-  return base;
+  return Math.max(base, groupSize);
 }
