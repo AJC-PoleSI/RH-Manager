@@ -457,6 +457,33 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // ──────────────────────────────────────────────────────────────
+      // RÉOUVERTURE D'UN CRÉNEAU "FULL" (épreuves de groupe) : la
+      // capacité candidats dépend désormais du nombre d'examinateurs
+      // (effectiveMaxCandidates, enrollment.ts). Ajouter un examinateur
+      // sur une salle déjà "full" peut donc lui redonner de la place —
+      // sans ce garde-fou, staffer davantage une salle ne débloquerait
+      // jamais les inscriptions.
+      // ──────────────────────────────────────────────────────────────
+      if (slot && slot.status === "full" && targetEpreuve?.is_group_epreuve) {
+        const { count: activeCount } = await supabaseAdmin
+          .from("slot_enrollments")
+          .select("id", { count: "exact", head: true })
+          .eq("slot_id", slotId)
+          .or("status.is.null,status.eq.active,status.eq.enrolled");
+        const groupSize = Math.max(
+          1,
+          Number((targetEpreuve as any).group_size) || 1,
+        );
+        const newEffectiveMax = Math.min(groupSize, memberCount);
+        if ((activeCount || 0) < newEffectiveMax) {
+          await supabaseAdmin
+            .from("evaluation_slots")
+            .update({ status: "published" })
+            .eq("id", slotId);
+        }
+      }
+
       return Response.json({ action: "added", memberCount });
     } else {
       return Response.json({ action: "no_change" });
