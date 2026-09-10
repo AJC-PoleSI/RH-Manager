@@ -234,7 +234,10 @@ export default function CandidateEpreuvesPage() {
     fetchData();
     // Polling toutes les 5s pour détecter rapidement les changements
     // (auto-publication, inscription, status, etc.).
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      fetchData();
+    }, 5000);
     const onFocus = () => fetchData();
     window.addEventListener("focus", onFocus);
     return () => {
