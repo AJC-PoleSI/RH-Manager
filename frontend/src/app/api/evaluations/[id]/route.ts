@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
-import { canEvaluate } from "@/lib/evaluation-access";
+import { canEvaluate, isMissingColumnError } from "@/lib/evaluation-access";
 import { NextRequest } from "next/server";
 
 // PUT /api/evaluations/[id] - Update an evaluation
@@ -15,25 +15,64 @@ export async function PUT(
   const { id } = params;
 
   try {
-    // SECURITY: Verify ownership before update
-    const { data: existing } = await supabaseAdmin
-      .from("candidate_evaluations")
-      .select("member_id, candidate_id, epreuve_id, is_group")
-      .eq("id", id)
-      .single();
+    // SECURITY: Verify ownership before update. `closed_at` peut ne pas
+    // encore exister en base (migration pas encore appliquée) : on retombe
+    // sur une sélection sans cette colonne plutôt que de faire échouer tout
+    // le PUT (cf. isMissingColumnError).
+    let existing: any = null;
+    {
+      const { data, error } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .select(
+          "member_id, candidate_id, epreuve_id, is_group, closed_at, epreuves(is_group_epreuve)",
+        )
+        .eq("id", id)
+        .single();
+      if (error && isMissingColumnError(error)) {
+        const fallback = await supabaseAdmin
+          .from("candidate_evaluations")
+          .select("member_id, candidate_id, epreuve_id, is_group, epreuves(is_group_epreuve)")
+          .eq("id", id)
+          .single();
+        existing = fallback.data;
+      } else {
+        existing = data;
+      }
+    }
 
     if (!existing) {
       return Response.json({ error: "Evaluation not found" }, { status: 404 });
     }
 
+    // Une évaluation clôturée n'est modifiable par personne d'autre qu'un
+    // admin — seul un admin peut la rouvrir (POST .../reopen), après quoi
+    // les règles normales ci-dessous s'appliquent de nouveau.
+    if (existing.closed_at && !user.isAdmin) {
+      return Response.json(
+        {
+          error:
+            "Cette évaluation est clôturée. Seul un administrateur peut la rouvrir.",
+          code: "EVALUATION_CLOSED",
+        },
+        { status: 403 },
+      );
+    }
+
+    const epreuveIsGroupType = existing.epreuves?.is_group_epreuve === true;
+
     // Permission rules:
     //   • Admins: always
-    //   • Individual eval (is_group=false): only the owner (member_id)
-    //   • Group eval (is_group=true): any member assigned to a slot of
-    //     this épreuve where this candidate is enrolled
+    //   • Solo eval (is_group=false — entretien classique, ou avis
+    //     individuel sur une épreuve de groupe) : uniquement l'auteur
+    //   • Note collective d'une VRAIE épreuve de groupe (is_group=true ET
+    //     epreuve.is_group_epreuve=true) : n'importe quel membre assigné au
+    //     créneau (édition collaborative, comportement existant)
+    //   • Note partagée en binôme (is_group=true mais épreuve pas "de
+    //     groupe") : uniquement l'auteur — les autres membres du créneau
+    //     sont en lecture seule tant qu'ils n'ont pas rouvert via un admin
     let canEdit = user.isAdmin || existing.member_id === user.id;
 
-    if (!canEdit && existing.is_group === true) {
+    if (!canEdit && existing.is_group === true && epreuveIsGroupType) {
       canEdit = await canEvaluate(
         user.id,
         existing.candidate_id,

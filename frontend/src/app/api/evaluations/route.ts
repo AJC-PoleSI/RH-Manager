@@ -1,6 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { canEvaluate } from "@/lib/evaluation-access";
+import {
+  canEvaluate,
+  getSlotExaminerIds,
+  isMissingColumnError,
+  resolveCandidateSlot,
+} from "@/lib/evaluation-access";
 import {
   getCriterionLabel,
   getMaxPoints,
@@ -26,9 +31,23 @@ export async function GET(req: NextRequest) {
         "*, epreuves(*), candidates(*), members!member_id(id, email, first_name, last_name)",
       );
 
-    // ── Membres non-admin : uniquement leurs propres évaluations ──
+    // ── Membres non-admin : leurs propres évaluations + celles des
+    // évaluations partagées (binôme) où ils sont attribués comme
+    // co-examinateurs sans être l'auteur (member_id) de la ligne ──
     if (!payload.isAdmin) {
-      query = query.eq("member_id", payload.id);
+      const { data: tracked } = await supabaseAdmin
+        .from("evaluator_tracking")
+        .select("evaluation_id")
+        .eq("member_id", payload.id);
+      const trackedIds = (tracked || [])
+        .map((r: any) => r.evaluation_id)
+        .filter(Boolean);
+
+      query = trackedIds.length
+        ? query.or(
+            `member_id.eq.${payload.id},id.in.(${trackedIds.join(",")})`,
+          )
+        : query.eq("member_id", payload.id);
     }
 
     const { data: evaluations, error } = await query;
@@ -95,6 +114,12 @@ export async function POST(req: NextRequest) {
   let candidateId: string | undefined;
   let epreuveId: string | undefined;
   let wantGroupEval = false;
+  // Décision serveur (jamais le client) : cette soumission produit-elle une
+  // ligne partagée (is_group=true) ? Vrai pour une épreuve "de groupe" dont
+  // le client demande la note collective (comportement existant), ET pour
+  // une épreuve individuelle (entretien) dont le créneau du candidat a 2
+  // examinateurs assignés ou plus — un seul note, attribué au binôme.
+  let effectiveIsGroup = false;
 
   try {
     const body = await req.json();
@@ -130,12 +155,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { data: epreuveRow } = await supabaseAdmin
+      .from("epreuves")
+      .select("evaluation_questions, is_group_epreuve")
+      .eq("id", epreuveId)
+      .single();
+
+    // ══════════════════════════════════════════════════════════════════
+    // BINÔME : sur une épreuve individuelle (pas "de groupe"), si le
+    // créneau du candidat a 2 examinateurs assignés ou plus, une seule note
+    // partagée est autorisée — attribuée à tous les examinateurs du
+    // créneau. Décidé côté serveur à partir des assignations réelles,
+    // jamais du flag `isGroup` envoyé par le client.
+    // ══════════════════════════════════════════════════════════════════
+    let attributedMemberIds = [memberId];
+    const epreuveIsGroupType = epreuveRow?.is_group_epreuve === true;
+    effectiveIsGroup = epreuveIsGroupType ? wantGroupEval : false;
+
+    if (effectiveIsGroup || !epreuveIsGroupType) {
+      const slot = await resolveCandidateSlot(candidateId, epreuveId);
+      if (slot) {
+        const examinerIds = await getSlotExaminerIds(slot.slotId);
+        if (!epreuveIsGroupType && examinerIds.length >= 2) {
+          effectiveIsGroup = true;
+          attributedMemberIds = examinerIds;
+        } else if (effectiveIsGroup && examinerIds.length) {
+          attributedMemberIds = examinerIds;
+        }
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // Anti-doublon : selon le type d'évaluation
     //   • GROUP : au plus UNE évaluation de groupe par (candidate, epreuve)
     //   • INDIVIDUAL : au plus UNE évaluation par (candidate, epreuve, member)
     // ══════════════════════════════════════════════════════════════════
-    if (wantGroupEval) {
+    if (effectiveIsGroup) {
       const { data: existingGroup } = await supabaseAdmin
         .from("candidate_evaluations")
         .select("id")
@@ -185,14 +240,8 @@ export async function POST(req: NextRequest) {
     // Chaque note doit être >= 0 et <= au nombre de points max du critère
     // ══════════════════════════════════════════════════════════════════
     if (scores) {
-      const { data: epreuveData } = await supabaseAdmin
-        .from("epreuves")
-        .select("evaluation_questions")
-        .eq("id", epreuveId)
-        .single();
-
-      if (epreuveData?.evaluation_questions) {
-        const questions = parseQuestions(epreuveData.evaluation_questions);
+      if (epreuveRow?.evaluation_questions) {
+        const questions = parseQuestions(epreuveRow.evaluation_questions);
 
         const parsedScores =
           typeof scores === "string" ? JSON.parse(scores) : scores;
@@ -237,32 +286,68 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Création de l'évaluation ──
-    const { data: evaluation, error: evalError } = await supabaseAdmin
+    // Une évaluation à auteur unique (is_group=false, qu'il s'agisse d'un
+    // entretien classique ou de l'avis individuel d'un membre sur une
+    // épreuve de groupe) se clôture immédiatement à la soumission : seul un
+    // admin pourra la rouvrir. Une évaluation partagée (binôme ou note
+    // collective) reste ouverte jusqu'à validation explicite (cf.
+    // /api/evaluations/[id]/close) pour laisser le temps aux co-examinateurs
+    // de la relire et commenter.
+    const baseInsert = {
+      candidate_id: candidateId,
+      epreuve_id: epreuveId,
+      member_id: memberId,
+      scores: JSON.stringify(normalizedScores),
+      comment,
+      is_group: effectiveIsGroup,
+      last_edited_by: memberId,
+    };
+    const closeFields = effectiveIsGroup
+      ? {}
+      : { closed_at: new Date().toISOString(), closed_by: memberId };
+
+    let { data: evaluation, error: evalError } = await supabaseAdmin
       .from("candidate_evaluations")
-      .insert({
-        candidate_id: candidateId,
-        epreuve_id: epreuveId,
-        member_id: memberId,
-        scores: JSON.stringify(normalizedScores),
-        comment,
-        is_group: wantGroupEval,
-        last_edited_by: memberId,
-      })
+      .insert({ ...baseInsert, ...closeFields })
       .select()
       .single();
 
+    // Repli : colonnes closed_at/closed_by pas encore migrées en prod (cf.
+    // MIGRATIONS_A_APPLIQUER.sql) — on enregistre quand même la note, sans
+    // verrouillage automatique, plutôt que de bloquer toute soumission.
+    if (evalError && isMissingColumnError(evalError)) {
+      console.warn(
+        "[evaluations] Colonnes closed_at/closed_by absentes — évaluation " +
+          "enregistrée sans clôture automatique. Appliquez la migration " +
+          "verrouillage des évaluations.",
+      );
+      ({ data: evaluation, error: evalError } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .insert(baseInsert)
+        .select()
+        .single());
+    }
+
     if (evalError) throw evalError;
 
-    // Create evaluator tracking record
+    // Attribution de l'évaluation à chaque examinateur du créneau (binôme
+    // ou note collective) : une ligne evaluator_tracking par membre, pas
+    // seulement pour celui qui a soumis.
+    const trackRows = Array.from(
+      new Set([...attributedMemberIds, memberId]),
+    ).map((mid) => ({
+      member_id: mid,
+      candidate_id: candidateId,
+      evaluation_id: evaluation.id,
+    }));
     const { error: trackError } = await supabaseAdmin
       .from("evaluator_tracking")
-      .insert({
-        member_id: memberId,
-        candidate_id: candidateId,
-        evaluation_id: evaluation.id,
-      });
+      .insert(trackRows);
 
     if (trackError) {
+      // Non bloquant : au pire, le tableau de suivi admin sous-compte
+      // temporairement le binôme (ex. contrainte unique(evaluation_id) pas
+      // encore relâchée par la migration — cf. MIGRATIONS_A_APPLIQUER.sql).
       console.error("Failed to create evaluator tracking:", trackError);
     }
 
@@ -282,19 +367,22 @@ export async function POST(req: NextRequest) {
           .select("id")
           .eq("candidate_id", candidateId)
           .eq("epreuve_id", epreuveId)
-          .eq("is_group", wantGroupEval);
+          .eq("is_group", effectiveIsGroup);
         // Contrainte unique individuelle = (candidate_id, epreuve_id,
         // member_id) : sans ce filtre on récupérerait la note d'un autre
         // examinateur.
-        if (!wantGroupEval) existingQuery = existingQuery.eq("member_id", memberId);
+        if (!effectiveIsGroup)
+          existingQuery = existingQuery.eq("member_id", memberId);
         const { data: existing } = await existingQuery.maybeSingle();
         if (existing) {
           return Response.json(
             {
-              error: wantGroupEval
-                ? "Une évaluation collective existe déjà pour ce candidat."
+              error: effectiveIsGroup
+                ? "Une évaluation partagée existe déjà pour ce candidat."
                 : "Vous avez déjà évalué ce candidat pour cette épreuve.",
-              code: wantGroupEval ? "GROUP_EVAL_EXISTS" : "INDIVIDUAL_EVAL_EXISTS",
+              code: effectiveIsGroup
+                ? "GROUP_EVAL_EXISTS"
+                : "INDIVIDUAL_EVAL_EXISTS",
               id: existing.id,
             },
             { status: 409 },

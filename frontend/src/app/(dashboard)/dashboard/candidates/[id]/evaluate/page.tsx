@@ -89,7 +89,8 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [indivComment, setIndivComment] = useState("");
   const [indivErrors, setIndivErrors] = useState<Record<number, string>>({});
 
-  // ── Group evaluation state ──
+  // ── Group evaluation state (aussi utilisé pour la note partagée en
+  // binôme sur une épreuve individuelle — cf. isBinome plus bas) ──
   const [groupEvalId, setGroupEvalId] = useState<string | null>(null);
   const [groupScores, setGroupScores] = useState<Record<number, string>>({});
   const [groupComment, setGroupComment] = useState("");
@@ -97,6 +98,11 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [groupLoading, setGroupLoading] = useState(false);
   const [groupSavedAt, setGroupSavedAt] = useState<string | null>(null);
   const [groupLastEditor, setGroupLastEditor] = useState<any>(null);
+  const [groupCanEdit, setGroupCanEdit] = useState(true);
+  const [groupClosedAt, setGroupClosedAt] = useState<string | null>(null);
+  const [groupClosedBy, setGroupClosedBy] = useState<any>(null);
+  const [closingEval, setClosingEval] = useState(false);
+  const [reopeningEval, setReopeningEval] = useState(false);
   const groupSaveTimer = useRef<NodeJS.Timeout | null>(null);
   // True tant qu'une édition locale n'a pas été persistée — empêche le
   // polling d'écraser ce que l'examinateur est en train de taper.
@@ -142,6 +148,12 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   const selectedEpreuve = epreuves.find((e) => e.id === selectedEpreuveId);
   const isGroupEpreuve = !!selectedEpreuve?.isGroupEpreuve;
+  // Épreuve individuelle (pas "de groupe") dont le créneau du candidat a 2
+  // examinateurs assignés ou plus : un seul note, la note est partagée et
+  // attribuée aux deux. Le serveur retranche déjà `examinerCount` sur
+  // resolveCandidateSlot + slot_member_assignments.
+  const isBinome = !isGroupEpreuve && (selectedEpreuve?.examinerCount ?? 0) >= 2;
+  const showSharedPanel = isGroupEpreuve || isBinome;
 
   let questions: Question[] = [];
   try {
@@ -164,9 +176,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const maxTotal = questions.reduce((sum, q) => sum + getMaxPoints(q), 0);
   const otherEvals = peerEvals.filter((e) => !e.isMine);
 
-  // ── Load group evaluation when épreuve selected ──
+  // ── Load group/binôme evaluation when épreuve selected ──
   const loadGroupEval = useCallback(async () => {
-    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    if (!selectedEpreuveId || !showSharedPanel) return;
     // Ne pas écraser une saisie locale non sauvegardée
     if (groupDirty.current || groupSaveTimer.current) return;
     setGroupLoading(true);
@@ -185,21 +197,30 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         setGroupComment(res.data.comment || "");
         setGroupSavedAt(res.data.updatedAt);
         setGroupLastEditor(res.data.lastEditor);
+        // canEdit absent (migration pas encore appliquée) => comportement
+        // d'avant, tout le monde peut éditer.
+        setGroupCanEdit(res.data.canEdit ?? true);
+        setGroupClosedAt(res.data.closedAt ?? null);
+        setGroupClosedBy(res.data.closedBy ?? null);
       } else {
         setGroupEvalId(null);
         setGroupScores({});
         setGroupComment("");
         setGroupSavedAt(null);
         setGroupLastEditor(null);
+        setGroupCanEdit(true);
+        setGroupClosedAt(null);
+        setGroupClosedBy(null);
       }
     } catch (e) {
       console.error("Failed to load group eval:", e);
     } finally {
       setGroupLoading(false);
     }
-  }, [id, selectedEpreuveId, isGroupEpreuve]);
+  }, [id, selectedEpreuveId, showSharedPanel]);
 
-  // ── Load peer individual evaluations (other examiners) ──
+  // ── Load peer individual evaluations (other examiners) — uniquement les
+  // vraies épreuves de groupe : en binôme il n'y a qu'une seule note. ──
   const loadPeers = useCallback(async () => {
     if (!selectedEpreuveId || !isGroupEpreuve) return;
     try {
@@ -214,7 +235,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   // ── Load the shared group comment feed ──
   const loadGroupComments = useCallback(async () => {
-    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    if (!selectedEpreuveId || !showSharedPanel) return;
     try {
       const res = await api.get(
         `/evaluations/group-comments?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
@@ -223,7 +244,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     } catch {
       // Silencieux : la table peut ne pas encore exister (migration)
     }
-  }, [id, selectedEpreuveId, isGroupEpreuve]);
+  }, [id, selectedEpreuveId, showSharedPanel]);
 
   useEffect(() => {
     loadGroupEval();
@@ -234,14 +255,14 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   // Poll all shared data every 7s so every examiner sees the others' notes,
   // the collective score and the comment feed evolve live.
   useEffect(() => {
-    if (!isGroupEpreuve || !selectedEpreuveId) return;
+    if (!showSharedPanel || !selectedEpreuveId) return;
     const t = setInterval(() => {
       loadGroupEval();
       loadPeers();
       loadGroupComments();
     }, 7000);
     return () => clearInterval(t);
-  }, [isGroupEpreuve, selectedEpreuveId, loadGroupEval, loadPeers, loadGroupComments]);
+  }, [showSharedPanel, selectedEpreuveId, loadGroupEval, loadPeers, loadGroupComments]);
 
   const validateScore = (
     idx: number,
@@ -269,14 +290,54 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   };
 
   const handleGroupScore = (idx: number, val: string, maxPoints: number) => {
+    if (!groupCanEdit || groupClosedAt) return;
     setGroupScores((p) => ({ ...p, [idx]: val }));
     validateScore(idx, val, maxPoints, setGroupErrors);
     scheduleGroupSave({ ...groupScores, [idx]: val }, groupComment);
   };
 
   const handleGroupComment = (val: string) => {
+    if (!groupCanEdit || groupClosedAt) return;
     setGroupComment(val);
     scheduleGroupSave(groupScores, val);
+  };
+
+  // Valide/clôture la note partagée (binôme ou collective) : plus personne
+  // à part un admin ne peut la modifier après ça.
+  const handleValidateClose = async () => {
+    if (!groupEvalId) return;
+    setClosingEval(true);
+    try {
+      const res = await api.post(`/evaluations/${groupEvalId}/close`);
+      setGroupClosedAt(res.data?.closedAt || new Date().toISOString());
+      toast("Évaluation clôturée.", "success");
+      await loadGroupEval();
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Erreur lors de la clôture",
+        "error",
+      );
+    } finally {
+      setClosingEval(false);
+    }
+  };
+
+  // Réouverture (admin uniquement) d'une évaluation clôturée.
+  const handleReopen = async () => {
+    if (!groupEvalId) return;
+    setReopeningEval(true);
+    try {
+      await api.post(`/evaluations/${groupEvalId}/reopen`);
+      toast("Évaluation rouverte.", "success");
+      await loadGroupEval();
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Erreur lors de la réouverture",
+        "error",
+      );
+    } finally {
+      setReopeningEval(false);
+    }
   };
 
   // Debounced auto-save for group eval (so collaborators see edits within 1s)
@@ -438,7 +499,12 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 <option value="">-- Sélectionner une épreuve --</option>
                 {epreuves.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.name} ({e.type}){e.isGroupEpreuve ? " · groupe" : ""}
+                    {e.name} ({e.type})
+                    {e.isGroupEpreuve
+                      ? " · groupe"
+                      : e.examinerCount >= 2
+                        ? " · binôme"
+                        : ""}
                   </option>
                 ))}
               </select>
@@ -452,18 +518,20 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {/* ───────── Group evaluation section (only for group épreuves) ───────── */}
-      {selectedEpreuve && isGroupEpreuve && (
+      {/* ───────── Shared evaluation section : vraie épreuve de groupe, ou
+          épreuve individuelle en binôme (2+ examinateurs sur le créneau) ───────── */}
+      {selectedEpreuve && showSharedPanel && (
         <Card className="border-indigo-200">
           <CardHeader className="bg-indigo-50/50">
             <div className="flex items-start justify-between flex-wrap gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2 text-indigo-900">
-                  👥 Évaluation collective
+                  👥 {isBinome ? "Évaluation partagée (binôme)" : "Évaluation collective"}
                 </CardTitle>
                 <p className="text-xs text-indigo-700 mt-1">
-                  Partagée entre tous les examinateurs du créneau · sauvegarde
-                  automatique
+                  {isBinome
+                    ? "Une seule note pour les deux examinateurs du créneau · sauvegarde automatique"
+                    : "Partagée entre tous les examinateurs du créneau · sauvegarde automatique"}
                 </p>
               </div>
               <div className="text-right">
@@ -475,7 +543,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                     </span>
                   )}
                 </p>
-                <p className="text-[10px] text-indigo-500 -mt-0.5">Note collective</p>
+                <p className="text-[10px] text-indigo-500 -mt-0.5">
+                  {isBinome ? "Note du binôme" : "Note collective"}
+                </p>
                 {groupSavedAt && (
                   <p className="text-[11px] text-indigo-600 font-medium mt-1">
                     Dernière maj : {new Date(groupSavedAt).toLocaleTimeString("fr-FR")}
@@ -494,22 +564,79 @@ function EvaluateCandidateForm({ id }: { id: string }) {
               <p className="text-sm text-gray-400">Chargement…</p>
             ) : (
               <>
+                {groupClosedAt ? (
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
+                    <p className="text-sm font-medium text-gray-800">
+                      🔒 Évaluation clôturée
+                      {groupClosedBy &&
+                        ` par ${groupClosedBy.firstName || groupClosedBy.email}`}{" "}
+                      le {new Date(groupClosedAt).toLocaleString("fr-FR")}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Seul un administrateur peut la rouvrir.
+                    </p>
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-2"
+                        disabled={reopeningEval}
+                        onClick={handleReopen}
+                      >
+                        {reopeningEval ? "Réouverture…" : "Réouvrir (admin)"}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  isBinome &&
+                  groupEvalId &&
+                  !groupCanEdit && (
+                    <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-2">
+                      <p className="text-xs text-indigo-700">
+                        Notée par votre binôme — vous pouvez consulter, commenter
+                        et valider, mais pas modifier les points.
+                      </p>
+                    </div>
+                  )
+                )}
+
                 <ScoreGrid
                   questions={questions}
                   scores={groupScores}
                   scoreErrors={groupErrors}
                   onChange={handleGroupScore}
+                  disabled={!groupCanEdit || !!groupClosedAt}
                 />
                 <div className="space-y-2 border-t border-indigo-100 pt-4">
-                  <Label>Synthèse collective</Label>
+                  <Label>Synthèse {isBinome ? "du binôme" : "collective"}</Label>
                   <textarea
-                    className="w-full p-2 border rounded-md"
+                    className="w-full p-2 border rounded-md disabled:bg-gray-50 disabled:text-gray-500"
                     rows={3}
                     value={groupComment}
+                    disabled={!groupCanEdit || !!groupClosedAt}
                     onChange={(e) => handleGroupComment(e.target.value)}
                     placeholder="Synthèse partagée, modifiable par tous les examinateurs…"
                   />
                 </div>
+
+                {groupEvalId && !groupClosedAt && (
+                  <div className="border-t border-indigo-100 pt-4">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={closingEval}
+                      onClick={handleValidateClose}
+                    >
+                      {closingEval
+                        ? "Clôture…"
+                        : "✓ Valider et clôturer la notation"}
+                    </Button>
+                    <p className="text-[11px] text-gray-500 mt-1 text-center">
+                      Clôture la note pour tout le monde — seul un admin
+                      pourra ensuite la rouvrir.
+                    </p>
+                  </div>
+                )}
 
                 {/* ── Fil de commentaires du groupe ── */}
                 <div className="space-y-2 border-t border-indigo-100 pt-4">
@@ -578,8 +705,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         </Card>
       )}
 
-      {/* ───────── Individual evaluation section ───────── */}
-      {selectedEpreuve && (
+      {/* ───────── Individual evaluation section (masquée en binôme : une
+          seule note partagée existe déjà ci-dessus) ───────── */}
+      {selectedEpreuve && !isBinome && (
         <Card>
           <CardHeader>
             <CardTitle>

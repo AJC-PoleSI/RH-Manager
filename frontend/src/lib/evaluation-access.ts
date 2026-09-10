@@ -105,3 +105,32 @@ export async function canEvaluate(
   const ids = await listEvaluableEpreuveIds(memberId, candidateId);
   return ids.includes(epreuveId);
 }
+
+/**
+ * Liste les membres assignés à un créneau (ids). Sert à déterminer si une
+ * épreuve individuelle est passée en binôme (2+ examinateurs sur le même
+ * créneau) et à qui attribuer l'évaluation partagée qui en résulte.
+ */
+export async function getSlotExaminerIds(slotId: string): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("slot_member_assignments")
+    .select("member_id")
+    .eq("slot_id", slotId);
+
+  if (error || !data) return [];
+  return data.map((r: any) => r.member_id).filter(Boolean);
+}
+
+/**
+ * Vrai si l'erreur signifie « colonne absente » (migration pas encore
+ * appliquée en prod — cf. MIGRATIONS_A_APPLIQUER.sql / CLAUDE.md). Permet un
+ * repli dégradé plutôt qu'un 500 sur tout le flux d'évaluation.
+ */
+export function isMissingColumnError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; message?: unknown };
+  const code = String(e.code ?? "");
+  // PostgREST: PGRST204 = colonne absente du cache de schéma.
+  // Postgres:  42703    = undefined_column.
+  return code === "PGRST204" || code === "42703";
+}

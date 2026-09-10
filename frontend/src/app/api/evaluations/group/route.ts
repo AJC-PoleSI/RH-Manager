@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { canEvaluate } from "@/lib/evaluation-access";
+import { canEvaluate, isMissingColumnError } from "@/lib/evaluation-access";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/group?candidateId=X&epreuveId=Y
@@ -38,13 +38,29 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  const baseSelect =
+    "*, last_editor:members!last_edited_by(first_name, last_name, email), closer:members!closed_by(first_name, last_name, email), epreuves(is_group_epreuve)";
+
+  let { data, error } = await supabaseAdmin
     .from("candidate_evaluations")
-    .select("*, last_editor:members!last_edited_by(first_name, last_name, email)")
+    .select(baseSelect)
     .eq("candidate_id", candidateId)
     .eq("epreuve_id", epreuveId)
     .eq("is_group", true)
     .maybeSingle();
+
+  // Repli : colonnes closed_at/closed_by pas encore migrées en prod.
+  if (error && isMissingColumnError(error)) {
+    ({ data, error } = await supabaseAdmin
+      .from("candidate_evaluations")
+      .select(
+        "*, last_editor:members!last_edited_by(first_name, last_name, email), epreuves(is_group_epreuve)",
+      )
+      .eq("candidate_id", candidateId)
+      .eq("epreuve_id", epreuveId)
+      .eq("is_group", true)
+      .maybeSingle());
+  }
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });
@@ -54,21 +70,41 @@ export async function GET(req: NextRequest) {
     return Response.json({ exists: false }, { status: 200 });
   }
 
+  const d = data as any;
+  // Note collective d'une vraie épreuve "de groupe" : n'importe quel membre
+  // assigné au créneau peut éditer (comportement historique). Note partagée
+  // en binôme (épreuve individuelle, 2+ examinateurs) : seul l'auteur édite,
+  // les autres sont en lecture seule (cf. règle miroir dans PUT /[id]).
+  const isRealGroupEpreuve = d.epreuves?.is_group_epreuve === true;
+  // Le requérant est déjà vérifié assigné au créneau plus haut (canEvaluate).
+  const canEdit =
+    !d.closed_at &&
+    (user.isAdmin || d.member_id === user.id || isRealGroupEpreuve);
+
   return Response.json({
     exists: true,
-    id: data.id,
+    id: d.id,
+    ownerId: d.member_id,
+    isMine: d.member_id === user.id,
     scores:
-      typeof data.scores === "string"
-        ? JSON.parse(data.scores || "{}")
-        : data.scores,
-    comment: data.comment || "",
-    updatedAt: data.updated_at || data.created_at,
-    lastEditor: data.last_editor
+      typeof d.scores === "string" ? JSON.parse(d.scores || "{}") : d.scores,
+    comment: d.comment || "",
+    updatedAt: d.updated_at || d.created_at,
+    lastEditor: d.last_editor
       ? {
-          firstName: data.last_editor.first_name,
-          lastName: data.last_editor.last_name,
-          email: data.last_editor.email,
+          firstName: d.last_editor.first_name,
+          lastName: d.last_editor.last_name,
+          email: d.last_editor.email,
         }
       : null,
+    closedAt: d.closed_at || null,
+    closedBy: d.closer
+      ? {
+          firstName: d.closer.first_name,
+          lastName: d.closer.last_name,
+          email: d.closer.email,
+        }
+      : null,
+    canEdit,
   });
 }
