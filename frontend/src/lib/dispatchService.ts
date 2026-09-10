@@ -241,24 +241,45 @@ export async function runDispatch(opts?: {
   }
 
   // 3. Fetch current assignments
-  const slotIds = slots.map((s: any) => s.id);
+  //
+  // BUG (rapporté par Felix le 10/09/2026, plusieurs cas observés le lundi) :
+  // un dispatch scoped à une épreuve (`opts.epreuveId`, cas du bouton
+  // "Publier" par épreuve) ne charge dans `slots` QUE les créneaux de cette
+  // épreuve. Si on se contente de lire les affectations `.in("slot_id",
+  // slotIds)`, les affectations des AUTRES épreuves — posées par un run
+  // précédent, scoped sur une épreuve différente — restent invisibles :
+  // registerConflict (étape 8) ne les enregistre jamais, et ce run peut donc
+  // réaffecter librement un examinateur déjà engagé au même horaire sur une
+  // autre épreuve. Résultat vécu : le même examinateur inscrit sur deux
+  // créneaux qui se chevauchent le même jour.
+  //
+  // Fix : on lit TOUJOURS les affectations de TOUS les créneaux (pas
+  // seulement `slotIds`), avec l'horaire de leur créneau. Celles hors du lot
+  // traité par ce run sont enregistrées plus bas comme engagements fixes
+  // (étape 8bis), quel que soit leur statut gelé/verrouillé — ce run ne les
+  // recalcule de toute façon jamais.
+  //
   // On lit aussi `is_manual` : un examinateur placé À LA MAIN par l'admin
   // (toggle-member) épingle son créneau, que le dispatch ne doit plus
   // rebrasser. Tant que la colonne n'est pas posée en base, on retombe sur la
   // lecture d'origine et le comportement reste celui d'avant.
-  let currentAssigns: any[] | null = null;
+  const slotIds = slots.map((s: any) => s.id);
+  const slotIdSet = new Set(slotIds);
+  let allAssigns: any[] | null = null;
   {
     const withManual = await supabaseAdmin
       .from("slot_member_assignments")
-      .select("slot_id, member_id, is_manual")
-      .in("slot_id", slotIds);
+      .select(
+        "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id)",
+      );
 
     if (withManual.error) {
       const plain = await supabaseAdmin
         .from("slot_member_assignments")
-        .select("slot_id, member_id")
-        .in("slot_id", slotIds);
-      currentAssigns = plain.data;
+        .select(
+          "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id)",
+        );
+      allAssigns = plain.data;
       console.warn(
         "[dispatch] Colonne slot_member_assignments.is_manual absente — les " +
           "affectations manuelles ne sont PAS protégées du rebrassage. " +
@@ -266,9 +287,18 @@ export async function runDispatch(opts?: {
           "MIGRATIONS_A_APPLIQUER.sql.",
       );
     } else {
-      currentAssigns = withManual.data;
+      allAssigns = withManual.data;
     }
   }
+
+  const currentAssigns = (allAssigns || []).filter((a: any) =>
+    slotIdSet.has(a.slot_id),
+  );
+  // Affectations sur des créneaux HORS du lot traité par ce run (autre
+  // épreuve quand `opts.epreuveId` est fourni) — engagements fixes, cf. étape 8bis.
+  const externalAssigns = (allAssigns || []).filter(
+    (a: any) => !slotIdSet.has(a.slot_id) && a.slot,
+  );
 
   // Créneaux « épinglés » : au moins un examinateur y a été placé à la main.
   //
