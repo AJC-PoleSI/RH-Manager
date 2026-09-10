@@ -50,11 +50,12 @@ export default function VerifyEmailPage() {
   const handleResend = async () => {
     if (!email.trim()) return;
     setResendLoading(true);
+    setResendError("");
     try {
       await api.post("/auth/resend-verification", { email: email.trim() });
       setResendDone(true);
-    } catch {
-      /* silent */
+    } catch (err: any) {
+      setResendError(err.response?.data?.error ?? "Échec de l'envoi. Réessayez.");
     } finally {
       setResendLoading(false);
     }
