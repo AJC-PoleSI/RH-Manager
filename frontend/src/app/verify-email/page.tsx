@@ -17,6 +17,7 @@ export default function VerifyEmailPage() {
   const [email, setEmail] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
   const [resendDone, setResendDone] = useState(false);
+  const [resendError, setResendError] = useState("");
 
   const verify = useCallback(async () => {
     const token = searchParams.get("token");
