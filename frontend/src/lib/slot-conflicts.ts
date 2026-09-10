@@ -26,16 +26,45 @@ export function normalizeRoom(room: string | null | undefined): string {
 }
 
 /**
+ * Bornes UTC d'un jour calendaire "YYYY-MM-DD", calculées explicitement
+ * (Date.UTC) pour ne jamais dépendre du fuseau du serveur.
+ *
+ * `evaluation_slots.date` est stocké à midi HEURE LOCALE convertie en UTC
+ * (cf. slotInsertRow : `new Date(dateStr + "T12:00:00").toISOString()`) — pour
+ * le fuseau de l'appli (Europe/Paris, UTC+1/+2), ça tombe toujours entre
+ * 10h et 11h UTC, donc largement à l'intérieur de ces bornes.
+ */
+function dayRangeUTC(dateStr: string): { start: string; end: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return {
+    start: new Date(Date.UTC(y, (m || 1) - 1, d || 1, 0, 0, 0, 0)).toISOString(),
+    end: new Date(Date.UTC(y, (m || 1) - 1, d || 1, 23, 59, 59, 999)).toISOString(),
+  };
+}
+
+/**
  * Charge tous les créneaux existants d'une journée (toutes épreuves
  * confondues) sous forme d'intervalles par salle normalisée.
  */
 export async function fetchDayIntervals(
   dateStr: string,
 ): Promise<Map<string, RoomInterval[]>> {
-  const { data } = await supabaseAdmin
+  // BUG (trouvé en test local le 10/09/2026) : `.like("date", "${dateStr}%")`
+  // sur une colonne `timestamptz` fait échouer la requête à coup sûr
+  // ("operator does not exist: timestamp with time zone ~~ unknown") — et
+  // l'erreur était silencieusement ignorée (seul `data` était déstructuré),
+  // donc `fetchDayIntervals` renvoyait TOUJOURS une Map vide. Résultat :
+  // AUCUNE des routes qui créent/déplacent des créneaux (openings, slots,
+  // bulk-create, publish, duplicate) ne détectait jamais le moindre
+  // chevauchement de salle — un doublon (double-clic, retry réseau,
+  // re-soumission) créait silencieusement des créneaux en plus.
+  const { start, end } = dayRangeUTC(dateStr);
+  const { data, error } = await supabaseAdmin
     .from("evaluation_slots")
     .select("id, room, start_time, end_time")
-    .like("date", `${dateStr}%`);
+    .gte("date", start)
+    .lte("date", end);
+  if (error) throw error;
 
   const byRoom = new Map<string, RoomInterval[]>();
   for (const s of (data as any[]) || []) {
