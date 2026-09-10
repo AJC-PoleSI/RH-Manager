@@ -442,11 +442,12 @@ export default function MemberDashboardCalendar({
                                                     const customStyle = ev.color ? { backgroundColor: ev.color, color: "#fff" } : {};
                                                     const borderClass = style.border ? `border ${style.border}` : "";
                                                     const classes = ev.color ? "" : `${style.bg} ${style.text} ${borderClass}`;
+                                                    const emptyOpacity = ev.type === "slot_empty" ? "opacity-60" : "";
                                                     return (
                                                         <button
                                                             key={ev.id}
                                                             onClick={() => setSelectedMemberSlot(ev)}
-                                                            className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${classes}`}
+                                                            className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${emptyOpacity} ${classes}`}
                                                             style={customStyle}
                                                             title={`${ev.title}${ev.room ? ` — ${ev.room}` : ""}${ev.startTime ? ` ${ev.startTime.slice(0, 5)}` : ""}`}
                                                         >
