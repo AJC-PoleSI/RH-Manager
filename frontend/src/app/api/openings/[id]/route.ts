@@ -10,6 +10,7 @@ import {
   notifySlotDeletion,
   deleteSlotsByIds,
   validateOpeningInput,
+  activeEnrollmentsOf,
 } from "@/lib/openings-service";
 
 export const dynamic = "force-dynamic";
