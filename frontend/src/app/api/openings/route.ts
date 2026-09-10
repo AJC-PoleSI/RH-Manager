@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
         break_end: o.break_end ? String(o.break_end).slice(0, 5) : null,
         slots_total: slots.length,
         slots_occupied: slots.filter((s: any) => s.occupied).length,
+        slots_ready: slots.filter((s: any) => s.staffed).length,
         conflicts: slots.filter((s: any) => conflictSet.has(s.id)),
       };
     });
