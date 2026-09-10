@@ -115,10 +115,13 @@ export async function POST(req: NextRequest) {
           ? Boolean(body.isGroupEpreuve)
           : body.type === "groupe",
       group_size: Math.max(1, Number(body.groupSize) || 1),
-      // Épreuve de groupe : le minimum d'examinateurs suit toujours le
-      // minimum de candidats (règle métier business game — voir
-      // docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md).
-      // Ne pas se fier uniquement au front pour synchroniser les deux valeurs.
+      // Épreuve de groupe : minimum de candidats pour qu'un créneau ne soit
+      // pas fusionné à la clôture des inscriptions (merge-undersized).
+      // Indépendant de min_evaluators_per_salle depuis le 10/09/2026 (Felix
+      // veut pouvoir fixer le nombre d'examinateurs minimum sans qu'il soit
+      // recalé sur le minimum de candidats — voir
+      // docs/superpowers/specs/2026-09-07-min-candidats-epreuves-groupe-design.md
+      // pour le contexte historique de cette synchro, désormais abandonnée).
       min_candidates:
         (body.isGroupEpreuve ?? body.type === "groupe")
           ? Number(body.minCandidates) || null
