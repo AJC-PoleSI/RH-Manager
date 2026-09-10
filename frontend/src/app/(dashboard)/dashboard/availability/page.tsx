@@ -171,6 +171,7 @@ export default function AvailabilityPage() {
           label: s.epreuve?.name?.trim() || "Épreuve",
           sublabel: parts.join(" · ") || undefined,
           color: colorFor(s.epreuve?.id || s.id),
+          hasCandidates: candidateNames.length > 0,
         });
         nextDetails.set(s.id, {
           id: s.id,
