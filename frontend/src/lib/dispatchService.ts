@@ -199,7 +199,6 @@ function commitMember(
   if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
   memberCommittedSlots[memberId].push(commitmentOf(slot));
 }
-}
 
 // ─── Main Dispatch Function ───────────────────────────────────────────
 
