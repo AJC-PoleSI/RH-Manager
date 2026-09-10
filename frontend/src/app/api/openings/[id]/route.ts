@@ -101,21 +101,35 @@ export async function PUT(
 
     const diff = diffOpeningSlots(next.date, target, existing);
 
-    // 0. Créneaux occupés qui sortiraient de la nouvelle plage : refusés par
-    // défaut (comme DELETE), sinon annulés + inscrits notifiés si `force`.
-    // Sans cette garde, ils restaient liés à CETTE ouverture mais hors de
-    // son horaire affiché — la salle avait l'air fermée sur le planning
-    // alors qu'un entretien y restait programmé.
+    // 0. Créneaux qui sortiraient de la nouvelle plage :
+    //   - avec un CANDIDAT inscrit → refusés par défaut (comme DELETE),
+    //     annulés + candidat notifié seulement si `force` (jamais annuler un
+    //     entretien qu'un candidat a réservé sans confirmation explicite) ;
+    //   - avec seulement des EXAMINATEURS affectés, aucun candidat → annulés
+    //     directement, sans confirmation : ce n'est pas un engagement pris
+    //     envers un candidat, et l'appelant relance le dispatch juste après
+    //     (cf. RoomOpeningsGrid.handleSave) pour réaffecter ces examinateurs
+    //     libérés sur un créneau qui existe encore.
+    // Avant cette garde, ces créneaux restaient liés à CETTE ouverture mais
+    // hors de son horaire affiché — la salle avait l'air fermée sur le
+    // planning alors qu'un entretien (souvent collectif) y restait
+    // programmé. Bug remonté par Felix le 10/09/2026.
     if (diff.conflictIds.length > 0) {
       const conflictSet = new Set(diff.conflictIds);
       const conflictSlots = existing.filter((s) => conflictSet.has(s.id));
+      const withCandidates = conflictSlots.filter(
+        (s) => activeEnrollmentsOf(s.raw).length > 0,
+      );
+      const membersOnly = conflictSlots.filter(
+        (s) => !withCandidates.includes(s),
+      );
 
-      if (!force) {
+      if (withCandidates.length > 0 && !force) {
         return Response.json(
           {
             error:
               "Des créneaux de cette ouverture ont des inscrits en dehors de la nouvelle plage",
-            occupied: conflictSlots.map((s) => ({
+            occupied: withCandidates.map((s) => ({
               id: s.id,
               date: s.date,
               start_time: s.start_time,
@@ -126,8 +140,10 @@ export async function PUT(
         );
       }
 
-      await notifySlotDeletion(conflictSlots.map((s) => s.raw));
-      await deleteSlotsByIds(diff.conflictIds);
+      if (withCandidates.length > 0) {
+        await notifySlotDeletion(withCandidates.map((s) => s.raw));
+      }
+      await deleteSlotsByIds([...withCandidates, ...membersOnly].map((s) => s.id));
     }
 
     // 1. Supprimer les créneaux libres hors cible (aucune inscription → pas de notification)
