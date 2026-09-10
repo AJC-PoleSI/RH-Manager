@@ -52,6 +52,8 @@ export interface Overlay {
   label: string;
   sublabel?: string;
   color?: string;
+  /** Aucun candidat inscrit sur ce créneau — rendu atténué pour le distinguer. */
+  hasCandidates?: boolean;
 }
 
 interface Props {
