@@ -42,15 +42,21 @@ language plpgsql
 as $$
 declare
   v_date date;
-  v_start time;
-  v_end time;
+  -- `evaluation_slots.start_time`/`end_time` sont des TEXT "HH:MM" (pas un
+  -- type `time`) : comparaison lexicographique, comme partout ailleurs dans
+  -- le code applicatif (cf. hhmm()/timeLt() en TypeScript). Testé en local
+  -- (sandbox Supabase Docker) avant application prod — la première version
+  -- de ce trigger déclarait `time` et cassait TOUT insert avec "operator
+  -- does not exist: text < time without time zone".
+  v_start text;
+  v_end text;
   v_conflict_count int;
 begin
   -- Ferme la fenêtre de race : toute autre transaction qui insère pour ce
   -- même membre attend ici jusqu'à notre commit/rollback.
   perform pg_advisory_xact_lock(hashtext(new.member_id::text));
 
-  select date, start_time, end_time
+  select date::date, start_time, end_time
     into v_date, v_start, v_end
     from evaluation_slots
     where id = new.slot_id;
@@ -67,7 +73,7 @@ begin
     join evaluation_slots es on es.id = sma.slot_id
     where sma.member_id = new.member_id
       and sma.slot_id <> new.slot_id
-      and es.date = v_date
+      and es.date::date = v_date
       and es.start_time < v_end
       and v_start < es.end_time;
 
