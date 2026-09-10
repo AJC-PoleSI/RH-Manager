@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
         room: s.room,
         status: s.status,
         occupied: isSlotOccupied(s),
+        staffed: isSlotStaffed(s),
       }));
       const target = sliceOpeningRow(o, epreuve);
       const diff = diffOpeningSlots(String(o.date).split("T")[0], target, slots);
