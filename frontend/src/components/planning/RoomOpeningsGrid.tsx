@@ -280,53 +280,99 @@ export default function RoomOpeningsGrid({
     setWarnings([]);
     const problems: string[] = [];
     try {
-      // Ordre imposé : on libère d'abord la place (suppressions), on ajuste
-      // ensuite, on crée en dernier. L'inverse ferait échouer des créations
-      // sur un chevauchement avec une ouverture qu'on s'apprêtait à retirer.
-      for (const id of diff.toDelete) {
-        try {
-          await api.delete(`/openings/${id}`);
-        } catch (e: any) {
-          const occupied = e?.response?.data?.occupied;
-          problems.push(
-            occupied?.length
-              ? `Suppression refusée : ${occupied.length} créneau(x) ont déjà des inscrits.`
-              : e?.response?.data?.error || "Échec d'une suppression",
-          );
-        }
+      // Ordre imposé ENTRE LES PHASES : on libère d'abord la place
+      // (suppressions), on ajuste ensuite, on crée en dernier. L'inverse
+      // ferait échouer des créations sur un chevauchement avec une ouverture
+      // qu'on s'apprêtait à retirer. En revanche les opérations D'UNE MÊME
+      // PHASE portent sur des salles/dates distinctes (bandes indépendantes)
+      // : les enchaîner en série un par un est ce qui rendait
+      // l'enregistrement lent dès qu'on ouvrait plusieurs salles à la fois.
+      // Promise.all les lance en parallèle sans changer l'ordre des phases.
+      const occupiedBlocked: { id: string; occupiedCount: number }[] = [];
+      await Promise.all(
+        diff.toDelete.map(async (id) => {
+          try {
+            await api.delete(`/openings/${id}`);
+          } catch (e: any) {
+            const occupied = e?.response?.data?.occupied;
+            if (occupied?.length) {
+              occupiedBlocked.push({ id, occupiedCount: occupied.length });
+            } else {
+              problems.push(e?.response?.data?.error || "Échec d'une suppression");
+            }
+          }
+        }),
+      );
+
+      // Une ouverture avec des inscrits est refusée par défaut (409) — sans
+      // ça, retirer une bande qui a ne serait-ce qu'un seul candidat inscrit
+      // était impossible depuis cette grille, même en cas d'erreur de saisie
+      // manifeste. On demande UNE confirmation groupée puis on force
+      // (DELETE ?force=true, qui notifie les candidats concernés) plutôt que
+      // de laisser l'ouverture bloquée indéfiniment.
+      if (occupiedBlocked.length > 0) {
+        const totalOccupied = occupiedBlocked.reduce(
+          (s, o) => s + o.occupiedCount,
+          0,
+        );
+        const confirmForce = window.confirm(
+          `${occupiedBlocked.length} ouverture(s) à supprimer ont ${totalOccupied} créneau(x) déjà inscrit(s). ` +
+            `Forcer la suppression quand même ? Les candidats concernés seront prévenus que leur créneau est annulé.`,
+        );
+        await Promise.all(
+          occupiedBlocked.map(async ({ id, occupiedCount }) => {
+            if (!confirmForce) {
+              problems.push(
+                `Suppression refusée : ${occupiedCount} créneau(x) ont déjà des inscrits.`,
+              );
+              return;
+            }
+            try {
+              await api.delete(`/openings/${id}`, { params: { force: true } });
+            } catch (e: any) {
+              problems.push(
+                e?.response?.data?.error || "Échec de la suppression forcée",
+              );
+            }
+          }),
+        );
       }
 
-      for (const u of diff.toUpdate) {
-        try {
-          await api.put(`/openings/${u.id}`, {
-            room: u.room,
-            date: u.date,
-            startTime: u.startTime,
-            endTime: u.endTime,
-          });
-        } catch (e: any) {
-          problems.push(
-            `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification"}`,
-          );
-        }
-      }
+      await Promise.all(
+        diff.toUpdate.map(async (u) => {
+          try {
+            await api.put(`/openings/${u.id}`, {
+              room: u.room,
+              date: u.date,
+              startTime: u.startTime,
+              endTime: u.endTime,
+            });
+          } catch (e: any) {
+            problems.push(
+              `${u.room} le ${u.date} : ${e?.response?.data?.error || "échec de la modification"}`,
+            );
+          }
+        }),
+      );
 
-      for (const c of diff.toCreate) {
-        try {
-          const res = await api.post("/openings", {
-            epreuveId,
-            room: c.room,
-            dates: [c.date],
-            startTime: c.startTime,
-            endTime: c.endTime,
-          });
-          for (const w of res.data?.warnings || []) problems.push(w);
-        } catch (e: any) {
-          problems.push(
-            `${c.room} le ${c.date} : ${e?.response?.data?.error || "échec de la création"}`,
-          );
-        }
-      }
+      await Promise.all(
+        diff.toCreate.map(async (c) => {
+          try {
+            const res = await api.post("/openings", {
+              epreuveId,
+              room: c.room,
+              dates: [c.date],
+              startTime: c.startTime,
+              endTime: c.endTime,
+            });
+            for (const w of res.data?.warnings || []) problems.push(w);
+          } catch (e: any) {
+            problems.push(
+              `${c.room} le ${c.date} : ${e?.response?.data?.error || "échec de la création"}`,
+            );
+          }
+        }),
+      );
 
       setDirty(false);
       await load();
