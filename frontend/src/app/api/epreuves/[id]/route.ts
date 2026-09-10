@@ -181,12 +181,6 @@ export async function PUT(
       }
     }
 
-    // Épreuve de groupe : le minimum d'examinateurs suit toujours le
-    // minimum de candidats (même règle qu'à la création).
-    if (updateData.is_group_epreuve && updateData.min_candidates) {
-      updateData.min_evaluators_per_salle = updateData.min_candidates;
-    }
-
     const { data, error } = await supabaseAdmin
       .from("epreuves")
       .update(updateData)
