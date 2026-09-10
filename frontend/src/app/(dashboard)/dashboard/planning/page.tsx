@@ -554,6 +554,9 @@ export default function PlanningPage() {
     // changements de jury. Toutes les 5s.
     if (isAdmin) {
       const interval = setInterval(() => {
+        // Ne pas fetch/re-render pendant que l'onglet est en arrière-plan
+        // (économise du travail et évite de dégrader l'INP au retour).
+        if (document.hidden) return;
         fetchSlotData();
         fetchAvailabilityData();
       }, 5000);
