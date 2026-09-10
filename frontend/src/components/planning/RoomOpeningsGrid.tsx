@@ -44,6 +44,8 @@ import { localYmd, MERGE_TOLERANCE_MIN } from "@/lib/availability-bands";
 interface ApiOpening extends OpeningRow {
   slots_total?: number;
   slots_occupied?: number;
+  /** Créneaux ayant atteint leur quota d'examinateurs (statut ready/published/full). */
+  slots_ready?: number;
 }
 
 interface Props {
