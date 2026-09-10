@@ -50,7 +50,6 @@ function ScoreGrid({
                   min="0"
                   max={maxPoints}
                   placeholder="0"
-                  required
                   disabled={disabled}
                   value={scores[idx] ?? ""}
                   className={scoreErrors[idx] ? "border-red-500" : ""}
