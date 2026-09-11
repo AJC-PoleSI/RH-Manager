@@ -687,7 +687,7 @@ export async function runDispatch(opts?: {
             supabaseAdmin
               .from("deliberations")
               .select("candidate_id, tour1_status, tour2_status, tour3_status")
-              .order("candidate_id")
+              .order("id")
               .range(from, to),
           ),
           fetchAllRows<any>((from, to) =>
