@@ -1,6 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { canEvaluate, isMissingColumnError } from "@/lib/evaluation-access";
+import {
+  normalizeScores,
+  parseQuestions,
+  scoreValidationMessage,
+  validateScores,
+} from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 // PUT /api/evaluations/[id] - Update an evaluation
@@ -24,14 +30,16 @@ export async function PUT(
       const { data, error } = await supabaseAdmin
         .from("candidate_evaluations")
         .select(
-          "member_id, candidate_id, epreuve_id, is_group, closed_at, epreuves(is_group_epreuve)",
+          "member_id, candidate_id, epreuve_id, is_group, closed_at, epreuves(is_group_epreuve, evaluation_questions)",
         )
         .eq("id", id)
         .single();
       if (error && isMissingColumnError(error)) {
         const fallback = await supabaseAdmin
           .from("candidate_evaluations")
-          .select("member_id, candidate_id, epreuve_id, is_group, epreuves(is_group_epreuve)")
+          .select(
+            "member_id, candidate_id, epreuve_id, is_group, epreuves(is_group_epreuve, evaluation_questions)",
+          )
           .eq("id", id)
           .single();
         existing = fallback.data;
@@ -91,15 +99,19 @@ export async function PUT(
       updated_at: new Date().toISOString(),
     };
     if (scores !== undefined) {
-      // Normaliser en nombres pour éviter la concaténation de strings
-      const rawScores =
-        typeof scores === "string" ? JSON.parse(scores) : scores || {};
-      const normalized: Record<string, number> = {};
-      for (const [k, v] of Object.entries(rawScores)) {
-        const num = Number(v);
-        normalized[k] = Number.isFinite(num) ? num : 0;
+      // Même garde que le POST : chaque note dans [0, points max du critère].
+      // Le PUT réécrivait auparavant n'importe quelle valeur (999/3 possible).
+      const questions = parseQuestions(existing.epreuves?.evaluation_questions);
+      const invalid = validateScores(questions, scores);
+      if (invalid) {
+        return Response.json(
+          { error: scoreValidationMessage(invalid) },
+          { status: 400 },
+        );
       }
-      updateData.scores = JSON.stringify(normalized);
+      updateData.scores = JSON.stringify(
+        normalizeScores(scores, questions.length ? questions : null),
+      );
     }
     if (comment !== undefined)
       updateData.comment =

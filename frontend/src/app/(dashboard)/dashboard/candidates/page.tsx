@@ -11,7 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
 import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
-import { getCriterionLabel, getMaxPoints } from '@/lib/evaluation-criteria';
+import {
+    averageOn20ByEpreuve,
+    getCriterionLabel,
+    getMaxPoints,
+    getTotalMaxPoints,
+    hasAnyScore,
+    sumScores,
+    toTwenty,
+} from '@/lib/evaluation-criteria';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -203,8 +211,6 @@ export default function CandidatesPage() {
                 } catch { return {}; }
             };
 
-            const avgOf = (nums: number[]) =>
-                nums.length === 0 ? null : Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
 
             // ───────── Sheet 1: Synthèse (one row per candidate) ─────────
             const synthRows = data.map((c: any) => {
@@ -216,10 +222,20 @@ export default function CandidatesPage() {
                     evalsByTour[t].push(e);
                 });
 
-                const tourAverage = (tour: number) => {
-                    const all = (evalsByTour[tour] || []).flatMap((e) => Object.values(parseScores(e.scores)));
-                    return avgOf(all as number[]);
-                };
+                // Même règle que la délibération : chaque évaluation ramenée en %
+                // de son barème, moyenne par épreuve, pondération par le barème,
+                // résultat /20. (Avant : moyenne brute des points par critère, où un
+                // critère /5 pesait autant qu'un critère /20.)
+                const toScored = (list: any[]) =>
+                    list
+                        .filter((e) => hasAnyScore(e.scores))
+                        .map((e) => ({
+                            epreuveKey: e.epreuves?.id || e.epreuves?.name || 'sans-epreuve',
+                            obtained: sumScores(e.scores),
+                            maxTotal: getTotalMaxPoints(e.epreuves?.evaluation_questions),
+                        }));
+                const tourAverage = (tour: number) =>
+                    averageOn20ByEpreuve(toScored(evalsByTour[tour] || []));
 
                 const tourComments = (tour: number) =>
                     (evalsByTour[tour] || [])
@@ -233,8 +249,7 @@ export default function CandidatesPage() {
                         .filter(Boolean)
                         .join('\n');
 
-                const allScores = evals.flatMap((e) => Object.values(parseScores(e.scores))) as number[];
-                const globalAvg = avgOf(allScores);
+                const globalAvg = averageOn20ByEpreuve(toScored(evals));
 
                 const delib = Array.isArray(c.deliberation) ? c.deliberation[0] : c.deliberation;
 
@@ -242,13 +257,13 @@ export default function CandidatesPage() {
                     Prénom: c.first_name,
                     Nom: c.last_name,
                     Email: c.email,
-                    'Note Tour 1': tourAverage(1),
+                    'Note Tour 1 (/20)': tourAverage(1),
                     'Commentaires Tour 1': tourComments(1),
-                    'Note Tour 2': tourAverage(2),
+                    'Note Tour 2 (/20)': tourAverage(2),
                     'Commentaires Tour 2': tourComments(2),
-                    'Note Tour 3': tourAverage(3),
+                    'Note Tour 3 (/20)': tourAverage(3),
                     'Commentaires Tour 3': tourComments(3),
-                    'Note Globale': globalAvg,
+                    'Note Globale (/20)': globalAvg,
                     'Points forts (délibération)': delib?.pros_comment || '',
                     'Points faibles (délibération)': delib?.cons_comment || '',
                     'Commentaire général': delib?.global_comments || c.comments || '',
@@ -265,7 +280,9 @@ export default function CandidatesPage() {
                 evals.forEach((e) => {
                     const scores = parseScores(e.scores);
                     const scoreEntries = Object.entries(scores);
-                    const avg = avgOf(scoreEntries.map(([, v]) => v));
+                    const maxTotal = getTotalMaxPoints(e.epreuves?.evaluation_questions);
+                    const total = sumScores(e.scores);
+                    const noteOn20 = hasAnyScore(e.scores) && maxTotal > 0 ? toTwenty(total, maxTotal) : null;
                     detailRows.push({
                         Prénom: c.first_name,
                         Nom: c.last_name,
@@ -276,7 +293,8 @@ export default function CandidatesPage() {
                             ? `${e.members.first_name} ${e.members.last_name || ''}`.trim()
                             : e.members?.email || '',
                         'Détail des notes': scoreEntries.map(([k, v]) => `${k}: ${v}`).join(' | '),
-                        Moyenne: avg,
+                        Total: maxTotal > 0 ? `${total} / ${maxTotal}` : total,
+                        'Note /20': noteOn20,
                         Commentaire: e.comment || '',
                         Date: e.created_at ? new Date(e.created_at).toLocaleDateString('fr-FR') : '',
                     });

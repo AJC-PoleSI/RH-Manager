@@ -30,6 +30,7 @@ const MEMBER_VISIBLE_FIELDS = [
 export function projectCandidateForMember<T extends Record<string, any>>(
   candidate: T,
   isAdmin: boolean,
+  viewerId?: string | null,
 ): Record<string, any> {
   if (isAdmin) return candidate;
   if (!candidate) return candidate;
@@ -39,13 +40,28 @@ export function projectCandidateForMember<T extends Record<string, any>>(
     if (field in candidate) projected[field] = candidate[field];
   }
 
-  // Les évaluations restent visibles : elles portent les notes, le
-  // commentaire et l'identité de l'examinateur.
+  // Les évaluations restent visibles : elles portent les notes et l'identité
+  // de l'examinateur. Le COMMENTAIRE, lui, n'est visible que par son auteur —
+  // même règle que /api/evaluations/candidate/[id] et /api/deliberations
+  // (audit du 12/09/2026 : ces deux routes le masquaient, celles des candidats
+  // le laissaient passer en clair à tout membre).
+  const projectEvaluation = (ev: Record<string, any>) =>
+    ev && typeof ev === "object"
+      ? {
+          ...ev,
+          comment:
+            viewerId && ev.member_id === viewerId ? ev.comment : null,
+        }
+      : ev;
   if ("candidate_evaluations" in candidate) {
-    projected.candidate_evaluations = candidate.candidate_evaluations;
+    const raw = candidate.candidate_evaluations;
+    projected.candidate_evaluations = Array.isArray(raw)
+      ? raw.map(projectEvaluation)
+      : raw;
   }
   if ("evaluations" in candidate) {
-    projected.evaluations = candidate.evaluations;
+    const raw = candidate.evaluations;
+    projected.evaluations = Array.isArray(raw) ? raw.map(projectEvaluation) : raw;
   }
   if ("candidate_wishes" in candidate) {
     projected.candidate_wishes = candidate.candidate_wishes;

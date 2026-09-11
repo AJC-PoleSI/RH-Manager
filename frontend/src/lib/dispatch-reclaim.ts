@@ -28,7 +28,7 @@
  * servis.
  */
 
-import { blocksSlot } from "@/lib/dispatch-core";
+import { blocksSlot, type RoomedCommitment } from "@/lib/dispatch-core";
 
 export interface ReclaimSlot {
   id: string;
@@ -66,6 +66,14 @@ interface PlanInput {
   juryBySlot: Map<string, Set<string>>;
   /** Membres dont les disponibilités couvrent ce créneau. */
   eligibleFor: (slotId: string) => Set<string> | string[];
+  /**
+   * Engagements que ce run ne recalcule PAS (affectations sur des créneaux
+   * hors périmètre, ex. autre épreuve lors d'un run scopé), par membre. Un
+   * examinateur n'est jamais déplacé vers un créneau que l'un d'eux bloque —
+   * sans ça, un run scopé pouvait le poser sur deux créneaux qui se
+   * chevauchent (audit du 12/09/2026).
+   */
+  fixedCommitments?: Map<string, RoomedCommitment[]>;
 }
 
 const commitmentOf = (s: ReclaimSlot) => ({
@@ -83,8 +91,11 @@ function conflictsElsewhere(
   exceptSlotId: string,
   slots: ReclaimSlot[],
   juryBySlot: Map<string, Set<string>>,
+  fixedCommitments?: Map<string, RoomedCommitment[]>,
 ): boolean {
   const t = commitmentOf(target);
+  if ((fixedCommitments?.get(memberId) || []).some((c) => blocksSlot(c, t)))
+    return true;
   return slots.some(
     (s) =>
       s.id !== exceptSlotId &&
@@ -115,6 +126,7 @@ export function planReclaims({
   slots,
   juryBySlot,
   eligibleFor,
+  fixedCommitments,
 }: PlanInput): ReclaimMove[] {
   const moves: ReclaimMove[] = [];
   const jury = (id: string) => juryBySlot.get(id) || new Set<string>();
@@ -172,6 +184,7 @@ export function planReclaims({
                 donor.id,
                 slots,
                 juryBySlot,
+                fixedCommitments,
               ),
           )
           .sort(); // déterminisme

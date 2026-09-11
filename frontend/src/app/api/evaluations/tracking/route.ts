@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/tracking - Fetch all evaluator tracking data (admin only)
@@ -9,14 +10,21 @@ export async function GET(req: NextRequest) {
   if (!user.isAdmin) return forbidden();
 
   try {
-    const { data: tracking, error } = await supabaseAdmin.from(
-      "evaluator_tracking",
-    ).select(`
+    // Une ligne par examinateur × évaluation : paginé (plafond PostgREST).
+    const { data: tracking, error } = await fetchAllRows<any>((from, to) =>
+      supabaseAdmin
+        .from("evaluator_tracking")
+        .select(
+          `
         *,
         members(id, email),
         candidates(id, first_name, last_name),
         candidate_evaluations(scores, comment, epreuves(name))
-      `);
+      `,
+        )
+        .order("id")
+        .range(from, to),
+    );
 
     if (error) throw error;
 

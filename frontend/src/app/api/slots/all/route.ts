@@ -4,6 +4,7 @@ import {
   filterActiveEnrollments,
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -30,33 +31,43 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get("end");
 
   try {
-    let query = supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        `
+    // Lecture PAGINÉE : la prod dépasse 1000 créneaux (1076 au 12/09/2026)
+    // et PostgREST tronque silencieusement toute lecture non paginée à 1000
+    // lignes — le planning admin perdait 76 créneaux sans aucune erreur.
+    // `.order("id")` en dernier garantit un parcours stable entre les pages.
+    const buildQuery = () => {
+      let query = supabaseAdmin
+        .from("evaluation_slots")
+        .select(
+          `
         *,
         epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size),
         members:slot_member_assignments(*, member:members(id, email, first_name, last_name)),
         enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name, email)),
         requests:slot_availability_requests(*, member:members(id, email))
       `,
-      )
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true });
+        )
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .order("id", { ascending: true });
 
-    if (tour) query = query.eq("tour", parseInt(tour));
-    if (status) query = query.eq("status", status);
-    if (start && end) {
-      const startDate = new Date(start);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(end);
-      endDate.setHours(23, 59, 59, 999);
-      query = query
-        .gte("date", startDate.toISOString())
-        .lte("date", endDate.toISOString());
-    }
+      if (tour) query = query.eq("tour", parseInt(tour));
+      if (status) query = query.eq("status", status);
+      if (start && end) {
+        const startDate = new Date(start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(end);
+        endDate.setHours(23, 59, 59, 999);
+        query = query
+          .gte("date", startDate.toISOString())
+          .lte("date", endDate.toISOString());
+      }
+      return query;
+    };
 
-    const { data, error } = await query;
+    const { data, error } = await fetchAllRows<any>((from, to) =>
+      buildQuery().range(from, to),
+    );
     if (error) throw error;
     // FIX C2 + H5: drop slots without épreuve (orphan guard), and also
     // strip cancelled enrollments from each slot so capacity / candidate

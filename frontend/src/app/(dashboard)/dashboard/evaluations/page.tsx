@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { toTwenty } from '@/lib/evaluation-criteria';
+import { hasAnyScore, toTwenty } from '@/lib/evaluation-criteria';
 import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
 
 interface MemberData {
@@ -23,8 +23,11 @@ interface EvaluationData {
     comment?: string;
     createdAt: string;
     candidate: { id: string; firstName: string; lastName: string };
-    epreuve: { name: string; tour: number; type: string; maxTotal?: number };
+    epreuve: { id?: string; name: string; tour: number; type: string; maxTotal?: number };
     member?: { id: string; firstName?: string; lastName?: string; email: string };
+    /** Note partagée (binôme / collective) plutôt qu'avis individuel. */
+    isGroup?: boolean;
+    closedAt?: string | null;
 }
 
 const POLES = ["Système d'information", 'Marketing', 'Développement commercial', 'Audit Qualité', 'Ressource Humaine', 'Trésorerie', 'Bureau - VP', 'Bureau - Président', 'Bureau - Secrétaire générale'];
@@ -215,8 +218,10 @@ function AdminView() {
 
     // Note moyenne GLOBALE = vraie moyenne des notes /20 (chaque évaluation
     // est d'abord ramenée à /20 selon le barème de son épreuve, sinon
-    // moyenner des totaux bruts d'épreuves à barèmes différents n'a pas de sens)
-    const allTotals = evaluations.map(ev => getScoreOn20(ev)).filter(v => v > 0);
+    // moyenner des totaux bruts d'épreuves à barèmes différents n'a pas de sens).
+    // Un 0/20 saisi est une note et compte ; une évaluation SANS aucune note
+    // (ligne collective créée à vide) est écartée.
+    const allTotals = evaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
@@ -229,7 +234,7 @@ function AdminView() {
         const mId = ev.member?.id || '';
         memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
         if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
-        memberEvalAverages[mId].push(getScoreOn20(ev));
+        if (hasAnyScore(ev.scores)) memberEvalAverages[mId].push(getScoreOn20(ev));
     });
 
     if (loading) {
@@ -520,9 +525,14 @@ function AdminView() {
                         </thead>
                         <tbody className="divide-y">
                             {evaluations.map(ev => {
-                                // Note collective = moyenne des totaux pour même candidat + même épreuve
+                                // Note collective = moyenne des notes /20 pour même candidat + même
+                                // épreuve (par id ; à défaut nom + tour), hors lignes sans aucune note.
+                                const sameEpreuve = (e: EvaluationData) =>
+                                    ev.epreuve?.id && e.epreuve?.id
+                                        ? e.epreuve.id === ev.epreuve.id
+                                        : e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour;
                                 const sameGroup = evaluations.filter(
-                                    e => e.candidate?.id === ev.candidate?.id && e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour
+                                    e => e.candidate?.id === ev.candidate?.id && sameEpreuve(e) && hasAnyScore(e.scores)
                                 );
                                 const groupTotals = sameGroup.map(e => getScoreOn20(e));
                                 const collectiveScore = groupTotals.length > 0
@@ -544,7 +554,12 @@ function AdminView() {
                                                 T{ev.epreuve?.tour || '?'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-3 text-center font-bold text-blue-600">{getScoreOn20(ev)}/20</td>
+                                        <td className="px-6 py-3 text-center font-bold text-blue-600">
+                                            {hasAnyScore(ev.scores) ? `${getScoreOn20(ev)}/20` : '—'}
+                                            {ev.isGroup && (
+                                                <span className="block text-[10px] font-normal text-indigo-500">note partagée</span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className="font-bold text-green-700">{collectiveScore}/20</span>
@@ -719,7 +734,7 @@ function MemberView() {
     // Stats — moyenne globale des notes /20 (chaque évaluation ramenée à /20
     // selon le barème de son épreuve avant d'être moyennée)
     const totalEvals = evaluations.length;
-    const allTotals = evaluations.map(ev => getScoreOn20(ev)).filter(v => v > 0);
+    const allTotals = evaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;

@@ -7,7 +7,13 @@ import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
 import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart, Maximize2, Minimize2 } from "lucide-react";
-import { getEpreuveCoefficient, toTwenty } from "@/lib/evaluation-criteria";
+import {
+  averageOn20ByEpreuve,
+  getEpreuveCoefficient,
+  hasAnyScore,
+  sumScores,
+  toTwenty,
+} from "@/lib/evaluation-criteria";
 
 interface Tour3Obligation {
   pole: string;
@@ -232,18 +238,19 @@ export default function DeliberationsPage() {
     try {
       const res = await api.get("/deliberations");
       setCandidates(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      try {
-        const res = await api.get("/candidates?limit=1000");
-        const list = Array.isArray(res.data) ? res.data : res.data.data || [];
-        setCandidates(list);
-      } catch {
-        setCandidates([]);
-      }
+    } catch (e: any) {
+      // Pas de repli sur /candidates : sa réponse n'a ni délibération, ni
+      // vœux, ni barème — la page affichait alors « - » partout sans un mot.
+      setCandidates([]);
+      toast(
+        e?.response?.data?.error ||
+          "Impossible de charger les candidats de la délibération.",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadData();
@@ -309,9 +316,16 @@ export default function DeliberationsPage() {
       } else {
         setTimeout(() => setSwipeDirection(null), 300);
       }
-    } catch (e) {
+    } catch (e: any) {
       setSwipeDirection(null);
       console.error("Failed to update deliberation:", e);
+      // Un 403 (non-admin) ou un 423 (tour verrouillé) restait invisible :
+      // l'écran laissait croire que la décision avait été prise.
+      toast(
+        e?.response?.data?.error ||
+          "La décision n'a pas pu être enregistrée.",
+        "error",
+      );
     }
   };
 
@@ -370,46 +384,25 @@ export default function DeliberationsPage() {
   // prorata de son barème (coefficient = barème / 20 — cf. getEpreuveCoefficient).
   // Une épreuve notée sur 40 compte donc 2x plus qu'une épreuve notée sur 20,
   // et une épreuve notée sur 5 compte 4x moins.
-  const getAvgScore = (c: Candidate): number => {
-    if (!c.evaluations || c.evaluations.length === 0) return 0;
+  //
+  // Périmètre : les évaluations DU TOUR DÉLIBÉRÉ. Avant, la moyenne mêlait
+  // tous les tours (un 18/20 au tour 1 masquait un 8/20 au tour 2). Les
+  // évaluations des autres tours restent consultables dans le détail.
+  // Une évaluation sans aucune note (ligne collective créée à vide) est
+  // ignorée : « pas de note » n'est pas 0. `null` = aucune note exploitable.
+  const evalsForTour = (c: Candidate): Evaluation[] =>
+    (c.evaluations || []).filter((ev) => ev.epreuve?.tour === selectedTour);
 
-    // Ratios 0..1 regroupés par épreuve, avec le barème de l'épreuve.
-    const byEpreuve = new Map<string, { ratios: number[]; maxTotal: number }>();
-
-    c.evaluations.forEach((ev) => {
-      const scores = parseScores(ev.scores);
-      if (!scores) return;
-
-      const obtained = Object.values(scores)
-        .map(Number)
-        .filter((n) => Number.isFinite(n))
-        .reduce((a, b) => a + b, 0);
-
-      const maxTotal = Number(ev.epreuve?.maxTotal);
-      // Sans barème connu, on ne peut pas normaliser : on ignore cette
-      // évaluation plutôt que de fausser la moyenne avec une note brute.
-      if (!Number.isFinite(maxTotal) || maxTotal <= 0) return;
-
-      const key = ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve";
-      const entry = byEpreuve.get(key) || { ratios: [], maxTotal };
-      entry.ratios.push(Math.min(1, Math.max(0, obtained / maxTotal)));
-      byEpreuve.set(key, entry);
-    });
-
-    if (byEpreuve.size === 0) return 0;
-
-    let weightedSum = 0;
-    let totalCoef = 0;
-    byEpreuve.forEach(({ ratios, maxTotal }) => {
-      const avgRatio = ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length;
-      const coef = getEpreuveCoefficient(maxTotal);
-      weightedSum += avgRatio * coef;
-      totalCoef += coef;
-    });
-
-    const overall = totalCoef > 0 ? weightedSum / totalCoef : 0;
-    return Math.round(overall * 20 * 10) / 10;
-  };
+  const getAvgScore = (c: Candidate): number | null =>
+    averageOn20ByEpreuve(
+      evalsForTour(c)
+        .filter((ev) => hasAnyScore(ev.scores))
+        .map((ev) => ({
+          epreuveKey: ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve",
+          obtained: sumScores(ev.scores),
+          maxTotal: Number(ev.epreuve?.maxTotal),
+        })),
+    );
 
   const getScoreTotal = (scores: any): number => {
     const parsed = parseScores(scores);
@@ -435,7 +428,7 @@ export default function DeliberationsPage() {
   const formatCoef = (coef: number): string =>
     Number.isInteger(coef) ? String(coef) : coef.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 
-  const getEvalCount = (c: Candidate): number => c.evaluations?.length || 0;
+  const getEvalCount = (c: Candidate): number => evalsForTour(c).length;
 
   const getFirstPole = (c: Candidate): string => {
     if (c.wishes && c.wishes.length > 0) {
@@ -454,9 +447,15 @@ export default function DeliberationsPage() {
         return t1 === "accepted" || t1 === "waiting";
       }
       if (selectedTour === 3) {
+        // Même règle qu'au tour 2 : une réserve (waiting) au tour précédent
+        // n'exclut pas — sinon un candidat en réserve au T1 puis admis au T2
+        // disparaissait de la liste du T3 sans pouvoir y être décidé.
         const t1 = c.deliberation?.tour1Status;
         const t2 = c.deliberation?.tour2Status;
-        return t1 === "accepted" && (t2 === "accepted" || t2 === "waiting");
+        return (
+          (t1 === "accepted" || t1 === "waiting") &&
+          (t2 === "accepted" || t2 === "waiting")
+        );
       }
       return true;
     });
@@ -517,6 +516,12 @@ export default function DeliberationsPage() {
   const acceptedCount = filteredCandidates.filter((c) => getStatus(c) === "accepted").length;
   const refusedCount = filteredCandidates.filter((c) => getStatus(c) === "refused").length;
   const pendingCount = filteredCandidates.filter((c) => !getStatus(c) || getStatus(c) === "pending").length;
+
+  // Compteurs de la modale « Valider et Envoyer » : l'API envoie un email à
+  // TOUS les candidats décidés du tour, quel que soit le filtre de pôle
+  // affiché — les compteurs doivent annoncer exactement ce qui va partir.
+  const sendAcceptedCount = candidates.filter((c) => getStatus(c) === "accepted").length;
+  const sendRefusedCount = candidates.filter((c) => getStatus(c) === "refused").length;
 
   // Current candidate (Tinder)
   const currentCandidate = filteredCandidates[currentIndex] || null;
@@ -608,6 +613,15 @@ export default function DeliberationsPage() {
     const status = getStatus(c);
     const btnSize = size === "sm" ? "w-8 h-8" : "w-12 h-12";
     const iconSize = size === "sm" ? 14 : 20;
+    // La décision est réservée aux admins (PUT /api/deliberations = 403
+    // sinon) : on ne propose pas des boutons qui échoueraient en silence.
+    if (!isAdmin) {
+      return (
+        <span className="text-[11px] text-gray-400 italic" title="Décision réservée aux administrateurs">
+          {status && status !== "pending" ? statusBadge(status) : "Décision réservée aux admins"}
+        </span>
+      );
+    }
     return (
       <div className={`flex items-center gap-1.5 ${tourLocked ? "opacity-40 pointer-events-none" : ""}`} title={tourLocked ? `Tour ${selectedTour} verrouillé` : undefined}>
         <button
@@ -1139,7 +1153,7 @@ export default function DeliberationsPage() {
                             </td>
                             <td className="px-5 py-3 text-center text-gray-600">{evalC}</td>
                             <td className="px-5 py-3 text-center font-bold text-blue-600">
-                              {avg ? <>{avg}<span className="text-xs font-normal text-gray-400"> / 20</span></> : "-"}
+                              {avg !== null ? <>{avg}<span className="text-xs font-normal text-gray-400"> / 20</span></> : "-"}
                             </td>
                             <td className="px-5 py-3 text-center">{statusBadge(status)}</td>
                             <td className="px-5 py-3">
@@ -1242,7 +1256,7 @@ export default function DeliberationsPage() {
                               <div className="flex items-center gap-1.5">
                                 <span>&#11088;</span>
                                 <span className="font-bold text-gray-800">
-                                  {avg ? `${avg} / 20` : "-"}
+                                  {avg !== null ? `${avg} / 20` : "-"}
                                 </span>
                                 <span className="text-xs text-gray-400">({evalC} eval{evalC !== 1 ? "s" : ""})</span>
                               </div>
@@ -1399,7 +1413,7 @@ export default function DeliberationsPage() {
                               <div className="flex items-center gap-1.5">
                                 <span className={focusMode ? "text-2xl" : "text-lg"}>&#11088;</span>
                                 <span className={`font-bold text-gray-800 ${focusMode ? "text-2xl" : "text-lg"}`}>
-                                  {avgScore ? `${avgScore} / 20` : "-"}
+                                  {avgScore !== null ? `${avgScore} / 20` : "-"}
                                 </span>
                               </div>
                               <span className={`text-gray-400 ${focusMode ? "text-sm" : "text-xs"}`}>
@@ -1412,9 +1426,9 @@ export default function DeliberationsPage() {
 
                       {/* Key comments preview */}
                       <div className={focusMode ? "px-8 py-5" : "px-6 py-4"}>
-                        {c.evaluations && c.evaluations.length > 0 ? (
+                        {evalsForTour(c).length > 0 ? (
                           <div className="space-y-2">
-                            {c.evaluations.slice(0, 2).map((ev, idx) => (
+                            {evalsForTour(c).slice(0, 2).map((ev, idx) => (
                               <div key={ev.id || idx} className="flex items-start gap-2">
                                 <span className={`text-gray-300 mt-0.5 ${focusMode ? "text-sm" : "text-xs"}`}>&#128172;</span>
                                 <div className="flex-1 min-w-0">
@@ -1431,9 +1445,9 @@ export default function DeliberationsPage() {
                                 </div>
                               </div>
                             ))}
-                            {c.evaluations.length > 2 && (
+                            {evalsForTour(c).length > 2 && (
                               <p className={`text-blue-500 font-medium ${focusMode ? "text-sm" : "text-xs"}`}>
-                                + {c.evaluations.length - 2} autre{c.evaluations.length - 2 > 1 ? "s" : ""} evaluation{c.evaluations.length - 2 > 1 ? "s" : ""}
+                                + {evalsForTour(c).length - 2} autre{evalsForTour(c).length - 2 > 1 ? "s" : ""} evaluation{evalsForTour(c).length - 2 > 1 ? "s" : ""}
                               </p>
                             )}
                           </div>
@@ -1487,7 +1501,13 @@ export default function DeliberationsPage() {
                                 Toutes les evaluations ({c.evaluations.length})
                               </h3>
                               <div className="space-y-2">
-                                {c.evaluations.map((ev, idx) => {
+                                {[...c.evaluations]
+                                  .sort(
+                                    (a, b) =>
+                                      (a.epreuve?.tour === selectedTour ? 0 : 1) -
+                                      (b.epreuve?.tour === selectedTour ? 0 : 1),
+                                  )
+                                  .map((ev, idx) => {
                                   const scores = typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores;
                                   return (
                                     <div key={ev.id || idx} className="bg-white rounded-lg border border-gray-200 p-3">
@@ -1759,14 +1779,18 @@ export default function DeliberationsPage() {
               {/* Summary Stats */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-xl p-4 text-center bg-green-50">
-                  <div className="text-3xl font-bold text-green-600">{acceptedCount}</div>
+                  <div className="text-3xl font-bold text-green-600">{sendAcceptedCount}</div>
                   <div className="text-sm text-gray-600 mt-1">Admis</div>
                 </div>
                 <div className="rounded-xl p-4 text-center bg-red-50">
-                  <div className="text-3xl font-bold text-red-500">{refusedCount}</div>
+                  <div className="text-3xl font-bold text-red-500">{sendRefusedCount}</div>
                   <div className="text-sm text-gray-600 mt-1">Refuses</div>
                 </div>
               </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                Tous les candidats décidés du Tour {selectedTour} recevront un email,
+                tous pôles confondus (le filtre de pôle de la page n&apos;est pas appliqué).
+              </p>
 
               {/* Mode de message */}
               <div className="inline-flex bg-gray-100 rounded-lg p-0.5">
@@ -1851,7 +1875,7 @@ export default function DeliberationsPage() {
                 </button>
                 <button
                   onClick={handleValidateAndSend}
-                  disabled={validateSending || (acceptedCount + refusedCount === 0)}
+                  disabled={validateSending || (sendAcceptedCount + sendRefusedCount === 0)}
                   className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {validateSending ? "Envoi…" : "Confirmer et Envoyer"}

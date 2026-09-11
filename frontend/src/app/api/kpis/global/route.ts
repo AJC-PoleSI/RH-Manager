@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { isMissingColumnError } from "@/lib/evaluation-access";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +27,16 @@ export async function GET(req: NextRequest) {
       perMemberRes,
       slotsRes,
       deliberationsRes,
-      epreuvesDataRes,
+      toursRes,
       availabilitiesCountRes,
     ] = await Promise.all([
+      // Même périmètre que la soirée de délibération et l'export : un
+      // candidat dont l'email n'est pas vérifié n'a pas fini son inscription
+      // et n'aura jamais de statut — il ne doit pas gonfler « En cours ».
       supabaseAdmin
         .from("candidates")
-        .select("id", { count: "exact", head: true }),
+        .select("id", { count: "exact", head: true })
+        .eq("email_verified", true),
       supabaseAdmin
         .from("candidate_evaluations")
         .select("id", { count: "exact", head: true }),
@@ -40,7 +46,14 @@ export async function GET(req: NextRequest) {
       supabaseAdmin
         .from("members")
         .select("id", { count: "exact", head: true }),
-      supabaseAdmin.from("candidate_evaluations").select("member_id"),
+      // Paginé : le total d'évaluations dépassera 1000 au fil des tours.
+      fetchAllRows<{ member_id: string }>((from, to) =>
+        supabaseAdmin
+          .from("candidate_evaluations")
+          .select("member_id")
+          .order("id")
+          .range(from, to),
+      ),
       // Only count slots linked to a real épreuve — orphan slots (epreuve_id=null)
       // are bugs/leftovers and must NOT inflate the "Créneaux planifiés" KPI.
       supabaseAdmin
@@ -48,7 +61,9 @@ export async function GET(req: NextRequest) {
         .select("id", { count: "exact", head: true })
         .not("epreuve_id", "is", null),
       supabaseAdmin.from("deliberations").select("*"),
-      supabaseAdmin.from("epreuves").select("tour"),
+      // « Tours créés » = la table `tours`, pas les valeurs distinctes de
+      // `epreuves.tour` (3 tours créés sans épreuve au tour 2 affichait 1).
+      supabaseAdmin.from("tours").select("id", { count: "exact", head: true }),
       supabaseAdmin
         .from("availabilities")
         .select("id", { count: "exact", head: true }),
@@ -66,15 +81,17 @@ export async function GET(req: NextRequest) {
       .map(([memberId, count]) => ({ memberId, _count: { id: count } }))
       .sort((a, b) => b._count.id - a._count.id);
 
-    const toursSet = new Set<number>();
-    if (epreuvesDataRes.data) {
-      epreuvesDataRes.data.forEach((ep: any) => {
-        if (ep.tour) toursSet.add(ep.tour);
-      });
-    }
-    const toursCreated = toursSet.size;
+    const toursCreated = toursRes.count ?? 0;
 
-    const totalCandidates = candidatesRes.count ?? 0;
+    // Colonne `email_verified` absente (migration pas appliquée) : on retombe
+    // sur le décompte brut plutôt que de casser tout le tableau de bord.
+    let totalCandidates = candidatesRes.count ?? 0;
+    if (candidatesRes.error && isMissingColumnError(candidatesRes.error)) {
+      const { count } = await supabaseAdmin
+        .from("candidates")
+        .select("id", { count: "exact", head: true });
+      totalCandidates = count ?? 0;
+    }
     const deliberations = deliberationsRes.data || [];
 
     let accepted = 0;

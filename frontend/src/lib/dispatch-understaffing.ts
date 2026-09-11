@@ -1,3 +1,4 @@
+import { isActiveEnrollment, type EnrollmentStatus } from "@/lib/enrollment";
 /**
  * dispatch-understaffing — Sous-effectif des créneaux : statut, bascule, alerte.
  *
@@ -37,7 +38,12 @@ export function activeEnrollmentCount(
   enrollments?: EnrollmentLike[] | null,
 ): number {
   if (!enrollments) return 0;
-  return enrollments.filter((e) => !e?.status || e.status === "active").length;
+  // Même règle que partout ailleurs (lib/enrollment.ts) : "active",
+  // "enrolled" (défaut historique de la colonne) et null sont des
+  // inscriptions en cours ; seul "cancelled" est une désinscription.
+  return enrollments.filter((e) =>
+    isActiveEnrollment(e?.status as EnrollmentStatus),
+  ).length;
 }
 
 // ─── Statut d'un créneau après dispatch ───────────────────────────────
@@ -90,7 +96,11 @@ export function isNewlyUnderstaffed(
   after: number,
   minMembers: number,
 ): boolean {
-  return before >= minMembers && after < minMembers;
+  if (before >= minMembers && after < minMembers) return true;
+  // Chute à ZÉRO examinateur depuis un créneau déjà incomplet (1/2 → 0/2) :
+  // le candidat n'a plus aucun jury, c'est la situation « CRITIQUE » — elle
+  // doit être signalée même par un run automatique.
+  return before > 0 && after === 0;
 }
 
 // ─── Composition des alertes ──────────────────────────────────────────

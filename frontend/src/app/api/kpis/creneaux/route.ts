@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +19,18 @@ export async function GET(req: NextRequest) {
   if (!payload.isAdmin) return forbidden();
 
   try {
-    const { data: slots, error } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        "id, epreuve_id, status, epreuve:epreuves(id, name, tour), enrollments:slot_enrollments(id)",
-      )
-      .not("epreuve_id", "is", null);
+    // Lecture PAGINÉE : plus de 1000 créneaux en prod, PostgREST tronque à
+    // 1000 sans erreur — le KPI sous-comptait silencieusement.
+    const { data: slots, error } = await fetchAllRows<any>((from, to) =>
+      supabaseAdmin
+        .from("evaluation_slots")
+        .select(
+          "id, epreuve_id, status, epreuve:epreuves(id, name, tour), enrollments:slot_enrollments(id, status)",
+        )
+        .not("epreuve_id", "is", null)
+        .order("id")
+        .range(from, to),
+    );
 
     if (error) throw error;
 
@@ -53,7 +61,10 @@ export async function GET(req: NextRequest) {
       const entry = byEpreuve[key];
       entry.totalSlots++;
       if (s.status === "ready") entry.readySlots++;
-      entry.candidatsInscrits += s.enrollments?.length ?? 0;
+      // Une inscription annulée n'est pas un candidat inscrit.
+      entry.candidatsInscrits += (s.enrollments || []).filter(
+        filterActiveEnrollments,
+      ).length;
     });
 
     const epreuves = Object.values(byEpreuve).sort(

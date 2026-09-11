@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
-import { normalizeQuestions } from "@/lib/evaluation-criteria";
+import { normalizeQuestions, parseQuestions } from "@/lib/evaluation-criteria";
 import { staleTimingCount, timingChangeWarning } from "@/lib/openings-service";
 import { NextRequest } from "next/server";
 
@@ -183,6 +183,40 @@ export async function PUT(
           },
           { status: 409 },
         );
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // GARDE : barème modifié alors que des notes existent déjà.
+    // Les notes sont stockées par POSITION de critère ({"0": 3, "1": 2}) :
+    // ajouter/retirer un critère décale ou fausse toutes les évaluations
+    // saisies (une note 16/20 devient 20/20 ou 12/20 selon le sens). On
+    // refuse tant que l'admin n'a pas confirmé explicitement ; un simple
+    // changement de libellé ou de points max reste libre.
+    // ══════════════════════════════════════════════════════════════════
+    if (updateData.evaluation_questions !== undefined) {
+      const { data: before } = await supabaseAdmin
+        .from("epreuves")
+        .select("evaluation_questions")
+        .eq("id", id)
+        .maybeSingle();
+      const countBefore = parseQuestions(before?.evaluation_questions).length;
+      const countAfter = parseQuestions(updateData.evaluation_questions).length;
+      if (countBefore !== countAfter && body.confirmCriteriaChange !== true) {
+        const { count: evalCount } = await supabaseAdmin
+          .from("candidate_evaluations")
+          .select("id", { count: "exact", head: true })
+          .eq("epreuve_id", id);
+        if ((evalCount ?? 0) > 0) {
+          return Response.json(
+            {
+              code: "EVALUATIONS_EXIST",
+              evaluations: evalCount,
+              error: `${evalCount} évaluation(s) ont déjà été saisies sur cette épreuve avec ${countBefore} critère(s). Passer à ${countAfter} critère(s) décalerait les notes existantes. Confirmez pour forcer la modification.`,
+            },
+            { status: 409 },
+          );
+        }
       }
     }
 

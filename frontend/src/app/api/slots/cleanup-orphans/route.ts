@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 /**
@@ -26,16 +27,30 @@ export async function POST(req: NextRequest) {
       ghostEvaluationsPurged: 0,
     };
 
-    // 1) Get all valid slot IDs
-    const { data: allSlots } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select("id");
-    const validSlotIds = new Set((allSlots || []).map((s: any) => s.id));
+    // 1) Get all valid slot IDs — lecture PAGINÉE et erreur BLOQUANTE.
+    //    Avec plus de 1000 créneaux en base (1076 en prod), une lecture non
+    //    paginée n'en voyait que 1000 : les inscriptions et affectations des
+    //    créneaux invisibles étaient prises pour des orphelines et SUPPRIMÉES.
+    //    De même, une lecture en erreur (`data` null) aurait vidé toute la
+    //    table : on s'arrête plutôt que de purger sur une vue partielle.
+    const { data: allSlots, error: slotsError } = await fetchAllRows<{
+      id: string;
+    }>((from, to) =>
+      supabaseAdmin.from("evaluation_slots").select("id").order("id").range(from, to),
+    );
+    if (slotsError) throw slotsError;
+    const validSlotIds = new Set((allSlots || []).map((s) => s.id));
 
     // 2) Purge orphan enrollments
-    const { data: allEnrolls } = await supabaseAdmin
-      .from("slot_enrollments")
-      .select("id, slot_id");
+    const { data: allEnrolls, error: enrollsError } = await fetchAllRows<any>(
+      (from, to) =>
+        supabaseAdmin
+          .from("slot_enrollments")
+          .select("id, slot_id")
+          .order("id")
+          .range(from, to),
+    );
+    if (enrollsError) throw enrollsError;
     const orphanEnrollIds = (allEnrolls || [])
       .filter((e: any) => !e.slot_id || !validSlotIds.has(e.slot_id))
       .map((e: any) => e.id);
@@ -48,10 +63,16 @@ export async function POST(req: NextRequest) {
       if (!error) report.orphanEnrollmentsPurged = orphanEnrollIds.length;
     }
 
-    // 3) Purge orphan member assignments
-    const { data: allAssigns } = await supabaseAdmin
-      .from("slot_member_assignments")
-      .select("id, slot_id");
+    // 3) Purge orphan member assignments (1199 lignes en prod : paginé)
+    const { data: allAssigns, error: assignsError } = await fetchAllRows<any>(
+      (from, to) =>
+        supabaseAdmin
+          .from("slot_member_assignments")
+          .select("id, slot_id")
+          .order("id")
+          .range(from, to),
+    );
+    if (assignsError) throw assignsError;
     const orphanAssignIds = (allAssigns || [])
       .filter((a: any) => !a.slot_id || !validSlotIds.has(a.slot_id))
       .map((a: any) => a.id);
@@ -65,9 +86,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 4) Purge ghost evaluations (no scores, no comment)
-    const { data: allEvals } = await supabaseAdmin
-      .from("candidate_evaluations")
-      .select("id, scores, comment");
+    const { data: allEvals, error: evalsError } = await fetchAllRows<any>(
+      (from, to) =>
+        supabaseAdmin
+          .from("candidate_evaluations")
+          .select("id, scores, comment")
+          .order("id")
+          .range(from, to),
+    );
+    if (evalsError) throw evalsError;
 
     const ghostEvalIds: string[] = [];
     for (const e of allEvals || []) {

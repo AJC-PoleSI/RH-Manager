@@ -144,6 +144,16 @@ function isCommitted(slot: SlotInfo): boolean {
   return slot.status === "closed";
 }
 
+/**
+ * Découpe une liste d'ids pour les filtres `.in()` : PostgREST les sérialise
+ * dans l'URL, et ~1000 UUID (37 Ko) frôlent les limites des proxies.
+ */
+function chunkIds(ids: string[], size = 200): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
 /** Clé d'épreuve d'un créneau (les créneaux sans épreuve sont regroupés). */
 function epreuveKeyOf(slot: SlotInfo): string {
   return slot.epreuve_id || "__sans_epreuve__";
@@ -157,6 +167,8 @@ interface Commitment {
   epreuve: string;
   room: string | null;
   roulementMinutes: number;
+  /** Créneau concerné — un créneau n'entre jamais en conflit avec lui-même. */
+  slotId?: string;
 }
 
 type CommittedSlots = Record<string, Commitment[]>;
@@ -170,6 +182,7 @@ function commitmentOf(slot: SlotInfo): Commitment {
     epreuve: epreuveKeyOf(slot),
     room: slot.room ? String(slot.room) : null,
     roulementMinutes: slot.epreuve?.roulement_minutes ?? 0,
+    slotId: slot.id,
   };
 }
 
@@ -187,7 +200,9 @@ function blockingCommitments(
 ): Commitment[] {
   const committed = memberCommittedSlots[memberId] || [];
   const target = commitmentOf(slot);
-  return committed.filter((c) => blocksSlot(c, target));
+  // Un engagement pré-enregistré sur CE créneau (jury ancré, étape 8ter) ne
+  // le bloque évidemment pas.
+  return committed.filter((c) => c.slotId !== slot.id && blocksSlot(c, target));
 }
 
 /** Check temporal overlap (ou battement insuffisant) between a member's committed slots and a candidate slot */
@@ -634,6 +649,32 @@ export async function runDispatch(opts?: {
     if (a.member_id && a.slot) registerConflict(a.member_id, a.slot as SlotInfo);
   });
 
+  // 8ter. JURY ANCRÉ (créneau verrouillé `is_locked` ou à candidat inscrit) :
+  // ses membres encore disponibles sont des engagements FIXES dès maintenant,
+  // pas seulement au moment où le créneau est servi (9b-bis). Sans ça, un
+  // créneau servi AVANT lui — autre salle au même horaire, ou prédécesseur de
+  // salle remonté par orderPredecessorsFirst — pouvait prendre un de ses
+  // examinateurs, encore libre à ses yeux ; 9b-bis le retirait ensuite pour
+  // « conflit horaire » et le jury annoncé au candidat changeait quand même
+  // (audit du 12/09/2026). Même critère de conservation qu'en 9b-bis.
+  const preRegistered = new Set<string>(); // `${slotId}:${memberId}`
+  const stillOverlappingOn = (memberId: string, slot: SlotInfo): boolean =>
+    (availabilitiesByMember.get(memberId) || []).some((av: any) =>
+      availabilityMatchesSlot(av, slot),
+    );
+  for (const slot of sortedSlots as SlotInfo[]) {
+    if (isFrozen(slot) || isLocked(slot)) continue; // déjà enregistrés en 8
+    const anchored =
+      isSlotLocked(slot) || activeEnrollmentCount(slot.enrollments) > 0;
+    if (!anchored) continue;
+    const eligible = new Set(matchSlotToMembers(slot));
+    (currentBySlot[slot.id] || new Set<string>()).forEach((memberId) => {
+      if (!eligible.has(memberId) && !stillOverlappingOn(memberId, slot)) return;
+      registerConflict(memberId, slot);
+      preRegistered.add(`${slot.id}:${memberId}`);
+    });
+  }
+
   // 9. Allocation : charge GLOBALE, brassage PAR ÉPREUVE, ordre GLOBAL.
   //
   // La charge (équité) se compte sur le total des créneaux, toutes épreuves
@@ -673,6 +714,18 @@ export async function runDispatch(opts?: {
       });
     }
   }
+  // Jurys ancrés pré-enregistrés (8ter) : leur charge compte aussi dès le
+  // départ — 9b-bis ne la recomptera pas (cf. preRegistered).
+  preRegistered.forEach((key) => {
+    const memberId = key.slice(key.indexOf(":") + 1);
+    memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
+  });
+  // Affectations HORS périmètre (run scopé à une épreuve) : engagements
+  // fixes, donc charge réelle. Sans ça, un membre à 20 créneaux sur l'autre
+  // épreuve repartait à zéro et était servi en premier (audit du 12/09/2026).
+  externalAssigns.forEach((a: any) => {
+    if (a.member_id) memberLoad[a.member_id] = (memberLoad[a.member_id] || 0) + 1;
+  });
 
   const stateByEpreuve = new Map<
     string,
@@ -766,6 +819,13 @@ export async function runDispatch(opts?: {
           ),
           getToursByNumber(),
         ]);
+
+      // Une lecture en échec donnait `data: null` → demande 0 partout, sans
+      // aucun signal (audit du 12/09/2026). Même règle que les lectures
+      // principales : mieux vaut ne rien recalculer que sur une vue fausse.
+      const forecastErr =
+        candRes.error || delibRes.error || wishRes.error || evalRes.error;
+      if (forecastErr) throw forecastErr;
 
       // Candidats éliminés : plus aucune épreuve à leur faire passer.
       const eliminated = new Set<string>();
@@ -1089,7 +1149,11 @@ export async function runDispatch(opts?: {
           return;
         }
         kept.push(memberId);
-        commitMember(memberId, slotInfo, memberLoad, memberCommittedSlots);
+        // Déjà enregistré (engagement + charge) à l'étape 8ter : ne pas
+        // compter deux fois.
+        if (!preRegistered.has(`${slot.id}:${memberId}`)) {
+          commitMember(memberId, slotInfo, memberLoad, memberCommittedSlots);
+        }
       });
 
       // Complément : mêmes règles de score qu'ailleurs, mais sans jamais
@@ -1190,13 +1254,20 @@ export async function runDispatch(opts?: {
       });
     }
 
-    // 9f. Detect members previously assigned but not anymore (equity removal)
+    // 9f. Detect members previously assigned but not anymore.
+    // Motif exact : quelqu'un qui a lui-même retiré sa disponibilité ne doit
+    // pas lire « un autre examinateur a été prioritairement affecté ».
     existing.forEach((memberId) => {
       if (!picked.includes(memberId) && !backups.includes(memberId)) {
+        const stillHasAvailability =
+          matchSlotToMembers(slotInfo).includes(memberId) ||
+          stillOverlappingOn(memberId, slotInfo);
         removedMembers.push({
           member_id: memberId,
           slot: slotInfo,
-          reason: "répartition d'équité",
+          reason: stillHasAvailability
+            ? "répartition d'équité"
+            : "disponibilité retirée",
         });
       }
     });
@@ -1242,7 +1313,18 @@ export async function runDispatch(opts?: {
     juryBySlot.set(a.slot_id, set);
   });
 
+  // Engagements que ce run ne réécrit pas (autre épreuve, run scopé) : la
+  // reprise ne doit jamais poser quelqu'un sur un créneau qu'ils bloquent.
+  const externalCommitments = new Map<string, Commitment[]>();
+  externalAssigns.forEach((a: any) => {
+    if (!a.member_id || !a.slot) return;
+    const list = externalCommitments.get(a.member_id) || [];
+    list.push(commitmentOf(a.slot as SlotInfo));
+    externalCommitments.set(a.member_id, list);
+  });
+
   const reclaimMoves = planReclaims({
+    fixedCommitments: externalCommitments,
     slots: (sortedSlots as SlotInfo[]).map((s) => ({
       id: s.id,
       date: String(s.date || ""),
@@ -1302,11 +1384,14 @@ export async function runDispatch(opts?: {
     if (!plannedBySlot.has(a.slot_id)) plannedBySlot.set(a.slot_id, new Set());
     plannedBySlot.get(a.slot_id)!.add(a.member_id);
   });
+  // Tous les créneaux, pas seulement les réécrits : un complément posé sur un
+  // créneau clôturé/manuel (9b) ou un receveur de reprise non réécrit est
+  // bien inséré en base — il doit apparaître dans l'aperçu.
   const added: Array<{ slot_id: string; member_id: string }> = [];
-  for (const slotId of wipeableSlotIds) {
-    const before = currentBySlot[slotId] || new Set<string>();
-    plannedBySlot.get(slotId)?.forEach((memberId) => {
-      if (!before.has(memberId)) added.push({ slot_id: slotId, member_id: memberId });
+  for (const slot of sortedSlots as SlotInfo[]) {
+    const before = currentBySlot[slot.id] || new Set<string>();
+    plannedBySlot.get(slot.id)?.forEach((memberId) => {
+      if (!before.has(memberId)) added.push({ slot_id: slot.id, member_id: memberId });
     });
   }
   const removed = removedMembers.map((r) => ({
@@ -1324,8 +1409,17 @@ export async function runDispatch(opts?: {
   // sont déjà connus (cf. plus bas pour le sous-effectif, recalculé ici).
   if (opts?.dryRun) {
     const preview: UnderstaffedSlot[] = [];
-    const plannedCount = (slotId: string) =>
-      plannedBySlot.get(slotId)?.size ?? (currentBySlot[slotId] || new Set()).size;
+    // Effectif PRÉVU : un créneau réécrit qui tombe à zéro n'a aucune entrée
+    // dans plannedBySlot — l'ancien `?? currentBySlot` lui rendait son ancien
+    // jury et l'aperçu ne le signalait pas. Un créneau non réécrit garde son
+    // jury en base, plus les compléments planifiés.
+    const plannedCount = (slotId: string) => {
+      const planned = plannedBySlot.get(slotId) || new Set<string>();
+      if (wipeableSet.has(slotId)) return planned.size;
+      const merged = new Set(currentBySlot[slotId] || []);
+      planned.forEach((m) => merged.add(m));
+      return merged.size;
+    };
     for (const slot of sortedSlots as SlotInfo[]) {
       if (isFrozen(slot)) continue;
       const needed = slot.min_members || 2;
@@ -1366,13 +1460,18 @@ export async function runDispatch(opts?: {
   // Insert backup assignments into evaluator_allocations table
   // (with statut = 'en_attente')
   if (backupAssignments.length > 0) {
-    // First clean up old backup allocations for wipeable slots
-    if (wipeableSlotIds.length > 0) {
-      await supabaseAdmin
+    // First clean up old backup allocations for wipeable slots.
+    // Par tranches : ~1000 UUID dans une seule URL `in.(...)` frôlent les
+    // limites de longueur des proxies — et l'erreur n'était jamais lue.
+    for (const ids of chunkIds(wipeableSlotIds)) {
+      const { error: cleanupErr } = await supabaseAdmin
         .from("evaluator_allocations")
         .delete()
-        .in("slot_id", wipeableSlotIds)
+        .in("slot_id", ids)
         .eq("statut", "en_attente");
+      if (cleanupErr && !isMissingTableError(cleanupErr)) {
+        console.error("Backup allocations cleanup error:", cleanupErr);
+      }
     }
 
     const slotById = new Map(sortedSlots.map((s: any) => [s.id, s]));
@@ -1417,14 +1516,12 @@ export async function runDispatch(opts?: {
             error,
           );
           for (const row of backupRows) {
-            try {
-              await supabaseAdmin
-                .from("evaluator_allocations")
-                .upsert(row, { onConflict: "slot_id,member_id" });
-            } catch (e: any) {
-              if (e?.code !== "23505") {
-                console.error("Backup allocation insert error:", e);
-              }
+            // supabase-js ne lance pas : l'erreur est dans la réponse.
+            const { error: rowErr } = await supabaseAdmin
+              .from("evaluator_allocations")
+              .upsert(row, { onConflict: "slot_id,member_id" });
+            if (rowErr && rowErr.code !== "23505") {
+              console.error("Backup allocation insert error:", rowErr);
             }
           }
         }
@@ -1445,19 +1542,30 @@ export async function runDispatch(opts?: {
   // supprime JAMAIS que les siennes. Tant que la colonne n'existe pas en base,
   // on ne touche à rien du tout (on ne peut pas distinguer les deux).
   if (wipeableSlotIds.length > 0) {
-    const cleanup = await supabaseAdmin
-      .from("slot_availability_requests")
-      .delete()
-      .eq("source", "dispatch")
-      .in("slot_id", wipeableSlotIds);
+    let cleanupError: any = null;
+    for (const ids of chunkIds(wipeableSlotIds)) {
+      const cleanup = await supabaseAdmin
+        .from("slot_availability_requests")
+        .delete()
+        .eq("source", "dispatch")
+        .in("slot_id", ids);
+      if (cleanup.error) {
+        cleanupError = cleanup.error;
+        break;
+      }
+    }
 
-    if (cleanup.error) {
+    if (cleanupError && isMissingColumnError(cleanupError)) {
       console.warn(
         "[dispatch] Colonne slot_availability_requests.source absente — les " +
           "examinateurs inscrits sur deux épreuves simultanées ne sont PAS " +
           "mis en liste d'attente sur le créneau non retenu. Appliquez la " +
           "section « dispos par épreuve » de MIGRATIONS_A_APPLIQUER.sql.",
       );
+    } else if (cleanupError) {
+      // Toute erreur était lue comme « colonne absente » alors que la colonne
+      // existe en prod : le vrai problème restait masqué.
+      console.error("Waitlist (arbitrage) cleanup error:", cleanupError);
     } else if (arbitrationLosers.length > 0) {
       const { error: waitlistErr } = await supabaseAdmin
         .from("slot_availability_requests")
@@ -1496,6 +1604,20 @@ export async function runDispatch(opts?: {
   // Créneaux en sous-effectif AVEC candidats inscrits, à signaler (étape 12bis).
   const understaffedWithCandidates: UnderstaffedSlot[] = [];
 
+  // PUBLICATION PAR ÉPREUVE — même garde que /api/slots/toggle-member : un
+  // créneau ne passe `published` (visible et réservable par les candidats)
+  // que si SON épreuve a déjà été publiée par l'admin (≥ 1 créneau
+  // published/full). Sinon, jury complet ou pas, il reste `ready`. Sans cette
+  // garde, dès que `planning_visible_candidats` était activé pour une
+  // première épreuve, tout créneau doté d'une épreuve encore en préparation
+  // (draft/open) était exposé aux candidats (audit du 12/09/2026).
+  const publishedEpreuveIds = new Set<string>();
+  for (const s of sortedSlots as SlotInfo[]) {
+    if (s.epreuve_id && (s.status === "published" || s.status === "full")) {
+      publishedEpreuveIds.add(s.epreuve_id);
+    }
+  }
+
   for (const slot of sortedSlots) {
     if (isLocked(slot as SlotInfo) || isFrozen(slot as SlotInfo)) continue;
 
@@ -1512,7 +1634,10 @@ export async function runDispatch(opts?: {
       assigned: assignedCount,
       minMembers: needed,
       candidates,
-      planningVisible: planningVisibleToCandidates,
+      planningVisible:
+        planningVisibleToCandidates &&
+        !!slot.epreuve_id &&
+        publishedEpreuveIds.has(slot.epreuve_id),
     });
 
     if (assignedCount < needed && candidates > 0) {
@@ -1539,10 +1664,15 @@ export async function runDispatch(opts?: {
     }
   }
   for (const [newStatus, ids] of Array.from(idsByNewStatus.entries())) {
-    await supabaseAdmin
-      .from("evaluation_slots")
-      .update({ status: newStatus })
-      .in("id", ids);
+    for (const chunk of chunkIds(ids)) {
+      const { error: statusErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ status: newStatus })
+        .in("id", chunk);
+      // Lue et propagée : une mise à jour de statut perdue laisse des créneaux
+      // réservables sans jury (ou l'inverse) et le run répondait « succès ».
+      if (statusErr) throw statusErr;
+    }
   }
 
   // 12. Send notifications for removed members

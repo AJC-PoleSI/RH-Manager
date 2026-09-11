@@ -192,8 +192,10 @@ export async function GET(req: NextRequest) {
               tour1Status: delib.tour1_status,
               tour2Status: delib.tour2_status,
               tour3Status: delib.tour3_status,
-              prosComment: delib.pros_comment,
-              consComment: delib.cons_comment,
+              // Notes de réserve (points forts / faibles) : réservées aux
+              // admins, comme dans lib/candidate-visibility.ts.
+              prosComment: canSeeAllComments ? delib.pros_comment : undefined,
+              consComment: canSeeAllComments ? delib.cons_comment : undefined,
               assignedPole: delib.assigned_pole,
             }
           : null,

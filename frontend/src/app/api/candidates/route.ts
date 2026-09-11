@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     // rester simple, la projection est appliquée ici avant la réponse.
     const isAdmin = !!payload.isAdmin;
     const mapped = (data || []).map((c: any) => {
-      const visible = projectCandidateForMember(c, isAdmin);
+      const visible = projectCandidateForMember(c, isAdmin, payload.id);
       return {
         ...visible,
         firstName: visible.first_name,

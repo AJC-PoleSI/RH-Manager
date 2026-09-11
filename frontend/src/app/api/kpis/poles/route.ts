@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { latestTourWishesByCandidate } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 // GET /api/kpis/poles — KPI des voeux de pôles pour la Soirée Délibération
@@ -12,10 +13,16 @@ export async function GET(req: NextRequest) {
   if (payload.role === "candidate") return forbidden();
 
   try {
-    // Fetch all wishes
-    const { data: wishes, error: wishError } = await supabaseAdmin
-      .from("candidate_wishes")
-      .select("*, candidate:candidates(id, first_name, last_name)");
+    // Fetch all wishes — paginé : 3 vœux × 2 tours × N candidats dépasse
+    // vite le plafond PostgREST de 1000 lignes.
+    const { data: wishes, error: wishError } = await fetchAllRows<any>(
+      (from, to) =>
+        supabaseAdmin
+          .from("candidate_wishes")
+          .select("*, candidate:candidates(id, first_name, last_name)")
+          .order("id")
+          .range(from, to),
+    );
 
     if (wishError) throw wishError;
 
@@ -87,11 +94,29 @@ export async function GET(req: NextRequest) {
       else if (w.rank === 3) poleStats[pole].demandesRang3++;
     });
 
-    // Compter les places acceptées par pôle
+    // Compter les places acceptées par pôle.
+    //
+    // `assigned_pole` n'est écrit par aucune route aujourd'hui (audit du
+    // 12/09/2026) : la colonne « Acceptés » restait à 0 en soirée de
+    // délibération. On compte donc les candidats ADMIS AU TOUR 3 (décision
+    // finale), rattachés à leur pôle affecté s'il est renseigné, sinon à leur
+    // premier vœu du tour le plus avancé.
+    const assignedByCandidate = new Map<string, string>();
     assignments.forEach((d: any) => {
-      if (d.assigned_pole && poleStats[d.assigned_pole]) {
-        poleStats[d.assigned_pole].placesAcceptees++;
-      }
+      if (d.candidate_id && d.assigned_pole)
+        assignedByCandidate.set(d.candidate_id, d.assigned_pole);
+    });
+    const firstWishByCandidate = new Map<string, string>();
+    currentWishes.forEach((w: any) => {
+      if (w.candidate_id && w.rank === 1 && w.pole)
+        firstWishByCandidate.set(w.candidate_id, w.pole);
+    });
+    (deliberations || []).forEach((d: any) => {
+      if (d.tour3_status !== "accepted") return;
+      const pole =
+        assignedByCandidate.get(d.candidate_id) ||
+        firstWishByCandidate.get(d.candidate_id);
+      if (pole && poleStats[pole]) poleStats[pole].placesAcceptees++;
     });
 
     // Trier par nombre total de demandes (desc)

@@ -7,11 +7,13 @@ import {
   resolveCandidateSlot,
 } from "@/lib/evaluation-access";
 import {
-  getCriterionLabel,
-  getMaxPoints,
   getTotalMaxPoints,
+  normalizeScores,
   parseQuestions,
+  scoreValidationMessage,
+  validateScores,
 } from "@/lib/evaluation-criteria";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations - Fetch evaluations (scoped by role)
@@ -50,7 +52,11 @@ export async function GET(req: NextRequest) {
         : query.eq("member_id", payload.id);
     }
 
-    const { data: evaluations, error } = await query;
+    // Lecture PAGINÉE pour l'admin : le total d'évaluations dépassera 1000
+    // au fil des tours (PostgREST tronque silencieusement au-delà).
+    const { data: evaluations, error } = await fetchAllRows<any>((from, to) =>
+      query.order("id").range(from, to),
+    );
 
     if (error) throw error;
 
@@ -59,6 +65,11 @@ export async function GET(req: NextRequest) {
       scores: typeof e.scores === "string" ? JSON.parse(e.scores) : e.scores,
       comment: e.comment,
       createdAt: e.created_at,
+      // Note partagée (binôme / collective) vs avis individuel : le récap
+      // admin ne doit pas présenter une note partagée comme celle de son
+      // seul auteur, ni la moyenner avec les avis individuels.
+      isGroup: e.is_group === true,
+      closedAt: e.closed_at ?? null,
       candidate: e.candidates
         ? {
             id: e.candidates.id,
@@ -71,12 +82,13 @@ export async function GET(req: NextRequest) {
       // entre épreuves — même calcul que /api/deliberations.
       epreuve: e.epreuves
         ? {
+            id: e.epreuves.id,
             name: e.epreuves.name,
             tour: e.epreuves.tour,
             type: e.epreuves.type,
             maxTotal: getTotalMaxPoints(e.epreuves.evaluation_questions),
           }
-        : { name: "", tour: 0, type: "", maxTotal: 20 },
+        : { id: "", name: "", tour: 0, type: "", maxTotal: 20 },
       member: e.members
         ? {
             id: e.members.id,
@@ -236,54 +248,24 @@ export async function POST(req: NextRequest) {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // GARDE : Validation des scores vs. points max des critères
-    // Chaque note doit être >= 0 et <= au nombre de points max du critère
+    // GARDE : chaque note doit tenir dans [0, points max du critère].
+    // Même règle que PUT /api/evaluations/[id] (lib/evaluation-criteria).
     // ══════════════════════════════════════════════════════════════════
-    if (scores) {
-      if (epreuveRow?.evaluation_questions) {
-        const questions = parseQuestions(epreuveRow.evaluation_questions);
-
-        const parsedScores =
-          typeof scores === "string" ? JSON.parse(scores) : scores;
-
-        for (const [key, value] of Object.entries(parsedScores)) {
-          const idx = Number(key);
-          const scoreVal = Number(value);
-          const question = questions[idx];
-          if (!question) continue;
-
-          const maxPoints = getMaxPoints(question);
-          const label = getCriterionLabel(question);
-
-          if (scoreVal < 0) {
-            return Response.json(
-              {
-                error: `La note pour le critère "${label}" ne peut pas être négative.`,
-              },
-              { status: 400 },
-            );
-          }
-          if (scoreVal > maxPoints) {
-            return Response.json(
-              {
-                error: `La note pour le critère "${label}" ne peut pas dépasser ${maxPoints} points.`,
-              },
-              { status: 400 },
-            );
-          }
-        }
-      }
+    const questions = parseQuestions(epreuveRow?.evaluation_questions);
+    const invalid = validateScores(questions, scores);
+    if (invalid) {
+      return Response.json(
+        { error: scoreValidationMessage(invalid) },
+        { status: 400 },
+      );
     }
 
-    // ── Normalisation des scores : TOUJOURS stocker en nombres ──
-    // Sinon "1" + "1" = "11" lors des calculs côté lecture.
-    const rawScores =
-      typeof scores === "string" ? JSON.parse(scores) : scores || {};
-    const normalizedScores: Record<string, number> = {};
-    for (const [k, v] of Object.entries(rawScores)) {
-      const num = Number(v);
-      normalizedScores[k] = Number.isFinite(num) ? num : 0;
-    }
+    // ── Normalisation : uniquement des nombres, uniquement des critères
+    // existants ; une case vide n'est pas stockée (ce n'est pas un 0).
+    const normalizedScores = normalizeScores(
+      scores,
+      questions.length ? questions : null,
+    );
 
     // ── Création de l'évaluation ──
     // Une évaluation à auteur unique (is_group=false, qu'il s'agisse d'un

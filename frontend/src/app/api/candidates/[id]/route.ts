@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const source =
       isSelf || payload.isAdmin
         ? data
-        : projectCandidateForMember(data, false);
+        : projectCandidateForMember(data, false, payload.id);
 
     // Map snake_case to camelCase
     const mapped: any = {

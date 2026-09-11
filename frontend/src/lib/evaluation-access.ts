@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { isActiveEnrollment } from "@/lib/enrollment";
 
 // Helpers d'autorisation partagés entre les routes d'évaluation collaborative
 // (commentaires de groupe, évaluations des pairs, cochage "qui examine qui").
@@ -24,7 +25,10 @@ export async function resolveCandidateSlot(
   if (error || !data) return null;
 
   for (const row of data as any[]) {
-    if (row.status && row.status !== "active") continue;
+    // Même règle que partout ailleurs (lib/enrollment.ts) : "active",
+    // "enrolled" (défaut historique de la colonne) et null sont des
+    // inscriptions en cours ; seul "cancelled" est une désinscription.
+    if (!isActiveEnrollment(row.status)) continue;
     const slot = row.slot;
     if (slot && slot.epreuve_id === epreuveId) {
       return { slotId: slot.id, epreuveId };
@@ -82,7 +86,7 @@ export async function listEvaluableEpreuveIds(
       const slot = row.slot;
       if (!slot?.epreuve_id) continue;
       const hasCandidate = (slot.enrollments || [])
-        .filter((e: any) => !e.status || e.status === "active")
+        .filter((e: any) => isActiveEnrollment(e.status))
         .some((e: any) => e.candidate_id === candidateId);
       if (hasCandidate) ids.add(slot.epreuve_id);
     }

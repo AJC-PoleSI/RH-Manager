@@ -19,6 +19,14 @@ interface Evaluation {
   id: string;
   scores: Record<string, number>;
   scoreTotal: number;
+  /** Total de points de l'épreuve (somme des barèmes). */
+  maxTotal?: number;
+  /** Note ramenée sur 20 ; null si aucune note saisie. */
+  scoreOn20?: number | null;
+  hasScores?: boolean;
+  /** Note partagée (binôme / collective) plutôt qu'avis individuel. */
+  isGroup?: boolean;
+  closedAt?: string | null;
   comment: string;
   createdAt: string;
   epreuve: { id: string; name: string; tour: number; type: string } | null;
@@ -28,7 +36,9 @@ interface Evaluation {
 interface EpreuveGroup {
   epreuve: { id: string; name: string; tour: number; type: string } | null;
   evaluations: Evaluation[];
-  collectiveScore: number;
+  /** Moyenne de l'épreuve sur 20 (null si aucune note). */
+  collectiveScore: number | null;
+  maxTotal?: number;
   evaluatorCount: number;
 }
 
@@ -47,8 +57,43 @@ export default function CandidateDetailPage({
   const [candidate, setCandidate] = useState<any>(null);
   const [epreuveGroups, setEpreuveGroups] = useState<EpreuveGroup[]>([]);
   const [allEvals, setAllEvals] = useState<Evaluation[]>([]);
+  // Moyenne pondérée /20, calculée côté serveur avec la même règle que la
+  // délibération (null = aucune note exploitable).
+  const [globalAverage, setGlobalAverage] = useState<number | null>(null);
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+
+  const loadEvaluations = async () => {
+    const evalRes = await api.get(`/evaluations/candidate/${candidateId}`);
+    const data = evalRes.data;
+    if (data && data.byEpreuve) {
+      setEpreuveGroups(data.byEpreuve);
+      setAllEvals(data.evaluations || []);
+      setGlobalAverage(
+        typeof data.globalAverage === "number" ? data.globalAverage : null,
+      );
+    } else if (Array.isArray(data)) {
+      setAllEvals(data);
+      setEpreuveGroups([]);
+      setGlobalAverage(null);
+    }
+  };
+
+  // Réouverture (admin) d'une évaluation clôturée — les avis individuels
+  // sont clôturés automatiquement à la soumission et n'avaient aucun écran
+  // pour être rouverts.
+  const handleReopen = async (evaluationId: string) => {
+    setReopeningId(evaluationId);
+    try {
+      await api.post(`/evaluations/${evaluationId}/reopen`);
+      await loadEvaluations();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || "Impossible de rouvrir l'évaluation");
+    } finally {
+      setReopeningId(null);
+    }
+  };
 
   useEffect(() => {
     if (!candidateId) return;
@@ -62,17 +107,7 @@ export default function CandidateDetailPage({
         // Les candidats ne peuvent pas voir les évaluations
         if (role !== "candidate") {
           try {
-            const evalRes = await api.get(
-              `/evaluations/candidate/${candidateId}`,
-            );
-            const data = evalRes.data;
-            if (data && data.byEpreuve) {
-              setEpreuveGroups(data.byEpreuve);
-              setAllEvals(data.evaluations || []);
-            } else if (Array.isArray(data)) {
-              setAllEvals(data);
-              setEpreuveGroups([]);
-            }
+            await loadEvaluations();
           } catch {
             // Permission denied or error — silently ignore evaluations
           }
@@ -133,15 +168,6 @@ export default function CandidateDetailPage({
     );
   }
 
-  // Note globale tous tours confondus (Number() en sécurité contre les strings)
-  const globalAvg =
-    allEvals.length > 0
-      ? Math.round(
-          (allEvals.reduce((sum, e) => sum + (Number(e.scoreTotal) || 0), 0) /
-            allEvals.length) *
-            10,
-        ) / 10
-      : 0;
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -273,10 +299,17 @@ export default function CandidateDetailPage({
           </div>
           <div className="bg-white border border-green-200 rounded-xl p-5">
             <p className="text-sm text-green-600 font-medium">
-              Note collective globale
+              Moyenne pondérée (tous tours)
             </p>
             <p className="text-3xl font-bold text-green-700 mt-1">
-              {globalAvg}
+              {globalAverage !== null ? (
+                <>
+                  {globalAverage}
+                  <span className="text-sm font-normal text-green-600"> / 20</span>
+                </>
+              ) : (
+                "-"
+              )}
             </p>
           </div>
           <div className="bg-white border border-purple-200 rounded-xl p-5">
@@ -329,11 +362,14 @@ export default function CandidateDetailPage({
                   </p>
                   <div className="flex items-baseline gap-1.5 justify-end">
                     <span className="text-2xl font-bold text-green-600">
-                      {group.collectiveScore}
+                      {group.collectiveScore !== null
+                        ? `${group.collectiveScore} / 20`
+                        : "-"}
                     </span>
                     <span className="text-xs text-gray-400">
                       (moyenne de {group.evaluatorCount} eval
-                      {group.evaluatorCount > 1 ? "s" : ""})
+                      {group.evaluatorCount > 1 ? "s" : ""}
+                      {group.maxTotal ? ` · barème /${group.maxTotal}` : ""})
                     </span>
                   </div>
                 </div>
@@ -380,14 +416,36 @@ export default function CandidateDetailPage({
                         </div>
                       </div>
 
-                      {/* Note individuelle */}
+                      {/* Note (individuelle ou partagée) */}
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs text-gray-400">
-                          Note individuelle
+                          {ev.isGroup ? "Note partagée" : "Note individuelle"}
                         </p>
                         <span className="text-xl font-bold text-blue-600">
-                          {ev.scoreTotal}
+                          {ev.scoreOn20 !== null && ev.scoreOn20 !== undefined
+                            ? `${ev.scoreOn20} / 20`
+                            : "-"}
                         </span>
+                        {ev.maxTotal ? (
+                          <p className="text-[11px] text-gray-400">
+                            {ev.scoreTotal} / {ev.maxTotal} pts
+                          </p>
+                        ) : null}
+                        {ev.closedAt && (
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            🔒 clôturée
+                            {user?.isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleReopen(ev.id)}
+                                disabled={reopeningId === ev.id}
+                                className="ml-2 text-blue-600 hover:underline disabled:opacity-50"
+                              >
+                                {reopeningId === ev.id ? "Réouverture…" : "Rouvrir (admin)"}
+                              </button>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
 

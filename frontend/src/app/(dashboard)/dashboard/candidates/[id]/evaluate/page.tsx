@@ -289,17 +289,50 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     validateScore(idx, val, maxPoints, setIndivErrors);
   };
 
+  // Une valeur hors barème n'est JAMAIS envoyée au serveur (qui la refuserait
+  // en 400) : elle reste en rouge à l'écran jusqu'à correction, et les autres
+  // critères continuent d'être sauvegardés normalement.
+  const isInvalidScore = (val: string, maxPoints: number) => {
+    if (val === "") return false;
+    const n = Number(val);
+    return !Number.isFinite(n) || n < 0 || n > maxPoints;
+  };
+  const withoutInvalid = (
+    scores: Record<number, string>,
+    errors: Record<number, string>,
+  ) =>
+    Object.fromEntries(
+      Object.entries(scores).filter(([k]) => !errors[Number(k)]),
+    ) as Record<number, string>;
+
   const handleGroupScore = (idx: number, val: string, maxPoints: number) => {
     if (!groupCanEdit || groupClosedAt) return;
     setGroupScores((p) => ({ ...p, [idx]: val }));
     validateScore(idx, val, maxPoints, setGroupErrors);
-    scheduleGroupSave({ ...groupScores, [idx]: val }, groupComment);
+    const nextErrors = { ...groupErrors };
+    if (isInvalidScore(val, maxPoints)) nextErrors[idx] = "invalid";
+    else delete nextErrors[idx];
+    scheduleGroupSave(
+      withoutInvalid({ ...groupScores, [idx]: val }, nextErrors),
+      groupComment,
+    );
   };
 
   const handleGroupComment = (val: string) => {
     if (!groupCanEdit || groupClosedAt) return;
     setGroupComment(val);
-    scheduleGroupSave(groupScores, val);
+    scheduleGroupSave(withoutInvalid(groupScores, groupErrors), val);
+  };
+
+  // Lève le drapeau « saisie locale non sauvegardée » et annule la
+  // sauvegarde différée : à appeler avant tout rechargement forcé, sinon
+  // loadGroupEval refuse d'écraser l'écran et le polling reste bloqué.
+  const resetGroupDirty = () => {
+    groupDirty.current = false;
+    if (groupSaveTimer.current) {
+      clearTimeout(groupSaveTimer.current);
+      groupSaveTimer.current = null;
+    }
   };
 
   // Valide/clôture la note partagée (binôme ou collective) : plus personne
@@ -372,10 +405,29 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       // (sauf si une nouvelle édition a relancé le timer entre-temps).
       if (!groupSaveTimer.current) groupDirty.current = false;
     } catch (e: any) {
-      // If 409 (already exists), reload to grab the existing id
-      if (e?.response?.status === 409 && e.response.data?.id) {
+      const status = e?.response?.status;
+      if (status === 409 && e.response.data?.id) {
+        // Un co-examinateur a créé la note au même instant : on reprend la
+        // sienne. Le drapeau « saisie locale » doit être levé AVANT le
+        // rechargement, sinon loadGroupEval refuse d'écraser l'écran et le
+        // polling ne rafraîchit plus jamais cette page.
+        resetGroupDirty();
         setGroupEvalId(e.response.data.id);
         await loadGroupEval();
+        toast(
+          "Votre binôme a déjà commencé cette note : sa saisie est affichée.",
+          "info",
+        );
+      } else if (status === 403) {
+        // Clôturée entre-temps, ou note d'un binôme dont on n'est pas
+        // l'auteur : on repasse en lecture seule sur l'état réel.
+        resetGroupDirty();
+        await loadGroupEval();
+        toast(
+          e?.response?.data?.error ||
+            "Vous ne pouvez plus modifier cette évaluation.",
+          "error",
+        );
       } else {
         console.error("Group save failed:", e);
         toast(
@@ -433,9 +485,15 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       );
     }
     try {
-      // For group épreuves, ensure group eval exists/saved before submitting individual
-      if (isGroupEpreuve && !groupEvalId) {
-        await saveGroupEval(groupScores, groupComment);
+      // Épreuve de groupe : on ne crée la note collective que si le panneau
+      // partagé contient quelque chose. Une ligne collective VIDE pesait
+      // 0/40 dans la moyenne du candidat (audit du 12/09/2026).
+      const groupHasContent =
+        Object.values(groupScores).some(
+          (v) => v !== "" && Number.isFinite(Number(v)),
+        ) || groupComment.trim().length > 0;
+      if (isGroupEpreuve && !groupEvalId && groupHasContent) {
+        await saveGroupEval(withoutInvalid(groupScores, groupErrors), groupComment);
       }
       await api.post("/evaluations", {
         candidateId: id,
@@ -448,6 +506,29 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       router.push("/dashboard/candidates");
     } catch (error: any) {
       console.error(error);
+      const code = error?.response?.data?.code;
+      if (
+        error?.response?.status === 409 &&
+        (code === "GROUP_EVAL_EXISTS" || code === "INDIVIDUAL_EVAL_EXISTS")
+      ) {
+        // Un 2e examinateur a été ajouté au créneau après le chargement de la
+        // page : le serveur note désormais en binôme et une note partagée
+        // existe déjà. On recharge les épreuves pour afficher ce panneau.
+        toast(
+          "Ce créneau est passé en binôme : une note partagée existe déjà, elle s'affiche ci-dessous.",
+          "info",
+        );
+        try {
+          const epRes = await api.get(
+            `/evaluations/allowed-epreuves?candidateId=${id}`,
+          );
+          setEpreuves(epRes.data?.epreuves || []);
+        } catch {
+          /* la page reste utilisable */
+        }
+        resetGroupDirty();
+        return;
+      }
       const serverMsg = error?.response?.data?.error;
       toast(serverMsg || "Erreur lors de l'enregistrement", "error");
     }

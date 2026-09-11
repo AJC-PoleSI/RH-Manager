@@ -3,6 +3,8 @@ import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { broadcastReplacementRequest } from "@/lib/replacement-requests";
 import { filterActiveEnrollments } from "@/lib/enrollment";
 import { activeEnrollmentCount } from "@/lib/dispatch-understaffing";
+import { blocksSlot } from "@/lib/dispatch-core";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/toggle-member — toggle member assignment on a slot
@@ -203,6 +205,11 @@ export async function POST(req: NextRequest) {
 
             if (!promoteErr) {
               promotedMemberId = candidate.member_id;
+              // Le promu s'était mis en liste d'attente via « je suis dispo »
+              // (slot_availability_requests), qui n'écrit PAS de
+              // disponibilité : sans celle-ci, le dispatch suivant le voyait
+              // sans dispo et l'effaçait du créneau (audit du 12/09/2026).
+              await syncSelfAvailability(candidate.member_id, slotId, "add");
               break;
             }
           }
@@ -261,10 +268,17 @@ export async function POST(req: NextRequest) {
           // Ne pas notifier les membres déjà affectés à un autre créneau qui
           // chevauche cet horaire (même dans une autre salle) — ils ne
           // peuvent de toute façon pas se porter volontaires.
-          const { data: otherAssignments } = await supabaseAdmin
-            .from("slot_member_assignments")
-            .select("member_id, slot:evaluation_slots(date, start_time, end_time)")
-            .neq("slot_id", slotId);
+          // Paginé : >1000 affectations en prod, une lecture tronquée
+          // notifiait des membres déjà pris à cet horaire.
+          const { data: otherAssignments } = await fetchAllRows<any>(
+            (from, to) =>
+              supabaseAdmin
+                .from("slot_member_assignments")
+                .select("member_id, slot:evaluation_slots(date, start_time, end_time)")
+                .neq("slot_id", slotId)
+                .order("id")
+                .range(from, to),
+          );
 
           const slotDateStr = String(slot.date || "").substring(0, 10);
           const slotStart = String(slot.start_time || "").substring(0, 5);
@@ -689,37 +703,74 @@ async function syncSelfAvailability(
   }
 }
 
+/**
+ * Le membre est-il déjà engagé sur un créneau qui BLOQUE `targetSlot` ?
+ *
+ * Même règle que le dispatch (`blocksSlot`, dispatch-core.ts) : chevauchement
+ * horaire strict, OU changement de salle sans le roulement minimum entre les
+ * deux. L'ancienne vérification ne regardait que le chevauchement : l'ajout
+ * manuel et la promotion depuis la liste d'attente acceptaient un
+ * enchaînement inter-salles à la minute près que le dispatch, lui, refuse.
+ */
 async function memberHasConflict(
   memberId: string,
-  targetSlot: { id: string; date: string; start_time: string; end_time: string },
+  targetSlot: {
+    id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    room?: string | null;
+    // Forme libre : selon la requête d'origine, `epreuve` arrive en objet ou
+    // en tableau (typage PostgREST) ; seul roulement_minutes nous intéresse.
+    epreuve?: any;
+  },
   excludeSlotId: string,
 ): Promise<boolean> {
-  // Récupérer toutes les autres affectations du membre à la même date
   const { data: otherSlots } = await supabaseAdmin
     .from("slot_member_assignments")
-    .select("slot:evaluation_slots(id, date, start_time, end_time)")
+    .select(
+      "slot:evaluation_slots(id, date, start_time, end_time, room, epreuve:epreuves(roulement_minutes))",
+    )
     .eq("member_id", memberId);
 
   if (!otherSlots || otherSlots.length === 0) return false;
 
-  const targetDate = (targetSlot.date || "").substring(0, 10);
-  const targetStart = targetSlot.start_time;
-  const targetEnd = targetSlot.end_time;
+  // Salle et roulement de la cible : les appelants ne les chargent pas tous.
+  let room = targetSlot.room;
+  const targetEpreuve = Array.isArray(targetSlot.epreuve)
+    ? targetSlot.epreuve[0]
+    : targetSlot.epreuve;
+  let roulement: number | null | undefined = targetEpreuve?.roulement_minutes;
+  if (room === undefined || roulement === undefined) {
+    const { data: t } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select("room, epreuve:epreuves(roulement_minutes)")
+      .eq("id", targetSlot.id)
+      .maybeSingle();
+    if (room === undefined) room = (t as any)?.room ?? null;
+    if (roulement === undefined)
+      roulement = (t as any)?.epreuve?.roulement_minutes ?? 0;
+  }
+
+  const target = {
+    date: String(targetSlot.date || "").substring(0, 10),
+    start: String(targetSlot.start_time || "").substring(0, 5),
+    end: String(targetSlot.end_time || "").substring(0, 5),
+    room: room ? String(room) : null,
+    roulementMinutes: roulement ?? 0,
+  };
 
   for (const row of otherSlots as any[]) {
     const s = row.slot;
     if (!s || s.id === excludeSlotId) continue;
-
-    const sDate = (s.date || "").substring(0, 10);
-    if (sDate !== targetDate) continue;
-
-    // Overlap check : start1 < end2 && start2 < end1
-    if (
-      timeLt(targetStart, s.end_time) &&
-      timeLt(s.start_time, targetEnd)
-    ) {
-      return true;
-    }
+    const commitment = {
+      date: String(s.date || "").substring(0, 10),
+      start: String(s.start_time || "").substring(0, 5),
+      end: String(s.end_time || "").substring(0, 5),
+      room: s.room ? String(s.room) : null,
+      roulementMinutes: s.epreuve?.roulement_minutes ?? 0,
+    };
+    if (blocksSlot(commitment, target)) return true;
   }
 
   return false;

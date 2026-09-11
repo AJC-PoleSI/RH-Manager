@@ -4,6 +4,7 @@ import { filterActiveEnrollments, effectiveMaxCandidates } from "@/lib/enrollmen
 import { slotGroupKey, regroupEnrollments } from "@/lib/room-packing";
 import { sendRoomChangeEmail } from "@/lib/resend";
 import { isMissingColumnError } from "@/lib/slot-lock";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 /**
@@ -42,13 +43,23 @@ export async function POST(req: NextRequest) {
       `;
     // `is_locked` peut ne pas exister (migration slot-lock pas encore
     // appliquée) : repli sur l'ancienne lecture, sans verrou à faire respecter.
-    let { data: rawSlots, error } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(`${BASE_COLS}, is_locked`);
-    if (error && isMissingColumnError(error)) {
-      ({ data: rawSlots, error } = await supabaseAdmin
+    // Lecture PAGINÉE (plus de 1000 créneaux en prod) : un plan calculé sur
+    // une vue tronquée déplacerait des candidats vers des salles déjà prises.
+    let { data: rawSlots, error } = await fetchAllRows<any>((from, to) =>
+      supabaseAdmin
         .from("evaluation_slots")
-        .select(BASE_COLS));
+        .select(`${BASE_COLS}, is_locked`)
+        .order("id")
+        .range(from, to),
+    );
+    if (error && isMissingColumnError(error)) {
+      ({ data: rawSlots, error } = await fetchAllRows<any>((from, to) =>
+        supabaseAdmin
+          .from("evaluation_slots")
+          .select(BASE_COLS)
+          .order("id")
+          .range(from, to),
+      ));
     }
     if (error) throw error;
 

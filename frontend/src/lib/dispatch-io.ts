@@ -92,7 +92,15 @@ export async function applyAssignments(
     const { error: insErr } = await client
       .from("slot_member_assignments")
       .insert(assignments);
-    if (insErr) console.error("Insert assignments error (fallback):", insErr);
+    // Le delete est DÉJÀ appliqué : si l'insert échoue, les créneaux réécrits
+    // sont sans jury. Avaler l'erreur laissait le run recalculer les statuts
+    // (`published` sur des créneaux vides), notifier, et répondre « succès »
+    // (audit du 12/09/2026). On propage : l'appelant échoue visiblement et
+    // les admins sont prévenus (cf. PUT /api/availability).
+    if (insErr) {
+      console.error("Insert assignments error (fallback):", insErr);
+      throw insErr;
+    }
   }
   return "fallback";
 }

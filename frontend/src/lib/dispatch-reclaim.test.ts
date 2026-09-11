@@ -265,3 +265,72 @@ describe("planReclaims — cohérence des déplacements", () => {
     expect(jury.get("219")!.size).toBe(2); // reste incomplet, sans boucler
   });
 });
+
+describe("planReclaims — engagements hors périmètre (run scopé à une épreuve)", () => {
+  // Audit du 12/09/2026 : sur un run limité à une épreuve, les affectations
+  // des AUTRES épreuves ne sont pas dans juryBySlot. La reprise pouvait donc
+  // déplacer un examinateur vers un créneau qui chevauche (ou enchaîne sans
+  // roulement avec) une affectation qu'il garde ailleurs → double réservation.
+  it("ne reprend pas un examinateur engagé ailleurs au même moment", () => {
+    const slots = [
+      slot({ id: "R", room: "219", start_time: "16:45", end_time: "17:10", candidates: 1 }),
+      slot({ id: "D", room: "205", start_time: "16:30", end_time: "16:55" }),
+    ];
+    const jury = juryOf([
+      ["R", ["clara"]],
+      ["D", ["m"]],
+    ]);
+    const fixed = new Map([
+      [
+        "m",
+        [
+          {
+            date: "2026-09-17",
+            start: "17:00",
+            end: "17:25",
+            room: "300",
+            roulementMinutes: 5,
+          },
+        ],
+      ],
+    ]);
+
+    const moves = planReclaims({
+      slots,
+      juryBySlot: jury,
+      eligibleFor: () => new Set(["m"]),
+      fixedCommitments: fixed,
+    });
+
+    expect(moves).toHaveLength(0);
+    expect(jury.get("D")!.has("m")).toBe(true);
+    expect(jury.get("R")!.size).toBe(1);
+  });
+
+  it("reprend normalement quand l'engagement externe ne bloque pas", () => {
+    const slots = [
+      slot({ id: "R", room: "219", candidates: 1 }),
+      slot({ id: "D", room: "205" }),
+    ];
+    const jury = juryOf([
+      ["R", ["clara"]],
+      ["D", ["m"]],
+    ]);
+    const fixed = new Map([
+      [
+        "m",
+        [{ date: "2026-09-18", start: "16:30", end: "16:55", room: "300", roulementMinutes: 5 }],
+      ],
+    ]);
+
+    const moves = planReclaims({
+      slots,
+      juryBySlot: jury,
+      eligibleFor: () => new Set(["m"]),
+      fixedCommitments: fixed,
+    });
+
+    expect(moves).toHaveLength(1);
+    expect(jury.get("R")!.has("m")).toBe(true);
+  });
+});

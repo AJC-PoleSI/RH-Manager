@@ -99,3 +99,33 @@ describe("applyAssignments", () => {
     expect(calls.rpc).toHaveLength(0);
   });
 });
+
+describe("applyAssignments — repli : l'insert échoue", () => {
+  // Audit du 12/09/2026 : sur le repli non atomique, le delete est déjà
+  // appliqué quand l'insert échoue. Avaler l'erreur laissait tous les
+  // créneaux réécrits SANS jury, avec des statuts recalculés comme si de
+  // rien n'était, et un « succès » renvoyé à l'appelant.
+  it("propage l'erreur d'insert au lieu de répondre succès", async () => {
+    const calls = { delete: 0, insert: 0 };
+    const client: DispatchClient = {
+      rpc: vi.fn(async () => ({ error: { code: "PGRST202" } })),
+      from: () => ({
+        delete: () => ({
+          in: async () => {
+            calls.delete++;
+            return { error: null };
+          },
+        }),
+        insert: async () => {
+          calls.insert++;
+          return { error: { code: "23514", message: "overlap" } };
+        },
+      }),
+    };
+    await expect(applyAssignments(client, ["s1"], ASSIGNS)).rejects.toMatchObject(
+      { code: "23514" },
+    );
+    expect(calls.delete).toBe(1);
+    expect(calls.insert).toBe(1);
+  });
+});

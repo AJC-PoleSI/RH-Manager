@@ -165,3 +165,165 @@ describe("moyenne normalisée (logique de la page délibérations)", () => {
     expect(moyenneSur20([])).toBe(0);
   });
 });
+
+// ── Validation des notes saisies (partagée POST / PUT /api/evaluations) ──
+//
+// Audit du 12/09/2026 : PUT /api/evaluations/[id] réécrivait les notes sans
+// jamais les borner au barème (seul le POST le faisait, en ligne). Un
+// examinateur pouvait donc corriger une note à 999/3 après coup.
+import { normalizeScores, validateScores } from "./evaluation-criteria";
+
+const QUESTIONS = [
+  { q: "Tenue", weight: 3 },
+  { q: "Fond", weight: 5 },
+  { q: "Sans barème" }, // → DEFAULT_MAX_POINTS
+];
+
+describe("validateScores", () => {
+  it("accepte des notes dans les bornes de chaque critère", () => {
+    expect(validateScores(QUESTIONS, { "0": 3, "1": 0, "2": 20 })).toBeNull();
+    expect(validateScores(QUESTIONS, { "0": "2.5" })).toBeNull();
+  });
+
+  it("refuse une note au-dessus du barème du critère, avec son libellé", () => {
+    const err = validateScores(QUESTIONS, { "0": 2, "1": 6 });
+    expect(err).toEqual({
+      index: 1,
+      label: "Fond",
+      maxPoints: 5,
+      reason: "above_max",
+    });
+  });
+
+  it("refuse une note négative", () => {
+    const err = validateScores(QUESTIONS, { "0": -1 });
+    expect(err?.reason).toBe("negative");
+    expect(err?.label).toBe("Tenue");
+  });
+
+  it("applique le barème par défaut à un critère sans barème", () => {
+    expect(validateScores(QUESTIONS, { "2": 20 })).toBeNull();
+    expect(validateScores(QUESTIONS, { "2": 21 })?.reason).toBe("above_max");
+  });
+
+  it("ignore les clés qui ne correspondent à aucun critère et les valeurs vides", () => {
+    // Une clé hors barème (critère supprimé entre-temps) ou une case laissée
+    // vide par l'examinateur ne doit pas bloquer la saisie : elle est
+    // simplement écartée à la normalisation.
+    expect(validateScores(QUESTIONS, { "7": 999, "0": "" })).toBeNull();
+  });
+
+  it("accepte les notes envoyées sous forme de chaîne JSON", () => {
+    expect(validateScores(QUESTIONS, JSON.stringify({ "1": 5 }))).toBeNull();
+    expect(validateScores(QUESTIONS, JSON.stringify({ "1": 5.5 }))?.reason).toBe(
+      "above_max",
+    );
+  });
+
+  it("sans critères déclarés, ne bloque rien (épreuve pas encore configurée)", () => {
+    expect(validateScores([], { "0": 15 })).toBeNull();
+  });
+});
+
+describe("normalizeScores", () => {
+  it("stocke toujours des nombres (jamais '1' + '1' = '11')", () => {
+    expect(normalizeScores({ "0": "3", "1": 2 })).toEqual({ "0": 3, "1": 2 });
+  });
+
+  it("accepte une chaîne JSON ou un objet, et tolère l'absence", () => {
+    expect(normalizeScores(JSON.stringify({ "0": 1 }))).toEqual({ "0": 1 });
+    expect(normalizeScores(undefined)).toEqual({});
+    expect(normalizeScores(null)).toEqual({});
+    expect(normalizeScores("{pas du json")).toEqual({});
+  });
+
+  it("écarte les valeurs non numériques ou vides au lieu de les stocker à 0", () => {
+    // Une case laissée vide n'est pas une note de 0 : la stocker à 0 ferait
+    // baisser la moyenne du candidat sans que personne ne l'ait décidé.
+    expect(normalizeScores({ "0": "", "1": "abc", "2": 4 })).toEqual({ "2": 4 });
+  });
+
+  it("écarte les clés hors barème quand les critères sont fournis", () => {
+    expect(normalizeScores({ "0": 1, "5": 9 }, QUESTIONS)).toEqual({ "0": 1 });
+    expect(normalizeScores({ "0": 1, "5": 9 })).toEqual({ "0": 1, "5": 9 });
+  });
+});
+
+// ── Moyenne pondérée unique (délibération, fiche candidat, export xlsx) ──
+import { averageOn20ByEpreuve, hasAnyScore } from "./evaluation-criteria";
+
+describe("hasAnyScore", () => {
+  it("vrai dès qu'une note numérique existe", () => {
+    expect(hasAnyScore({ "0": 3 })).toBe(true);
+    expect(hasAnyScore('{"1":"4"}')).toBe(true);
+    expect(hasAnyScore({ "0": 0 })).toBe(true); // un 0 saisi est une note
+  });
+
+  it("faux pour une évaluation vide ou sans valeur exploitable", () => {
+    // Une note collective créée « à vide » (panneau jamais touché) ne doit pas
+    // peser 0/40 dans la moyenne du candidat.
+    expect(hasAnyScore({})).toBe(false);
+    expect(hasAnyScore("{}")).toBe(false);
+    expect(hasAnyScore(null)).toBe(false);
+    expect(hasAnyScore({ "0": "", "1": "abc" })).toBe(false);
+  });
+});
+
+describe("averageOn20ByEpreuve", () => {
+  it("ramène chaque note en % de son barème avant de moyenner", () => {
+    // 32/40 (80 %) et 4/5 (80 %) → 16/20, quel que soit le barème.
+    expect(
+      averageOn20ByEpreuve([
+        { epreuveKey: "A", obtained: 32, maxTotal: 40 },
+        { epreuveKey: "B", obtained: 4, maxTotal: 5 },
+      ]),
+    ).toBe(16);
+  });
+
+  it("moyenne d'abord les notes d'une même épreuve (deux examinateurs ≠ double poids)", () => {
+    // Épreuve A notée 2 fois (20/20 et 10/20 → 15/20), épreuve B 10/20.
+    // Sans regroupement : (20+10+10)/3 = 13,3 ; avec : (15+10)/2 = 12,5.
+    expect(
+      averageOn20ByEpreuve([
+        { epreuveKey: "A", obtained: 20, maxTotal: 20 },
+        { epreuveKey: "A", obtained: 10, maxTotal: 20 },
+        { epreuveKey: "B", obtained: 10, maxTotal: 20 },
+      ]),
+    ).toBe(12.5);
+  });
+
+  it("pondère chaque épreuve par son barème (coef = barème / 20)", () => {
+    // A /40 (coef 2) à 100 %, B /20 (coef 1) à 0 % → (2×1 + 1×0)/3 = 13,3.
+    expect(
+      averageOn20ByEpreuve([
+        { epreuveKey: "A", obtained: 40, maxTotal: 40 },
+        { epreuveKey: "B", obtained: 0, maxTotal: 20 },
+      ]),
+    ).toBe(13.3);
+  });
+
+  it("ignore les barèmes inconnus et renvoie null sans note exploitable", () => {
+    expect(averageOn20ByEpreuve([])).toBeNull();
+    expect(
+      averageOn20ByEpreuve([{ epreuveKey: "A", obtained: 5, maxTotal: 0 }]),
+    ).toBeNull();
+    expect(
+      averageOn20ByEpreuve([
+        { epreuveKey: "A", obtained: 5, maxTotal: 0 },
+        { epreuveKey: "B", obtained: 10, maxTotal: 20 },
+      ]),
+    ).toBe(10);
+  });
+
+  it("distingue une vraie moyenne de 0 d'une absence de note", () => {
+    expect(
+      averageOn20ByEpreuve([{ epreuveKey: "A", obtained: 0, maxTotal: 20 }]),
+    ).toBe(0);
+  });
+
+  it("plafonne une note qui dépasserait son barème (données anciennes)", () => {
+    expect(
+      averageOn20ByEpreuve([{ epreuveKey: "A", obtained: 30, maxTotal: 20 }]),
+    ).toBe(20);
+  });
+});

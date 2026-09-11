@@ -241,3 +241,28 @@ describe("buildUnderstaffedNotifications", () => {
     expect(notif.body).toContain("et 1 autre.");
   });
 });
+
+// ─── Audit du 12/09/2026 ──────────────────────────────────────────────
+describe("activeEnrollmentCount — statut 'enrolled' (défaut historique de la colonne)", () => {
+  it("compte 'enrolled' comme une inscription active, comme lib/enrollment.ts", () => {
+    // Le dispatch triait ces créneaux comme ancrés (filterActiveEnrollments)
+    // mais les traitait en 9c (jury reconstruit de zéro) : deux définitions.
+    expect(activeEnrollmentCount([{ status: "enrolled" }])).toBe(1);
+    expect(
+      activeEnrollmentCount([{ status: "enrolled" }, { status: "cancelled" }]),
+    ).toBe(1);
+  });
+});
+
+describe("isNewlyUnderstaffed — chute à zéro examinateur", () => {
+  it("signale un créneau qui passe de 1 à 0 examinateur même s'il était déjà incomplet", () => {
+    // 1/2 → 0/2 : le candidat n'a plus AUCUN jury, c'est la situation
+    // « CRITIQUE » de la spec ; ne pas la signaler parce que le créneau était
+    // déjà sous le quota la rendait invisible aux runs automatiques.
+    expect(isNewlyUnderstaffed(1, 0, 2)).toBe(true);
+  });
+
+  it("ne signale pas un créneau qui reste à zéro", () => {
+    expect(isNewlyUnderstaffed(0, 0, 2)).toBe(false);
+  });
+});

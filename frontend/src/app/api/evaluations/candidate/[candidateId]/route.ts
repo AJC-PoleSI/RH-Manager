@@ -1,5 +1,13 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  averageOn20ByEpreuve,
+  getTotalMaxPoints,
+  hasAnyScore,
+  normalizeScores,
+  sumScores,
+  toTwenty,
+} from "@/lib/evaluation-criteria";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -35,16 +43,11 @@ export async function GET(
 
     // Parse scores and format each evaluation
     const parsed = (evaluations || []).map((e: any) => {
-      const rawScores =
-        typeof e.scores === "string" ? JSON.parse(e.scores) : e.scores || {};
-      const scores: Record<string, number> = {};
-      let total = 0;
-      for (const [k, v] of Object.entries(rawScores)) {
-        const num = Number(v);
-        const safe = Number.isFinite(num) ? num : 0;
-        scores[k] = safe;
-        total += safe;
-      }
+      const scores = normalizeScores(e.scores);
+      const total = sumScores(e.scores);
+      // Barème de l'épreuve : permet d'afficher « total / max » et une note
+      // sur 20 comparable entre épreuves (même règle que /api/deliberations).
+      const maxTotal = getTotalMaxPoints(e.epreuves?.evaluation_questions);
 
       const isOwnEval = e.member_id === payload.id;
 
@@ -52,6 +55,11 @@ export async function GET(
         id: e.id,
         scores,
         scoreTotal: total,
+        maxTotal,
+        scoreOn20: hasAnyScore(e.scores) && maxTotal > 0 ? toTwenty(total, maxTotal) : null,
+        hasScores: hasAnyScore(e.scores),
+        isGroup: e.is_group === true,
+        closedAt: e.closed_at ?? null,
         comment: canSeeAllComments || isOwnEval ? e.comment : null,
         createdAt: e.created_at,
         // BUG FIX : l'intitulé des critères (evaluation_questions) manquait
@@ -83,7 +91,9 @@ export async function GET(
       {
         epreuve: any;
         evaluations: typeof parsed;
-        collectiveScore: number;
+        /** Moyenne des notes de l'épreuve, ramenée sur 20 (null si aucune note). */
+        collectiveScore: number | null;
+        maxTotal: number;
         evaluatorCount: number;
       }
     > = {};
@@ -94,28 +104,43 @@ export async function GET(
         byEpreuve[epId] = {
           epreuve: ev.epreuve,
           evaluations: [],
-          collectiveScore: 0,
+          collectiveScore: null,
+          maxTotal: ev.maxTotal,
           evaluatorCount: 0,
         };
       }
       byEpreuve[epId].evaluations.push(ev);
     });
 
-    // Calculer la moyenne par épreuve
+    // Moyenne par épreuve sur 20 — les évaluations sans aucune note (ligne
+    // collective créée à vide) sont listées mais ne pèsent pas 0.
     Object.values(byEpreuve).forEach((group) => {
-      const totals = group.evaluations.map((e) => e.scoreTotal);
-      group.evaluatorCount = totals.length;
-      group.collectiveScore =
-        totals.length > 0
-          ? Math.round(
-              (totals.reduce((a, b) => a + b, 0) / totals.length) * 10,
-            ) / 10
-          : 0;
+      const scored = group.evaluations.filter((e) => e.hasScores);
+      group.evaluatorCount = scored.length;
+      group.collectiveScore = averageOn20ByEpreuve(
+        scored.map((e) => ({
+          epreuveKey: group.epreuve?.id || "unknown",
+          obtained: e.scoreTotal,
+          maxTotal: e.maxTotal,
+        })),
+      );
     });
+
+    // Moyenne globale du candidat, même règle que la délibération.
+    const globalAverage = averageOn20ByEpreuve(
+      parsed
+        .filter((e) => e.hasScores)
+        .map((e) => ({
+          epreuveKey: e.epreuve?.id || "unknown",
+          obtained: e.scoreTotal,
+          maxTotal: e.maxTotal,
+        })),
+    );
 
     return Response.json({
       evaluations: parsed,
       byEpreuve: Object.values(byEpreuve),
+      globalAverage,
     });
   } catch (error) {
     console.error("Fetch candidate evaluations error:", error);

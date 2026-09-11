@@ -520,6 +520,24 @@ export default function CreationPage() {
               `Épreuve modifiée — ${res.data?.cascade?.deletedSlots || 0} créneau(x) supprimé(s), ${res.data?.cascade?.notifiedCandidates || 0} candidat(s) notifié(s).`,
               "success",
             );
+          } else if (
+            err.response?.status === 409 &&
+            err.response?.data?.code === "EVALUATIONS_EXIST"
+          ) {
+            // BARÈME : des notes existent déjà, indexées par position de
+            // critère — changer leur nombre décale les notes saisies.
+            const confirmed = window.confirm(
+              `⚠️ ${err.response.data.error}\n\nForcer quand même la modification du barème ?`,
+            );
+            if (!confirmed) {
+              setCreatingEpreuve(false);
+              return;
+            }
+            await api.put(`/epreuves/${editingEpreuveId}`, {
+              ...payload,
+              confirmCriteriaChange: true,
+            });
+            toast("Épreuve modifiée (barème forcé)", "success");
           } else {
             throw err;
           }
