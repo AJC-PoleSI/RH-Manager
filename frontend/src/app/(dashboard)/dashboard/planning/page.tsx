@@ -232,6 +232,11 @@ export default function PlanningPage() {
   const [editSlot, setEditSlot] = useState<any>(null);
   const [editRoom, setEditRoom] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapAKey, setSwapAKey] = useState("");
+  const [swapBKey, setSwapBKey] = useState("");
+  const [swapLoading, setSwapLoading] = useState(false);
   // Tous les membres (pour le sélecteur dans la modale)
   const [allMembers, setAllMembers] = useState<
     { id: string; email: string; firstName?: string; lastName?: string }[]
