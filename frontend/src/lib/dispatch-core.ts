@@ -220,10 +220,13 @@ export function isFrozen(slot: SlotTiming, now: Date = new Date()): boolean {
  * `continuing` : membres présents sur le créneau précédent de la même salle et
  * dont le streak n'a pas atteint ROOM_STREAK_MAX — on veut les garder sur place.
  * `anchored`   : membres déjà affectés à ce créneau avant que le run l'efface.
+ * `uprooting`  : membres en pleine chaîne dans une AUTRE salle, qu'on
+ *                délogerait en les prenant ici (cf. UPROOT_PENALTY).
  */
 export interface SlotContinuity {
   continuing?: Set<string>;
   anchored?: Set<string>;
+  uprooting?: Set<string>;
 }
 
 /**
