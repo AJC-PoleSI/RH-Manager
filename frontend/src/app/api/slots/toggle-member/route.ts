@@ -2,6 +2,7 @@ import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { broadcastReplacementRequest } from "@/lib/replacement-requests";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { activeEnrollmentCount } from "@/lib/dispatch-understaffing";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/toggle-member — toggle member assignment on a slot
