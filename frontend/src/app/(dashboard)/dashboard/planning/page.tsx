@@ -15,6 +15,7 @@ import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
 import { lockReasonLabel } from "@/lib/slot-lock";
+import { availabilityMatchesSlot } from "@/lib/dispatch-core";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -217,6 +218,13 @@ export default function PlanningPage() {
   const [globalDetailSlot, setGlobalDetailSlot] = useState<any | null>(null);
   // Créneau dont le verrou est en cours de bascule (évite le double-clic).
   const [lockBusyId, setLockBusyId] = useState<string | null>(null);
+  // Sélecteur « + examinateur » de la modale de détail.
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [memberPickerQuery, setMemberPickerQuery] = useState("");
+  const [memberPickerBusy, setMemberPickerBusy] = useState<string | null>(null);
+  // Dispos de TOUS les membres pour la seule journée du créneau ouvert :
+  // elles servent à distinguer « disponible » de « à forcer » dans la liste.
+  const [dayAvailabilities, setDayAvailabilities] = useState<any[]>([]);
   const [repartitionLoading, setRepartitionLoading] = useState(false);
   const [repartitionResult, setRepartitionResult] = useState<any>(null);
   const [resetLoading, setResetLoading] = useState(false);
@@ -611,6 +619,93 @@ export default function PlanningPage() {
       }
     },
     [fetchSlotData, toast],
+  );
+
+  /**
+   * Recharge le créneau ouvert dans la modale après modification du jury.
+   *
+   * La modale garde une COPIE du créneau prise au clic (raw + compteurs) :
+   * sans ce rafraîchissement, ajouter un examinateur ne changerait rien à
+   * l'écran tant qu'on ne referme pas le panneau.
+   */
+  const refreshDetailSlot = useCallback(async (slotId: string) => {
+    try {
+      const res = await api.get("/slots/all");
+      const updated = (res.data || []).find((s: any) => s.id === slotId);
+      if (!updated) return;
+      setGlobalDetailSlot((prev: any) =>
+        prev?.raw?.id === slotId
+          ? {
+              ...prev,
+              raw: updated,
+              memberCount: updated.members?.length || 0,
+              candCount: updated.enrollments?.length || 0,
+              minMembers: updated.min_members || 2,
+              maxCands: updated.max_candidates || 1,
+            }
+          : prev,
+      );
+    } catch {
+      /* le toast d'erreur de l'appelant suffit */
+    }
+  }, []);
+
+  /**
+   * Ouvre le sélecteur d'examinateurs et charge les disponibilités du JOUR
+   * du créneau — uniquement ce jour-là : la route /availability/all n'est pas
+   * paginée, et PostgREST tronque toute réponse à 1000 lignes sans le dire
+   * (cf. supabase-paging.ts). Sur une seule journée on reste très en dessous.
+   */
+  const openMemberPicker = useCallback(async (slot: any) => {
+    setMemberPickerOpen(true);
+    setMemberPickerQuery("");
+    const day = String(slot?.date || "").substring(0, 10);
+    if (!day) return;
+    try {
+      const res = await api.get(`/availability/all?start=${day}&end=${day}`);
+      setDayAvailabilities(res.data || []);
+    } catch {
+      // Pas de dispos chargées : la liste reste utilisable, tout le monde
+      // apparaît simplement dans « non déclarés disponibles ».
+      setDayAvailabilities([]);
+    }
+  }, []);
+
+  /**
+   * Ajoute ou retire un examinateur sur un créneau (admin).
+   *
+   * Côté serveur, une affectation posée par un admin est marquée `is_manual` :
+   * le dispatch ne la défera pas au prochain recalcul. Les refus (conflit
+   * horaire, autre salle prioritaire en sous-effectif, sur-effectif candidats)
+   * reviennent en 409 avec leur explication — on l'affiche telle quelle.
+   */
+  const toggleMemberOnSlot = useCallback(
+    async (slot: any, memberId: string, action: "add" | "remove") => {
+      setMemberPickerBusy(memberId);
+      try {
+        await api.post("/slots/toggle-member", {
+          slotId: slot.id,
+          memberId,
+          action,
+        });
+        await refreshDetailSlot(slot.id);
+        setRepartitionResult(null);
+        fetchSlotData();
+        fetchAllSlotsGlobal();
+        toast(
+          action === "add" ? "Examinateur ajouté" : "Examinateur retiré",
+          "success",
+        );
+      } catch (e: any) {
+        toast(
+          e?.response?.data?.error || "Modification impossible",
+          "error",
+        );
+      } finally {
+        setMemberPickerBusy(null);
+      }
+    },
+    [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
   );
 
   useEffect(() => {
@@ -1336,6 +1431,10 @@ export default function PlanningPage() {
           const weekLabel = `${weekDates[0].toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} — ${weekDates[6].toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}`;
 
           const handleEvClick = (ev: AdminEv) => {
+            // Le sélecteur d'examinateur appartient au créneau qu'on quitte :
+            // le laisser ouvert l'afficherait sur le suivant, avec les dispos
+            // de la mauvaise journée.
+            setMemberPickerOpen(false);
             if (ev.kind === "slot") {
               const s = ev.raw;
               const mc = s.members?.length||0, cc=s.enrollments?.length||0;
@@ -1580,7 +1679,7 @@ export default function PlanningPage() {
         {globalDetailSlot && (
           <div
             className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-            onClick={() => setGlobalDetailSlot(null)}
+            onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }}
           >
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
@@ -1594,7 +1693,7 @@ export default function PlanningPage() {
                   <div className="p-5 border-b border-gray-100 bg-blue-50">
                     <div className="flex items-center justify-between">
                       <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
-                      <button onClick={() => setGlobalDetailSlot(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
                     </div>
                     <p className="text-sm font-semibold text-gray-800 mt-3">{raw.title}</p>
                     {raw.description && (
@@ -1652,7 +1751,7 @@ export default function PlanningPage() {
                         <h2 className="text-base font-semibold flex items-center gap-2">
                           {icon} {s.epreuve?.name || "Créneau"}
                         </h2>
-                        <button onClick={() => setGlobalDetailSlot(null)} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
+                        <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
                       </div>
                       <p className="text-xs mt-1 opacity-80">{label}</p>
                     </div>
@@ -1691,7 +1790,22 @@ export default function PlanningPage() {
                       </div>
                       <hr className="my-2" />
                       <div>
-                        <p className="text-xs uppercase text-gray-400 mb-1.5">Examinateurs ({memberCount}/{minMembers}+)</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs uppercase text-gray-400">Examinateurs ({memberCount}/{minMembers}+)</p>
+                          {isAdmin && (
+                            <button
+                              onClick={() => (memberPickerOpen ? setMemberPickerOpen(false) : openMemberPicker(s))}
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                                memberPickerOpen
+                                  ? "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                                  : "bg-blue-600 text-white hover:bg-blue-700"
+                              }`}
+                              title={memberPickerOpen ? "Fermer" : "Ajouter un examinateur"}
+                            >
+                              {memberPickerOpen ? "×" : "+"}
+                            </button>
+                          )}
+                        </div>
                         {memberCount === 0 ? (
                           <p className="text-purple-700 text-sm italic">Aucun examinateur assigné</p>
                         ) : (
@@ -1701,10 +1815,118 @@ export default function PlanningPage() {
                               const name = mem.firstName || mem.first_name
                                 ? `${mem.firstName || mem.first_name} ${mem.lastName || mem.last_name || ""}`.trim()
                                 : mem.email?.split("@")[0] || "Inconnu";
-                              return <li key={idx} className="flex items-center gap-2 text-gray-800"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />{name} <span className="text-xs text-gray-400">{mem.email}</span></li>;
+                              const mid = mem.id || m.member_id;
+                              return (
+                                <li key={idx} className="flex items-center gap-2 text-gray-800 group">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                                  <span className="flex-1">{name} <span className="text-xs text-gray-400">{mem.email}</span></span>
+                                  {/* Contrepartie du « + » : défaire un ajout
+                                      fait par erreur sans quitter la modale.
+                                      Le serveur refuse les retraits qui
+                                      laisseraient un candidat sans jury. */}
+                                  {isAdmin && mid && (
+                                    <button
+                                      onClick={() => {
+                                        if (!window.confirm(`Retirer ${name} de ce créneau ?`)) return;
+                                        toggleMemberOnSlot(s, mid, "remove");
+                                      }}
+                                      disabled={memberPickerBusy === mid}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 flex-shrink-0 disabled:opacity-40"
+                                      title="Retirer cet examinateur"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </li>
+                              );
                             })}
                           </ul>
                         )}
+
+                        {/* ── Sélecteur d'examinateur ──
+                            Les membres réellement disponibles sur ce créneau
+                            sont listés en premier, avec la MÊME règle que le
+                            dispatch (availabilityMatchesSlot) : sans ça,
+                            « disponible » dans cette liste et « disponible »
+                            pour l'algorithme ne voudraient pas dire la même
+                            chose. Les autres restent proposés en dessous —
+                            l'admin peut forcer, le serveur refusera seulement
+                            les vrais conflits d'horaire. */}
+                        {isAdmin && memberPickerOpen && (() => {
+                          const assignedIds = new Set(
+                            (s.members || []).map((m: any) => m.member?.id || m.member_id),
+                          );
+                          const q = memberPickerQuery.trim().toLowerCase();
+                          const matches = (m: any) =>
+                            !q ||
+                            `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(q);
+
+                          const availableIds = new Set(
+                            dayAvailabilities
+                              .filter((av: any) => availabilityMatchesSlot(av, s))
+                              .map((av: any) => av.member_id),
+                          );
+
+                          const pool = allMembers
+                            .filter((m) => !assignedIds.has(m.id) && matches(m))
+                            .sort((a, b) =>
+                              `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
+                            );
+                          const dispo = pool.filter((m) => availableIds.has(m.id));
+                          const autres = pool.filter((m) => !availableIds.has(m.id));
+
+                          const row = (m: any, isDispo: boolean) => (
+                            <button
+                              key={m.id}
+                              onClick={() => toggleMemberOnSlot(s, m.id, "add")}
+                              disabled={memberPickerBusy === m.id}
+                              className="w-full text-left px-2 py-1.5 rounded-md hover:bg-blue-50 flex items-center gap-2 text-sm disabled:opacity-40"
+                            >
+                              <span className={isDispo ? "text-green-600" : "text-gray-300"}>
+                                {isDispo ? "✓" : "○"}
+                              </span>
+                              <span className="flex-1 truncate">
+                                {`${m.firstName} ${m.lastName}`.trim() || m.email}
+                              </span>
+                              <span className="text-blue-600 font-bold">+</span>
+                            </button>
+                          );
+
+                          return (
+                            <div className="mt-3 border border-gray-200 rounded-lg p-2 bg-gray-50">
+                              <input
+                                autoFocus
+                                value={memberPickerQuery}
+                                onChange={(e) => setMemberPickerQuery(e.target.value)}
+                                placeholder="Rechercher un membre…"
+                                className="w-full text-sm px-2 py-1.5 rounded-md border border-gray-300 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <div className="max-h-56 overflow-y-auto">
+                                {dispo.length > 0 && (
+                                  <>
+                                    <p className="text-[11px] uppercase text-green-700 font-semibold px-2 py-1">
+                                      Disponibles sur ce créneau ({dispo.length})
+                                    </p>
+                                    {dispo.map((m) => row(m, true))}
+                                  </>
+                                )}
+                                {autres.length > 0 && (
+                                  <>
+                                    <p className="text-[11px] uppercase text-gray-400 font-semibold px-2 py-1 mt-1">
+                                      Non déclarés disponibles ({autres.length})
+                                    </p>
+                                    {autres.map((m) => row(m, false))}
+                                  </>
+                                )}
+                                {pool.length === 0 && (
+                                  <p className="text-sm text-gray-500 italic px-2 py-2">
+                                    Aucun membre ne correspond.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <p className="text-xs uppercase text-gray-400 mb-1.5">Candidats ({candCount}/{maxCands})</p>
