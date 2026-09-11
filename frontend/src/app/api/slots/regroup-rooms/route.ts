@@ -3,6 +3,7 @@ import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { filterActiveEnrollments, effectiveMaxCandidates } from "@/lib/enrollment";
 import { slotGroupKey, regroupEnrollments } from "@/lib/room-packing";
 import { sendRoomChangeEmail } from "@/lib/resend";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 /**
@@ -31,17 +32,24 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dryRun !== false;
     const notify = body?.notify === true;
+    const force = body?.force === true;
 
-    const { data: rawSlots, error } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        `
+    const BASE_COLS = `
         id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id,
         enrollments:slot_enrollments(id, candidate_id, status),
         members:slot_member_assignments(id),
         epreuve:epreuves(name, is_group_epreuve, group_size)
-      `,
-      );
+      `;
+    // `is_locked` peut ne pas exister (migration slot-lock pas encore
+    // appliquée) : repli sur l'ancienne lecture, sans verrou à faire respecter.
+    let { data: rawSlots, error } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select(`${BASE_COLS}, is_locked`);
+    if (error && isMissingColumnError(error)) {
+      ({ data: rawSlots, error } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select(BASE_COLS));
+    }
     if (error) throw error;
 
     const today = new Date().toISOString().substring(0, 10);
@@ -109,6 +117,25 @@ export async function POST(req: NextRequest) {
 
     if (dryRun) {
       return Response.json({ dryRun: true, moves: plan.length, plan });
+    }
+
+    // ── CRÉNEAUX FIGÉS ──
+    // Changer un candidat de salle rompt la promesse « votre créneau ne bouge
+    // plus » faite à l'inscription ou à la publication. Le regroupement reste
+    // possible — c'est un rattrapage utile — mais il exige désormais une
+    // confirmation explicite quand il touche des créneaux verrouillés.
+    const lockedMoves = plan.filter(
+      (m) => (slotById.get(m.fromSlotId) as any)?.is_locked,
+    );
+    if (lockedMoves.length > 0 && !force) {
+      return Response.json(
+        {
+          error: "creneaux_figes",
+          message: `${lockedMoves.length} candidat(s) inscrits sur des créneaux figés changeraient de salle. Confirmer ?`,
+          moves: lockedMoves,
+        },
+        { status: 409 },
+      );
     }
 
     // ── Application ──

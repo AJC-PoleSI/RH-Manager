@@ -14,6 +14,7 @@ import UnderstaffedBanner from "@/components/planning/UnderstaffedBanner";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
+import { lockReasonLabel } from "@/lib/slot-lock";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -214,6 +215,8 @@ export default function PlanningPage() {
   const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
   // Modal détail créneau cliqué dans la vue calendrier globale
   const [globalDetailSlot, setGlobalDetailSlot] = useState<any | null>(null);
+  // Créneau dont le verrou est en cours de bascule (évite le double-clic).
+  const [lockBusyId, setLockBusyId] = useState<string | null>(null);
   const [repartitionLoading, setRepartitionLoading] = useState(false);
   const [repartitionResult, setRepartitionResult] = useState<any>(null);
   const [resetLoading, setResetLoading] = useState(false);
@@ -553,6 +556,63 @@ export default function PlanningPage() {
     evalParSalle,
   ]);
 
+  /**
+   * Figer / déverrouiller un créneau.
+   *
+   * Le déverrouillage d'un créneau à candidats inscrits revient avec un 409
+   * « confirmation_requise » : on repose alors la question à l'admin avant de
+   * renvoyer `force`. Rouvrir un rendez-vous pris au rebrassage de
+   * l'algorithme ne doit jamais être un clic anodin.
+   */
+  const toggleSlotLock = useCallback(
+    async (slot: any) => {
+      if (!slot?.id) return;
+      const next = !slot.is_locked;
+      setLockBusyId(slot.id);
+      try {
+        const send = (force: boolean) =>
+          api.post(`/slots/${slot.id}/lock`, { locked: next, force });
+
+        try {
+          await send(false);
+        } catch (err: any) {
+          const data = err?.response?.data;
+          if (err?.response?.status === 409 && data?.error === "confirmation_requise") {
+            if (!window.confirm(data.message)) return;
+            await send(true);
+          } else {
+            throw err;
+          }
+        }
+
+        // La modale affiche l'objet créneau reçu au clic : sans cette mise à
+        // jour locale, elle continuerait d'afficher l'ancien état du verrou.
+        setGlobalDetailSlot((prev: any) =>
+          prev?.raw?.id === slot.id
+            ? {
+                ...prev,
+                raw: {
+                  ...prev.raw,
+                  is_locked: next,
+                  locked_reason: next ? "manuel" : null,
+                },
+              }
+            : prev,
+        );
+        toast(next ? "Créneau figé 🔒" : "Créneau déverrouillé 🔓", "success");
+        fetchSlotData();
+      } catch (err: any) {
+        toast(
+          err?.response?.data?.error || "Échec du verrouillage",
+          "error",
+        );
+      } finally {
+        setLockBusyId(null);
+      }
+    },
+    [fetchSlotData, toast],
+  );
+
   useEffect(() => {
     fetchAvailabilityData();
     fetchSlotData();
@@ -805,11 +865,36 @@ export default function PlanningPage() {
       // de candidats avant de fermer (no-op pour les autres épreuves).
       let mergeInfo = "";
       try {
-        const mergeRes = await api.post("/slots/merge-undersized", {
-          epreuveId: selectedEpreuveId,
-        });
-        if (mergeRes.data?.merged > 0) {
-          mergeInfo = ` · ${mergeRes.data.merged} créneau(x) sous le minimum fusionné(s)`;
+        const merge = (force: boolean) =>
+          api.post("/slots/merge-undersized", {
+            epreuveId: selectedEpreuveId,
+            force,
+          });
+
+        let mergeRes: { data?: { merged?: number } } | undefined;
+        try {
+          mergeRes = await merge(false);
+        } catch (err: any) {
+          // La fusion déplacerait des candidats inscrits sur des créneaux
+          // FIGÉS. C'est précisément ce que le verrou promet d'empêcher : on
+          // ne le fait plus en silence, l'admin tranche en connaissance de
+          // cause. Refuser laisse simplement les créneaux sous-remplis en
+          // l'état — la clôture des inscriptions se poursuit.
+          const data = err?.response?.data;
+          if (err?.response?.status === 409 && data?.error === "creneaux_figes") {
+            if (!window.confirm(data.message)) {
+              mergeInfo = " · fusion annulée (créneaux figés conservés)";
+            } else {
+              mergeRes = await merge(true);
+            }
+          } else {
+            throw err;
+          }
+        }
+
+        const mergedCount = mergeRes?.data?.merged ?? 0;
+        if (mergedCount > 0) {
+          mergeInfo = ` · ${mergedCount} créneau(x) sous le minimum fusionné(s)`;
         }
       } catch (e) {
         console.error("Erreur fusion créneaux sous-remplis:", e);
@@ -1209,10 +1294,13 @@ export default function PlanningPage() {
             else if (memberCount === 0) { bg = "#EDE9FE"; dot = "#7C3AED"; txt = "#3B0764"; icon = "🟣"; }
             else if (candCount < maxCands) { bg = "#FEE2E2"; dot = "#DC2626"; txt = "#7F1D1D"; icon = "🔴"; }
             else if (memberCount < minMembers) { bg = "#FEF3C7"; dot = "#D97706"; txt = "#78350F"; icon = "🟠"; }
+            // Cadenas : ce créneau est figé, ni le dispatch ni une édition
+            // manuelle ne le feront bouger (cf. slot-lock.ts).
+            const lockMark = s.is_locked ? "🔒 " : "";
             allAdminEvents.push({
               id: `slot-${s.id}`,
               date: toDateStr(s.date),
-              title: `${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
+              title: `${lockMark}${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
               startTime: (s.start_time || "").substring(0, 5),
               bg, textColor: txt, dotColor: dot, kind: "slot", raw: s,
             });
@@ -1587,6 +1675,20 @@ export default function PlanningPage() {
                         <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Tour</span>
                         <span className="font-medium text-gray-800">Tour {s.tour || s.epreuve?.tour || "?"}</span>
                       </div>
+                      {/* VERROU — pourquoi ce créneau ne bouge plus. Le motif
+                          est affiché en clair : sans lui, « figé » laisse
+                          deviner s'il s'agit d'une publication, d'une
+                          inscription ou d'une décision manuelle. */}
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Verrou</span>
+                        {s.is_locked ? (
+                          <span className="font-medium text-amber-700 flex items-center gap-1">
+                            🔒 Figé <span className="text-xs text-gray-500">— {lockReasonLabel(s.locked_reason)}</span>
+                          </span>
+                        ) : (
+                          <span className="font-medium text-gray-500">Libre — l&apos;algorithme peut réaffecter les examinateurs</span>
+                        )}
+                      </div>
                       <hr className="my-2" />
                       <div>
                         <p className="text-xs uppercase text-gray-400 mb-1.5">Examinateurs ({memberCount}/{minMembers}+)</p>
@@ -1641,7 +1743,29 @@ export default function PlanningPage() {
                           </ul>
                         )}
                       </div>
-                      <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                        {isAdmin && (
+                          <button
+                            onClick={() => toggleSlotLock(s)}
+                            disabled={lockBusyId === s.id}
+                            className={`text-xs px-3 py-1.5 rounded-md font-medium shadow-sm transition-all disabled:opacity-50 ${
+                              s.is_locked
+                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
+                            }`}
+                            title={
+                              s.is_locked
+                                ? "Rendre ce créneau à l'algorithme"
+                                : "Empêcher toute réaffectation sur ce créneau"
+                            }
+                          >
+                            {lockBusyId === s.id
+                              ? "…"
+                              : s.is_locked
+                                ? "🔓 Déverrouiller"
+                                : "🔒 Figer ce créneau"}
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             const dateStr = String(s.date || "").substring(0, 10);

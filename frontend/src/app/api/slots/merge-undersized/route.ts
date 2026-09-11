@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { filterActiveEnrollments, effectiveMaxCandidates } from "@/lib/enrollment";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/merge-undersized — admin : à la clôture des inscriptions
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!payload.isAdmin) return forbidden();
 
   try {
-    const { epreuveId } = await req.json();
+    const { epreuveId, force } = await req.json();
     if (!epreuveId) {
       return Response.json({ error: "epreuveId requis" }, { status: 400 });
     }
@@ -34,15 +35,25 @@ export async function POST(req: NextRequest) {
       return Response.json({ merged: 0, movedCandidates: 0, notifiedCandidates: 0 });
     }
 
-    const { data: slots, error: slotsErr } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        "id, date, start_time, end_time, room, max_candidates, enrollments:slot_enrollments(id, candidate_id, status), members:slot_member_assignments(id)",
-      )
-      .eq("epreuve_id", epreuveId)
-      .eq("status", "published")
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true });
+    const SLOT_COLS =
+      "id, date, start_time, end_time, room, max_candidates, enrollments:slot_enrollments(id, candidate_id, status), members:slot_member_assignments(id)";
+    const readSlots = (cols: string) =>
+      supabaseAdmin
+        .from("evaluation_slots")
+        .select(cols)
+        .eq("epreuve_id", epreuveId)
+        .eq("status", "published")
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true });
+
+    // `is_locked` peut ne pas exister (migration slot-lock pas encore
+    // appliquée) : on retombe alors sur l'ancienne lecture, sans verrou.
+    let { data: slots, error: slotsErr } = await readSlots(
+      `${SLOT_COLS}, is_locked`,
+    );
+    if (slotsErr && isMissingColumnError(slotsErr)) {
+      ({ data: slots, error: slotsErr } = await readSlots(SLOT_COLS));
+    }
     if (slotsErr) throw slotsErr;
 
     const withCapacity = (slots || []).map((s: any) => {
