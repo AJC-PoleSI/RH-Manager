@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import api from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import { activeEnrollmentCount, formatSlotLabel, type UnderstaffedSlot } from "@/lib/dispatch-understaffing";
 
 /**
