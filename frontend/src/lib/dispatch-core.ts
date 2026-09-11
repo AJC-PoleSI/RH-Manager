@@ -43,6 +43,23 @@ export const ROOM_CONTINUITY_BONUS = 1000;
  */
 export const SLOT_ANCHOR_BONUS = 0.5;
 
+/**
+ * Malus (ajouté au score) d'un membre qu'on ARRACHERAIT à une chaîne en cours
+ * dans une AUTRE salle pour le placer ici.
+ *
+ * Symétrique de `ROOM_CONTINUITY_BONUS` : rester sur place et ne pas être
+ * délogé sont le même fait physique vu des deux côtés. Le bonus seul ne
+ * suffisait pas — il n'agit que lorsqu'on décide le créneau de SA salle. Quand
+ * une salle concurrente est servie avant (cas réel du 21/09/2026 : salles 205
+ * et 217 proposent le même entretien à 08:30), elle captait le duo, qui se
+ * déplaçait pour rien en laissant sa propre salle vide.
+ *
+ * Ce malus ne peut JAMAIS laisser un créneau non pourvu : le score ne fait
+ * qu'ORDONNER le vivier, la boucle gloutonne le vide de toute façon tant qu'il
+ * reste des membres disponibles. Il déplace le choix, pas la couverture.
+ */
+export const UPROOT_PENALTY = 1000;
+
 // ─── Types ────────────────────────────────────────────────────────────
 export interface SlotTiming {
   date?: string | null;
