@@ -516,7 +516,13 @@ export async function POST(req: NextRequest) {
 
         // Le créneau ne s'ouvre aux candidats qu'une fois le nombre
         // d'examinateurs AU COMPLET (son minimum), pas dès le premier arrivé.
-        const requiredForPublish = slot.min_members || 2;
+        //
+        // EXCEPTION (spec 2026-09-11) : un créneau où un candidat est DÉJÀ
+        // inscrit repasse en circulation dès le PREMIER examinateur. Le
+        // rendez-vous est pris ; le garder hors du planning n'aide personne et
+        // empêche même le créneau de se compléter.
+        const enrolled = activeEnrollmentCount(slot.enrollments);
+        const requiredForPublish = enrolled > 0 ? 1 : slot.min_members || 2;
 
         let newStatus: string | null = null;
         if (epreuvePublished && memberCount >= requiredForPublish) {
