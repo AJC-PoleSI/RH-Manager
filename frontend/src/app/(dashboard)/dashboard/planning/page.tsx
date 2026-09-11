@@ -1054,6 +1054,10 @@ export default function PlanningPage() {
           {ModeToggle}
         </div>
 
+        {/* Créneaux sans leur compte d'examinateurs — priorité aux créneaux
+            où un candidat est déjà inscrit (cf. UnderstaffedBanner). */}
+        <UnderstaffedBanner slots={allSlotsGlobal} />
+
         {/* ══════════════════════════════════════════════════════════════════
                     CALENDRIER ADMINISTRATEUR GLOBAL — design unifié
                     ══════════════════════════════════════════════════════════════════ */}

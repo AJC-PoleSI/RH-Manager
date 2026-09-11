@@ -13,6 +13,8 @@ import {
   orderPredecessorsFirst,
   blocksSlot,
   ROOM_STREAK_MAX,
+  ROOM_CONTINUITY_BONUS,
+  UPROOT_PENALTY,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
@@ -574,5 +576,133 @@ describe("orderPredecessorsFirst (un créneau après son prédécesseur de salle
       ["s2", "s1"],
     ]);
     expect(orderPredecessorsFirst(slots, predecessor)).toHaveLength(3);
+  });
+});
+
+describe("scoreMember — malus d'arrachement (piste 2)", () => {
+  const load = { alice: 0, bob: 5 };
+  const pairs = new Map<string, number>();
+
+  it("pénalise un membre qu'on arracherait à une chaîne en cours ailleurs", () => {
+    // Alice est au milieu d'une chaîne en salle 217. Ce créneau-ci est en 205.
+    // Même si Alice est la moins chargée, Bob doit passer devant.
+    const continuity = { uprooting: new Set(["alice"]) };
+    expect(scoreMember("alice", [], load, pairs, continuity)).toBeGreaterThan(
+      scoreMember("bob", [], load, pairs, continuity),
+    );
+  });
+
+  it("n'arrache personne quand le membre continue SA propre chaîne ici", () => {
+    // Sur le créneau de sa propre salle, Alice reçoit le bonus, pas le malus.
+    const continuity = { continuing: new Set(["alice"]) };
+    expect(scoreMember("alice", [], load, pairs, continuity)).toBeLessThan(
+      scoreMember("bob", [], load, pairs, continuity),
+    );
+  });
+
+  it("le malus est du même ordre que le bonus (symétrie rester / être arraché)", () => {
+    expect(UPROOT_PENALTY).toBe(ROOM_CONTINUITY_BONUS);
+  });
+
+  it("sans information d'arrachement, le score est inchangé", () => {
+    expect(scoreMember("alice", [], load, pairs, {})).toBe(
+      scoreMember("alice", [], load, pairs),
+    );
+  });
+});
+
+describe("compareByTension — créneaux avec candidats inscrits", () => {
+  const base = {
+    date: "2026-09-21",
+    start_time: "08:30",
+    eligible: 4,
+    quota: 2,
+  };
+
+  it("un créneau avec des candidats inscrits se sert en premier", () => {
+    const avecCandidats = { ...base, id: "a", hasEnrolledCandidates: true };
+    const sansCandidats = { ...base, id: "b", hasEnrolledCandidates: false };
+    expect(compareByTension(avecCandidats, sansCandidats)).toBeLessThan(0);
+    expect(compareByTension(sansCandidats, avecCandidats)).toBeGreaterThan(0);
+  });
+
+  it("passe MÊME devant un créneau de groupe sans inscrit — un rendez-vous pris prime", () => {
+    const entretienAvecCandidat = {
+      ...base,
+      id: "entretien",
+      hasEnrolledCandidates: true,
+      isGroupEpreuve: false,
+    };
+    const groupeSansCandidat = {
+      ...base,
+      id: "bg",
+      hasEnrolledCandidates: false,
+      isGroupEpreuve: true,
+    };
+    expect(
+      compareByTension(entretienAvecCandidat, groupeSansCandidat),
+    ).toBeLessThan(0);
+  });
+
+  it("à inscrits égaux des deux côtés, l'arbitrage groupe/individuel reprend la main", () => {
+    const individuel = { ...base, id: "a", hasEnrolledCandidates: true };
+    const groupe = {
+      ...base,
+      id: "b",
+      hasEnrolledCandidates: true,
+      isGroupEpreuve: true,
+    };
+    expect(compareByTension(groupe, individuel)).toBeLessThan(0);
+  });
+
+  it("champ absent des deux côtés (anciennes données) : comportement inchangé", () => {
+    const a = { ...base, id: "a", isGroupEpreuve: true };
+    const b = { ...base, id: "b", isGroupEpreuve: false };
+    expect(compareByTension(a, b)).toBeLessThan(0);
+  });
+});
+
+describe("compareByTension — départage par continuité de salle (piste 1)", () => {
+  // Cas réel du lundi 21/09/2026 : salle 217 et salle 205 proposent le même
+  // entretien individuel à 08:30. Amandine et Esther viennent de terminer en
+  // 217. Avant ce départage, l'ordre tombait sur la comparaison d'UUID : la
+  // 205 pouvait être servie en premier, capter le duo, et laisser la 217 vide.
+  const salle217 = {
+    id: "zzz-217-0830", // UUID défavorable exprès
+    date: "2026-09-21",
+    start_time: "08:30",
+    eligible: 2,
+    quota: 2,
+    continuesChain: true, // le duo est déjà en 217 au créneau précédent
+  };
+  const salle205 = {
+    id: "aaa-205-0830",
+    date: "2026-09-21",
+    start_time: "08:30",
+    eligible: 2,
+    quota: 2,
+    continuesChain: false, // la 205 démarre à froid
+  };
+
+  it("le créneau qui prolonge une salle occupée se sert avant celui qui démarre à froid", () => {
+    expect(compareByTension(salle217, salle205)).toBeLessThan(0);
+    expect(compareByTension(salle205, salle217)).toBeGreaterThan(0);
+  });
+
+  it("ne s'applique qu'à égalité stricte — la tension reste prioritaire", () => {
+    const froidMaisTendu = { ...salle205, eligible: 1 };
+    expect(compareByTension(froidMaisTendu, salle217)).toBeLessThan(0);
+  });
+
+  it("ne perturbe pas l'ordre chronologique entre créneaux d'horaires différents", () => {
+    const tot = { ...salle205, start_time: "08:00" };
+    const tard = { ...salle217, start_time: "09:00" };
+    expect(compareByTension(tot, tard)).toBeLessThan(0);
+  });
+
+  it("champ absent des deux côtés : départage déterministe par id, comme avant", () => {
+    const a = { ...salle205, continuesChain: undefined };
+    const b = { ...salle217, continuesChain: undefined };
+    expect(compareByTension(a, b)).toBeLessThan(0); // "aaa…" < "zzz…"
   });
 });

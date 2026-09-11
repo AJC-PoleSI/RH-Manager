@@ -14,7 +14,10 @@ import {
   type SlotContinuity,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
-import { effectiveMaxCandidates } from "@/lib/enrollment";
+import {
+  effectiveMaxCandidates,
+  filterActiveEnrollments,
+} from "@/lib/enrollment";
 import { isEliminated } from "@/lib/favorites";
 import { getToursByNumber } from "@/lib/tour-status";
 
@@ -409,23 +412,81 @@ export async function runDispatch(opts?: {
     membersBySlot.set(slotId, new Set(members));
   });
 
-  /** Qui garder sur place sur ce créneau, et qui y était déjà avant le run. */
-  const continuityFor = (slotId: string): SlotContinuity => {
+  /**
+   * Membres à garder sur place sur ce créneau : ceux du créneau précédent de
+   * la même salle dont le streak n'a pas atteint le plafond.
+   */
+  const continuingMembersOf = (slotId: string): Set<string> => {
     const entry = chainOf.get(slotId);
     const continuing = new Set<string>();
-    if (entry && entry.index > 0) {
-      const previous = membersBySlot.get(entry.chain[entry.index - 1]);
-      previous?.forEach((memberId) => {
-        if (
-          roomStreak(memberId, entry.chain, entry.index, membersBySlot) <
-          ROOM_STREAK_MAX
-        ) {
-          continuing.add(memberId);
-        }
-      });
-    }
-    return { continuing, anchored: currentBySlot[slotId] };
+    if (!entry || entry.index === 0) return continuing;
+    const previous = membersBySlot.get(entry.chain[entry.index - 1]);
+    previous?.forEach((memberId) => {
+      if (
+        roomStreak(memberId, entry.chain, entry.index, membersBySlot) <
+        ROOM_STREAK_MAX
+      ) {
+        continuing.add(memberId);
+      }
+    });
+    return continuing;
   };
+
+  /**
+   * Ce créneau prolonge-t-il une salle déjà occupée ? (cf. `continuesChain`)
+   *
+   * Lu au moment du TRI, donc sur l'état d'avant le run : c'est exactement ce
+   * qu'il faut pour savoir quelle salle a une équipe en place à préserver.
+   */
+  const chainHasOccupiedPredecessor = (slotId: string): boolean => {
+    const entry = chainOf.get(slotId);
+    if (!entry || entry.index === 0) return false;
+    return (membersBySlot.get(entry.chain[entry.index - 1])?.size || 0) > 0;
+  };
+
+  // Créneaux du même jour — support du calcul d'arrachement ci-dessous.
+  const slotsByDate = new Map<string, SlotInfo[]>();
+  (sortedSlots as SlotInfo[]).forEach((s) => {
+    const key = String(s.date).substring(0, 10);
+    if (!slotsByDate.has(key)) slotsByDate.set(key, []);
+    slotsByDate.get(key)!.push(s);
+  });
+
+  /**
+   * Qui déloger‑t‑on en pourvoyant ce créneau ? (cf. UPROOT_PENALTY)
+   *
+   * Un membre est « arraché » si une AUTRE salle a, à un horaire incompatible
+   * avec celui-ci, un créneau qui prolongerait sa chaîne en cours. Le prendre
+   * ici lui coûte sa continuité — et laisse potentiellement sa salle vide.
+   *
+   * Le malus ne fait qu'ordonner le vivier : si ce membre est le seul
+   * disponible, il est pris quand même (cf. la boucle gloutonne, étape 9c).
+   */
+  const uprootedBy = (slot: SlotInfo): Set<string> => {
+    const uprooting = new Set<string>();
+    const target = commitmentOf(slot);
+    if (!target.room) return uprooting;
+
+    for (const other of slotsByDate.get(target.date) || []) {
+      if (other.id === slot.id) continue;
+      const otherCommitment = commitmentOf(other);
+      if (!otherCommitment.room || otherCommitment.room === target.room)
+        continue;
+      // Prendre ce créneau empêche-t-il de tenir l'autre ?
+      if (!blocksSlot(otherCommitment, target)) continue;
+      continuingMembersOf(other.id).forEach((memberId) =>
+        uprooting.add(memberId),
+      );
+    }
+    return uprooting;
+  };
+
+  /** Qui garder sur place sur ce créneau, et qui y était déjà avant le run. */
+  const continuityFor = (slot: SlotInfo): SlotContinuity => ({
+    continuing: continuingMembersOf(slot.id),
+    anchored: currentBySlot[slot.id],
+    uprooting: uprootedBy(slot),
+  });
 
   // 7. Tracking structures
   //
@@ -474,11 +535,10 @@ export async function runDispatch(opts?: {
     if (a.member_id && a.slot) registerConflict(a.member_id, a.slot as SlotInfo);
   });
 
-  // 9. Allocation : état d'équité PAR ÉPREUVE, ordre de passage GLOBAL.
+  // 9. Allocation : charge GLOBALE, brassage PAR ÉPREUVE, ordre GLOBAL.
   //
-  // Équité (charge) et brassage (binômes) restent calculés au sein d'une même
-  // épreuve : un examinateur qui a déjà fait 2 entretiens individuels n'est pas
-  // pénalisé pour les épreuves de groupe, et chaque épreuve garde sa rotation.
+  // La charge (équité) se compte sur le total des créneaux, toutes épreuves
+  // confondues ; le brassage des binômes reste interne à chaque épreuve.
   //
   // En revanche l'ORDRE dans lequel les créneaux se servent est GLOBAL et suit
   // leur TENSION (examinateurs disponibles − quota) : le créneau qui manque le
@@ -492,24 +552,35 @@ export async function runDispatch(opts?: {
     slotsByEpreuve.get(key)!.push(slot as SlotInfo);
   }
 
-  // État équité + brassage PROPRE à chaque épreuve, pré-chargé depuis les
-  // créneaux gelés / clôturés de cette même épreuve.
+  // CHARGE (équité) : GLOBALE, toutes épreuves confondues.
+  //
+  // Elle était calculée par épreuve, ce qui remettait chacun à zéro d'une
+  // épreuve à l'autre : quelqu'un déjà très sollicité sur les business games
+  // repartait « vierge » aux yeux des entretiens individuels. Constat sur les
+  // données réelles du 11/09/2026 : Emilie Munsch 1re sur Business Game (22
+  // créneaux) et avant-dernière sur Entretien individuel (7). Un examinateur
+  // qui donne une matinée la donne, quelle que soit l'épreuve — c'est bien le
+  // total qui doit être équilibré.
+  //
+  // BRASSAGE (binômes) : reste PAR ÉPREUVE. Un jury de business game réunit 6
+  // personnes, un entretien 2 : mélanger les deux fausserait la pénalité de
+  // binôme, et chaque épreuve doit garder sa propre rotation.
+  const memberLoad: Record<string, number> = {};
+  for (const slot of sortedSlots) {
+    if (isFrozen(slot as SlotInfo) || isLocked(slot as SlotInfo)) {
+      const existing = currentBySlot[slot.id] || new Set<string>();
+      existing.forEach((memberId) => {
+        memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
+      });
+    }
+  }
+
   const stateByEpreuve = new Map<
     string,
     { memberLoad: Record<string, number>; pairHistory: Map<string, number> }
   >();
-  for (const [key, epreuveSlots] of Array.from(slotsByEpreuve.entries())) {
-    const memberLoad: Record<string, number> = {};
-    const pairHistory = new Map<string, number>();
-    for (const slot of epreuveSlots) {
-      if (isFrozen(slot) || isLocked(slot)) {
-        const existing = currentBySlot[slot.id] || new Set<string>();
-        existing.forEach((memberId) => {
-          memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
-        });
-      }
-    }
-    stateByEpreuve.set(key, { memberLoad, pairHistory });
+  for (const key of Array.from(slotsByEpreuve.keys())) {
+    stateByEpreuve.set(key, { memberLoad, pairHistory: new Map() });
   }
 
   // ── PRÉVISION PAR ÉPREUVE : pourra-t-on faire passer tout le monde ? ──
@@ -681,6 +752,10 @@ export async function runDispatch(opts?: {
       epreuveDeficit: shortfall?.deficit,
       epreuveCoverage: shortfall?.coverage,
       isGroupEpreuve: slot.epreuve?.is_group_epreuve ?? false,
+      hasEnrolledCandidates: (slot.enrollments || []).some(
+        filterActiveEnrollments,
+      ),
+      continuesChain: chainHasOccupiedPredecessor(slot.id),
     };
   };
 
@@ -704,7 +779,7 @@ export async function runDispatch(opts?: {
     const existing = currentBySlot[slot.id] || new Set<string>();
     const slotInfo = slot;
     // Qui garder sur place dans cette salle (cf. étape 6bis).
-    const continuity = continuityFor(slot.id);
+    const continuity = continuityFor(slot);
 
     // 9a. Frozen slots — don't touch
     if (isFrozen(slotInfo)) {
