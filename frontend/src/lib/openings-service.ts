@@ -160,8 +160,10 @@ export async function fetchOpeningSlots(
 export async function notifySlotDeletion(slots: any[]): Promise<number> {
   const rows: any[] = [];
   for (const s of slots) {
-    const enrollments = (s.enrollments || []).filter(
-      (e: any) => (!e.status || e.status === "active") && e.candidate_id,
+    // Même règle de statut que partout ailleurs : un candidat inscrit avec le
+    // statut par défaut 'enrolled' doit être prévenu comme les autres.
+    const enrollments = activeEnrollmentsOf(s).filter(
+      (e: any) => e.candidate_id,
     );
     if (enrollments.length === 0) continue;
     const dateStr = s.date
