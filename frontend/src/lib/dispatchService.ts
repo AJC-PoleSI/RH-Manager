@@ -681,6 +681,10 @@ export async function runDispatch(opts?: {
       epreuveDeficit: shortfall?.deficit,
       epreuveCoverage: shortfall?.coverage,
       isGroupEpreuve: slot.epreuve?.is_group_epreuve ?? false,
+      hasEnrolledCandidates: (slot.enrollments || []).some(
+        filterActiveEnrollments,
+      ),
+      continuesChain: chainHasOccupiedPredecessor(slot.id),
     };
   };
 
