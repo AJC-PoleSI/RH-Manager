@@ -634,6 +634,32 @@ export async function POST(req: NextRequest) {
       throw atomicError;
     }
 
+    // ── VERROUILLAGE ──
+    // Un rendez-vous vient d'être pris : ce créneau ne se rebrasse plus. Le
+    // dispatch protégeait déjà les créneaux à inscrits, mais uniquement tant
+    // que l'inscription est active — matérialiser le verrou le rend visible
+    // à l'admin (cadenas + motif) et le fait respecter par les routes qui
+    // déplacent des créneaux (fusion, regroupement, édition manuelle).
+    //
+    // Best-effort : une inscription valide ne doit JAMAIS échouer parce que
+    // le verrou n'a pas pu être posé.
+    try {
+      const { error: lockErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({
+          is_locked: true,
+          locked_at: new Date().toISOString(),
+          locked_reason: "inscription",
+        })
+        .eq("id", slotId)
+        .eq("is_locked", false);
+      if (lockErr && !isMissingColumnError(lockErr)) {
+        console.error("Verrouillage du créneau à l'inscription échoué:", lockErr);
+      }
+    } catch (e) {
+      console.error("Verrouillage du créneau à l'inscription échoué:", e);
+    }
+
     return Response.json(enrollment, { status: 201 });
   } catch (error: any) {
     // FIX (idempotent): unique constraint hit means an enrollment already
