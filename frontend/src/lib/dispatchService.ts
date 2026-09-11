@@ -1246,22 +1246,43 @@ export async function runDispatch(opts?: {
     assignedCountBySlot.set(a.slot_id, (assignedCountBySlot.get(a.slot_id) || 0) + 1);
   });
   const idsByNewStatus = new Map<string, string[]>();
+  // Créneaux en sous-effectif AVEC candidats inscrits, à signaler (étape 12bis).
+  const understaffedWithCandidates: UnderstaffedSlot[] = [];
+
   for (const slot of sortedSlots) {
     if (isLocked(slot as SlotInfo) || isFrozen(slot as SlotInfo)) continue;
 
     const assignedCount = assignedCountBySlot.get(slot.id) || 0;
+    const needed = slot.min_members || 2;
+    const candidates = activeEnrollmentCount(
+      (slot as SlotInfo).enrollments,
+    );
 
-    // Le créneau ne s'ouvre aux candidats qu'une fois le nombre
-    // d'examinateurs AU COMPLET (= son minimum), pas dès le premier arrivé.
-    const requiredForPublish = slot.min_members || 2;
+    // Le créneau ne s'ouvre aux candidats qu'une fois son jury au complet —
+    // SAUF s'il a déjà des candidats inscrits, auquel cas il reste en
+    // circulation avec un seul examinateur (cf. slotStatusAfterDispatch).
+    const newStatus = slotStatusAfterDispatch({
+      assigned: assignedCount,
+      minMembers: needed,
+      candidates,
+      planningVisible: planningVisibleToCandidates,
+    });
 
-    let newStatus: string;
-    if (planningVisibleToCandidates && assignedCount >= requiredForPublish) {
-      newStatus = "published";
-    } else if (assignedCount >= (slot.min_members || 2)) {
-      newStatus = "ready";
-    } else {
-      newStatus = "open";
+    if (assignedCount < needed && candidates > 0) {
+      const before = (currentBySlot[slot.id] || new Set<string>()).size;
+      // Alerte à la BASCULE seulement — sauf recalcul manuel de l'admin, qui
+      // fait le point sur tout le stock (cf. opts.notifyAll).
+      if (opts?.notifyAll || isNewlyUnderstaffed(before, assignedCount, needed)) {
+        understaffedWithCandidates.push({
+          slotId: slot.id,
+          date: String(slot.date || ""),
+          startTime: String(slot.start_time || ""),
+          room: (slot as SlotInfo).room ?? null,
+          assigned: assignedCount,
+          needed,
+          candidates,
+        });
+      }
     }
 
     if (slot.status !== newStatus) {
