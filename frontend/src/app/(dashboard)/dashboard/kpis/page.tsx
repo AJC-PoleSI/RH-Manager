@@ -189,7 +189,6 @@ export default function KPIsPage() {
                     <th className="py-2 pr-4 font-medium">Épreuve</th>
                     <th className="py-2 pr-4 font-medium">Tour</th>
                     <th className="py-2 pr-4 font-medium">Créneaux prêts</th>
-                    <th className="py-2 pr-4 font-medium">Total créneaux</th>
                     <th className="py-2 font-medium">Candidats inscrits</th>
                   </tr>
                 </thead>
