@@ -86,6 +86,10 @@ interface SlotInfo {
   min_members: number;
   max_candidates?: number | null;
   epreuve_id: string | null;
+  /** Verrou explicite (cf. slot-lock.ts). Absent tant que la migration
+   *  `supabase-migration-slot-lock.sql` n'est pas appliquée. */
+  is_locked?: boolean | null;
+  locked_reason?: string | null;
   enrollments?: Array<{ id: string; status?: string }>;
   epreuve?: {
     is_group_epreuve?: boolean | null;
