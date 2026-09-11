@@ -181,7 +181,7 @@ export default function KPIsPage() {
         </Card>
       )}
 
-      {slotsData && slotsData.epreuves.length > 0 && (
+      {slotsData && (
         <Card>
           <CardHeader>
             <CardTitle>Créneaux &amp; inscriptions par épreuve</CardTitle>
@@ -192,32 +192,38 @@ export default function KPIsPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 border-b">
-                    <th className="py-2 pr-4 font-medium">Épreuve</th>
-                    <th className="py-2 pr-4 font-medium">Tour</th>
-                    <th className="py-2 pr-4 font-medium">Créneaux prêts</th>
-                    <th className="py-2 font-medium">Candidats inscrits</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {slotsData.epreuves.map((ep) => (
-                    <tr key={ep.epreuveId} className="border-b last:border-0">
-                      <td className="py-2 pr-4">{ep.name}</td>
-                      <td className="py-2 pr-4">{ep.tour ?? "—"}</td>
-                      <td className="py-2 pr-4">
-                        {ep.readySlots}/{ep.totalSlots}
-                      </td>
-                      <td className="py-2 font-medium">
-                        {ep.candidatsInscrits}
-                      </td>
+            {slotsData.epreuves.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                Aucun créneau rattaché à une épreuve pour le moment.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="py-2 pr-4 font-medium">Épreuve</th>
+                      <th className="py-2 pr-4 font-medium">Tour</th>
+                      <th className="py-2 pr-4 font-medium">Créneaux prêts</th>
+                      <th className="py-2 font-medium">Candidats inscrits</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {slotsData.epreuves.map((ep) => (
+                      <tr key={ep.epreuveId} className="border-b last:border-0">
+                        <td className="py-2 pr-4">{ep.name}</td>
+                        <td className="py-2 pr-4">{ep.tour ?? "—"}</td>
+                        <td className="py-2 pr-4">
+                          {ep.readySlots}/{ep.totalSlots}
+                        </td>
+                        <td className="py-2 font-medium">
+                          {ep.candidatsInscrits}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
