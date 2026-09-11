@@ -1390,6 +1390,104 @@ export default function PlanningPage() {
           );
         })()}
 
+        {/* Modal échange de deux examinateurs entre salles */}
+        {swapOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setSwapOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">
+                  ⇄ Échanger deux examinateurs
+                </h2>
+                <button
+                  onClick={() => setSwapOpen(false)}
+                  className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-sm">
+                <p className="text-xs text-gray-500">
+                  Les deux examinateurs permutent de créneau. Les candidats,
+                  les horaires et les autres examinateurs ne bougent pas.
+                </p>
+
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1.5">
+                    Examinateur 1
+                  </label>
+                  <select
+                    value={swapAKey}
+                    onChange={(e) => {
+                      setSwapAKey(e.target.value);
+                      setSwapBKey("");
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Sélectionner…</option>
+                    {swapAssignments.map((a) => (
+                      <option key={a.key} value={a.key}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1.5">
+                    Examinateur 2
+                  </label>
+                  <select
+                    value={swapBKey}
+                    onChange={(e) => setSwapBKey(e.target.value)}
+                    disabled={!swapA}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    <option value="">
+                      {swapA
+                        ? "Sélectionner…"
+                        : "Choisissez d'abord l'examinateur 1"}
+                    </option>
+                    {swapBOptions.map((a) => (
+                      <option key={a.key} value={a.key}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                  {swapA && swapBOptions.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1.5">
+                      Aucun autre créneau de la même épreuve n&apos;a
+                      d&apos;examinateur à échanger.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+                <button
+                  onClick={() => setSwapOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSwapMembers}
+                  disabled={!swapAKey || !swapBKey || swapLoading}
+                  className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {swapLoading ? "Échange…" : "Échanger"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal détail créneau (vue globale admin) */}
         {globalDetailSlot && (
           <div
