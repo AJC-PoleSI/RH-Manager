@@ -1350,7 +1350,13 @@ export default function PlanningPage() {
                 const minMembers = globalDetailSlot.minMembers;
                 const maxCands = globalDetailSlot.maxCands;
                 let headerColor = "bg-green-50 text-green-900"; let icon = "🟢"; let label = "Tout OK";
-                if (memberCount === 0) { headerColor = "bg-purple-100 text-purple-900"; icon = "🟣"; label = "Aucun examinateur"; }
+                // Un candidat déjà inscrit sur un créneau en sous-effectif prime
+                // sur tout le reste : c'est un rendez-vous pris qui risque de ne
+                // pas se tenir. Sans cette priorité, le cas se cachait derrière
+                // « Manque candidat(s) » (spec 2026-09-11).
+                if (memberCount === 0 && candCount > 0) { headerColor = "bg-red-100 text-red-900"; icon = "⚠️"; label = `CRITIQUE — ${candCount} candidat(s) inscrit(s), aucun examinateur`; }
+                else if (memberCount < minMembers && candCount > 0) { headerColor = "bg-amber-50 text-amber-900"; icon = "🟠"; label = `Sous-effectif — ${memberCount}/${minMembers} examinateur(s) pour ${candCount} candidat(s) inscrit(s)`; }
+                else if (memberCount === 0) { headerColor = "bg-purple-100 text-purple-900"; icon = "🟣"; label = "Aucun examinateur"; }
                 else if (candCount < maxCands) { headerColor = "bg-red-50 text-red-900"; icon = "🔴"; label = "Manque candidat(s)"; }
                 else if (memberCount < minMembers) { headerColor = "bg-orange-50 text-orange-900"; icon = "🟠"; label = "Examinateurs insuffisants"; }
                 return (
