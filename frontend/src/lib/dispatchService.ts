@@ -535,11 +535,10 @@ export async function runDispatch(opts?: {
     if (a.member_id && a.slot) registerConflict(a.member_id, a.slot as SlotInfo);
   });
 
-  // 9. Allocation : état d'équité PAR ÉPREUVE, ordre de passage GLOBAL.
+  // 9. Allocation : charge GLOBALE, brassage PAR ÉPREUVE, ordre GLOBAL.
   //
-  // Équité (charge) et brassage (binômes) restent calculés au sein d'une même
-  // épreuve : un examinateur qui a déjà fait 2 entretiens individuels n'est pas
-  // pénalisé pour les épreuves de groupe, et chaque épreuve garde sa rotation.
+  // La charge (équité) se compte sur le total des créneaux, toutes épreuves
+  // confondues ; le brassage des binômes reste interne à chaque épreuve.
   //
   // En revanche l'ORDRE dans lequel les créneaux se servent est GLOBAL et suit
   // leur TENSION (examinateurs disponibles − quota) : le créneau qui manque le
