@@ -137,7 +137,14 @@ export type OpeningSlot = ExistingSlot & { raw: any };
 export async function fetchOpeningSlots(
   openingId: string,
 ): Promise<OpeningSlot[]> {
-  const { data } = await supabaseAdmin
+  // L'erreur DOIT remonter : une requête en échec renverrait sinon une liste
+  // vide, c'est-à-dire « cette ouverture n'a aucun créneau ». L'appelant
+  // n'exclurait alors plus les créneaux de l'ouverture du contrôle de
+  // chevauchement et rejetterait l'édition sur un « Chevauchement »
+  // trompeur — et le diff serait calculé sur un existant faux. C'est très
+  // exactement le motif d'erreur silencieuse qui avait neutralisé
+  // `fetchDayIntervals` (cf. slot-conflicts.ts).
+  const { data, error } = await supabaseAdmin
     .from("evaluation_slots")
     .select(
       `id, date, start_time, end_time, room, status,
@@ -145,6 +152,7 @@ export async function fetchOpeningSlots(
        enrollments:slot_enrollments(id, status, candidate_id)`,
     )
     .eq("opening_id", openingId);
+  if (error) throw error;
 
   return ((data as any[]) || []).map((s) => ({
     id: s.id,
