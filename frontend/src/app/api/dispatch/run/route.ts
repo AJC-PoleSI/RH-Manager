@@ -16,6 +16,11 @@ export const dynamic = "force-dynamic";
  *
  * Body (optionnel) :
  *   { epreuveId?: string }  — limiter le dispatch à une épreuve spécifique
+ *   { dryRun?: boolean }    — SIMULER sans rien écrire (admin uniquement).
+ *                             Renvoie le diff (added / removed) et la liste
+ *                             des créneaux à candidats en sous-effectif, pour
+ *                             que l'admin valide avant d'appliquer : un run
+ *                             global rebrasse plus de mille créneaux.
  *
  * Réponse :
  *   { updated, backupsAssigned, unfilled, frozen, notifications }
