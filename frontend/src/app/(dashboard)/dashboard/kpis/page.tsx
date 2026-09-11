@@ -22,16 +22,35 @@ interface KPIData {
   evaluationsPerMember: { memberId: string; _count: { id: number } }[];
 }
 
+interface EpreuveSlotStats {
+  epreuveId: string;
+  name: string;
+  tour: number | null;
+  totalSlots: number;
+  readySlots: number;
+  candidatsInscrits: number;
+}
+
+interface SlotsKPIData {
+  epreuves: EpreuveSlotStats[];
+  totals: { totalSlots: number; readySlots: number; candidatsInscrits: number };
+}
+
 export default function KPIsPage() {
   const [data, setData] = useState<KPIData | null>(null);
+  const [slotsData, setSlotsData] = useState<SlotsKPIData | null>(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
     const fetchKPIs = async () => {
       try {
-        const res = await api.get("/kpis/global");
-        setData(res.data);
+        const [globalRes, slotsRes] = await Promise.all([
+          api.get("/kpis/global"),
+          api.get("/kpis/slots"),
+        ]);
+        setData(globalRes.data);
+        setSlotsData(slotsRes.data);
       } catch (e: any) {
         // Les statistiques de pilotage sont réservées aux admins : on le dit,
         // plutôt que d'afficher une erreur de chargement trompeuse.
