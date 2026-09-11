@@ -209,13 +209,26 @@ export async function runDispatch(opts?: {
   epreuveId?: string;
 }): Promise<DispatchResult> {
   // 1. Fetch slots with enrollments
-  let slotQuery = supabaseAdmin
-    .from("evaluation_slots")
-    .select(
-      "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour, roulement_minutes)",
-    );
-  if (opts?.epreuveId) slotQuery = slotQuery.eq("epreuve_id", opts.epreuveId);
-  const { data: slots, error: slotErr } = await slotQuery;
+  //
+  // PAGINÉ — obligatoire. PostgREST plafonne toute réponse à 1000 lignes, sans
+  // erreur ni avertissement. Au 11/09/2026 la base comptait 1076 créneaux et
+  // 1189 affectations : le dispatch n'en voyait donc que 1000 de chaque, dans
+  // un ordre arbitraire faute de `.order()`. Les changements de disponibilité
+  // portant sur les 76 créneaux invisibles n'étaient JAMAIS appliqués — le
+  // planning restait figé sans le moindre signal. C'est le bug rapporté par
+  // Felix (« l'algorithme n'a pas pris en compte les nouvelles dispos »).
+  //
+  // L'ordre sur `id` n'a pas de sens métier — le tri chronologique se fait en
+  // mémoire, étape 6 — il ne sert qu'à rendre la pagination déterministe.
+  const { data: slots, error: slotErr } = await fetchAllRows<any>((from, to) => {
+    let q = supabaseAdmin
+      .from("evaluation_slots")
+      .select(
+        "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour, roulement_minutes)",
+      );
+    if (opts?.epreuveId) q = q.eq("epreuve_id", opts.epreuveId);
+    return q.order("id").range(from, to);
+  });
   if (slotErr) throw slotErr;
   if (!slots || slots.length === 0)
     return {
