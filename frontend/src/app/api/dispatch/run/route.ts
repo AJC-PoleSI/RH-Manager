@@ -32,9 +32,33 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
+
+    // Aperçu : réservé à l'admin, c'est lui qui arbitre un recalcul global.
+    const dryRun = body.dryRun === true;
+    if (dryRun && !payload.isAdmin) {
+      return Response.json({ error: "Acces interdit" }, { status: 403 });
+    }
+
+    // Un recalcul lancé par l'admin fait le point sur TOUS les créneaux à
+    // candidats en sous-effectif, pas seulement ceux qui viennent de basculer :
+    // les cas installés ne basculent plus et ne seraient jamais signalés.
     const result = await runDispatch({
       epreuveId: body.epreuveId || undefined,
+      dryRun,
+      notifyAll: payload.isAdmin === true,
     });
+
+    if (dryRun) {
+      return Response.json({
+        success: true,
+        ...result,
+        message:
+          `Simulation : ${result.added?.length ?? 0} affectation(s) ajoutée(s), ` +
+          `${result.removed?.length ?? 0} retirée(s), ` +
+          `${result.understaffedWithCandidates?.length ?? 0} créneau(x) à candidats en sous-effectif. ` +
+          "Rien n'a été enregistré.",
+      });
+    }
 
     return Response.json({
       success: true,
