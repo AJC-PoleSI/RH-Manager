@@ -385,6 +385,26 @@ export interface SlotDemand {
    * avant un individuel qui lui dispute le même horaire.
    */
   isGroupEpreuve?: boolean;
+  /**
+   * Des candidats se sont déjà inscrits sur ce créneau.
+   *
+   * Critère le PLUS prioritaire : un rendez-vous pris avec un candidat est un
+   * engagement, pas une optimisation. Sans lui, le dispatch pouvait vider le
+   * jury d'un créneau où un candidat était inscrit au profit d'un créneau sans
+   * personne — 8 cas en base au 11/09/2026, dont plusieurs à 0 examinateur.
+   */
+  hasEnrolledCandidates?: boolean;
+  /**
+   * Ce créneau prolonge-t-il une salle DÉJÀ occupée au créneau précédent ?
+   *
+   * Pur départage, tout en bas de l'ordre : il ne tranche qu'entre créneaux
+   * par ailleurs strictement équivalents — typiquement deux salles qui
+   * proposent la même épreuve au même horaire. Avant, ce cas tombait sur la
+   * comparaison d'UUID (`a.id.localeCompare(b.id)`), donc sur un ordre
+   * arbitraire : la salle qui démarrait à froid pouvait être servie en
+   * premier, capter l'équipe de la salle voisine et laisser celle-ci vide.
+   */
+  continuesChain?: boolean;
 }
 
 /**
