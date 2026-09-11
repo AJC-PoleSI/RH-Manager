@@ -1484,15 +1484,32 @@ export async function runDispatch(opts?: {
       pair_diversity: finalPairs,
     };
 
-    await supabaseAdmin.from("allocation_history").insert({
-      epreuve_id: opts?.epreuveId || sortedSlots[0]?.epreuve_id || null,
-      version: Date.now(), // Use timestamp as version for simplicity
-      allocations: JSON.stringify(assignmentsToInsert),
-      statistiques: JSON.stringify(statsPayload),
-      triggered_by: opts?.epreuveId
-        ? "dispatch_epreuve"
-        : "dispatch_global",
-    });
+    const { error: historyError } = await supabaseAdmin
+      .from("allocation_history")
+      .insert({
+        epreuve_id: opts?.epreuveId || sortedSlots[0]?.epreuve_id || null,
+        version: Date.now(), // horodatage epoch en ms — exige une colonne BIGINT
+        allocations: JSON.stringify(assignmentsToInsert),
+        statistiques: JSON.stringify(statsPayload),
+        triggered_by: opts?.epreuveId ? "dispatch_epreuve" : "dispatch_global",
+      });
+
+    // 22003 = numeric out of range : `version` est encore en INTEGER (max
+    // 2 147 483 647) alors qu'on y écrit un timestamp (~1,78e12). C'est ce qui
+    // a laissé allocation_history VIDE depuis la création de la table — donc
+    // aucune trace pour savoir si un recalcul avait tourné. Message explicite
+    // plutôt qu'un `catch` muet, tant que la migration n'est pas posée.
+    if (historyError) {
+      if ((historyError as { code?: string }).code === "22003") {
+        console.warn(
+          "[dispatch] allocation_history.version est en INTEGER — journal non " +
+            "écrit. Appliquez la section O de MIGRATIONS_A_APPLIQUER.sql " +
+            "(ALTER COLUMN version TYPE BIGINT).",
+        );
+      } else {
+        console.error("Allocation history insert error:", historyError);
+      }
+    }
   } catch (e) {
     console.error("Allocation history insert error:", e);
   }
