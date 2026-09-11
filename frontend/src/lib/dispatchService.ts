@@ -14,7 +14,10 @@ import {
   type SlotContinuity,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
-import { effectiveMaxCandidates } from "@/lib/enrollment";
+import {
+  effectiveMaxCandidates,
+  filterActiveEnrollments,
+} from "@/lib/enrollment";
 import { isEliminated } from "@/lib/favorites";
 import { getToursByNumber } from "@/lib/tour-status";
 
