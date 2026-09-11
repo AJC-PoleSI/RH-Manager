@@ -493,5 +493,14 @@ export function compareByTension(a: SlotDemand, b: SlotDemand): number {
   if (ad !== bd) return ad < bd ? -1 : 1;
   const cmp = hhmm(a.start_time).localeCompare(hhmm(b.start_time));
   if (cmp !== 0) return cmp;
+
+  // Dernier départage avant l'UUID : entre deux créneaux par ailleurs
+  // identiques (typiquement deux salles, même épreuve, même horaire), celui
+  // qui prolonge une salle occupée passe devant. Il choisit alors en premier,
+  // et le bonus de continuité peut réellement garder l'équipe sur place.
+  const ka = a.continuesChain ? 1 : 0;
+  const kb = b.continuesChain ? 1 : 0;
+  if (ka !== kb) return kb - ka;
+
   return a.id.localeCompare(b.id);
 }
