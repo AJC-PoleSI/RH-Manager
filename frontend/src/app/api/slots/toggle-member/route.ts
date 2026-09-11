@@ -581,6 +581,107 @@ export async function POST(req: NextRequest) {
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────
+
+/** `availabilities.weekday` est NOT NULL : on le dérive de la date du créneau. */
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/**
+ * Aligne la disponibilité déclarée d'un membre sur son inscription manuelle à
+ * un créneau.
+ *
+ * POURQUOI. Le dispatch ne connaît qu'une source de vérité : la table
+ * `availabilities`. Un examinateur qui s'inscrivait lui-même depuis le planning
+ * obtenait bien une affectation, mais aucune disponibilité — il était donc
+ * absent du vivier et le recalcul suivant l'effaçait sans un mot. Le diagnostic
+ * du 11/09/2026 a relevé 12 affectations dans ce cas. La règle du « jury
+ * ancré » (spec 2026-09-11) rend le problème systématique : elle retire
+ * précisément les examinateurs sans disponibilité.
+ *
+ * PORTÉE. Uniquement l'inscription/désinscription PAR LE MEMBRE LUI-MÊME. Un
+ * admin qui place quelqu'un ne déclare pas une disponibilité à sa place : son
+ * choix est protégé par `is_manual`, qui épingle le créneau.
+ *
+ * La ligne créée épouse EXACTEMENT le créneau (même jour, mêmes heures, même
+ * épreuve), et le retrait ne supprime que cette ligne-là : une plage plus large
+ * saisie dans la grille hebdomadaire n'est jamais touchée.
+ *
+ * Fail-soft : une erreur ici ne doit jamais faire échouer l'affectation
+ * elle-même, qui est déjà écrite.
+ */
+async function syncSelfAvailability(
+  memberId: string,
+  slotId: string,
+  action: "add" | "remove",
+  knownSlot?: {
+    date?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    epreuve_id?: string | null;
+  },
+): Promise<void> {
+  try {
+    let slot = knownSlot;
+    if (!slot) {
+      const { data } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("date, start_time, end_time, epreuve_id")
+        .eq("id", slotId)
+        .single();
+      slot = data || undefined;
+    }
+    if (!slot) return;
+
+    const ymd = String(slot.date || "").substring(0, 10);
+    const start = String(slot.start_time || "").substring(0, 5);
+    const end = String(slot.end_time || "").substring(0, 5);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd) || !start || !end) return;
+
+    // Même normalisation que PUT /api/availability : midi UTC, pour que la
+    // comparaison de jour reste stable quel que soit le fuseau.
+    const date = new Date(`${ymd}T12:00:00.000Z`).toISOString();
+    const epreuveId = slot.epreuve_id || null;
+
+    const scope = (q: any) =>
+      epreuveId ? q.eq("epreuve_id", epreuveId) : q.is("epreuve_id", null);
+
+    if (action === "remove") {
+      await scope(
+        supabaseAdmin
+          .from("availabilities")
+          .delete()
+          .eq("member_id", memberId)
+          .eq("date", date)
+          .eq("start_time", start)
+          .eq("end_time", end),
+      );
+      return;
+    }
+
+    const { data: already } = await scope(
+      supabaseAdmin
+        .from("availabilities")
+        .select("id")
+        .eq("member_id", memberId)
+        .eq("date", date)
+        .eq("start_time", start)
+        .eq("end_time", end),
+    ).limit(1);
+    if (already && already.length > 0) return;
+
+    await supabaseAdmin.from("availabilities").insert({
+      member_id: memberId,
+      weekday: WEEKDAYS[new Date(date).getUTCDay()],
+      date,
+      start_time: start,
+      end_time: end,
+      epreuve_id: epreuveId,
+    });
+  } catch (e) {
+    // L'affectation, elle, est déjà enregistrée : on ne la remet pas en cause.
+    console.error("syncSelfAvailability error:", e);
+  }
+}
+
 async function memberHasConflict(
   memberId: string,
   targetSlot: { id: string; date: string; start_time: string; end_time: string },
