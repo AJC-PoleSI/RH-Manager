@@ -276,7 +276,34 @@ export async function PUT(
         .eq("epreuve_id", id);
     }
 
-    return Response.json({ ...data, cascade });
+    // ══════════════════════════════════════════════════════════════════
+    // Durée / roulement modifiés → les créneaux DÉJÀ POSÉS ne sont pas
+    // redécoupés (ça déplacerait des entretiens parfois déjà réservés).
+    // On se contente d'avertir, pour que l'écart ne passe plus inaperçu.
+    // ══════════════════════════════════════════════════════════════════
+    const durationChanged =
+      updateData.duration_minutes !== undefined &&
+      updateData.duration_minutes !== timingBefore?.duration_minutes;
+    const roulementChanged =
+      updateData.roulement_minutes !== undefined &&
+      updateData.roulement_minutes !== timingBefore?.roulement_minutes;
+
+    let timingWarning: string | null = null;
+    if (durationChanged || roulementChanged) {
+      const { data: timedSlots } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("start_time, end_time")
+        .eq("epreuve_id", id);
+      const slots = timedSlots || [];
+      timingWarning = timingChangeWarning({
+        durationChanged,
+        roulementChanged,
+        staleSlots: staleTimingCount(slots, data.duration_minutes || 30),
+        totalSlots: slots.length,
+      });
+    }
+
+    return Response.json({ ...data, cascade, timingWarning });
   } catch (error) {
     console.error("PUT /epreuves/:id catch error:", error);
     return Response.json(
