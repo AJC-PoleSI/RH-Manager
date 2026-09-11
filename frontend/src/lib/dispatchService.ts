@@ -553,24 +553,35 @@ export async function runDispatch(opts?: {
     slotsByEpreuve.get(key)!.push(slot as SlotInfo);
   }
 
-  // État équité + brassage PROPRE à chaque épreuve, pré-chargé depuis les
-  // créneaux gelés / clôturés de cette même épreuve.
+  // CHARGE (équité) : GLOBALE, toutes épreuves confondues.
+  //
+  // Elle était calculée par épreuve, ce qui remettait chacun à zéro d'une
+  // épreuve à l'autre : quelqu'un déjà très sollicité sur les business games
+  // repartait « vierge » aux yeux des entretiens individuels. Constat sur les
+  // données réelles du 11/09/2026 : Emilie Munsch 1re sur Business Game (22
+  // créneaux) et avant-dernière sur Entretien individuel (7). Un examinateur
+  // qui donne une matinée la donne, quelle que soit l'épreuve — c'est bien le
+  // total qui doit être équilibré.
+  //
+  // BRASSAGE (binômes) : reste PAR ÉPREUVE. Un jury de business game réunit 6
+  // personnes, un entretien 2 : mélanger les deux fausserait la pénalité de
+  // binôme, et chaque épreuve doit garder sa propre rotation.
+  const memberLoad: Record<string, number> = {};
+  for (const slot of sortedSlots) {
+    if (isFrozen(slot as SlotInfo) || isLocked(slot as SlotInfo)) {
+      const existing = currentBySlot[slot.id] || new Set<string>();
+      existing.forEach((memberId) => {
+        memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
+      });
+    }
+  }
+
   const stateByEpreuve = new Map<
     string,
     { memberLoad: Record<string, number>; pairHistory: Map<string, number> }
   >();
-  for (const [key, epreuveSlots] of Array.from(slotsByEpreuve.entries())) {
-    const memberLoad: Record<string, number> = {};
-    const pairHistory = new Map<string, number>();
-    for (const slot of epreuveSlots) {
-      if (isFrozen(slot) || isLocked(slot)) {
-        const existing = currentBySlot[slot.id] || new Set<string>();
-        existing.forEach((memberId) => {
-          memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
-        });
-      }
-    }
-    stateByEpreuve.set(key, { memberLoad, pairHistory });
+  for (const key of Array.from(slotsByEpreuve.keys())) {
+    stateByEpreuve.set(key, { memberLoad, pairHistory: new Map() });
   }
 
   // ── PRÉVISION PAR ÉPREUVE : pourra-t-on faire passer tout le monde ? ──
