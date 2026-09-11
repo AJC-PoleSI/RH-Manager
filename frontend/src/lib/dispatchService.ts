@@ -1065,47 +1065,14 @@ export async function runDispatch(opts?: {
     // du créneau suivant de la salle.
     membersBySlot.set(slot.id, new Set(picked));
 
-    // 9d. Remplaçants (liste d'attente).
-    //
-    // Deux populations, dans cet ordre :
-    //   1. Les examinateurs LIBRES à cet horaire — les vrais remplaçants,
-    //      plafonnés à BACKUP_COUNT.
-    //   2. Les « perdants de l'arbitrage » : ceux qui s'étaient inscrits sur ce
-    //      créneau MAIS que le dispatch a placés sur une épreuve qui le
-    //      chevauche. Ils restent sur la liste d'attente (sans plafond : ce
-    //      sont exactement les gens qui avaient coché les deux épreuves) pour
-    //      pouvoir être promus si quelqu'un se désiste ailleurs. La promotion
-    //      (toggle-member) revérifie le conflit horaire au moment de promouvoir,
-    //      donc en inscrire un ici ne risque pas de le placer à deux endroits.
-    const remainingEligible = matchSlotToMembers(slotInfo).filter(
-      (id) => !picked.includes(id),
+    // 9d. Remplaçants (liste d'attente) — cf. assignBackups.
+    const backups = assignBackups(
+      slotInfo,
+      picked,
+      memberLoad,
+      pairHistory,
+      continuity,
     );
-    const byScore = (a: string, b: string) =>
-      scoreMember(a, picked, memberLoad, pairHistory, continuity) -
-      scoreMember(b, picked, memberLoad, pairHistory, continuity);
-
-    const freeBackups = remainingEligible
-      .filter((id) => !wouldConflict(id, slotInfo, memberCommittedSlots))
-      .sort(byScore)
-      .slice(0, BACKUP_COUNT);
-    // Don't increment load for backups — they're on standby
-
-    const conflictedBackups = remainingEligible
-      .filter((id) => wouldConflict(id, slotInfo, memberCommittedSlots))
-      .sort(byScore);
-
-    const backups = [...freeBackups, ...conflictedBackups];
-
-    backups.forEach((memberId) => {
-      backupAssignments.push({ slot_id: slot.id, member_id: memberId });
-    });
-    conflictedBackups
-      .filter((memberId) =>
-        lostArbitration(memberId, slotInfo, memberCommittedSlots),
-      )
-      .forEach((memberId) => {
-        arbitrationLosers.push({ slot_id: slot.id, member_id: memberId });
-      });
 
     // 9e. Track unfilled slots
     if (picked.length < quota) {
