@@ -305,18 +305,27 @@ export async function runDispatch(opts?: {
   const slotIdSet = new Set(slotIds);
   let allAssigns: any[] | null = null;
   {
-    const withManual = await supabaseAdmin
-      .from("slot_member_assignments")
-      .select(
-        "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
-      );
-
-    if (withManual.error) {
-      const plain = await supabaseAdmin
+    const withManual = await fetchAllRows<any>((from, to) =>
+      supabaseAdmin
         .from("slot_member_assignments")
         .select(
-          "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
-        );
+          "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
+        )
+        .order("slot_id")
+        .range(from, to),
+    );
+
+    if (withManual.error) {
+      const plain = await fetchAllRows<any>((from, to) =>
+        supabaseAdmin
+          .from("slot_member_assignments")
+          .select(
+            "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
+          )
+          .order("slot_id")
+          .range(from, to),
+      );
+      if (plain.error) throw plain.error;
       allAssigns = plain.data;
       console.warn(
         "[dispatch] Colonne slot_member_assignments.is_manual absente — les " +
