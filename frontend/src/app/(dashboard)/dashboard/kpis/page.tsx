@@ -186,6 +186,20 @@ export default function KPIsPage() {
         </Card>
       )}
 
+      {slotsError && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Créneaux &amp; inscriptions par épreuve</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-500">
+              Impossible de charger ces statistiques (bloqueur de publicité ou
+              problème réseau ?). Réessaie de recharger la page.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {slotsData && (
         <Card>
           <CardHeader>
