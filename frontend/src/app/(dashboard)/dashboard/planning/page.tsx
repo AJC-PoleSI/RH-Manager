@@ -1266,12 +1266,21 @@ export default function PlanningPage() {
                   <span className="text-xl">🗺️</span> Vue Globale du Recrutement
                   <span className="text-xs font-normal text-gray-400 ml-1">— clic pour détails</span>
                 </h3>
-                <div className="flex bg-gray-100 rounded-full p-0.5">
-                  {(["month","week"] as const).map(m => (
-                    <button key={m} onClick={() => setAdminCalView(m)} className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${adminCalView===m?"bg-white text-gray-900 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>
-                      {m === "month" ? "Mois" : "Semaine"}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSwapOpen(true)}
+                    className="px-3 py-1.5 text-sm font-medium rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    title="Échanger deux examinateurs de salle"
+                  >
+                    ⇄ Échanger
+                  </button>
+                  <div className="flex bg-gray-100 rounded-full p-0.5">
+                    {(["month","week"] as const).map(m => (
+                      <button key={m} onClick={() => setAdminCalView(m)} className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${adminCalView===m?"bg-white text-gray-900 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>
+                        {m === "month" ? "Mois" : "Semaine"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

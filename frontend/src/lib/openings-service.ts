@@ -8,6 +8,7 @@ import {
   minutesToTime,
 } from "@/lib/slot-conflicts";
 import { sliceOpening, SlotTime, ExistingSlot } from "@/lib/opening-slicer";
+import { filterActiveEnrollments } from "@/lib/enrollment";
 
 export interface OpeningRow {
   id: string;
