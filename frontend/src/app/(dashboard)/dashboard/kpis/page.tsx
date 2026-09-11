@@ -44,21 +44,31 @@ export default function KPIsPage() {
 
   useEffect(() => {
     const fetchKPIs = async () => {
-      try {
-        const [globalRes, slotsRes] = await Promise.all([
-          api.get("/kpis/global"),
-          api.get("/kpis/slots"),
-        ]);
-        setData(globalRes.data);
-        setSlotsData(slotsRes.data);
-      } catch (e: any) {
+      // Deux requêtes indépendantes : si /kpis/slots échoue, ça ne doit pas
+      // faire disparaître le reste de la page (Promise.all propageait
+      // l'erreur de l'une à l'autre).
+      const [globalRes, slotsRes] = await Promise.allSettled([
+        api.get("/kpis/global"),
+        api.get("/kpis/slots"),
+      ]);
+
+      if (globalRes.status === "fulfilled") {
+        setData(globalRes.value.data);
+      } else if (globalRes.reason?.response?.status === 403) {
         // Les statistiques de pilotage sont réservées aux admins : on le dit,
         // plutôt que d'afficher une erreur de chargement trompeuse.
-        if (e?.response?.status === 403) setForbidden(true);
-        else console.error(e);
-      } finally {
-        setLoading(false);
+        setForbidden(true);
+      } else {
+        console.error(globalRes.reason);
       }
+
+      if (slotsRes.status === "fulfilled") {
+        setSlotsData(slotsRes.value.data);
+      } else {
+        console.error(slotsRes.reason);
+      }
+
+      setLoading(false);
     };
     fetchKPIs();
   }, []);

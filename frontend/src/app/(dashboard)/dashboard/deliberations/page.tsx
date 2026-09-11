@@ -1314,7 +1314,7 @@ export default function DeliberationsPage() {
               </div>
 
               {/* Card stack */}
-              <div className="relative w-full max-w-lg">
+              <div className={`relative w-full ${focusMode ? "max-w-2xl" : "max-w-lg"}`}>
                 {/* Shadow cards */}
                 {currentIndex < filteredCandidates.length - 1 && (
                   <div
