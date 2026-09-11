@@ -249,14 +249,23 @@ export async function runDispatch(opts?: {
   // purement horaires et le comportement reste celui d'avant.
   let availabilities: any[] | null = null;
   {
-    const withEpreuve = await supabaseAdmin
-      .from("availabilities")
-      .select("member_id, date, start_time, end_time, epreuve_id");
+    const withEpreuve = await fetchAllRows<any>((from, to) =>
+      supabaseAdmin
+        .from("availabilities")
+        .select("member_id, date, start_time, end_time, epreuve_id")
+        .order("id")
+        .range(from, to),
+    );
 
     if (withEpreuve.error) {
-      const plain = await supabaseAdmin
-        .from("availabilities")
-        .select("member_id, date, start_time, end_time");
+      const plain = await fetchAllRows<any>((from, to) =>
+        supabaseAdmin
+          .from("availabilities")
+          .select("member_id, date, start_time, end_time")
+          .order("id")
+          .range(from, to),
+      );
+      if (plain.error) throw plain.error;
       availabilities = plain.data;
       console.warn(
         "[dispatch] Colonne availabilities.epreuve_id absente — une dispo " +
