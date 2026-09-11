@@ -4,8 +4,13 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/kpis/slots — par épreuve : créneaux "ready" et candidats inscrits.
+// GET /api/kpis/creneaux — par épreuve : créneaux "ready" et candidats inscrits.
 // Réservé aux admins, même périmètre que /api/kpis/global.
+//
+// Nommée "creneaux" et non "slots" : les bloqueurs de pub (EasyList et
+// dérivés) bloquent silencieusement toute requête dont le chemin contient
+// "/slots" (règles anti-casino/machines à sous) — la requête n'atteignait
+// jamais le serveur, sans la moindre erreur visible côté client.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
