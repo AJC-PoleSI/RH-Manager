@@ -1016,8 +1016,16 @@ export async function runDispatch(opts?: {
           return;
         }
         if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) {
-          // Engagé ailleurs au même moment (autre épreuve servie avant) : on
-          // ne peut pas le garder ici, il devient remplaçant en 9d.
+          // Engagé ailleurs au même moment (autre créneau servi avant dans ce
+          // run) : on ne peut pas le garder ici. Il redevient remplaçant en 9d,
+          // mais le retrait doit être TRACÉ — sans ça il disparaissait du
+          // créneau sans apparaître dans `removed`, et l'aperçu affichait un
+          // créneau passant de 2 à 3 examinateurs alors qu'il en perdait un.
+          removedMembers.push({
+            member_id: memberId,
+            slot: slotInfo,
+            reason: "conflit horaire",
+          });
           return;
         }
         kept.push(memberId);
