@@ -215,7 +215,9 @@ notifications, ni journal). Le résultat expose, en plus des compteurs actuels :
 
 `POST /api/dispatch/run` accepte `{ dryRun?: boolean }`. Le mode `dryRun` est
 réservé aux admins (`payload.isAdmin`) ; le mode réel garde la règle actuelle
-(membres uniquement, candidats interdits).
+(membres uniquement, candidats interdits). Un appel émis par un admin active
+aussi `notifyAll` (§3.4) : le compte rendu porte alors sur l'ensemble des
+créneaux en sous-effectif à candidats, pas seulement sur les bascules.
 
 Page planning admin : bouton **« Recalculer tout maintenant »** →
 appel `dryRun` → modale récapitulative (compteurs + listes déroulantes des
