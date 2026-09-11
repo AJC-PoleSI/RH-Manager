@@ -958,7 +958,7 @@ export default function PlanningPage() {
         toast("Aucun nouveau créneau à publier", "info");
       } else {
         toast(
-          `${count} nouveau(x) créneau(x) publié(s) — les inscriptions existantes sont préservées`,
+          `${count} nouveau(x) créneau(x) publié(s) et figés 🔒 — l'algorithme n'y touchera plus`,
           "success",
         );
         setPlanningVisible(true);

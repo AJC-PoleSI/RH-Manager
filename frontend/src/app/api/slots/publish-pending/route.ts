@@ -38,7 +38,49 @@ export async function POST(req: NextRequest) {
 
     const skipped = (pending || []).length - ids.length;
 
+    // ── VERROUILLAGE ──
+    // Le planning de cette épreuve est annoncé aux candidats : ses créneaux ne
+    // doivent plus être rebrassés par le dispatch (qui se relance à chaque
+    // sauvegarde de disponibilité et reconstruit sinon le jury de zéro).
+    //
+    // Écriture PAR FILTRE, sans liste d'ids : PostgREST plafonne toute réponse
+    // à 1000 lignes sans erreur ni avertissement, donc une liste d'ids
+    // construite depuis une lecture serait amputée en silence sur une grosse
+    // épreuve (l'épreuve commune dépasse ce seuil). Le filtre s'applique côté
+    // Postgres, sur toutes les lignes concernées, en une transaction.
+    //
+    // TOUS les créneaux publiés de l'épreuve sont verrouillés, pas seulement
+    // ceux de cette passe : un créneau publié lors d'une publication
+    // précédente mérite la même protection. C'est aussi pourquoi l'appel a
+    // lieu même quand il n'y a rien de nouveau à publier — republier sert
+    // alors de rattrapage.
+    const lockPublishedSlots = async () => {
+      const { error: lockErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({
+          is_locked: true,
+          locked_at: new Date().toISOString(),
+          locked_reason: "publication",
+        })
+        .eq("epreuve_id", epreuveId)
+        .in("status", ["published", "full"])
+        .eq("is_locked", false);
+
+      if (!lockErr) return;
+      // Migration `supabase-migration-slot-lock.sql` pas encore appliquée :
+      // la publication reste valide, seule la protection manque. On ne fait
+      // pas échouer la publication pour autant.
+      if (isMissingColumnError(lockErr)) {
+        console.warn(
+          "[publish-pending] Colonne is_locked absente — créneaux publiés NON verrouillés. Appliquez supabase-migration-slot-lock.sql.",
+        );
+      } else {
+        throw lockErr;
+      }
+    };
+
     if (ids.length === 0) {
+      await lockPublishedSlots();
       return Response.json({
         message:
           skipped > 0
@@ -59,43 +101,7 @@ export async function POST(req: NextRequest) {
 
     if (updErr) throw updErr;
 
-    // ── VERROUILLAGE ──
-    // Le planning de cette épreuve est annoncé aux candidats : ses créneaux ne
-    // doivent plus être rebrassés par le dispatch (qui se relance à chaque
-    // sauvegarde de disponibilité et reconstruit sinon le jury de zéro).
-    //
-    // Écriture PAR FILTRE, sans liste d'ids : PostgREST plafonne toute réponse
-    // à 1000 lignes sans erreur ni avertissement, donc une liste d'ids
-    // construite depuis une lecture serait amputée en silence sur une grosse
-    // épreuve (l'épreuve commune dépasse ce seuil). Le filtre s'applique
-    // côté Postgres, sur toutes les lignes concernées, en une transaction.
-    //
-    // Tous les créneaux `published` de l'épreuve sont verrouillés, pas
-    // seulement ceux de cette passe : un créneau publié lors d'une publication
-    // précédente mérite la même protection.
-    const { error: lockErr } = await supabaseAdmin
-      .from("evaluation_slots")
-      .update({
-        is_locked: true,
-        locked_at: new Date().toISOString(),
-        locked_reason: "publication",
-      })
-      .eq("epreuve_id", epreuveId)
-      .in("status", ["published", "full"])
-      .eq("is_locked", false);
-
-    if (lockErr) {
-      // Migration `supabase-migration-slot-lock.sql` pas encore appliquée :
-      // la publication reste valide, seule la protection manque. On ne fait
-      // pas échouer la publication pour autant.
-      if (isMissingColumnError(lockErr)) {
-        console.warn(
-          "[publish-pending] Colonne is_locked absente — créneaux publiés NON verrouillés. Appliquez supabase-migration-slot-lock.sql.",
-        );
-      } else {
-        throw lockErr;
-      }
-    }
+    await lockPublishedSlots();
 
     // Activer aussi la visibilité du planning si pas déjà fait
     await supabaseAdmin.from("system_settings").upsert(
