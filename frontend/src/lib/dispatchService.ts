@@ -1024,7 +1024,15 @@ export async function runDispatch(opts?: {
     //
     // Le retrait est notifié avec son vrai motif : l'examinateur s'est
     // lui-même retiré, ce n'est pas un arbitrage d'équité subi.
-    if (activeEnrollmentCount(slotInfo.enrollments) > 0) {
+    //
+    // MÊME TRAITEMENT POUR UN CRÉNEAU VERROUILLÉ (`is_locked`) : publié aux
+    // candidats, ou figé à la main par l'admin. Le jury a été annoncé, il ne
+    // se rebrasse plus — seuls partent ceux qui ont supprimé leur propre
+    // disponibilité, et les places libérées sont recomplétées.
+    if (
+      isSlotLocked(slotInfo) ||
+      activeEnrollmentCount(slotInfo.enrollments) > 0
+    ) {
       // Même cible qu'en 9c : une épreuve de groupe monte jusqu'à `group_size`
       // si le vivier suit. Plafonner au minimum ici priverait un business game
       // à candidats de la moitié de son jury dès qu'il perd quelqu'un.
