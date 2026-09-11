@@ -1016,6 +1016,10 @@ export async function runDispatch(opts?: {
       });
       membersBySlot.set(slot.id, new Set(kept));
 
+      // Réserve : ces créneaux sont ceux qui ont le plus besoin d'un
+      // remplaçant mobilisable, puisqu'un candidat les attend.
+      assignBackups(slotInfo, kept, memberLoad, pairHistory, continuity);
+
       if (kept.length < quota) {
         unfilled.push({ slot_id: slot.id, needed: quota, got: kept.length });
       }
