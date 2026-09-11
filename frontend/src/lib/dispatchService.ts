@@ -411,21 +411,32 @@ export async function runDispatch(opts?: {
   // des binômes se mesurent à l'intérieur d'une même épreuve, pas en mélangeant
   // entretiens individuels et épreuves de groupe.)
 
-  // 5. Match availabilities to slots par chevauchement horaire (une dispo qui
-  // englobe le créneau compte, même si les heures de début diffèrent).
+  // 5. Qui est réellement disponible sur un créneau ?
+  //
+  // La disponibilité doit COUVRIR tout le créneau, pas seulement le croiser
+  // (cf. availabilitiesCoverSlot). On raisonne donc par EXAMINATEUR — ses
+  // plages contiguës se fusionnent — et non plage par plage.
+  //
   // Mémoïsé : la liste est relue plusieurs fois par créneau (titulaires,
   // remplaçants, calcul de tension) et sert de base au tri global.
+  const availabilitiesByMember = new Map<string, any[]>();
+  (availabilities || []).forEach((av: any) => {
+    if (!av.member_id) return;
+    if (!availabilitiesByMember.has(av.member_id))
+      availabilitiesByMember.set(av.member_id, []);
+    availabilitiesByMember.get(av.member_id)!.push(av);
+  });
+
   const eligibleBySlot = new Map<string, string[]>();
   const matchSlotToMembers = (slot: SlotInfo): string[] => {
     const cached = eligibleBySlot.get(slot.id);
     if (cached) return cached;
     const matches: string[] = [];
-    (availabilities || []).forEach((av: any) => {
-      if (!availabilityMatchesSlot(av, slot)) return;
-      if (av.member_id && !matches.includes(av.member_id)) {
-        matches.push(av.member_id);
-      }
-    });
+    for (const [memberId, avs] of Array.from(
+      availabilitiesByMember.entries(),
+    )) {
+      if (availabilitiesCoverSlot(avs, slot)) matches.push(memberId);
+    }
     eligibleBySlot.set(slot.id, matches);
     return matches;
   };
