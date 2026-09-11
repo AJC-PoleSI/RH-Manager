@@ -44,13 +44,18 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Acces interdit" }, { status: 403 });
     }
 
-    // Un recalcul lancé par l'admin fait le point sur TOUS les créneaux à
-    // candidats en sous-effectif, pas seulement ceux qui viennent de basculer :
-    // les cas installés ne basculent plus et ne seraient jamais signalés.
+    // `notifyAll` fait le point sur TOUS les créneaux à candidats en
+    // sous-effectif, pas seulement ceux qui viennent de basculer (les cas
+    // installés ne basculent plus et ne seraient donc jamais signalés).
+    //
+    // EXPLICITE, et non déduit du rôle admin : les boutons existants
+    // (« Publier », « Répartir par épreuve ») passent aussi par cette route en
+    // tant qu'admin, et enverraient alors une notification de masse à chaque
+    // clic. Seul « Recalculer tout » le demande.
     const result = await runDispatch({
       epreuveId: body.epreuveId || undefined,
       dryRun,
-      notifyAll: payload.isAdmin === true,
+      notifyAll: body.notifyAll === true && payload.isAdmin === true,
     });
 
     if (dryRun) {
