@@ -621,8 +621,8 @@ describe("compareByTension — créneaux avec candidats inscrits", () => {
   };
 
   it("un créneau avec des candidats inscrits se sert en premier", () => {
-    const avecCandidats = { ...base, id: "a", hasEnrolledCandidates: true };
-    const sansCandidats = { ...base, id: "b", hasEnrolledCandidates: false };
+    const avecCandidats = { ...base, id: "a", isAnchored: true };
+    const sansCandidats = { ...base, id: "b", isAnchored: false };
     expect(compareByTension(avecCandidats, sansCandidats)).toBeLessThan(0);
     expect(compareByTension(sansCandidats, avecCandidats)).toBeGreaterThan(0);
   });
@@ -631,13 +631,13 @@ describe("compareByTension — créneaux avec candidats inscrits", () => {
     const entretienAvecCandidat = {
       ...base,
       id: "entretien",
-      hasEnrolledCandidates: true,
+      isAnchored: true,
       isGroupEpreuve: false,
     };
     const groupeSansCandidat = {
       ...base,
       id: "bg",
-      hasEnrolledCandidates: false,
+      isAnchored: false,
       isGroupEpreuve: true,
     };
     expect(
@@ -646,11 +646,11 @@ describe("compareByTension — créneaux avec candidats inscrits", () => {
   });
 
   it("à inscrits égaux des deux côtés, l'arbitrage groupe/individuel reprend la main", () => {
-    const individuel = { ...base, id: "a", hasEnrolledCandidates: true };
+    const individuel = { ...base, id: "a", isAnchored: true };
     const groupe = {
       ...base,
       id: "b",
-      hasEnrolledCandidates: true,
+      isAnchored: true,
       isGroupEpreuve: true,
     };
     expect(compareByTension(groupe, individuel)).toBeLessThan(0);

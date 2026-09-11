@@ -870,9 +870,13 @@ export async function runDispatch(opts?: {
       epreuveDeficit: shortfall?.deficit,
       epreuveCoverage: shortfall?.coverage,
       isGroupEpreuve: slot.epreuve?.is_group_epreuve ?? false,
-      hasEnrolledCandidates: (slot.enrollments || []).some(
-        filterActiveEnrollments,
-      ),
+      // Ancré = jury non rebrassable : candidat déjà inscrit, OU créneau
+      // verrouillé (publié aux candidats / figé par l'admin). Ces créneaux se
+      // servent en premier — sinon un créneau libre traité avant pourrait
+      // leur prendre un examinateur, et le jury « figé » bougerait quand même.
+      isAnchored:
+        isSlotLocked(slot) ||
+        (slot.enrollments || []).some(filterActiveEnrollments),
       continuesChain: chainHasOccupiedPredecessor(slot.id),
     };
   };

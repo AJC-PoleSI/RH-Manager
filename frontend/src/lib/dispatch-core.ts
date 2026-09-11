@@ -452,12 +452,18 @@ export interface SlotDemand {
   /**
    * Des candidats se sont déjà inscrits sur ce créneau.
    *
-   * Critère le PLUS prioritaire : un rendez-vous pris avec un candidat est un
-   * engagement, pas une optimisation. Sans lui, le dispatch pouvait vider le
-   * jury d'un créneau où un candidat était inscrit au profit d'un créneau sans
-   * personne — 8 cas en base au 11/09/2026, dont plusieurs à 0 examinateur.
+   * Créneau ANCRÉ : son jury ne se rebrasse plus (candidat déjà inscrit, ou
+   * créneau verrouillé — publié aux candidats / figé par l'admin).
+   *
+   * Critère le PLUS prioritaire : un rendez-vous pris, ou un planning annoncé,
+   * est un engagement, pas une optimisation. Sans lui, le dispatch pouvait
+   * vider le jury d'un créneau réservé au profit d'un créneau sans personne —
+   * 8 cas en base au 11/09/2026, dont plusieurs à 0 examinateur. C'est aussi
+   * ce qui garantit qu'un créneau verrouillé se sert AVANT les autres : sinon
+   * un créneau libre traité plus tôt pourrait lui prendre un examinateur, et
+   * le jury verrouillé bougerait quand même.
    */
-  hasEnrolledCandidates?: boolean;
+  isAnchored?: boolean;
   /**
    * Ce créneau prolonge-t-il une salle DÉJÀ occupée au créneau précédent ?
    *
@@ -532,9 +538,9 @@ export function slotTension(eligible: number, quota: number): number {
  *      chronologie (déterminisme).
  */
 export function compareByTension(a: SlotDemand, b: SlotDemand): number {
-  const ea = a.hasEnrolledCandidates ? 1 : 0;
-  const eb = b.hasEnrolledCandidates ? 1 : 0;
-  if (ea !== eb) return eb - ea; // candidats déjà inscrits d'abord
+  const ea = a.isAnchored ? 1 : 0;
+  const eb = b.isAnchored ? 1 : 0;
+  if (ea !== eb) return eb - ea; // créneaux ancrés (réservés/verrouillés) d'abord
 
   const ga = a.isGroupEpreuve ? 1 : 0;
   const gb = b.isGroupEpreuve ? 1 : 0;
