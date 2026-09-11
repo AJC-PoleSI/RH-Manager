@@ -283,7 +283,11 @@ export function scoreMember(
   if (continuity?.continuing?.has(memberId)) bonus += ROOM_CONTINUITY_BONUS;
   if (continuity?.anchored?.has(memberId)) bonus += SLOT_ANCHOR_BONUS;
 
-  return loadScore + pairPenalty - bonus;
+  const uprootPenalty = continuity?.uprooting?.has(memberId)
+    ? UPROOT_PENALTY
+    : 0;
+
+  return loadScore + pairPenalty + uprootPenalty - bonus;
 }
 
 /**
