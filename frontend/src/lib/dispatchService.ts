@@ -3,7 +3,7 @@ import {
   pairKey,
   isFrozen,
   scoreMember,
-  availabilityMatchesSlot,
+  availabilitiesCoverSlot,
   compareByTension,
   epreuveShortfall,
   slotFillTarget,
