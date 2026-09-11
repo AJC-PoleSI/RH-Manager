@@ -1503,5 +1503,9 @@ export async function runDispatch(opts?: {
     unfilled,
     frozen: frozenCount,
     notifications: notificationCount,
+    dryRun: false,
+    added,
+    removed,
+    understaffedWithCandidates,
   };
 }
