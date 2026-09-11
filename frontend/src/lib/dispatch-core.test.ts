@@ -14,6 +14,7 @@ import {
   blocksSlot,
   ROOM_STREAK_MAX,
   ROOM_CONTINUITY_BONUS,
+  availabilitiesCoverSlot,
   UPROOT_PENALTY,
 } from "./dispatch-core";
 
@@ -704,5 +705,162 @@ describe("compareByTension — départage par continuité de salle (piste 1)", (
     const a = { ...salle205, continuesChain: undefined };
     const b = { ...salle217, continuesChain: undefined };
     expect(compareByTension(a, b)).toBeLessThan(0); // "aaa…" < "zzz…"
+  });
+});
+
+describe("availabilitiesCoverSlot — la dispo doit COUVRIR tout le créneau", () => {
+  const slot = {
+    date: "2026-09-21",
+    start_time: "10:00",
+    end_time: "10:25",
+    epreuve_id: "ep1",
+  };
+
+  it("accepte une dispo qui englobe le créneau", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "09:00", end_time: "12:00" }],
+        slot,
+      ),
+    ).toBe(true);
+  });
+
+  it("REFUSE une dispo qui commence APRÈS le début du créneau — cas réel d'Amandine le 21/09", () => {
+    // Dispo déclarée 10:15, créneau 10:00-10:25 : elle arriverait 15 min après
+    // le début. L'ancien test (simple chevauchement) l'acceptait.
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "10:15", end_time: "12:00" }],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("REFUSE une dispo qui se termine AVANT la fin du créneau", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "09:00", end_time: "10:10" }],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("accepte quand la dispo colle exactement au créneau", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "10:00", end_time: "10:25" }],
+        slot,
+      ),
+    ).toBe(true);
+  });
+
+  it("FUSIONNE deux plages contiguës pour couvrir un créneau à cheval", () => {
+    // Saisir 09:00-10:10 puis 10:10-11:00 revient à être dispo 09:00-11:00.
+    expect(
+      availabilitiesCoverSlot(
+        [
+          { date: "2026-09-21", start_time: "09:00", end_time: "10:10" },
+          { date: "2026-09-21", start_time: "10:10", end_time: "11:00" },
+        ],
+        slot,
+      ),
+    ).toBe(true);
+  });
+
+  it("ne fusionne PAS deux plages séparées par un trou", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [
+          { date: "2026-09-21", start_time: "09:00", end_time: "10:05" },
+          { date: "2026-09-21", start_time: "10:15", end_time: "11:00" },
+        ],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("ignore un autre jour", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-22", start_time: "09:00", end_time: "12:00" }],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("horaires strictement identiques : l'épreuve n'entre pas en ligne de compte", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [
+          {
+            date: "2026-09-21",
+            start_time: "10:00",
+            end_time: "10:25",
+            epreuve_id: "AUTRE",
+          },
+        ],
+        slot,
+      ),
+    ).toBe(true);
+  });
+
+  it("une dispo cochée sur une AUTRE épreuve ne compte pas si les horaires diffèrent", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [
+          {
+            date: "2026-09-21",
+            start_time: "09:00",
+            end_time: "12:00",
+            epreuve_id: "AUTRE",
+          },
+        ],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("une dispo cochée sur LA BONNE épreuve compte", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [
+          {
+            date: "2026-09-21",
+            start_time: "09:00",
+            end_time: "12:00",
+            epreuve_id: "ep1",
+          },
+        ],
+        slot,
+      ),
+    ).toBe(true);
+  });
+
+  it("dispo héritée sans heure de fin : comportement historique conservé", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "10:00" }],
+        slot,
+      ),
+    ).toBe(true);
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "09:00" }],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("liste vide : pas disponible", () => {
+    expect(availabilitiesCoverSlot([], slot)).toBe(false);
+  });
+
+  it("cas Business Game : dispo 17:00-18:00 ne couvre pas un créneau 17:50-18:35", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [{ date: "2026-09-21", start_time: "17:00", end_time: "18:00" }],
+        { date: "2026-09-21", start_time: "17:50", end_time: "18:35", epreuve_id: "bg" },
+      ),
+    ).toBe(false);
   });
 });

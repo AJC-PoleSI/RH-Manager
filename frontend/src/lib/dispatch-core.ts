@@ -206,6 +206,70 @@ export function availabilityMatchesSlot(
   return av.epreuve_id === (slot.epreuve_id ?? null);
 }
 
+/**
+ * Les disponibilités d'un examinateur COUVRENT-ELLES tout le créneau ?
+ *
+ * Remplace le simple chevauchement d'`availabilityMatchesSlot`, qui suffisait
+ * à être affecté dès UNE minute commune. Constat sur données réelles du
+ * 11/09/2026 : 124 affectations sur 1263 plaçaient un examinateur sur un
+ * créneau que sa disponibilité ne couvrait pas — jusqu'à 40 minutes d'écart
+ * (Business Game de 45 min contre une dispo d'une heure mal alignée). Amandine
+ * était ainsi affectée à un créneau 10:00–10:25 en s'étant déclarée à partir
+ * de 10:15.
+ *
+ * Le commentaire d'origine disait déjà « une dispo 12h00–13h00 COUVRE un
+ * créneau 12h05–12h50 » : c'est bien l'inclusion qui était voulue, le code
+ * avait dérivé.
+ *
+ * Les plages CONTIGUËS sont fusionnées : déclarer 09h00–10h10 puis
+ * 10h10–11h00 revient à être disponible de 09h00 à 11h00 (7 affectations
+ * réelles ne tiennent que grâce à ça).
+ */
+export function availabilitiesCoverSlot(
+  avs: AvailabilityTiming[],
+  slot: SlotTiming,
+): boolean {
+  const sStart = hhmm(slot.start_time);
+  const sEnd = hhmm(slot.end_time) || sStart;
+
+  const usable: Array<[string, string]> = [];
+  for (const av of avs) {
+    if (ymd(av.date) !== ymd(slot.date)) continue;
+    const avStart = hhmm(av.start_time);
+
+    // Ancienne dispo sans heure de fin → égalité d'heure de début, comme avant.
+    if (!av.end_time) {
+      if (avStart === sStart) return true;
+      continue;
+    }
+    const avEnd = hhmm(av.end_time);
+
+    // Horaires strictement identiques → deux épreuves simultanées sont
+    // interchangeables pour l'examinateur, c'est au dispatch de trancher.
+    if (avStart === sStart && avEnd === sEnd) return true;
+
+    // Sinon la dispo doit avoir été cochée POUR CETTE ÉPREUVE (une dispo
+    // héritée, sans épreuve, reste valable pour tout).
+    if (av.epreuve_id && av.epreuve_id !== (slot.epreuve_id ?? null)) continue;
+    usable.push([avStart, avEnd]);
+  }
+
+  usable.sort((a, b) => a[0].localeCompare(b[0]));
+  let curStart: string | null = null;
+  let curEnd: string | null = null;
+  for (const [start, end] of usable) {
+    if (curEnd !== null && start <= curEnd) {
+      if (end > curEnd) curEnd = end;
+    } else {
+      curStart = start;
+      curEnd = end;
+    }
+    if (curStart !== null && curStart <= sStart && (curEnd as string) >= sEnd)
+      return true;
+  }
+  return false;
+}
+
 /** Un créneau est-il gelé (< FREEZE_HOURS avant son début) ? */
 export function isFrozen(slot: SlotTiming, now: Date = new Date()): boolean {
   const dateStr = ymd(slot.date);
