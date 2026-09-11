@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -64,7 +64,7 @@ export default function CandidateDetailPage({
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  const loadEvaluations = async () => {
+  const loadEvaluations = useCallback(async () => {
     const evalRes = await api.get(`/evaluations/candidate/${candidateId}`);
     const data = evalRes.data;
     if (data && data.byEpreuve) {
@@ -78,7 +78,7 @@ export default function CandidateDetailPage({
       setEpreuveGroups([]);
       setGlobalAverage(null);
     }
-  };
+  }, [candidateId]);
 
   // Réouverture (admin) d'une évaluation clôturée — les avis individuels
   // sont clôturés automatiquement à la soumission et n'avaient aucun écran
@@ -122,7 +122,7 @@ export default function CandidateDetailPage({
       }
     };
     load();
-  }, [candidateId, role]);
+  }, [candidateId, role, loadEvaluations]);
 
   if (loading) {
     return (
