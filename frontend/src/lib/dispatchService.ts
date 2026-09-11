@@ -4,6 +4,7 @@ import {
   isFrozen,
   scoreMember,
   availabilitiesCoverSlot,
+  availabilityMatchesSlot,
   compareByTension,
   epreuveShortfall,
   slotFillTarget,
