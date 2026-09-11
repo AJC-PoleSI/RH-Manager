@@ -6,6 +6,8 @@ import {
   isSlotStaffed,
   sliceParamsFromEpreuve,
   slotInsertRow,
+  staleTimingCount,
+  timingChangeWarning,
 } from "./openings-service";
 
 describe("validateOpeningInput", () => {
