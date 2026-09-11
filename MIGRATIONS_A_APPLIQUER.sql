@@ -624,3 +624,45 @@ begin
   end if;
 end;
 $$;
+
+
+-- ------------------------------------------------------------
+-- 12) Verrouillage des créneaux — fin du rebrassage permanent
+--     (supabase-migration-slot-lock.sql)
+-- ------------------------------------------------------------
+-- Le dispatch se relance à chaque sauvegarde de disponibilité et rebrassait
+-- intégralement le jury de tout créneau non protégé (étape 9c : la sélection
+-- repart d'une liste vide). Un créneau publié pouvait donc changer de jury
+-- parce qu'un membre a coché une case trois semaines plus tôt.
+--
+-- Le verrou est un ACTE écrit en base, pas une déduction depuis `status`
+-- (lequel est recalculé à chaque run à partir de l'effectif du jury).
+-- Il protège le jury, la date, l'horaire, la salle et les inscriptions.
+--   'publication' — planning de l'épreuve publié aux candidats
+--   'inscription' — un candidat a réservé le créneau
+--   'manuel'      — figé à la main par l'admin
+
+ALTER TABLE evaluation_slots
+  ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS locked_reason TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_evaluation_slots_is_locked
+  ON evaluation_slots (is_locked)
+  WHERE is_locked = true;
+
+-- Rattrapage : les rendez-vous DÉJÀ pris sont protégés immédiatement.
+UPDATE evaluation_slots s
+   SET is_locked = true, locked_at = now(), locked_reason = 'inscription'
+ WHERE s.is_locked = false
+   AND EXISTS (
+     SELECT 1 FROM slot_enrollments e
+      WHERE e.slot_id = s.id
+        AND coalesce(e.status, 'enrolled') <> 'cancelled'
+   );
+
+-- Et les créneaux déjà annoncés aux candidats.
+UPDATE evaluation_slots
+   SET is_locked = true, locked_at = now(), locked_reason = 'publication'
+ WHERE is_locked = false
+   AND status IN ('published', 'full');

@@ -258,15 +258,28 @@ export async function runDispatch(opts?: {
   //
   // L'ordre sur `id` n'a pas de sens métier — le tri chronologique se fait en
   // mémoire, étape 6 — il ne sert qu'à rendre la pagination déterministe.
-  const { data: slots, error: slotErr } = await fetchAllRows<any>((from, to) => {
-    let q = supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour, roulement_minutes)",
-      );
-    if (opts?.epreuveId) q = q.eq("epreuve_id", opts.epreuveId);
-    return q.order("id").range(from, to);
-  });
+  // `is_locked` porte le verrou (cf. slot-lock.ts). Tant que la migration
+  // `supabase-migration-slot-lock.sql` n'est pas appliquée à la main, la
+  // colonne n'existe pas : on retombe alors sur la lecture d'origine plutôt
+  // que de faire échouer le dispatch entier — sans verrou, mais vivant.
+  const SLOT_COLUMNS =
+    "id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id, enrollments:slot_enrollments(id, status), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test, pole, tour, roulement_minutes)";
+  const readSlots = (columns: string) =>
+    fetchAllRows<any>((from, to) => {
+      let q = supabaseAdmin.from("evaluation_slots").select(columns);
+      if (opts?.epreuveId) q = q.eq("epreuve_id", opts.epreuveId);
+      return q.order("id").range(from, to);
+    });
+
+  let { data: slots, error: slotErr } = await readSlots(
+    `${SLOT_COLUMNS}, is_locked, locked_reason`,
+  );
+  if (slotErr && isMissingColumnError(slotErr)) {
+    console.warn(
+      "[dispatch] Colonne is_locked absente — verrouillage inactif. Appliquez supabase-migration-slot-lock.sql.",
+    );
+    ({ data: slots, error: slotErr } = await readSlots(SLOT_COLUMNS));
+  }
   if (slotErr) throw slotErr;
   if (!slots || slots.length === 0)
     return {
