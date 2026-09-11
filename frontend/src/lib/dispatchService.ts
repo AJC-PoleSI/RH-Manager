@@ -1402,11 +1402,18 @@ export async function runDispatch(opts?: {
       day: "numeric",
       month: "long",
     });
+    // Le motif change le sens du message : « vous n'êtes plus disponible » n'a
+    // rien à voir avec « quelqu'un a été préféré pour l'équité ». Annoncer le
+    // second quand c'est le premier laisse croire à une décision subie.
+    const body =
+      removal.reason === "disponibilité retirée"
+        ? `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : votre disponibilité sur ce créneau a été retirée.`
+        : `Vous avez été retiré du créneau de ${startStr} le ${dateDisplay} (raison : ${removal.reason}). Un autre examinateur a été prioritairement affecté pour garantir l'équité de répartition.`;
     return {
       member_id: removal.member_id,
       type: "dispatch_change",
       title: "Changement d'affectation",
-      body: `Vous avez été retiré du créneau de ${startStr} le ${dateDisplay} (raison : ${removal.reason}). Un autre examinateur a été prioritairement affecté pour garantir l'équité de répartition.`,
+      body,
       link: "/dashboard",
     };
   });
