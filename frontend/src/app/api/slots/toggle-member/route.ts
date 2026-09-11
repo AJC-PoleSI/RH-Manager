@@ -472,10 +472,21 @@ export async function POST(req: NextRequest) {
         throw insertError;
       }
 
+      // S'inscrire soi-même sur un créneau EST une déclaration de
+      // disponibilité : on l'enregistre, sinon le dispatch ne nous voit pas
+      // dans le vivier et nous efface au run suivant (cf.
+      // syncSelfAvailability). Un admin qui place quelqu'un d'autre ne
+      // déclare rien à sa place : son choix est protégé par `is_manual`.
+      if (memberId === payload.id) {
+        await syncSelfAvailability(memberId, slotId, "add", targetSlot as any);
+      }
+
       // Check if slot reaches minMembers threshold
       const { data: slot } = await supabaseAdmin
         .from("evaluation_slots")
-        .select("*, members:slot_member_assignments(id)")
+        .select(
+          "*, members:slot_member_assignments(id), enrollments:slot_enrollments(id, status)",
+        )
         .eq("id", slotId)
         .single();
 
