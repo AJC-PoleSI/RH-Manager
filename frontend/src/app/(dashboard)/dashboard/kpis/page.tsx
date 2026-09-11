@@ -39,17 +39,18 @@ interface SlotsKPIData {
 export default function KPIsPage() {
   const [data, setData] = useState<KPIData | null>(null);
   const [slotsData, setSlotsData] = useState<SlotsKPIData | null>(null);
+  const [slotsError, setSlotsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
     const fetchKPIs = async () => {
-      // Deux requêtes indépendantes : si /kpis/slots échoue, ça ne doit pas
-      // faire disparaître le reste de la page (Promise.all propageait
+      // Deux requêtes indépendantes : si /kpis/creneaux échoue, ça ne doit
+      // pas faire disparaître le reste de la page (Promise.all propageait
       // l'erreur de l'une à l'autre).
       const [globalRes, slotsRes] = await Promise.allSettled([
         api.get("/kpis/global"),
-        api.get("/kpis/slots"),
+        api.get("/kpis/creneaux"),
       ]);
 
       if (globalRes.status === "fulfilled") {
@@ -65,7 +66,11 @@ export default function KPIsPage() {
       if (slotsRes.status === "fulfilled") {
         setSlotsData(slotsRes.value.data);
       } else {
+        // Visible plutôt que silencieux : un bloqueur de pub ou une panne
+        // réseau sur cette seule requête ne doit pas juste faire disparaître
+        // la carte sans explication.
         console.error(slotsRes.reason);
+        setSlotsError(true);
       }
 
       setLoading(false);
