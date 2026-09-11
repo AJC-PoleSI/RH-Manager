@@ -674,17 +674,37 @@ export async function runDispatch(opts?: {
     );
 
     if (epreuveIds.length > 0) {
+      // Paginé comme les lectures principales : ces tables sont encore sous le
+      // plafond des 1000 lignes (77 candidats au 11/09/2026), mais une
+      // troncature silencieuse ici fausserait la DEMANDE par épreuve — donc
+      // l'ordre de service — sans le moindre signal.
       const [candRes, delibRes, wishRes, evalRes, toursByNumber] =
         await Promise.all([
-          supabaseAdmin.from("candidates").select("id"),
-          supabaseAdmin
-            .from("deliberations")
-            .select("candidate_id, tour1_status, tour2_status, tour3_status"),
-          supabaseAdmin.from("candidate_wishes").select("candidate_id, pole"),
-          supabaseAdmin
-            .from("candidate_evaluations")
-            .select("candidate_id, epreuve_id, scores")
-            .in("epreuve_id", epreuveIds),
+          fetchAllRows<any>((from, to) =>
+            supabaseAdmin.from("candidates").select("id").order("id").range(from, to),
+          ),
+          fetchAllRows<any>((from, to) =>
+            supabaseAdmin
+              .from("deliberations")
+              .select("candidate_id, tour1_status, tour2_status, tour3_status")
+              .order("candidate_id")
+              .range(from, to),
+          ),
+          fetchAllRows<any>((from, to) =>
+            supabaseAdmin
+              .from("candidate_wishes")
+              .select("candidate_id, pole")
+              .order("id")
+              .range(from, to),
+          ),
+          fetchAllRows<any>((from, to) =>
+            supabaseAdmin
+              .from("candidate_evaluations")
+              .select("candidate_id, epreuve_id, scores")
+              .in("epreuve_id", epreuveIds)
+              .order("id")
+              .range(from, to),
+          ),
           getToursByNumber(),
         ]);
 
