@@ -151,6 +151,13 @@ export async function POST(req: NextRequest) {
 
       if (deleteError) throw deleteError;
 
+      // Se retirer soi-même d'un créneau, c'est retirer sa disponibilité :
+      // sans ça le prochain dispatch nous y remettrait aussitôt (cf.
+      // syncSelfAvailability).
+      if (memberId === payload.id) {
+        await syncSelfAvailability(memberId, slotId, "remove");
+      }
+
       // Refetch slot (avec inscriptions pour pouvoir notifier les candidats)
       const { data: slot } = await supabaseAdmin
         .from("evaluation_slots")
