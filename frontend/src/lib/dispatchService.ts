@@ -1138,6 +1138,68 @@ export async function runDispatch(opts?: {
     .filter((s: any) => !isLocked(s as SlotInfo) && !isFrozen(s as SlotInfo))
     .map((s: any) => s.id);
 
+  // Diff lisible du run : ce que l'admin verra dans l'aperçu, et ce qui
+  // alimente le compte rendu du recalcul réel.
+  const plannedBySlot = new Map<string, Set<string>>();
+  assignmentsToInsert.forEach((a) => {
+    if (!plannedBySlot.has(a.slot_id)) plannedBySlot.set(a.slot_id, new Set());
+    plannedBySlot.get(a.slot_id)!.add(a.member_id);
+  });
+  const added: Array<{ slot_id: string; member_id: string }> = [];
+  for (const slotId of wipeableSlotIds) {
+    const before = currentBySlot[slotId] || new Set<string>();
+    plannedBySlot.get(slotId)?.forEach((memberId) => {
+      if (!before.has(memberId)) added.push({ slot_id: slotId, member_id: memberId });
+    });
+  }
+  const removed = removedMembers.map((r) => ({
+    slot_id: r.slot.id,
+    member_id: r.member_id,
+    reason: r.reason,
+  }));
+
+  // ── SIMULATION : on s'arrête ici, avant la moindre écriture ──
+  //
+  // La coupure est franche (aucun appel d'écriture n'est atteint) plutôt que
+  // neutralisée au cas par cas : impossible qu'un oubli laisse passer un
+  // write. Le prix est que l'aperçu ne calcule pas les statuts ni les alertes
+  // — ils dépendent des étapes suivantes ; le diff et le sous-effectif, eux,
+  // sont déjà connus (cf. plus bas pour le sous-effectif, recalculé ici).
+  if (opts?.dryRun) {
+    const preview: UnderstaffedSlot[] = [];
+    const plannedCount = (slotId: string) =>
+      plannedBySlot.get(slotId)?.size ?? (currentBySlot[slotId] || new Set()).size;
+    for (const slot of sortedSlots as SlotInfo[]) {
+      if (isFrozen(slot)) continue;
+      const needed = slot.min_members || 2;
+      const assigned = plannedCount(slot.id);
+      const candidates = activeEnrollmentCount(slot.enrollments);
+      if (assigned < needed && candidates > 0) {
+        preview.push({
+          slotId: slot.id,
+          date: String(slot.date || ""),
+          startTime: String(slot.start_time || ""),
+          room: slot.room ?? null,
+          assigned,
+          needed,
+          candidates,
+        });
+      }
+    }
+    return {
+      updated: assignmentsToInsert.length,
+      backupsAssigned: backupAssignments.length,
+      unfilled,
+      frozen: frozenCount,
+      notifications: 0,
+      dryRun: true,
+      added,
+      removed,
+      understaffedWithCandidates: preview,
+      wouldNotify: buildUnderstaffedNotifications(preview).length,
+    };
+  }
+
   await applyAssignments(
     supabaseAdmin as unknown as DispatchClient,
     wipeableSlotIds,
