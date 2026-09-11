@@ -893,6 +893,76 @@ export async function runDispatch(opts?: {
       continue;
     }
 
+    // 9b-bis. JURY ANCRÉ — créneaux où des candidats sont DÉJÀ inscrits.
+    //
+    // Un rendez-vous pris avec un candidat n'est pas une variable
+    // d'optimisation. Sur ces créneaux le dispatch ne rebrasse RIEN : il
+    // conserve les examinateurs en place, retire les seuls qui n'ont plus de
+    // disponibilité (ils ne viendront pas), et complète les places libres.
+    //
+    // Différence avec 9b (verrouillé) : là on ne fait que COMPLÉTER, ici on
+    // retire aussi les indisponibles — c'est précisément ce que Felix
+    // demandait (« l'algorithme n'a pas pris en compte le changement de
+    // dispo ») sans pour autant reconstruire le jury de zéro.
+    //
+    // Le retrait est notifié avec son vrai motif : l'examinateur s'est
+    // lui-même retiré, ce n'est pas un arbitrage d'équité subi.
+    if (activeEnrollmentCount(slotInfo.enrollments) > 0) {
+      const quota = slot.min_members || 2;
+      const stillAvailable = new Set(matchSlotToMembers(slotInfo));
+
+      const kept: string[] = [];
+      existing.forEach((memberId) => {
+        if (!stillAvailable.has(memberId)) {
+          removedMembers.push({
+            member_id: memberId,
+            slot: slotInfo,
+            reason: "disponibilité retirée",
+          });
+          return;
+        }
+        if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) {
+          // Engagé ailleurs au même moment (autre épreuve servie avant) : on
+          // ne peut pas le garder ici, il devient remplaçant en 9d.
+          return;
+        }
+        kept.push(memberId);
+        commitMember(memberId, slotInfo, memberLoad, memberCommittedSlots);
+      });
+
+      // Complément : mêmes règles de score qu'ailleurs, mais sans jamais
+      // remettre en cause les membres conservés.
+      const pool = matchSlotToMembers(slotInfo).filter(
+        (id) =>
+          !kept.includes(id) &&
+          !wouldConflict(id, slotInfo, memberCommittedSlots),
+      );
+      while (kept.length < quota && pool.length > 0) {
+        pool.sort(
+          (a, b) =>
+            scoreMember(a, kept, memberLoad, pairHistory, continuity) -
+            scoreMember(b, kept, memberLoad, pairHistory, continuity),
+        );
+        const chosen = pool.shift()!;
+        for (const other of kept) {
+          const key = pairKey(chosen, other);
+          pairHistory.set(key, (pairHistory.get(key) || 0) + 1);
+        }
+        kept.push(chosen);
+        commitMember(chosen, slotInfo, memberLoad, memberCommittedSlots);
+      }
+
+      kept.forEach((memberId) => {
+        assignmentsToInsert.push({ slot_id: slot.id, member_id: memberId });
+      });
+      membersBySlot.set(slot.id, new Set(kept));
+
+      if (kept.length < quota) {
+        unfilled.push({ slot_id: slot.id, needed: quota, got: kept.length });
+      }
+      continue;
+    }
+
     // 9c. Open slots — full re-allocation with brassage + equity.
     //
     // Sélection GLOUTONNE : à chaque pick on re-trie les candidats restants
