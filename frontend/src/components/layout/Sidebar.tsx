@@ -46,6 +46,7 @@ const Sidebar = () => {
           icon: "🌙",
         },
         { href: "/dashboard/planning", label: "Planning", icon: "📅" },
+        { href: "/dashboard/kpis", label: "Statistiques", icon: "📈" },
       ],
     },
     {
