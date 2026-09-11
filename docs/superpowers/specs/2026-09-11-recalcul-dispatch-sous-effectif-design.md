@@ -177,6 +177,13 @@ retrouve en sous-effectif **après**. La comparaison se fait entre `currentBySlo
 de suivi n'est nécessaire, et un créneau déjà en sous-effectif au run précédent
 ne renotifie pas.
 
+**Exception — le recalcul manuel notifie tout.** Les 8 créneaux déjà en
+sous-effectif aujourd'hui ne « basculent » plus : personne ne serait jamais
+prévenu pour eux. Le recalcul déclenché par l'admin (§3.5, hors `dryRun`) envoie
+donc la notification pour **tous** les créneaux en sous-effectif avec candidat
+inscrit, bascule ou non. Les runs automatiques (sauvegarde de disponibilité) s'en
+tiennent aux bascules.
+
 Deux notifications groupées maximum par run, envoyées à **tous les membres** via
 `notifyMembers` :
 
