@@ -377,3 +377,66 @@ export async function sendAccountDeletionRequestEmail(opts: {
     html,
   });
 }
+
+/**
+ * Changement de salle d'un candidat suite au regroupement des inscriptions.
+ *
+ * Les inscriptions étaient éparpillées sur plusieurs salles au même horaire,
+ * ce qui obligeait les examinateurs à changer de salle entre deux passages.
+ * On les regroupe — l'horaire ne change JAMAIS, seule la salle change.
+ */
+export async function sendRoomChangeEmail(opts: {
+  to: string;
+  firstName: string | null;
+  epreuve: string;
+  dateLabel: string;
+  timeLabel: string;
+  oldRoom: string | null;
+  newRoom: string | null;
+}) {
+  const safeName = escapeHtml((opts.firstName || "").trim());
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2563EB;padding:32px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Audencia Junior Conseil</p>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Changement de salle</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px 28px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour${safeName ? " " + safeName : ""},</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#4b5563;line-height:1.6;">
+            La salle de votre <strong>${escapeHtml(opts.epreuve)}</strong> a changé.
+            <strong>La date et l'heure restent identiques.</strong>
+          </p>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;border:1px solid #e5e7eb;border-radius:8px;">
+            <tr><td style="padding:14px 18px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#6b7280;">Date</td>
+                <td style="padding:14px 18px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;font-weight:600;">${escapeHtml(opts.dateLabel)}</td></tr>
+            <tr><td style="padding:14px 18px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#6b7280;">Heure</td>
+                <td style="padding:14px 18px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;font-weight:600;">${escapeHtml(opts.timeLabel)}</td></tr>
+            <tr><td style="padding:14px 18px;font-size:14px;color:#6b7280;">Nouvelle salle</td>
+                <td style="padding:14px 18px;font-size:16px;color:#2563EB;font-weight:700;">${escapeHtml(opts.newRoom || "—")}</td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+            ${opts.oldRoom ? `Votre ancienne salle était la ${escapeHtml(opts.oldRoom)}. ` : ""}Merci de vous présenter directement en salle ${escapeHtml(opts.newRoom || "—")}.
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+
+  return send({
+    from: FROM,
+    to: opts.to,
+    subject: `Changement de salle — ${opts.epreuve} du ${opts.dateLabel}`,
+    html,
+  });
+}

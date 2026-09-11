@@ -9,6 +9,7 @@ import { getCandidateWishedPoles } from "@/lib/admission";
 import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
+import { pickPackedRoom } from "@/lib/room-packing";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
@@ -33,22 +34,77 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch slot with enrollments and members
-    const { data: slot, error: slotError } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        `
+    const SLOT_SELECT = `
         *,
         enrollments:slot_enrollments(*),
         members:slot_member_assignments(id),
         epreuve:epreuves(*)
-      `,
-      )
+      `;
+    const { data: requestedSlot, error: slotError } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select(SLOT_SELECT)
       .eq("id", slotId)
       .single();
 
-    if (slotError || !slot) {
+    if (slotError || !requestedSlot) {
       return Response.json({ error: "Slot not found" }, { status: 404 });
     }
+
+    // ── C'est le SYSTÈME qui choisit la salle, pas le candidat ──
+    //
+    // Le candidat réserve un HORAIRE. Plusieurs salles peuvent porter la même
+    // épreuve au même moment ; on en remplit une avant d'en ouvrir une autre
+    // (cf. room-packing.ts), sinon les inscriptions s'éparpillent et les
+    // examinateurs doivent se déplacer d'une salle à l'autre pour les suivre.
+    //
+    // La salle demandée par le client n'est donc qu'une indication d'horaire :
+    // on ne lui fait pas confiance pour désigner la salle.
+    const { data: groupRows } = await supabaseAdmin
+      .from("evaluation_slots")
+      .select(SLOT_SELECT)
+      .eq("epreuve_id", requestedSlot.epreuve_id)
+      .eq("date", requestedSlot.date)
+      .eq("start_time", requestedSlot.start_time)
+      .eq("end_time", requestedSlot.end_time);
+
+    const groupSlots = (groupRows || []).map((s: any) => ({
+      ...s,
+      enrollments: (s.enrollments || []).filter(filterActiveEnrollments),
+    }));
+
+    // Déjà inscrit sur cet horaire → on reste sur SA salle (le traitement
+    // d'idempotence plus bas s'en charge).
+    const alreadyMine = groupSlots.find((s: any) =>
+      s.enrollments.some((e: any) => e.candidate_id === candidateId),
+    );
+
+    let target = requestedSlot;
+    if (alreadyMine) {
+      target = alreadyMine;
+    } else if (groupSlots.length > 1) {
+      // Seules les salles réellement dotées (jury au complet) sont
+      // réservables — même règle que la visibilité côté /slots/available.
+      const eligible = groupSlots.filter(
+        (s: any) =>
+          ["published", "full"].includes(s.status) &&
+          (s.members?.length || 0) >= (s.min_members || 2),
+      );
+      const pick = pickPackedRoom(
+        eligible.map((s: any) => ({
+          slotId: s.id,
+          room: s.room || null,
+          enrolledCount: s.enrollments.length,
+          capacity: effectiveMaxCandidates(s),
+          juryInPlace: (s.members?.length || 0) > 0,
+        })),
+      );
+      if (pick) {
+        target = groupSlots.find((s: any) => s.id === pick.slotId) || target;
+      }
+    }
+
+    const slot = target;
+    slotId = slot.id;
 
     // PUBLICATION PAR ÉPREUVE : seuls les créneaux explicitement publiés
     // acceptent des inscriptions candidates.

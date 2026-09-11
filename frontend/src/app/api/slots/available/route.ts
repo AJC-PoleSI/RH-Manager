@@ -4,6 +4,7 @@ import {
   filterActiveEnrollments,
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
+import { slotGroupKey, pickPackedRoom } from "@/lib/room-packing";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
@@ -134,23 +135,91 @@ export async function GET(req: NextRequest) {
       ) {
         return false;
       }
-      // Sinon: ne montrer que les statuts PUBLIÉS avec au moins
-      // 1 examinateur affecté (publication par épreuve).
+      // Sinon: ne montrer que les statuts PUBLIÉS dont le jury est AU COMPLET.
+      //
+      // Le seuil est le minimum de l'épreuve (`min_members`), pas « au moins
+      // un examinateur » : un créneau ne doit jamais être réservable tant
+      // qu'il n'a pas le jury requis pour se tenir. C'est la même règle que
+      // la publication côté dispatch (cf. `requiredForPublish`) — ce filtre
+      // en est le garde-fou côté lecture, pour les créneaux gelés ou
+      // verrouillés dont le statut n'est plus recalculé.
       if (!["published", "full"].includes(slot.status)) {
         return false;
       }
-      return memberCount >= 1;
+      return memberCount >= (slot.min_members || 2);
     });
 
-    const available = filtered.map((slot: any) => {
-      const enrolledCount = slot.enrollments?.length || 0;
-      // Capacité effective : source unique de vérité partagée (enrollment.ts).
-      const effectiveMax = effectiveMaxCandidates(slot);
+    // ── Regroupement des salles parallèles (candidats uniquement) ──
+    //
+    // Plusieurs salles peuvent porter la MÊME épreuve au MÊME horaire. Le
+    // candidat ne doit pas avoir à choisir laquelle : il choisit un horaire,
+    // et le système remplit une salle avant d'en ouvrir une autre
+    // (cf. room-packing.ts). Sans ça, les inscriptions s'éparpillent et les
+    // examinateurs doivent se déplacer pour suivre les candidats.
+    //
+    // Une fois inscrit, le candidat voit SA salle : c'est son point de
+    // rendez-vous. Les membres et admins, eux, continuent de voir le détail
+    // salle par salle.
+    const groupsForCandidate = new Map<string, any[]>();
+    if (isCandidate) {
+      for (const slot of filtered) {
+        const key = slotGroupKey(slot);
+        if (!groupsForCandidate.has(key)) groupsForCandidate.set(key, []);
+        groupsForCandidate.get(key)!.push(slot);
+      }
+    }
+
+    // Un seul représentant par horaire côté candidat : celui de SA salle s'il
+    // est inscrit, sinon la salle que le système lui attribuerait.
+    const representatives = !isCandidate
+      ? filtered
+      : Array.from(groupsForCandidate.values()).map((group: any[]) => {
+          const mine = group.find((s: any) =>
+            s.enrollments?.some((e: any) => e.candidate_id === candidateId),
+          );
+          if (mine) return mine;
+          const pick = pickPackedRoom(
+            group.map((s: any) => ({
+              slotId: s.id,
+              room: s.room || null,
+              enrolledCount: s.enrollments?.length || 0,
+              capacity: effectiveMaxCandidates(s),
+              juryInPlace: (s.members?.length || 0) > 0,
+            })),
+          );
+          return group.find((s: any) => s.id === pick?.slotId) || group[0];
+        });
+
+    const available = representatives.map((slot: any) => {
+      const group = isCandidate
+        ? groupsForCandidate.get(slotGroupKey(slot)) || [slot]
+        : [slot];
+      const mine = isCandidate
+        ? group.find((s: any) =>
+            s.enrollments?.some((e: any) => e.candidate_id === candidateId),
+          )
+        : undefined;
+
+      // Côté candidat, capacité et remplissage se lisent sur TOUT l'horaire,
+      // pas sur une salle : c'est l'horaire qu'il réserve.
+      const enrolledCount = group.reduce(
+        (n: number, s: any) => n + (s.enrollments?.length || 0),
+        0,
+      );
+      const effectiveMax = group.reduce(
+        (n: number, s: any) => n + effectiveMaxCandidates(s),
+        0,
+      );
       const isFull = enrolledCount >= effectiveMax;
-      const isEnrolled =
-        payload.role === "candidate"
-          ? slot.enrollments?.some((e: any) => e.candidate_id === candidateId)
-          : false;
+      const isEnrolled = Boolean(mine);
+
+      // Salle masquée tant que le candidat n'est pas inscrit ; une fois
+      // inscrit, il voit la sienne.
+      const visibleRoom = isCandidate
+        ? mine
+          ? mine.room || null
+          : null
+        : slot.room || null;
 
       return {
         id: slot.id,
@@ -168,7 +237,7 @@ export async function GET(req: NextRequest) {
         endTime: slot.end_time,
         durationMinutes: slot.duration_minutes,
         label: slot.label,
-        room: slot.room || null,
+        room: visibleRoom,
         tour: slot.tour,
         maxCandidates: effectiveMax,
         // Minimum de candidats visé pour cette épreuve de groupe (business
