@@ -769,7 +769,7 @@ export async function runDispatch(opts?: {
     const existing = currentBySlot[slot.id] || new Set<string>();
     const slotInfo = slot;
     // Qui garder sur place dans cette salle (cf. étape 6bis).
-    const continuity = continuityFor(slot.id);
+    const continuity = continuityFor(slot);
 
     // 9a. Frozen slots — don't touch
     if (isFrozen(slotInfo)) {

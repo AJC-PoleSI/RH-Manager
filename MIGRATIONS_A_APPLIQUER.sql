@@ -570,3 +570,57 @@ ALTER TABLE evaluator_tracking
 ALTER TABLE evaluator_tracking
   ADD CONSTRAINT uniq_evaluator_tracking_member_evaluation
   UNIQUE (member_id, evaluation_id);
+
+
+-- ------------------------------------------------------------
+-- O) Recalcul du dispatch : traçabilité + écriture atomique
+--    (audit du 11/09/2026 — spec docs/superpowers/specs/
+--     2026-09-11-recalcul-dispatch-sous-effectif-design.md)
+-- ------------------------------------------------------------
+-- 1. allocation_history.version est en INTEGER (max 2 147 483 647) alors que
+--    le dispatch y écrit `Date.now()` (~1,78e12) : CHAQUE journalisation
+--    échoue en 22003 (numeric out of range), dans un try/catch silencieux.
+--    Résultat constaté en prod le 11/09/2026 : la table est VIDE depuis
+--    toujours — aucun moyen de savoir si un recalcul a tourné, ni quand.
+--    BIGINT accueille un timestamp epoch en millisecondes sans débordement.
+
+ALTER TABLE allocation_history
+  ALTER COLUMN version TYPE BIGINT;
+
+-- 2. Écriture ATOMIQUE des affectations examinateurs.
+--    (reprise de supabase-migration-dispatch-atomic.sql, JAMAIS appliquée en
+--    production — vérifié le 11/09/2026 : PGRST202 « Could not find the
+--    function public.replace_slot_assignments ».)
+--
+--    Le dispatch remplace les affectations d'un lot de créneaux : il SUPPRIME
+--    puis RÉINSÈRE. Sans transaction, un échec d'insert laisse des créneaux
+--    SANS jury (le delete, lui, est déjà appliqué). Cette fonction fait
+--    delete + insert dans UNE seule transaction : si l'insert échoue, le
+--    delete est annulé.
+--
+--    Le code (dispatch-io.ts) l'appelle via
+--      supabaseAdmin.rpc('replace_slot_assignments', { p_slot_ids, p_assignments })
+--    et retombe sur l'ancien delete+insert tant qu'elle n'existe pas : l'ordre
+--    déploiement code / migration est indifférent.
+--
+--    Idempotent (CREATE OR REPLACE).
+
+create or replace function replace_slot_assignments(
+  p_slot_ids uuid[],
+  p_assignments jsonb
+) returns void
+language plpgsql
+as $$
+begin
+  if p_slot_ids is not null and array_length(p_slot_ids, 1) is not null then
+    delete from slot_member_assignments
+      where slot_id = any (p_slot_ids);
+  end if;
+
+  if p_assignments is not null and jsonb_array_length(p_assignments) > 0 then
+    insert into slot_member_assignments (slot_id, member_id)
+    select (elem ->> 'slot_id')::uuid, (elem ->> 'member_id')::uuid
+    from jsonb_array_elements(p_assignments) as elem;
+  end if;
+end;
+$$;
