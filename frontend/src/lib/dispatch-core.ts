@@ -43,23 +43,6 @@ export const ROOM_CONTINUITY_BONUS = 1000;
  */
 export const SLOT_ANCHOR_BONUS = 0.5;
 
-/**
- * Malus (ajouté au score) d'un membre qu'on ARRACHERAIT à une chaîne en cours
- * dans une AUTRE salle pour le placer ici.
- *
- * Symétrique de `ROOM_CONTINUITY_BONUS` : rester sur place et ne pas être
- * délogé sont le même fait physique vu des deux côtés. Le bonus seul ne
- * suffisait pas — il n'agit que lorsqu'on décide le créneau de SA salle. Quand
- * une salle concurrente est servie avant (cas réel du 21/09/2026 : salles 205
- * et 217 proposent le même entretien à 08:30), elle captait le duo, qui se
- * déplaçait pour rien en laissant sa propre salle vide.
- *
- * Ce malus ne peut JAMAIS laisser un créneau non pourvu : le score ne fait
- * qu'ORDONNER le vivier, la boucle gloutonne le vide de toute façon tant qu'il
- * reste des membres disponibles. Il déplace le choix, pas la couverture.
- */
-export const UPROOT_PENALTY = 1000;
-
 // ─── Types ────────────────────────────────────────────────────────────
 export interface SlotTiming {
   date?: string | null;
@@ -220,13 +203,10 @@ export function isFrozen(slot: SlotTiming, now: Date = new Date()): boolean {
  * `continuing` : membres présents sur le créneau précédent de la même salle et
  * dont le streak n'a pas atteint ROOM_STREAK_MAX — on veut les garder sur place.
  * `anchored`   : membres déjà affectés à ce créneau avant que le run l'efface.
- * `uprooting`  : membres en pleine chaîne dans une AUTRE salle, qu'on
- *                délogerait en les prenant ici (cf. UPROOT_PENALTY).
  */
 export interface SlotContinuity {
   continuing?: Set<string>;
   anchored?: Set<string>;
-  uprooting?: Set<string>;
 }
 
 /**
@@ -283,11 +263,7 @@ export function scoreMember(
   if (continuity?.continuing?.has(memberId)) bonus += ROOM_CONTINUITY_BONUS;
   if (continuity?.anchored?.has(memberId)) bonus += SLOT_ANCHOR_BONUS;
 
-  const uprootPenalty = continuity?.uprooting?.has(memberId)
-    ? UPROOT_PENALTY
-    : 0;
-
-  return loadScore + pairPenalty + uprootPenalty - bonus;
+  return loadScore + pairPenalty - bonus;
 }
 
 /**
@@ -385,26 +361,6 @@ export interface SlotDemand {
    * avant un individuel qui lui dispute le même horaire.
    */
   isGroupEpreuve?: boolean;
-  /**
-   * Des candidats se sont déjà inscrits sur ce créneau.
-   *
-   * Critère le PLUS prioritaire : un rendez-vous pris avec un candidat est un
-   * engagement, pas une optimisation. Sans lui, le dispatch pouvait vider le
-   * jury d'un créneau où un candidat était inscrit au profit d'un créneau sans
-   * personne — 8 cas en base au 11/09/2026, dont plusieurs à 0 examinateur.
-   */
-  hasEnrolledCandidates?: boolean;
-  /**
-   * Ce créneau prolonge-t-il une salle DÉJÀ occupée au créneau précédent ?
-   *
-   * Pur départage, tout en bas de l'ordre : il ne tranche qu'entre créneaux
-   * par ailleurs strictement équivalents — typiquement deux salles qui
-   * proposent la même épreuve au même horaire. Avant, ce cas tombait sur la
-   * comparaison d'UUID (`a.id.localeCompare(b.id)`), donc sur un ordre
-   * arbitraire : la salle qui démarrait à froid pouvait être servie en
-   * premier, capter l'équipe de la salle voisine et laisser celle-ci vide.
-   */
-  continuesChain?: boolean;
 }
 
 /**
@@ -468,10 +424,6 @@ export function slotTension(eligible: number, quota: number): number {
  *      chronologie (déterminisme).
  */
 export function compareByTension(a: SlotDemand, b: SlotDemand): number {
-  const ea = a.hasEnrolledCandidates ? 1 : 0;
-  const eb = b.hasEnrolledCandidates ? 1 : 0;
-  if (ea !== eb) return eb - ea; // candidats déjà inscrits d'abord
-
   const ga = a.isGroupEpreuve ? 1 : 0;
   const gb = b.isGroupEpreuve ? 1 : 0;
   if (ga !== gb) return gb - ga; // groupe d'abord
@@ -493,14 +445,5 @@ export function compareByTension(a: SlotDemand, b: SlotDemand): number {
   if (ad !== bd) return ad < bd ? -1 : 1;
   const cmp = hhmm(a.start_time).localeCompare(hhmm(b.start_time));
   if (cmp !== 0) return cmp;
-
-  // Dernier départage avant l'UUID : entre deux créneaux par ailleurs
-  // identiques (typiquement deux salles, même épreuve, même horaire), celui
-  // qui prolonge une salle occupée passe devant. Il choisit alors en premier,
-  // et le bonus de continuité peut réellement garder l'équipe sur place.
-  const ka = a.continuesChain ? 1 : 0;
-  const kb = b.continuesChain ? 1 : 0;
-  if (ka !== kb) return kb - ka;
-
   return a.id.localeCompare(b.id);
 }
