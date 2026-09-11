@@ -1429,6 +1429,28 @@ export async function runDispatch(opts?: {
     }
   }
 
+  // 12bis. APPEL AUX VOLONTAIRES — créneaux à candidats en sous-effectif.
+  //
+  // Envoyé à TOUS les examinateurs : on ne sait pas à l'avance qui pourra se
+  // libérer. Deux notifications distinctes au maximum (sous-effectif d'un
+  // côté, « aucun examinateur » de l'autre) — cf.
+  // buildUnderstaffedNotifications, qui gère aussi la troncature de la liste.
+  //
+  // Le filtrage anti-spam a déjà eu lieu à l'étape 11 : seuls les créneaux qui
+  // viennent de BASCULER sont dans la liste, sauf recalcul manuel de l'admin
+  // (opts.notifyAll) qui fait le point complet.
+  //
+  // Fail-soft : une alerte perdue ne doit pas invalider un recalcul correct.
+  for (const notif of buildUnderstaffedNotifications(
+    understaffedWithCandidates,
+  )) {
+    try {
+      notificationCount += await notifyAllMembers(notif);
+    } catch (e) {
+      console.error("Understaffed alert error:", e);
+    }
+  }
+
   // 13. Log to allocation_history for audit trail
   try {
     // Recompute aggregate stats from the final assignments (memberLoad and
