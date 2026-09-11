@@ -64,12 +64,60 @@ export async function POST(req: NextRequest) {
     let movedCandidates = 0;
     let notifiedCandidates = 0;
 
+    // ── PLAN D'ABORD, EXÉCUTION ENSUITE ──
+    // Fusionner DÉPLACE des candidats d'un créneau à un autre : c'est
+    // exactement ce que le verrou promet d'empêcher. Or tout créneau à
+    // inscrits est verrouillé — cette route serait donc morte si le verrou
+    // la bloquait purement et simplement.
+    //
+    // On calcule donc le plan avant d'écrire quoi que ce soit, et on le
+    // soumet à l'admin quand il touche des créneaux figés : l'action reste
+    // possible, mais plus jamais à son insu. `force: true` l'applique.
+    const plan: Array<{ source: any; target: any }> = [];
     for (const source of undersized) {
       const target = withCapacity.find(
-        (s) => s.id !== source.id && s.remaining >= source.active.length,
+        (s) =>
+          s.id !== source.id &&
+          s.remaining >= source.active.length &&
+          !plan.some((p) => p.source.id === s.id),
       );
       if (!target) continue; // aucune salle ne peut tout absorber → on laisse tel quel
+      target.remaining -= source.active.length;
+      plan.push({ source, target });
+    }
+    // La capacité a servi à établir le plan : on la restaure pour l'exécution,
+    // qui la décrémentera à nouveau au fil des fusions réellement appliquées.
+    plan.forEach(({ source, target }) => {
+      target.remaining += source.active.length;
+    });
 
+    const lockedMoves = plan.filter(({ source }) => source.is_locked);
+    if (lockedMoves.length > 0 && !force) {
+      return Response.json(
+        {
+          error: "creneaux_figes",
+          message: `${lockedMoves.length} créneau(x) figé(s) seraient fusionnés et ${lockedMoves.reduce((n, m) => n + m.source.active.length, 0)} candidat(s) déplacé(s) vers un autre horaire. Confirmer ?`,
+          moves: lockedMoves.map(({ source, target }) => ({
+            from: {
+              id: source.id,
+              date: source.date,
+              start_time: source.start_time,
+              room: source.room,
+              candidates: source.active.length,
+            },
+            to: {
+              id: target.id,
+              date: target.date,
+              start_time: target.start_time,
+              room: target.room,
+            },
+          })),
+        },
+        { status: 409 },
+      );
+    }
+
+    for (const { source, target } of plan) {
       const enrollmentIds = source.active.map((e: any) => e.id);
       const { error: moveErr } = await supabaseAdmin
         .from("slot_enrollments")

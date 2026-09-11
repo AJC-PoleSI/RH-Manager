@@ -7,6 +7,7 @@ import {
   timeToMinutes,
   minutesToTime,
 } from "@/lib/slot-conflicts";
+import { lockReasonLabel } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 // PUT /api/slots/[id] — update a slot (admin)
@@ -33,6 +34,7 @@ export async function PUT(
       endTime,
       durationMinutes,
       tour,
+      force,
     } = await req.json();
 
     const data: Record<string, any> = {};
