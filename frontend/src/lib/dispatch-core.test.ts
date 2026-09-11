@@ -13,6 +13,8 @@ import {
   orderPredecessorsFirst,
   blocksSlot,
   ROOM_STREAK_MAX,
+  ROOM_CONTINUITY_BONUS,
+  UPROOT_PENALTY,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
