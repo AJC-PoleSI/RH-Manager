@@ -1345,13 +1345,13 @@ export default function DeliberationsPage() {
                     >
                       {/* Status ribbon */}
                       {status === "accepted" && (
-                        <div className="absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-bold text-white bg-green-600">Admis</div>
+                        <div className={`absolute top-4 right-4 z-10 rounded-full font-bold text-white bg-green-600 ${focusMode ? "px-4 py-1.5 text-sm" : "px-3 py-1 text-xs"}`}>Admis</div>
                       )}
                       {status === "refused" && (
-                        <div className="absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-bold text-white" style={{ backgroundColor: "#E8446A" }}>Refuse</div>
+                        <div className={`absolute top-4 right-4 z-10 rounded-full font-bold text-white ${focusMode ? "px-4 py-1.5 text-sm" : "px-3 py-1 text-xs"}`} style={{ backgroundColor: "#E8446A" }}>Refuse</div>
                       )}
                       {status === "waiting" && (
-                        <div className="absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-bold text-white bg-yellow-600">Reserve</div>
+                        <div className={`absolute top-4 right-4 z-10 rounded-full font-bold text-white bg-yellow-600 ${focusMode ? "px-4 py-1.5 text-sm" : "px-3 py-1 text-xs"}`}>Reserve</div>
                       )}
 
                       {/* Card header - gradient */}
