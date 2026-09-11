@@ -492,6 +492,11 @@ export default function CreationPage() {
           } else {
             toast("Épreuve modifiée", "success");
           }
+          // Durée / roulement changés : les créneaux déjà posés gardent leur
+          // découpage. Sans ce message, l'écart passait totalement inaperçu.
+          if (res.data?.timingWarning) {
+            toast(res.data.timingWarning, "error");
+          }
         } catch (err: any) {
           // CASCADE DATES : des créneaux existent hors de la nouvelle
           // plage → avertissement + confirmation avant suppression.
