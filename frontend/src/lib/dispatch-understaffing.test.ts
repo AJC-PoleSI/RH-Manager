@@ -150,7 +150,7 @@ describe("formatSlotLabel", () => {
       formatSlotLabel(
         slot({ date: "2026-09-21T00:00:00.000Z", startTime: "19:30:00" }),
       ),
-    ).toBe("lun. 21/09 19h30 — salle 217".replace("217", "205"));
+    ).toBe("lun. 21/09 19h30 — salle 205");
   });
 
   it("omet la salle quand elle est absente", () => {
