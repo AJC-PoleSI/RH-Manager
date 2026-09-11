@@ -50,8 +50,64 @@ function toUnderstaffed(slot: SlotLike): UnderstaffedSlot | null {
   };
 }
 
-export default function UnderstaffedBanner({ slots }: { slots: SlotLike[] }) {
+/** Aperçu renvoyé par POST /api/dispatch/run avec `dryRun: true`. */
+interface DispatchPreview {
+  added?: Array<{ slot_id: string; member_id: string }>;
+  removed?: Array<{ slot_id: string; member_id: string; reason: string }>;
+  understaffedWithCandidates?: UnderstaffedSlot[];
+  updated?: number;
+  frozen?: number;
+}
+
+export default function UnderstaffedBanner({
+  slots,
+  onRecalculated,
+}: {
+  slots: SlotLike[];
+  /** Rafraîchit la page après un recalcul réel. */
+  onRecalculated?: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const toast = useToast();
+  const [preview, setPreview] = useState<DispatchPreview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  /**
+   * Un recalcul global rebrasse plus de mille créneaux : on montre d'abord ce
+   * qui changerait (aucune écriture), l'admin applique ensuite s'il valide.
+   */
+  const runPreview = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post("/dispatch/run", { dryRun: true });
+      setPreview(res.data);
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Impossible de simuler le recalcul",
+        "error",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const apply = async () => {
+    setApplying(true);
+    try {
+      const res = await api.post("/dispatch/run", {});
+      toast(res.data?.message || "Recalcul appliqué", "success");
+      setPreview(null);
+      onRecalculated?.();
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Le recalcul a échoué",
+        "error",
+      );
+    } finally {
+      setApplying(false);
+    }
+  };
 
   const { critical, partial, otherCount } = useMemo(() => {
     const all = (slots || [])
