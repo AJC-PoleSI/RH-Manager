@@ -468,6 +468,10 @@ export function slotTension(eligible: number, quota: number): number {
  *      chronologie (déterminisme).
  */
 export function compareByTension(a: SlotDemand, b: SlotDemand): number {
+  const ea = a.hasEnrolledCandidates ? 1 : 0;
+  const eb = b.hasEnrolledCandidates ? 1 : 0;
+  if (ea !== eb) return eb - ea; // candidats déjà inscrits d'abord
+
   const ga = a.isGroupEpreuve ? 1 : 0;
   const gb = b.isGroupEpreuve ? 1 : 0;
   if (ga !== gb) return gb - ga; // groupe d'abord
