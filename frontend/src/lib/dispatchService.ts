@@ -31,6 +31,7 @@ import {
 import { isEliminated } from "@/lib/favorites";
 import { getToursByNumber } from "@/lib/tour-status";
 import { isSlotLocked, isMissingColumnError } from "@/lib/slot-lock";
+import { planReclaims } from "@/lib/dispatch-reclaim";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
@@ -1212,6 +1213,88 @@ export async function runDispatch(opts?: {
     .filter((s: any) => !isLocked(s as SlotInfo) && !isFrozen(s as SlotInfo))
     .map((s: any) => s.id);
 
+  // ── 9e. REPRISE : un créneau sans candidat n'a pas de jury à protéger ──
+  //
+  // L'allocation ne sait que PUISER dans le vivier libre ; elle ne reprend
+  // jamais quelqu'un déjà posé. Résultat mesuré le 11/09/2026 : salle 219 à
+  // 16h30 avec 1 candidat et 1 examinateur, pendant que les salles 205 et 217
+  // au même horaire gardaient 2 examinateurs chacune pour personne.
+  //
+  // Cette passe s'exécute sur le RÉSULTAT de l'allocation (tous les jurys sont
+  // décidés, donc « qui est où » est enfin connu) et déplace des examinateurs
+  // depuis les créneaux SANS candidat vers ceux où quelqu'un attend.
+  // Cf. dispatch-reclaim.ts pour la règle complète.
+  const wipeableSet = new Set(wipeableSlotIds);
+  const juryBySlot = new Map<string, Set<string>>();
+  for (const slot of sortedSlots as SlotInfo[]) {
+    // Créneau réécrit → le jury planifié fait foi. Sinon (clôturé, manuel,
+    // gelé) → l'état en base, que ce run ne remplace pas.
+    const planned = new Set<string>(
+      wipeableSet.has(slot.id)
+        ? []
+        : Array.from(currentBySlot[slot.id] || new Set<string>()),
+    );
+    juryBySlot.set(slot.id, planned);
+  }
+  assignmentsToInsert.forEach((a) => {
+    const set = juryBySlot.get(a.slot_id) || new Set<string>();
+    set.add(a.member_id);
+    juryBySlot.set(a.slot_id, set);
+  });
+
+  const reclaimMoves = planReclaims({
+    slots: (sortedSlots as SlotInfo[]).map((s) => ({
+      id: s.id,
+      date: String(s.date || ""),
+      start_time: String(s.start_time || ""),
+      end_time: String(s.end_time || ""),
+      room: s.room ?? null,
+      minMembers: s.min_members || 2,
+      candidates: activeEnrollmentCount(s.enrollments),
+      wipeable: wipeableSet.has(s.id),
+      frozen: isFrozen(s),
+      roulementMinutes: s.epreuve?.roulement_minutes ?? 0,
+    })),
+    juryBySlot,
+    eligibleFor: (slotId) => {
+      const slot = (sortedSlots as SlotInfo[]).find((s) => s.id === slotId);
+      return slot ? matchSlotToMembers(slot) : [];
+    },
+  });
+
+  if (reclaimMoves.length > 0) {
+    const slotById = new Map(
+      (sortedSlots as SlotInfo[]).map((s) => [s.id, s]),
+    );
+    for (const move of reclaimMoves) {
+      // Retirer la ligne planifiée sur le créneau donneur…
+      const idx = assignmentsToInsert.findIndex(
+        (a) => a.slot_id === move.fromSlotId && a.member_id === move.memberId,
+      );
+      if (idx >= 0) assignmentsToInsert.splice(idx, 1);
+      // …et poser celle du créneau receveur.
+      assignmentsToInsert.push({
+        slot_id: move.toSlotId,
+        member_id: move.memberId,
+      });
+
+      // L'examinateur est prévenu avec le vrai motif : il change de salle au
+      // même horaire, il n'est pas « retiré ».
+      const from = slotById.get(move.fromSlotId);
+      const to = slotById.get(move.toSlotId);
+      if (from && to) {
+        removedMembers.push({
+          member_id: move.memberId,
+          slot: from,
+          reason: `déplacé vers la salle ${to.room || "?"} (candidat inscrit, jury incomplet)`,
+        });
+      }
+    }
+    console.info(
+      `[dispatch] ${reclaimMoves.length} examinateur(s) repris sur des créneaux sans candidat pour compléter des créneaux réservés.`,
+    );
+  }
+
   // Diff lisible du run : ce que l'admin verra dans l'aperçu, et ce qui
   // alimente le compte rendu du recalcul réel.
   const plannedBySlot = new Map<string, Set<string>>();
@@ -1480,7 +1563,11 @@ export async function runDispatch(opts?: {
     // rien à voir avec « quelqu'un a été préféré pour l'équité ». Annoncer le
     // second quand c'est le premier laisse croire à une décision subie.
     let body: string;
-    if (removal.reason === "disponibilité retirée") {
+    if (removal.reason.startsWith("déplacé vers")) {
+      // Ni un retrait ni un arbitrage d'équité : même horaire, même épreuve,
+      // autre salle. Le dire autrement inquiéterait pour rien.
+      body = `Changement de SALLE pour le créneau de ${startStr} le ${dateDisplay} : vous êtes ${removal.reason.replace("déplacé vers", "désormais en")}. Votre horaire ne change pas.`;
+    } else if (removal.reason === "disponibilité retirée") {
       body = `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : votre disponibilité sur ce créneau a été retirée.`;
     } else if (removal.reason === "conflit horaire") {
       body = `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : vous êtes engagé sur un autre créneau au même moment. Vous restez sur la liste d'attente de celui-ci.`;
