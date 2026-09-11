@@ -146,12 +146,16 @@ export async function PUT(
       const startDay = newStart ? String(newStart).split("T")[0] : null;
       const endDay = newEnd ? String(newEnd).split("T")[0] : null;
 
-      const { data: slots } = await supabaseAdmin
+      // L'erreur DOIT remonter : sinon la liste revient vide, aucun créneau
+      // n'est jugé hors plage, et l'épreuve est réduite en laissant derrière
+      // elle des créneaux orphelins hors de ses dates — en silence.
+      const { data: slots, error: slotsErr } = await supabaseAdmin
         .from("evaluation_slots")
         .select(
           "id, date, start_time, end_time, room, enrollments:slot_enrollments(candidate_id, status)",
         )
         .eq("epreuve_id", id);
+      if (slotsErr) throw slotsErr;
 
       slotsToDelete = (slots || []).filter((s: any) => {
         const day = String(s.date).split("T")[0];
