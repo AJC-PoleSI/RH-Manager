@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { filterActiveEnrollments } from "@/lib/enrollment";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 // DELETE /api/slots/enroll/[slotId]
