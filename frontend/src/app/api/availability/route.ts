@@ -197,12 +197,32 @@ export async function PUT(req: NextRequest) {
     // runDispatch — not the legacy runAutoAllocate — so that a full global
     // re-balancing happens over ALL current availabilities at every save
     // (titulaires rotate across slots instead of freezing the first two
-    // members who declared). Errors are swallowed because the availability
-    // save itself succeeded.
+    // members who declared).
+    //
+    // L'erreur reste avalée — la disponibilité, elle, EST enregistrée, et
+    // annuler la requête ferait croire au membre qu'il n'a rien sauvegardé.
+    // En revanche elle n'est plus muette : l'admin est notifié. Sans ça, un
+    // recalcul qui échoue n'existe que dans les logs Vercel et le planning
+    // reste figé sans que personne ne s'en aperçoive — c'est exactement ce
+    // qui a masqué le bug de pagination diagnostiqué le 11/09/2026.
     try {
       await runDispatch();
     } catch (e) {
       console.error("Dispatch after availability change failed:", e);
+      try {
+        await notifyAdmins({
+          type: "dispatch_failed",
+          title: "⚠️ Le recalcul du planning a échoué",
+          body:
+            "Les disponibilités ont bien été enregistrées, mais la répartition " +
+            "automatique des examinateurs n'a pas pu être recalculée. Le planning " +
+            "est peut-être désynchronisé — relancez « Recalculer tout » depuis la " +
+            `page planning. Détail : ${String(e).substring(0, 200)}`,
+          link: "/dashboard/planning",
+        });
+      } catch (notifyError) {
+        console.error("notifyAdmins after dispatch failure:", notifyError);
+      }
     }
 
     return Response.json({ message: "Availabilities updated" });
