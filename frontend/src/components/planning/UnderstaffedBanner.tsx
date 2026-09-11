@@ -103,7 +103,10 @@ export default function UnderstaffedBanner({
   const apply = async () => {
     setApplying(true);
     try {
-      const res = await api.post("/dispatch/run", {});
+      // notifyAll : ce recalcul-ci fait le point complet et prévient les
+      // examinateurs de TOUS les créneaux à candidats en sous-effectif, pas
+      // seulement de ceux qui viennent de basculer.
+      const res = await api.post("/dispatch/run", { notifyAll: true });
       toast(res.data?.message || "Recalcul appliqué", "success");
       setPreview(null);
       onRecalculated?.();
