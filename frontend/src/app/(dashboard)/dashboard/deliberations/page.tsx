@@ -1374,35 +1374,35 @@ export default function DeliberationsPage() {
                             lastName={c.lastName}
                             hasPhoto={c.hasPhoto}
                             version={c.photoUpdatedAt}
-                            size={80}
+                            size={focusMode ? 112 : 80}
                             rounded="rounded-2xl"
                             grayscale={status === "refused"}
                             className="shadow-md"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h1 className="text-xl font-semibold text-gray-900">{c.firstName} {c.lastName}</h1>
+                              <h1 className={`font-semibold text-gray-900 ${focusMode ? "text-3xl" : "text-xl"}`}>{c.firstName} {c.lastName}</h1>
                               <FavoriteBadge c={c} isAdmin={isAdmin} inline />
                             </div>
-                            <p className="text-sm text-gray-500 mt-0.5">{c.formation || "Formation non renseignee"}</p>
+                            <p className={`text-gray-500 mt-0.5 ${focusMode ? "text-lg" : "text-sm"}`}>{c.formation || "Formation non renseignee"}</p>
                             {/* Pole wishes */}
                             {c.wishes && c.wishes.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1.5">
+                              <div className={`flex flex-wrap gap-1.5 ${focusMode ? "mt-2.5" : "mt-1.5"}`}>
                                 {c.wishes.slice(0, 3).map((w, i) => (
-                                  <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
+                                  <span key={`wish-${w.pole}-${w.rank}`} className={`rounded ${focusMode ? "text-sm px-2.5 py-1" : "text-[10px] px-1.5 py-0.5"} ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
                                     {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
                                   </span>
                                 ))}
                               </div>
                             )}
-                            <div className="flex items-center gap-4 mt-2">
+                            <div className={`flex items-center gap-4 ${focusMode ? "mt-3" : "mt-2"}`}>
                               <div className="flex items-center gap-1.5">
-                                <span className="text-lg">&#11088;</span>
-                                <span className="text-lg font-bold text-gray-800">
+                                <span className={focusMode ? "text-2xl" : "text-lg"}>&#11088;</span>
+                                <span className={`font-bold text-gray-800 ${focusMode ? "text-2xl" : "text-lg"}`}>
                                   {avgScore ? `${avgScore} / 20` : "-"}
                                 </span>
                               </div>
-                              <span className="text-xs text-gray-400">
+                              <span className={`text-gray-400 ${focusMode ? "text-sm" : "text-xs"}`}>
                                 {evalCount} evaluation{evalCount !== 1 ? "s" : ""}
                               </span>
                             </div>
@@ -1411,17 +1411,17 @@ export default function DeliberationsPage() {
                       </div>
 
                       {/* Key comments preview */}
-                      <div className="px-6 py-4">
+                      <div className={focusMode ? "px-8 py-5" : "px-6 py-4"}>
                         {c.evaluations && c.evaluations.length > 0 ? (
                           <div className="space-y-2">
                             {c.evaluations.slice(0, 2).map((ev, idx) => (
                               <div key={ev.id || idx} className="flex items-start gap-2">
-                                <span className="text-xs text-gray-300 mt-0.5">&#128172;</span>
+                                <span className={`text-gray-300 mt-0.5 ${focusMode ? "text-sm" : "text-xs"}`}>&#128172;</span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-gray-600 line-clamp-2">
+                                  <p className={`text-gray-600 line-clamp-2 ${focusMode ? "text-base" : "text-sm"}`}>
                                     {ev.comment || "Pas de commentaire"}
                                   </p>
-                                  <p className="text-xs text-gray-400 mt-0.5">
+                                  <p className={`text-gray-400 mt-0.5 ${focusMode ? "text-sm" : "text-xs"}`}>
                                     {ev.member?.firstName || ev.member?.email || "Evaluateur"} &middot; {ev.epreuve?.name || ""} &middot; Note: {(() => {
                                       const { note, coef } = getNoteSur20(ev);
                                       if (note === null) return `${getScoreTotal(ev.scores)} (bareme inconnu)`;
@@ -1432,13 +1432,13 @@ export default function DeliberationsPage() {
                               </div>
                             ))}
                             {c.evaluations.length > 2 && (
-                              <p className="text-xs text-blue-500 font-medium">
+                              <p className={`text-blue-500 font-medium ${focusMode ? "text-sm" : "text-xs"}`}>
                                 + {c.evaluations.length - 2} autre{c.evaluations.length - 2 > 1 ? "s" : ""} evaluation{c.evaluations.length - 2 > 1 ? "s" : ""}
                               </p>
                             )}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-400 italic">Aucune evaluation disponible</p>
+                          <p className={`text-gray-400 italic ${focusMode ? "text-base" : "text-sm"}`}>Aucune evaluation disponible</p>
                         )}
                       </div>
 
