@@ -1016,9 +1016,26 @@ export async function runDispatch(opts?: {
       );
       const stillAvailable = new Set(matchSlotToMembers(slotInfo));
 
+      // Un candidat a déjà réservé ici : on ne DÉFAIT pas un jury en place.
+      //
+      // La règle de couverture (availabilitiesCoverSlot) est plus exigeante
+      // que l'ancienne : un examinateur dont la dispo ne chevauche que
+      // partiellement le créneau n'est plus éligible. L'appliquer aux jurys
+      // DÉJÀ constitués sur des créneaux réservés viderait des entretiens que
+      // des candidats ont pris — 5 créneaux, dont 2 tombant à zéro
+      // examinateur, mesurés sur les données du 11/09/2026.
+      //
+      // On garde donc en place quelqu'un qui reste au moins partiellement
+      // disponible ; la règle stricte ne s'applique qu'aux NOUVELLES
+      // affectations. Celui qui a réellement retiré sa dispo part, lui.
+      const stillOverlapping = (memberId: string): boolean =>
+        (availabilitiesByMember.get(memberId) || []).some((av: any) =>
+          availabilityMatchesSlot(av, slotInfo),
+        );
+
       const kept: string[] = [];
       existing.forEach((memberId) => {
-        if (!stillAvailable.has(memberId)) {
+        if (!stillAvailable.has(memberId) && !stillOverlapping(memberId)) {
           removedMembers.push({
             member_id: memberId,
             slot: slotInfo,
