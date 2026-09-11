@@ -62,6 +62,16 @@ interface DispatchResult {
   unfilled: Array<{ slot_id: string; needed: number; got: number }>;
   frozen: number;
   notifications: number;
+  /** Vrai quand le run était une simulation : rien n'a été écrit. */
+  dryRun?: boolean;
+  /** Affectations créées par ce run (ou qui le seraient, en simulation). */
+  added?: Array<{ slot_id: string; member_id: string }>;
+  /** Affectations supprimées par ce run, avec leur motif. */
+  removed?: Array<{ slot_id: string; member_id: string; reason: string }>;
+  /** Créneaux restant sous leur quota alors que des candidats y sont inscrits. */
+  understaffedWithCandidates?: UnderstaffedSlot[];
+  /** Nombre de membres qui recevront (ou recevraient) l'appel aux volontaires. */
+  wouldNotify?: number;
 }
 
 interface SlotInfo {
@@ -216,6 +226,24 @@ function commitMember(
 
 export async function runDispatch(opts?: {
   epreuveId?: string;
+  /**
+   * Simulation : tout est calculé, RIEN n'est écrit (ni affectations, ni
+   * remplaçants, ni statuts, ni notifications, ni journal). Sert à montrer à
+   * l'admin ce qu'un recalcul changerait avant qu'il ne l'applique — un run
+   * global rebrasse plus de mille créneaux, ça ne se découvre pas après coup.
+   */
+  dryRun?: boolean;
+  /**
+   * Signaler TOUS les créneaux en sous-effectif à candidats, pas seulement
+   * ceux qui viennent de basculer.
+   *
+   * Les runs automatiques (sauvegarde de disponibilité) s'en tiennent aux
+   * bascules, sinon chaque enregistrement notifierait tout le monde. Mais un
+   * créneau déjà en sous-effectif ne bascule plus jamais : sans cette option,
+   * les cas installés (8 créneaux au 11/09/2026) ne seraient signalés à
+   * personne. Le recalcul déclenché par l'admin fait donc le point complet.
+   */
+  notifyAll?: boolean;
 }): Promise<DispatchResult> {
   // 1. Fetch slots with enrollments
   //
