@@ -1115,7 +1115,12 @@ export default function PlanningPage() {
             const minMembers = s.min_members || s.minMembers || 2;
             const maxCands = s.max_candidates || s.maxCandidates || 1;
             let bg = "#D1FAE5"; let dot = "#16A34A"; let txt = "#064E3B"; let icon = "🟢";
-            if (memberCount === 0) { bg = "#EDE9FE"; dot = "#7C3AED"; txt = "#3B0764"; icon = "🟣"; }
+            // Priorité au sous-effectif SUR UN CRÉNEAU À CANDIDATS : un
+            // rendez-vous pris qui n'a pas son jury passe avant un créneau
+            // simplement pas rempli (spec 2026-09-11).
+            if (memberCount === 0 && candCount > 0) { bg = "#FECACA"; dot = "#B91C1C"; txt = "#7F1D1D"; icon = "⚠️"; }
+            else if (memberCount < minMembers && candCount > 0) { bg = "#FDE68A"; dot = "#B45309"; txt = "#78350F"; icon = "🟠"; }
+            else if (memberCount === 0) { bg = "#EDE9FE"; dot = "#7C3AED"; txt = "#3B0764"; icon = "🟣"; }
             else if (candCount < maxCands) { bg = "#FEE2E2"; dot = "#DC2626"; txt = "#7F1D1D"; icon = "🔴"; }
             else if (memberCount < minMembers) { bg = "#FEF3C7"; dot = "#D97706"; txt = "#78350F"; icon = "🟠"; }
             allAdminEvents.push({
