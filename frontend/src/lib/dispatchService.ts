@@ -995,7 +995,14 @@ export async function runDispatch(opts?: {
     // Le retrait est notifié avec son vrai motif : l'examinateur s'est
     // lui-même retiré, ce n'est pas un arbitrage d'équité subi.
     if (activeEnrollmentCount(slotInfo.enrollments) > 0) {
-      const quota = slot.min_members || 2;
+      // Même cible qu'en 9c : une épreuve de groupe monte jusqu'à `group_size`
+      // si le vivier suit. Plafonner au minimum ici priverait un business game
+      // à candidats de la moitié de son jury dès qu'il perd quelqu'un.
+      const quota = slotFillTarget(
+        slot.min_members || 2,
+        slot.epreuve?.is_group_epreuve,
+        slot.epreuve?.group_size,
+      );
       const stillAvailable = new Set(matchSlotToMembers(slotInfo));
 
       const kept: string[] = [];
