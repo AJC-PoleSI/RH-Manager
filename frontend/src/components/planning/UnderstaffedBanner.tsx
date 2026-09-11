@@ -85,7 +85,10 @@ export default function UnderstaffedBanner({
   const runPreview = async () => {
     setLoading(true);
     try {
-      const res = await api.post("/dispatch/run", { dryRun: true });
+      const res = await api.post("/dispatch/run", {
+        dryRun: true,
+        notifyAll: true,
+      });
       setPreview(res.data);
     } catch (e: any) {
       toast(
