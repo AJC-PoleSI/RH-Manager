@@ -200,7 +200,6 @@ export default function KPIsPage() {
                       <td className="py-2 pr-4">
                         {ep.readySlots}/{ep.totalSlots}
                       </td>
-                      <td className="py-2 pr-4">{ep.totalSlots}</td>
                       <td className="py-2 font-medium">
                         {ep.candidatsInscrits}
                       </td>
