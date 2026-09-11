@@ -1356,7 +1356,7 @@ export default function DeliberationsPage() {
 
                       {/* Card header - gradient */}
                       <div
-                        className="px-6 pt-8 pb-6"
+                        className={focusMode ? "px-8 pt-10 pb-7" : "px-6 pt-8 pb-6"}
                         style={{
                           background: status === "accepted"
                             ? "linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)"
