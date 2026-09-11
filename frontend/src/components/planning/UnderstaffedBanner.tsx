@@ -76,7 +76,7 @@ export default function UnderstaffedBanner({
   const [preview, setPreview] = useState<DispatchPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
-  const toast = useToast();
+  const { toast } = useToast();
 
   /**
    * Un recalcul global rebrasse plus de mille créneaux : on montre d'abord ce
