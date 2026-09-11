@@ -136,6 +136,27 @@ export async function DELETE(
         .eq("id", slotId);
     }
 
+    // ── LIBÉRATION DU VERROU ──
+    // Le créneau avait été verrouillé PARCE QU'un candidat s'y était inscrit.
+    // Le dernier inscrit vient de se désister : plus aucun rendez-vous ne
+    // l'ancre, il peut retourner au rebrassage. On ne touche évidemment PAS
+    // aux verrous posés pour une autre raison (planning publié, décision de
+    // l'admin), qui survivent au désistement.
+    if (
+      updatedSlot &&
+      updatedSlot.locked_reason === "inscription" &&
+      !(updatedSlot.enrollments || []).some(filterActiveEnrollments)
+    ) {
+      const { error: unlockErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ is_locked: false, locked_at: null, locked_reason: null })
+        .eq("id", slotId)
+        .eq("locked_reason", "inscription");
+      if (unlockErr && !isMissingColumnError(unlockErr)) {
+        console.error("Déverrouillage après désistement échoué:", unlockErr);
+      }
+    }
+
     return Response.json({ success: true });
   } catch (error) {
     return Response.json(

@@ -9,6 +9,7 @@ import { getCandidateWishedPoles } from "@/lib/admission";
 import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { pickPackedRoom } from "@/lib/room-packing";
 import { NextRequest } from "next/server";
 
