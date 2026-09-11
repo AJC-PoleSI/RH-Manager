@@ -30,6 +30,7 @@ import {
 } from "@/lib/enrollment";
 import { isEliminated } from "@/lib/favorites";
 import { getToursByNumber } from "@/lib/tour-status";
+import { isSlotLocked, isMissingColumnError } from "@/lib/slot-lock";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
