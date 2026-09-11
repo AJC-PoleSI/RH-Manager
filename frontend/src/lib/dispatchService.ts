@@ -14,6 +14,15 @@ import {
   type SlotContinuity,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
+import { fetchAllRows } from "@/lib/supabase-paging";
+import {
+  activeEnrollmentCount,
+  buildUnderstaffedNotifications,
+  isNewlyUnderstaffed,
+  slotStatusAfterDispatch,
+  type UnderstaffedSlot,
+} from "@/lib/dispatch-understaffing";
+import { notifyAllMembers } from "@/lib/notifications";
 import {
   effectiveMaxCandidates,
   filterActiveEnrollments,
@@ -311,7 +320,7 @@ export async function runDispatch(opts?: {
         .select(
           "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
         )
-        .order("slot_id")
+        .order("id")
         .range(from, to),
     );
 
@@ -322,7 +331,7 @@ export async function runDispatch(opts?: {
           .select(
             "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
           )
-          .order("slot_id")
+          .order("id")
           .range(from, to),
       );
       if (plain.error) throw plain.error;
