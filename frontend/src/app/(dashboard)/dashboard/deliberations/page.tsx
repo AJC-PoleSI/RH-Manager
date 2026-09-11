@@ -1573,7 +1573,7 @@ export default function DeliberationsPage() {
                       )}
 
                       {/* Expand hint */}
-                      <div className="text-center py-2 text-xs text-gray-400">
+                      <div className={`text-center py-2 text-gray-400 ${focusMode ? "text-sm" : "text-xs"}`}>
                         {expanded ? "Cliquer pour reduire" : "Cliquer pour voir les details"}
                       </div>
 
