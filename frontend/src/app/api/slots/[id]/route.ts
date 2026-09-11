@@ -59,6 +59,38 @@ export async function PUT(
     if (tour !== undefined) data.tour = tour;
 
     // ══════════════════════════════════════════════════════════════════
+    // CRÉNEAU FIGÉ : son identité (horaire, salle) ne change plus
+    // ══════════════════════════════════════════════════════════════════
+    // Le verrou vaut promesse faite aux examinateurs et aux candidats : « ce
+    // créneau ne bougera plus ». Une modification manuelle la romprait aussi
+    // sûrement qu'un rebrassage de l'algorithme. On la refuse donc, sauf
+    // `force: true` — l'admin garde la main, mais consciemment.
+    if (
+      startTime !== undefined ||
+      endTime !== undefined ||
+      room !== undefined
+    ) {
+      const { data: lockRow, error: lockReadErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .select("is_locked, locked_reason")
+        .eq("id", id)
+        .single();
+
+      // Colonne absente (migration pas encore appliquée) → pas de verrou à
+      // faire respecter, on laisse passer comme avant.
+      if (!lockReadErr && lockRow?.is_locked && !force) {
+        return Response.json(
+          {
+            error: "creneau_fige",
+            message: `Ce créneau est figé (${lockReasonLabel(lockRow.locked_reason)}). Le déplacer romprait le rendez-vous annoncé. Déverrouillez-le d'abord, ou confirmez le déplacement.`,
+            locked_reason: lockRow.locked_reason,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // Anti-chevauchement (déplacement / changement de salle / d'horaire)
     // ══════════════════════════════════════════════════════════════════
     if (
