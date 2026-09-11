@@ -112,10 +112,18 @@ export function isSlotStaffed(s: any): boolean {
   return ["ready", "published", "full"].includes(s.status);
 }
 
+/**
+ * Inscriptions candidates encore valables sur ce créneau.
+ *
+ * S'appuie sur `filterActiveEnrollments` (enrollment.ts), source unique de
+ * vérité : le schéma a pour DÉFAUT `status = 'enrolled'`
+ * (supabase-schema-tables.sql), et cette fonction ne reconnaissait que
+ * `'active'`. Une inscription posée sans statut explicite passait donc pour
+ * inexistante — le créneau paraissait libre et pouvait être supprimé lors
+ * d'une édition d'ouverture, sans même prévenir le candidat.
+ */
 export function activeEnrollmentsOf(s: any): any[] {
-  return (s.enrollments || []).filter(
-    (e: any) => !e.status || e.status === "active",
-  );
+  return (s.enrollments || []).filter(filterActiveEnrollments);
 }
 
 export function isSlotOccupied(s: any): boolean {

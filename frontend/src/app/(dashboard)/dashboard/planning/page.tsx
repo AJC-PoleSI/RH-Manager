@@ -952,6 +952,81 @@ export default function PlanningPage() {
     }
   };
 
+  // ══════════════════════════════════════════════════════════════════
+  // Échange de deux examinateurs entre deux créneaux (salles)
+  // ══════════════════════════════════════════════════════════════════
+  const swapAssignments = useMemo(() => {
+    const list: {
+      key: string;
+      slotId: string;
+      memberId: string;
+      epreuveId: string;
+      name: string;
+      label: string;
+    }[] = [];
+    allSlotsGlobal.forEach((s: any) => {
+      (s.members || []).forEach((m: any) => {
+        const mem = m.member || {};
+        const memberId = m.member_id || mem.id;
+        if (!memberId) return;
+        const name =
+          `${mem.first_name || ""} ${mem.last_name || ""}`.trim() ||
+          mem.email?.split("@")[0] ||
+          "Examinateur";
+        const day = new Date(s.date).toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "short",
+        });
+        const hours = `${String(s.start_time || "").substring(0, 5)}–${String(s.end_time || "").substring(0, 5)}`;
+        list.push({
+          key: `${s.id}:${memberId}`,
+          slotId: s.id,
+          memberId,
+          epreuveId: s.epreuve_id,
+          name,
+          label: `${name} — ${s.room || "sans salle"} · ${s.epreuve?.name || "Épreuve"} · ${day} ${hours}`,
+        });
+      });
+    });
+    return list.sort((a, b) => a.label.localeCompare(b.label));
+  }, [allSlotsGlobal]);
+
+  const swapA = swapAssignments.find((a) => a.key === swapAKey) || null;
+  // Même épreuve obligatoire (règle appliquée aussi côté serveur) : on ne
+  // propose que des échanges que l'API acceptera.
+  const swapBOptions = swapA
+    ? swapAssignments.filter(
+        (a) =>
+          a.epreuveId === swapA.epreuveId &&
+          a.slotId !== swapA.slotId &&
+          a.memberId !== swapA.memberId,
+      )
+    : [];
+
+  const handleSwapMembers = async () => {
+    const b = swapAssignments.find((a) => a.key === swapBKey);
+    if (!swapA || !b) return;
+    setSwapLoading(true);
+    try {
+      await api.post("/slots/swap-members", {
+        slotAId: swapA.slotId,
+        memberAId: swapA.memberId,
+        slotBId: b.slotId,
+        memberBId: b.memberId,
+      });
+      toast(`${swapA.name} et ${b.name} ont été échangés`, "success");
+      setSwapOpen(false);
+      setSwapAKey("");
+      setSwapBKey("");
+      fetchAllSlotsGlobal();
+      fetchSlotData();
+    } catch (e: any) {
+      toast(e?.response?.data?.error || "Échange impossible", "error");
+    } finally {
+      setSwapLoading(false);
+    }
+  };
+
   const handleToggleMemberOnSlot = async (
     slotId: string,
     memberId: string,
