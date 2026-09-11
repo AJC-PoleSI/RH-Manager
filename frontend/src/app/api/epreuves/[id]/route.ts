@@ -185,6 +185,15 @@ export async function PUT(
       }
     }
 
+    // Valeurs de découpage AVANT modification : elles servent à savoir si la
+    // durée / le roulement changent réellement, pour pouvoir avertir que les
+    // créneaux déjà posés, eux, ne bougeront pas (cf. plus bas).
+    const { data: timingBefore } = await supabaseAdmin
+      .from("epreuves")
+      .select("duration_minutes, roulement_minutes")
+      .eq("id", id)
+      .maybeSingle();
+
     const { data, error } = await supabaseAdmin
       .from("epreuves")
       .update(updateData)
