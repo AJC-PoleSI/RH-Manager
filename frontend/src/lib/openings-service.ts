@@ -288,6 +288,51 @@ export async function createOpeningWithSlots(
   return { ok: true, opening, slotsCreated: rows.length };
 }
 
+/**
+ * Combien de créneaux existants ne font plus la durée de l'épreuve ?
+ *
+ * Changer `duration_minutes` (ou `roulement_minutes`) sur une épreuve ne
+ * redécoupe PAS les ouvertures déjà posées — et c'est voulu : redécouper
+ * déplacerait des entretiens déjà planifiés, parfois déjà réservés par un
+ * candidat. Mais jusqu'ici rien ne le signalait, et l'écart passait inaperçu.
+ */
+export function staleTimingCount(
+  slots: Array<{ start_time: string; end_time: string }>,
+  durationMinutes: number,
+): number {
+  return slots.filter(
+    (s) => timeToMinutes(s.end_time) - timeToMinutes(s.start_time) !== durationMinutes,
+  ).length;
+}
+
+/**
+ * Message d'avertissement après un changement de durée ou de roulement.
+ * `null` quand il n'y a rien à signaler.
+ */
+export function timingChangeWarning(opts: {
+  durationChanged: boolean;
+  roulementChanged: boolean;
+  staleSlots: number;
+  totalSlots: number;
+}): string | null {
+  if (!opts.durationChanged && !opts.roulementChanged) return null;
+  if (opts.totalSlots === 0) return null;
+
+  const quoi = [
+    opts.durationChanged ? "la durée" : null,
+    opts.roulementChanged ? "le roulement" : null,
+  ]
+    .filter(Boolean)
+    .join(" et ");
+
+  const detail =
+    opts.durationChanged && opts.staleSlots > 0
+      ? ` ${opts.staleSlots} créneau${opts.staleSlots > 1 ? "x" : ""} sur ${opts.totalSlots} gardent l'ancienne durée.`
+      : ` Les ${opts.totalSlots} créneaux déjà posés gardent leur découpage.`;
+
+  return `Vous avez modifié ${quoi} de l'épreuve. Les créneaux existants restent INCHANGÉS —${detail} Pour appliquer le nouveau découpage, modifiez les ouvertures concernées.`;
+}
+
 export function validateOpeningInput(o: {
   room?: string;
   date?: string;

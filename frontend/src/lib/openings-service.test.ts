@@ -238,3 +238,80 @@ describe("slotInsertRow", () => {
     expect(row.end_time).toBe("08:25");
   });
 });
+
+describe("staleTimingCount", () => {
+  const s = (start: string, end: string) => ({ start_time: start, end_time: end });
+
+  it("ne compte rien quand tous les créneaux font la bonne durée", () => {
+    expect(staleTimingCount([s("08:00", "08:25"), s("08:35", "09:00")], 25)).toBe(0);
+  });
+
+  it("compte les créneaux dont la durée ne correspond plus", () => {
+    // L'épreuve passe à 45 min : les créneaux de 25 min sont périmés.
+    expect(staleTimingCount([s("08:00", "08:25"), s("08:35", "09:20")], 45)).toBe(1);
+  });
+
+  it("tolère le format HH:MM:SS de Postgres", () => {
+    expect(staleTimingCount([s("08:00:00", "08:25:00")], 25)).toBe(0);
+  });
+
+  it("ne compte rien sur une liste vide", () => {
+    expect(staleTimingCount([], 25)).toBe(0);
+  });
+});
+
+describe("timingChangeWarning", () => {
+  it("ne dit rien quand ni la durée ni le roulement ne changent", () => {
+    expect(
+      timingChangeWarning({
+        durationChanged: false,
+        roulementChanged: false,
+        staleSlots: 0,
+        totalSlots: 40,
+      }),
+    ).toBeNull();
+  });
+
+  it("ne dit rien quand l'épreuve n'a encore aucun créneau", () => {
+    expect(
+      timingChangeWarning({
+        durationChanged: true,
+        roulementChanged: false,
+        staleSlots: 0,
+        totalSlots: 0,
+      }),
+    ).toBeNull();
+  });
+
+  it("annonce combien de créneaux gardent l'ancienne durée", () => {
+    const w = timingChangeWarning({
+      durationChanged: true,
+      roulementChanged: false,
+      staleSlots: 12,
+      totalSlots: 40,
+    });
+    expect(w).toContain("12");
+    expect(w).toContain("40");
+    expect(w).toMatch(/durée/i);
+  });
+
+  it("prévient aussi quand seul le roulement change", () => {
+    const w = timingChangeWarning({
+      durationChanged: false,
+      roulementChanged: true,
+      staleSlots: 0,
+      totalSlots: 40,
+    });
+    expect(w).toMatch(/roulement/i);
+  });
+
+  it("dit explicitement que les créneaux existants ne sont PAS modifiés", () => {
+    const w = timingChangeWarning({
+      durationChanged: true,
+      roulementChanged: true,
+      staleSlots: 5,
+      totalSlots: 10,
+    });
+    expect(w).toMatch(/inchang/i);
+  });
+});
