@@ -4,6 +4,7 @@ import {
   minutesToTime,
   normalizeRoom,
   findConflict,
+  findAllConflicts,
   addInterval,
   type RoomInterval,
 } from "./slot-conflicts";
@@ -139,6 +140,49 @@ describe("findConflict", () => {
 
   it("ne trouve rien dans une salle inconnue", () => {
     expect(findConflict(new Map(), "205", 480, 505)).toBeNull();
+  });
+});
+
+describe("findAllConflicts", () => {
+  // Déplacer un créneau vers une salle qui n'a qu'UN créneau vide au même
+  // horaire se règle par un échange de salles ; encore faut-il être sûr qu'il
+  // n'y en a qu'un. `findConflict` s'arrête au premier et ne le dit pas.
+  const intervals = (): Map<string, RoomInterval[]> =>
+    new Map([
+      [
+        "217",
+        [
+          { startMin: 480, endMin: 505, room: "217", slotId: "a" }, // 08:00-08:25
+          { startMin: 510, endMin: 535, room: "217", slotId: "b" }, // 08:30-08:55
+          { startMin: 520, endMin: 545, room: "217", slotId: "c" }, // 08:40-09:05
+        ],
+      ],
+    ]);
+
+  it("renvoie tous les créneaux qui chevauchent, pas seulement le premier", () => {
+    const found = findAllConflicts(intervals(), "217", 510, 535);
+    expect(found.map((f) => f.slotId)).toEqual(["b", "c"]);
+  });
+
+  it("renvoie une liste vide quand la salle est libre sur l'horaire", () => {
+    expect(findAllConflicts(intervals(), "217", 545, 570)).toEqual([]);
+  });
+
+  it("renvoie une liste vide pour une salle inconnue", () => {
+    expect(findAllConflicts(intervals(), "999", 510, 535)).toEqual([]);
+  });
+
+  it("exclut le créneau en cours de déplacement", () => {
+    const found = findAllConflicts(intervals(), "217", 510, 535, "b");
+    expect(found.map((f) => f.slotId)).toEqual(["c"]);
+  });
+
+  it("ignore les créneaux adjacents (fin == début)", () => {
+    expect(findAllConflicts(intervals(), "217", 505, 510)).toEqual([]);
+  });
+
+  it("normalise le nom de la salle comme findConflict", () => {
+    expect(findAllConflicts(intervals(), " 217 ", 510, 535)).toHaveLength(2);
   });
 });
 

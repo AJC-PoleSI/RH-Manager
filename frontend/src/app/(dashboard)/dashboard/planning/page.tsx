@@ -769,10 +769,15 @@ export default function PlanningPage() {
           ]
             .filter(Boolean)
             .join(" et ");
+          // L'échange n'est pas un détail : un second créneau a bougé, et
+          // l'admin doit savoir lequel avant de s'étonner de le voir ailleurs.
+          const echange = res.data?._swappedWith
+            ? ` (échange : le créneau vide de ${room} passe en ${res.data._swappedWith.room})`
+            : "";
           toast(
             prevenus
-              ? `Salle → ${room} · ${prevenus} prévenu(s)${n.emails ? `, ${n.emails} email(s) envoyé(s)` : ""}`
-              : `Salle → ${room}`,
+              ? `Salle → ${room}${echange} · ${prevenus} prévenu(s)${n.emails ? `, ${n.emails} email(s) envoyé(s)` : ""}`
+              : `Salle → ${room}${echange}`,
             "success",
           );
         } catch (e: any) {
@@ -1854,7 +1859,9 @@ export default function PlanningPage() {
                                   <optgroup label="Salles utilisées ce jour-là">
                                     {roomChoices.day.map((r) => (
                                       <option key={r.room} value={r.room} disabled={r.busy}>
-                                        {r.room}{r.busy ? " — occupée à cet horaire" : ""}
+                                        {r.room}
+                                        {r.busy ? " — occupée à cet horaire" : ""}
+                                        {r.swap ? " — libre (échange de salles)" : ""}
                                       </option>
                                     ))}
                                   </optgroup>
@@ -1877,6 +1884,15 @@ export default function PlanningPage() {
                                   placeholder="Nom de la salle (ex. 204)"
                                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
                                 />
+                              )}
+
+                              {/* La salle visée porte un créneau vide au même
+                                  horaire : on permute, personne n'est déplacé. */}
+                              {roomChoices.day.find((r) => r.room === roomEditValue)?.swap && (
+                                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2 py-1.5">
+                                  🔄 La salle {roomEditValue} a un créneau vide sur cet horaire :
+                                  les deux salles seront échangées. Ce créneau vide prendra la salle {s.room || "—"}.
+                                </p>
                               )}
 
                               {/* Personne sur le créneau : rien à décider, la

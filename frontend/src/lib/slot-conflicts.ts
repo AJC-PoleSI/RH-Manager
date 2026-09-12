@@ -102,6 +102,30 @@ export function findConflict(
 }
 
 /**
+ * Tous les créneaux d'une salle qui chevauchent l'intervalle demandé.
+ *
+ * `findConflict` s'arrête au premier : il suffit pour refuser. Déplacer un
+ * créneau vers une salle qui n'a qu'un créneau VIDE au même horaire se règle
+ * par un échange des deux salles (cf. PUT /api/slots/[id]) — mais seulement si
+ * ce vide est le SEUL obstacle. D'où le besoin de tous les voir.
+ */
+export function findAllConflicts(
+  intervals: Map<string, RoomInterval[]>,
+  room: string,
+  startMin: number,
+  endMin: number,
+  excludeSlotId?: string,
+): RoomInterval[] {
+  const list = intervals.get(normalizeRoom(room)) || [];
+  return list.filter(
+    (it) =>
+      !(excludeSlotId && it.slotId === excludeSlotId) &&
+      startMin < it.endMin &&
+      it.startMin < endMin,
+  );
+}
+
+/**
  * Ajoute un intervalle au cache local (pour détecter aussi les conflits
  * internes à un même batch de création).
  */

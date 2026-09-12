@@ -3,7 +3,7 @@ import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
 import {
   fetchDayIntervals,
-  findConflict,
+  findAllConflicts,
   timeToMinutes,
   minutesToTime,
   normalizeRoom,
@@ -12,6 +12,78 @@ import { lockReasonLabel } from "@/lib/slot-lock";
 import { notifyMembers } from "@/lib/notifications";
 import { sendRoomChangeEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
+
+/**
+ * Ouverture de salle couvrant cet horaire, s'il y en a une.
+ *
+ * Un créneau déplacé qui garderait `opening_id` sur l'ouverture de son ANCIENNE
+ * salle ferait mentir le tableau des ouvertures — et surtout, la prochaine
+ * modification de cette ouverture le ramènerait silencieusement dans la salle
+ * d'origine (cf. « mettre à jour la salle des créneaux conservés »,
+ * PUT /api/openings/[id]). Sans ouverture correspondante on renvoie null : le
+ * créneau devient autonome, plus aucune ouverture ne le déplacera.
+ */
+async function findOpeningIdFor(
+  epreuveId: string | null | undefined,
+  dateStr: string,
+  room: string | null | undefined,
+  startMin: number,
+  endMin: number,
+): Promise<string | null> {
+  if (!epreuveId || !room || !dateStr) return null;
+  const { data } = await supabaseAdmin
+    .from("room_openings")
+    .select("id, room, start_time, end_time")
+    .eq("epreuve_id", epreuveId)
+    .eq("date", dateStr);
+  const match = (data || []).find(
+    (o: any) =>
+      normalizeRoom(o.room) === normalizeRoom(room) &&
+      timeToMinutes(String(o.start_time).slice(0, 5)) <= startMin &&
+      timeToMinutes(String(o.end_time).slice(0, 5)) >= endMin,
+  );
+  return (match as any)?.id ?? null;
+}
+
+/**
+ * Le créneau qui gêne peut-il simplement échanger sa salle avec le nôtre ?
+ *
+ * Oui s'il est VIDE (aucun examinateur affecté, aucun inscrit) et exactement
+ * sur le même horaire : permuter les deux salles ne déplace alors personne et
+ * ne peut créer aucun chevauchement ailleurs. C'est le cas courant — avec le
+ * modèle des ouvertures, toute salle ouverte à cette heure-là porte déjà un
+ * créneau, souvent vide. Sans cet échange, aucune salle réellement disponible
+ * ne serait proposable (remonté par Felix le 12/09/2026).
+ *
+ * Un créneau vide n'a été promis à personne : son verrou éventuel ne protège
+ * aucun rendez-vous, il n'entre donc pas en jeu ici.
+ */
+async function loadSwappableSlot(
+  slotId: string | undefined,
+  startMin: number,
+  endMin: number,
+): Promise<any | null> {
+  if (!slotId) return null;
+  const { data } = await supabaseAdmin
+    .from("evaluation_slots")
+    .select(
+      `id, room, date, start_time, end_time, epreuve_id, opening_id,
+       members:slot_member_assignments(id),
+       enrollments:slot_enrollments(id, status)`,
+    )
+    .eq("id", slotId)
+    .single();
+  if (!data) return null;
+
+  const isEmpty =
+    ((data as any).members || []).length === 0 &&
+    ((data as any).enrollments || []).filter(filterActiveEnrollments).length === 0;
+  const sameHours =
+    timeToMinutes(String((data as any).start_time).slice(0, 5)) === startMin &&
+    timeToMinutes(String((data as any).end_time).slice(0, 5)) === endMin;
+
+  return isEmpty && sameHours ? data : null;
+}
 
 // PUT /api/slots/[id] — update a slot (admin)
 //
@@ -115,6 +187,12 @@ export async function PUT(
     // personne) et composer les messages — « salle 204 → salle 210 » est une
     // information exploitable, « salle 210 » seul ne dit pas qu'on a bougé.
     let before: any = null;
+    // Créneau vide de la salle d'arrivée avec lequel on permute les salles.
+    let swapTarget: any = null;
+    let dayStr = "";
+    let effStartMin = 0;
+    let effEndMin = 0;
+
     if (identityChanged) {
       const { data: current } = await supabaseAdmin
         .from("evaluation_slots")
@@ -139,26 +217,40 @@ export async function PUT(
         const effectiveEnd = String(
           endTime !== undefined ? endTime : before.end_time,
         ).slice(0, 5);
-        const dateStr = String(before.date).split("T")[0];
-        const newStart = timeToMinutes(effectiveStart);
-        const newEnd = timeToMinutes(effectiveEnd);
+        dayStr = String(before.date).split("T")[0];
+        effStartMin = timeToMinutes(effectiveStart);
+        effEndMin = timeToMinutes(effectiveEnd);
 
         if (effectiveRoom) {
-          const intervals = await fetchDayIntervals(dateStr);
-          const overlap = findConflict(
+          const intervals = await fetchDayIntervals(dayStr);
+          const overlaps = findAllConflicts(
             intervals,
             effectiveRoom,
-            newStart,
-            newEnd,
+            effStartMin,
+            effEndMin,
             id,
           );
-          if (overlap) {
-            return Response.json(
-              {
-                error: `Chevauchement : ${overlap.room} a déjà un créneau ${minutesToTime(overlap.startMin)}–${minutesToTime(overlap.endMin)} ce jour-là.`,
-              },
-              { status: 409 },
-            );
+          if (overlaps.length > 0) {
+            // Un seul créneau gêne, vide et sur le même horaire → échange des
+            // salles au lieu d'un refus. Sinon, quelqu'un est attendu là (ou
+            // l'horaire ne coïncide pas) : on refuse comme avant.
+            swapTarget =
+              overlaps.length === 1
+                ? await loadSwappableSlot(
+                    overlaps[0].slotId,
+                    effStartMin,
+                    effEndMin,
+                  )
+                : null;
+            if (!swapTarget) {
+              const clash = overlaps[0];
+              return Response.json(
+                {
+                  error: `Chevauchement : ${clash.room} a déjà un créneau ${minutesToTime(clash.startMin)}–${minutesToTime(clash.endMin)} ce jour-là.`,
+                },
+                { status: 409 },
+              );
+            }
           }
         }
       }
@@ -176,6 +268,27 @@ export async function PUT(
         (endTime !== undefined &&
           String(endTime).slice(0, 5) !== String(before.end_time).slice(0, 5)));
 
+    // ══════════════════════════════════════════════════════════════════
+    // ÉCHANGE DE SALLES — le créneau vide part dans celle qu'on libère
+    // ══════════════════════════════════════════════════════════════════
+    // Fait AVANT notre propre mise à jour : les deux créneaux ne doivent à
+    // aucun moment se retrouver tous les deux dans la salle d'arrivée. Si la
+    // mise à jour suivante échoue, on remet ce créneau où il était.
+    if (swapTarget && before) {
+      const swapOpeningId = await findOpeningIdFor(
+        swapTarget.epreuve_id,
+        dayStr,
+        before.room,
+        effStartMin,
+        effEndMin,
+      );
+      const { error: swapErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ room: before.room, opening_id: swapOpeningId })
+        .eq("id", swapTarget.id);
+      if (swapErr) throw swapErr;
+    }
+
     const { data: slot, error } = await supabaseAdmin
       .from("evaluation_slots")
       .update(data)
@@ -191,39 +304,43 @@ export async function PUT(
       )
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // L'échange a déjà déplacé le créneau vide : le laisser là créerait le
+      // chevauchement que tout ce code s'emploie à empêcher.
+      if (swapTarget) {
+        const { error: rollbackErr } = await supabaseAdmin
+          .from("evaluation_slots")
+          .update({ room: swapTarget.room, opening_id: swapTarget.opening_id ?? null })
+          .eq("id", swapTarget.id);
+        if (rollbackErr) {
+          console.error(
+            "ÉCHANGE DE SALLES : rollback impossible, créneaux",
+            id,
+            "et",
+            swapTarget.id,
+            "possiblement tous deux en salle",
+            before?.room,
+            rollbackErr,
+          );
+        }
+      }
+      throw error;
+    }
 
-    // ══════════════════════════════════════════════════════════════════
-    // RATTACHEMENT À L'OUVERTURE DE LA SALLE D'ARRIVÉE
-    // ══════════════════════════════════════════════════════════════════
-    // Un créneau déplacé qui garderait `opening_id` sur l'ouverture de son
-    // ANCIENNE salle ferait mentir le tableau des ouvertures — et surtout, la
-    // prochaine modification de cette ouverture le ramènerait silencieusement
-    // dans la salle d'origine (cf. « mettre à jour la salle des créneaux
-    // conservés », PUT /api/openings/[id]). On le rattache donc à l'ouverture
-    // de la salle d'arrivée si elle couvre son horaire, sinon on le détache :
-    // il devient un créneau autonome, que plus aucune ouverture ne déplacera.
-    // Fail-soft : l'échec de ce rattachement ne doit pas annuler un
-    // changement de salle déjà appliqué et déjà annoncé.
+    // Rattachement du créneau déplacé à l'ouverture de sa nouvelle salle.
+    // Fail-soft : son échec ne doit pas annuler un changement déjà appliqué.
     if (roomChanged) {
       try {
-        const dateStr = String(before.date).split("T")[0];
-        const slotStart = timeToMinutes(String(slot.start_time).slice(0, 5));
-        const slotEnd = timeToMinutes(String(slot.end_time).slice(0, 5));
-        const { data: openings } = await supabaseAdmin
-          .from("room_openings")
-          .select("id, room, start_time, end_time")
-          .eq("epreuve_id", before.epreuve_id)
-          .eq("date", dateStr);
-        const match = (openings || []).find(
-          (o: any) =>
-            normalizeRoom(o.room) === normalizeRoom(slot.room) &&
-            timeToMinutes(String(o.start_time).slice(0, 5)) <= slotStart &&
-            timeToMinutes(String(o.end_time).slice(0, 5)) >= slotEnd,
+        const openingId = await findOpeningIdFor(
+          before.epreuve_id,
+          dayStr,
+          slot.room,
+          timeToMinutes(String(slot.start_time).slice(0, 5)),
+          timeToMinutes(String(slot.end_time).slice(0, 5)),
         );
         await supabaseAdmin
           .from("evaluation_slots")
-          .update({ opening_id: match?.id ?? null })
+          .update({ opening_id: openingId })
           .eq("id", id);
       } catch (e) {
         console.error("Rattachement ouverture (changement de salle) échec:", e);
@@ -236,6 +353,7 @@ export async function PUT(
     // Les DEUX côtés du rendez-vous : les candidats inscrits (message privé
     // + email) et les examinateurs affectés (notification in-app + email).
     // Prévenir les seuls candidats laisserait le jury dans l'ancienne salle.
+    // Le créneau échangé, lui, est vide : il n'y a personne à y prévenir.
     const notified = { candidates: 0, members: 0, emails: 0 };
 
     if (shouldNotify && before && (roomChanged || timeChanged)) {
@@ -341,7 +459,11 @@ export async function PUT(
       }
     }
 
-    return Response.json({ ...slot, _notified: notified });
+    return Response.json({
+      ...slot,
+      _notified: notified,
+      _swappedWith: swapTarget ? { id: swapTarget.id, room: before?.room } : null,
+    });
   } catch (error) {
     console.error("Update slot error:", error);
     return Response.json({ error: "Failed to update slot" }, { status: 500 });

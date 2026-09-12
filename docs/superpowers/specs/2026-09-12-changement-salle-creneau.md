@@ -32,10 +32,30 @@ Liste déroulante : salles utilisées **ce jour-là** d'abord, puis les autres
 salles connues du planning, puis « Autre salle… » (saisie libre — une salle peut
 n'avoir encore jamais servi).
 
-Les salles qui portent déjà un créneau **sur cet horaire** sont marquées
-« occupée » et non sélectionnables : le serveur les refuserait de toute façon
-(anti-chevauchement, `slot-conflicts.ts`), autant le dire avant le clic.
-Logique et tests : `lib/room-choices.ts`.
+Trois états, pas deux (logique et tests : `lib/room-choices.ts`) :
+
+| État | Quand | Effet |
+|---|---|---|
+| libre | rien dans cette salle sur cet horaire | déplacement simple |
+| **libre (échange de salles)** | un créneau **vide** au même horaire | les deux salles sont permutées |
+| occupée | quelqu'un y est attendu, ou l'horaire ne coïncide pas | refusé |
+
+**Pourquoi l'échange est indispensable** (défaut de la v1, remonté par Felix le
+12/09/2026) : avec le modèle des ouvertures, toute salle ouverte à cet horaire
+porte déjà un créneau. S'en tenir à l'anti-chevauchement revenait donc à ne
+proposer que les salles *fermées* à cette heure-là — l'inverse du besoin.
+Déplacer un candidat vers la salle voisine, vide, était impossible.
+
+L'échange ne s'applique qu'à **un seul** créneau gênant, **vide** (aucun
+examinateur affecté, aucun inscrit actif) et **exactement sur le même
+horaire** : la seule configuration où permuter ne déplace personne et ne peut
+créer de chevauchement ailleurs. Un créneau vide n'ayant été promis à personne,
+son verrou éventuel n'entre pas en jeu.
+
+Côté serveur l'échange est fait **avant** la mise à jour du créneau déplacé —
+les deux ne doivent jamais se retrouver ensemble dans la salle d'arrivée — et
+annulé si celle-ci échoue. Chacun est rattaché à l'ouverture de sa nouvelle
+salle (`findOpeningIdFor`), qui peut appartenir à une autre épreuve.
 
 Effet de bord utile : si la salle **du créneau lui-même** apparaît occupée,
 c'est qu'un autre créneau s'y superpose — l'incohérence est visible à l'écran.
