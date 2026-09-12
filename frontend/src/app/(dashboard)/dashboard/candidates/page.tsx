@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
 import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
+import CandidateSlots from '@/components/candidates/CandidateSlots';
 import {
     averageOn20ByEpreuve,
     getCriterionLabel,
@@ -636,6 +637,10 @@ export default function CandidatesPage() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Créneaux : quand, où et avec quels examinateurs
+                        passe ce candidat. */}
+                    <CandidateSlots candidateId={selectedCandidate.id} />
 
                     {/* Evaluations */}
                     <Card>

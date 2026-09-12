@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Loader2, ArrowLeft } from "lucide-react";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
 import CandidatePhotoUpload from "@/components/forms/CandidatePhotoUpload";
+import CandidateSlots from "@/components/candidates/CandidateSlots";
 
 interface EvalMember {
   id: string;
@@ -287,6 +288,11 @@ export default function CandidateDetailPage({
           </div>
         </div>
       )}
+
+      {/* Créneaux : l'épreuve, la salle et les examinateurs de chaque
+          passage. Réservé au staff — un candidat ne doit pas découvrir
+          son jury à l'avance (il a son propre planning dans son espace). */}
+      {!isCandidate && <CandidateSlots candidateId={candidateId} />}
 
       {/* Stats globales : masquées pour les candidats */}
       {!isCandidate && (
