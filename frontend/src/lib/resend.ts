@@ -379,11 +379,14 @@ export async function sendAccountDeletionRequestEmail(opts: {
 }
 
 /**
- * Changement de salle d'un candidat suite au regroupement des inscriptions.
+ * Changement de salle — l'horaire ne change JAMAIS, seule la salle change.
  *
- * Les inscriptions étaient éparpillées sur plusieurs salles au même horaire,
- * ce qui obligeait les examinateurs à changer de salle entre deux passages.
- * On les regroupe — l'horaire ne change JAMAIS, seule la salle change.
+ * Deux origines : le regroupement des inscriptions éparpillées sur plusieurs
+ * salles au même horaire, et le déplacement manuel d'un créneau par l'admin.
+ *
+ * `role` choisit à qui l'on parle : le candidat qui vient passer l'épreuve, ou
+ * l'examinateur qui vient l'évaluer. Les deux doivent être prévenus — prévenir
+ * les seuls candidats laisserait le jury dans l'ancienne salle.
  */
 export async function sendRoomChangeEmail(opts: {
   to: string;
@@ -393,8 +396,13 @@ export async function sendRoomChangeEmail(opts: {
   timeLabel: string;
   oldRoom: string | null;
   newRoom: string | null;
+  role?: "candidate" | "member";
 }) {
   const safeName = escapeHtml((opts.firstName || "").trim());
+  const isMember = opts.role === "member";
+  const intro = isMember
+    ? `La salle de l'épreuve <strong>${escapeHtml(opts.epreuve)}</strong> que vous évaluez a changé.`
+    : `La salle de votre <strong>${escapeHtml(opts.epreuve)}</strong> a changé.`;
   const html = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -410,7 +418,7 @@ export async function sendRoomChangeEmail(opts: {
         <tr><td style="padding:36px 40px 28px;">
           <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour${safeName ? " " + safeName : ""},</p>
           <p style="margin:0 0 20px;font-size:15px;color:#4b5563;line-height:1.6;">
-            La salle de votre <strong>${escapeHtml(opts.epreuve)}</strong> a changé.
+            ${intro}
             <strong>La date et l'heure restent identiques.</strong>
           </p>
           <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;border:1px solid #e5e7eb;border-radius:8px;">
@@ -422,7 +430,7 @@ export async function sendRoomChangeEmail(opts: {
                 <td style="padding:14px 18px;font-size:16px;color:#2563EB;font-weight:700;">${escapeHtml(opts.newRoom || "—")}</td></tr>
           </table>
           <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
-            ${opts.oldRoom ? `Votre ancienne salle était la ${escapeHtml(opts.oldRoom)}. ` : ""}Merci de vous présenter directement en salle ${escapeHtml(opts.newRoom || "—")}.
+            ${opts.oldRoom ? `L'ancienne salle était la ${escapeHtml(opts.oldRoom)}. ` : ""}Merci de vous rendre directement en salle ${escapeHtml(opts.newRoom || "—")}.
           </p>
         </td></tr>
         <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">

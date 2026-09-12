@@ -16,6 +16,7 @@ import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
 import { lockReasonLabel } from "@/lib/slot-lock";
 import { availabilityMatchesSlot } from "@/lib/dispatch-core";
+import { roomChoicesForSlot } from "@/lib/room-choices";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -239,10 +240,13 @@ export default function PlanningPage() {
     { email: string; count: number; details: string }[]
   >([]);
 
-  // Modale modification créneau
-  const [editSlot, setEditSlot] = useState<any>(null);
-  const [editRoom, setEditRoom] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
+  // Éditeur de salle de la modale de détail (« ✏️ Changer »).
+  const [roomEditOpen, setRoomEditOpen] = useState(false);
+  const [roomEditValue, setRoomEditValue] = useState("");
+  // Saisie libre : une salle peut n'avoir encore jamais servi sur le planning.
+  const [roomEditCustom, setRoomEditCustom] = useState(false);
+  const [roomEditNotify, setRoomEditNotify] = useState(true);
+  const [roomEditSaving, setRoomEditSaving] = useState(false);
 
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapAKey, setSwapAKey] = useState("");
@@ -708,6 +712,101 @@ export default function PlanningPage() {
     [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
   );
 
+  // Un autre créneau ouvert, c'est un autre contexte : refermer l'éditeur
+  // plutôt que de proposer sur ce créneau-ci la salle saisie pour le précédent.
+  useEffect(() => {
+    setRoomEditOpen(false);
+  }, [globalDetailSlot?.raw?.id]);
+
+  // Salles proposées pour déplacer le créneau ouvert dans la modale (logique
+  // et tests dans room-choices.ts).
+  const roomChoices = useMemo(
+    () => roomChoicesForSlot(allSlotsGlobal, globalDetailSlot?.raw),
+    [allSlotsGlobal, globalDetailSlot],
+  );
+
+  /**
+   * Déplace un créneau dans une autre salle (admin) — l'horaire ne bouge pas.
+   *
+   * Les deux côtés du rendez-vous sont prévenus par le serveur : message privé
+   * + email aux candidats inscrits, notification + email aux examinateurs
+   * affectés. Prévenir les seuls candidats laisserait le jury dans l'ancienne
+   * salle. `roomEditNotify` permet la correction silencieuse d'une coquille
+   * sur un créneau que personne n'a encore vu.
+   *
+   * Deux refus possibles côté serveur : la salle d'arrivée a déjà un créneau
+   * sur cet horaire (message affiché tel quel) et le créneau est figé — celui-
+   * là est une question, pas une erreur : on la pose à l'admin avant de forcer.
+   */
+  const saveSlotRoom = useCallback(
+    async (slot: any) => {
+      const room = roomEditValue.trim();
+      if (!room) {
+        toast("Indiquez une salle", "error");
+        return;
+      }
+      if (room === String(slot.room || "").trim()) {
+        setRoomEditOpen(false);
+        return;
+      }
+
+      const attempt = async (force: boolean): Promise<void> => {
+        try {
+          const res = await api.put(`/slots/${slot.id}`, {
+            room,
+            notify: roomEditNotify,
+            ...(force ? { force: true } : {}),
+          });
+          const n = res.data?._notified || {};
+          setRoomEditOpen(false);
+          await refreshDetailSlot(slot.id);
+          setRepartitionResult(null);
+          fetchSlotData();
+          fetchAllSlotsGlobal();
+          const prevenus = [
+            n.candidates ? `${n.candidates} candidat(s)` : null,
+            n.members ? `${n.members} examinateur(s)` : null,
+          ]
+            .filter(Boolean)
+            .join(" et ");
+          toast(
+            prevenus
+              ? `Salle → ${room} · ${prevenus} prévenu(s)${n.emails ? `, ${n.emails} email(s) envoyé(s)` : ""}`
+              : `Salle → ${room}`,
+            "success",
+          );
+        } catch (e: any) {
+          const data = e?.response?.data;
+          if (data?.error === "creneau_fige" && !force) {
+            if (window.confirm(`${data.message}\n\nChanger la salle quand même ?`)) {
+              return attempt(true);
+            }
+            return;
+          }
+          toast(
+            data?.error || data?.message || "Changement de salle impossible",
+            "error",
+          );
+        }
+      };
+
+      setRoomEditSaving(true);
+      try {
+        await attempt(false);
+      } finally {
+        setRoomEditSaving(false);
+      }
+    },
+    [
+      roomEditValue,
+      roomEditNotify,
+      refreshDetailSlot,
+      fetchSlotData,
+      fetchAllSlotsGlobal,
+      toast,
+    ],
+  );
+
   useEffect(() => {
     fetchAvailabilityData();
     fetchSlotData();
@@ -1109,30 +1208,6 @@ export default function PlanningPage() {
   };
 
   // ══════════════════════════════════════════════════════════════════
-  // Modale modification créneau : ouvrir / sauvegarder / toggle membre
-  // ══════════════════════════════════════════════════════════════════
-  const openEditSlot = (slot: any) => {
-    setEditSlot(slot);
-    setEditRoom(slot.room || "");
-  };
-
-  const handleSaveSlot = async () => {
-    if (!editSlot) return;
-    setEditSaving(true);
-    try {
-      await api.put(`/slots/${editSlot.id}`, { room: editRoom });
-      toast("Creneau mis a jour", "success");
-      setEditSlot(null);
-      setRepartitionResult(null); // Force re-fetch from DB
-      fetchSlotData();
-    } catch {
-      toast("Erreur mise a jour", "error");
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
-  // ══════════════════════════════════════════════════════════════════
   // Échange de deux examinateurs entre deux créneaux (salles)
   // ══════════════════════════════════════════════════════════════════
   const swapAssignments = useMemo(() => {
@@ -1204,41 +1279,6 @@ export default function PlanningPage() {
       toast(e?.response?.data?.error || "Échange impossible", "error");
     } finally {
       setSwapLoading(false);
-    }
-  };
-
-  const handleToggleMemberOnSlot = async (
-    slotId: string,
-    memberId: string,
-    isAssigned: boolean,
-  ) => {
-    try {
-      if (isAssigned) {
-        // Retirer le membre
-        await api.post("/slots/toggle-member", {
-          slotId,
-          memberId,
-          action: "remove",
-        });
-      } else {
-        // Ajouter le membre
-        await api.post("/slots/toggle-member", {
-          slotId,
-          memberId,
-          action: "add",
-        });
-      }
-      // Re-fetch le slot modifié
-      const res = await api.get("/slots/all");
-      const updated = (res.data || []).find((s: any) => s.id === slotId);
-      if (updated) setEditSlot(updated);
-      setRepartitionResult(null);
-      fetchSlotData();
-    } catch (e: any) {
-      toast(
-        e?.response?.data?.error || "Erreur modification evaluateur",
-        "error",
-      );
     }
   };
 
@@ -1679,7 +1719,7 @@ export default function PlanningPage() {
         {globalDetailSlot && (
           <div
             className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-            onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }}
+            onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }}
           >
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
@@ -1693,7 +1733,7 @@ export default function PlanningPage() {
                   <div className="p-5 border-b border-gray-100 bg-blue-50">
                     <div className="flex items-center justify-between">
                       <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
-                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
                     </div>
                     <p className="text-sm font-semibold text-gray-800 mt-3">{raw.title}</p>
                     {raw.description && (
@@ -1751,7 +1791,7 @@ export default function PlanningPage() {
                         <h2 className="text-base font-semibold flex items-center gap-2">
                           {icon} {s.epreuve?.name || "Créneau"}
                         </h2>
-                        <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); }} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
+                        <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
                       </div>
                       <p className="text-xs mt-1 opacity-80">{label}</p>
                     </div>
@@ -1766,9 +1806,114 @@ export default function PlanningPage() {
                         <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Horaire</span>
                         <span className="font-medium text-gray-800">{(s.start_time || "").substring(0, 5)} – {(s.end_time || "").substring(0, 5)}</span>
                       </div>
+                      {/* ── SALLE ──
+                          Modifiable ici même : c'est dans cette modale qu'on
+                          constate qu'une salle est incohérente (deux épreuves
+                          au même endroit, salle finalement indisponible),
+                          c'est donc ici qu'on doit pouvoir la corriger, sans
+                          rouvrir l'ouverture ni relancer le dispatch. */}
                       <div className="flex items-start gap-3">
                         <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Salle</span>
-                        <span className="font-medium text-gray-800">{s.room || "—"}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-gray-800">{s.room || "—"}</span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => {
+                                  if (roomEditOpen) { setRoomEditOpen(false); return; }
+                                  setRoomEditValue(s.room || "");
+                                  setRoomEditCustom(false);
+                                  setRoomEditNotify(true);
+                                  setRoomEditOpen(true);
+                                }}
+                                className="text-xs px-2 py-0.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                                title="Changer la salle de ce créneau"
+                              >
+                                {roomEditOpen ? "Annuler" : "✏️ Changer"}
+                              </button>
+                            )}
+                          </div>
+
+                          {isAdmin && roomEditOpen && (
+                            <div className="mt-2 border border-gray-200 rounded-lg p-2.5 bg-gray-50 space-y-2">
+                              <select
+                                value={roomEditCustom ? "__custom__" : roomEditValue}
+                                onChange={(e) => {
+                                  if (e.target.value === "__custom__") {
+                                    setRoomEditCustom(true);
+                                    setRoomEditValue("");
+                                  } else {
+                                    setRoomEditCustom(false);
+                                    setRoomEditValue(e.target.value);
+                                  }
+                                }}
+                                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                              >
+                                <option value="">— Choisir une salle —</option>
+                                {roomChoices.day.length > 0 && (
+                                  <optgroup label="Salles utilisées ce jour-là">
+                                    {roomChoices.day.map((r) => (
+                                      <option key={r.room} value={r.room} disabled={r.busy}>
+                                        {r.room}{r.busy ? " — occupée à cet horaire" : ""}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {roomChoices.others.length > 0 && (
+                                  <optgroup label="Autres salles du planning">
+                                    {roomChoices.others.map((r) => (
+                                      <option key={r} value={r}>{r}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                <option value="__custom__">Autre salle…</option>
+                              </select>
+
+                              {roomEditCustom && (
+                                <input
+                                  autoFocus
+                                  value={roomEditValue}
+                                  onChange={(e) => setRoomEditValue(e.target.value)}
+                                  placeholder="Nom de la salle (ex. 204)"
+                                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
+                                />
+                              )}
+
+                              {/* Personne sur le créneau : rien à décider, la
+                                  case ne ferait que suggérer un envoi qui
+                                  n'aura pas lieu. Sinon, décocher = correction
+                                  silencieuse d'une coquille encore invisible. */}
+                              {candCount + memberCount === 0 ? (
+                                <p className="text-xs text-gray-500">
+                                  Aucun candidat ni examinateur sur ce créneau — personne à prévenir.
+                                </p>
+                              ) : (
+                                <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={roomEditNotify}
+                                    onChange={(e) => setRoomEditNotify(e.target.checked)}
+                                    className="mt-0.5"
+                                  />
+                                  <span>
+                                    Prévenir{candCount > 0 ? ` ${candCount} candidat(s)` : ""}
+                                    {candCount > 0 && memberCount > 0 ? " et" : ""}
+                                    {memberCount > 0 ? ` ${memberCount} examinateur(s)` : ""}
+                                    <span className="text-gray-400"> — message + email, l&apos;horaire ne change pas</span>
+                                  </span>
+                                </label>
+                              )}
+
+                              <button
+                                onClick={() => saveSlotRoom(s)}
+                                disabled={roomEditSaving || !roomEditValue.trim()}
+                                className="w-full bg-blue-600 text-white text-sm font-medium rounded-md py-1.5 hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                              >
+                                {roomEditSaving ? "Changement…" : "Changer la salle"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Tour</span>

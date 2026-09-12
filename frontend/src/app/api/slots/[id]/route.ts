@@ -6,11 +6,19 @@ import {
   findConflict,
   timeToMinutes,
   minutesToTime,
+  normalizeRoom,
 } from "@/lib/slot-conflicts";
 import { lockReasonLabel } from "@/lib/slot-lock";
+import { notifyMembers } from "@/lib/notifications";
+import { sendRoomChangeEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
 
 // PUT /api/slots/[id] — update a slot (admin)
+//
+// Changer la SALLE d'un créneau déjà peuplé est une opération courante (deux
+// épreuves programmées dans la même salle, salle finalement indisponible…).
+// Elle n'est jamais silencieuse : candidats inscrits ET examinateurs affectés
+// sont prévenus (message / notification in-app + email), sauf `notify: false`.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -35,7 +43,14 @@ export async function PUT(
       durationMinutes,
       tour,
       force,
+      notify,
     } = await req.json();
+
+    // Prévenir les intéressés est le comportement par défaut : un créneau
+    // déplacé sans avertissement, c'est quelqu'un qui se présente devant une
+    // salle vide. `notify: false` reste possible pour corriger une coquille
+    // sur un créneau que personne n'a encore vu.
+    const shouldNotify = notify !== false;
 
     const data: Record<string, any> = {};
     if (label !== undefined) data.label = label;
@@ -60,6 +75,10 @@ export async function PUT(
     }
     if (tour !== undefined) data.tour = tour;
 
+    // Horaire ou salle : ce qui définit le rendez-vous annoncé.
+    const identityChanged =
+      startTime !== undefined || endTime !== undefined || room !== undefined;
+
     // ══════════════════════════════════════════════════════════════════
     // CRÉNEAU FIGÉ : son identité (horaire, salle) ne change plus
     // ══════════════════════════════════════════════════════════════════
@@ -67,11 +86,7 @@ export async function PUT(
     // créneau ne bougera plus ». Une modification manuelle la romprait aussi
     // sûrement qu'un rebrassage de l'algorithme. On la refuse donc, sauf
     // `force: true` — l'admin garde la main, mais consciemment.
-    if (
-      startTime !== undefined ||
-      endTime !== undefined ||
-      room !== undefined
-    ) {
+    if (identityChanged) {
       const { data: lockRow, error: lockReadErr } = await supabaseAdmin
         .from("evaluation_slots")
         .select("is_locked, locked_reason")
@@ -93,27 +108,38 @@ export async function PUT(
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Anti-chevauchement (déplacement / changement de salle / d'horaire)
+    // ÉTAT AVANT MODIFICATION
     // ══════════════════════════════════════════════════════════════════
-    if (
-      startTime !== undefined ||
-      endTime !== undefined ||
-      room !== undefined
-    ) {
+    // Lu une seule fois, il sert à trois choses : l'anti-chevauchement, savoir
+    // ce qui a RÉELLEMENT changé (réenregistrer la même salle ne doit alerter
+    // personne) et composer les messages — « salle 204 → salle 210 » est une
+    // information exploitable, « salle 210 » seul ne dit pas qu'on a bougé.
+    let before: any = null;
+    if (identityChanged) {
       const { data: current } = await supabaseAdmin
         .from("evaluation_slots")
-        .select("date, start_time, end_time, room")
+        .select(
+          `
+          date, start_time, end_time, room, epreuve_id,
+          epreuve:epreuves(name),
+          members:slot_member_assignments(member_id, member:members(id, email, first_name, last_name)),
+          enrollments:slot_enrollments(candidate_id, status, candidate:candidates(id, first_name, last_name, email))
+          `,
+        )
         .eq("id", id)
         .single();
-      if (current) {
-        const effectiveRoom = room !== undefined ? room : current.room;
+      before = current;
+
+      // ── Anti-chevauchement (changement de salle / d'horaire) ──
+      if (before) {
+        const effectiveRoom = room !== undefined ? room : before.room;
         const effectiveStart = String(
-          startTime !== undefined ? startTime : current.start_time,
+          startTime !== undefined ? startTime : before.start_time,
         ).slice(0, 5);
         const effectiveEnd = String(
-          endTime !== undefined ? endTime : current.end_time,
+          endTime !== undefined ? endTime : before.end_time,
         ).slice(0, 5);
-        const dateStr = String(current.date).split("T")[0];
+        const dateStr = String(before.date).split("T")[0];
         const newStart = timeToMinutes(effectiveStart);
         const newEnd = timeToMinutes(effectiveEnd);
 
@@ -138,6 +164,18 @@ export async function PUT(
       }
     }
 
+    const roomChanged =
+      !!before &&
+      room !== undefined &&
+      normalizeRoom(room) !== normalizeRoom(before.room);
+    const timeChanged =
+      !!before &&
+      ((startTime !== undefined &&
+        String(startTime).slice(0, 5) !==
+          String(before.start_time).slice(0, 5)) ||
+        (endTime !== undefined &&
+          String(endTime).slice(0, 5) !== String(before.end_time).slice(0, 5)));
+
     const { data: slot, error } = await supabaseAdmin
       .from("evaluation_slots")
       .update(data)
@@ -156,17 +194,53 @@ export async function PUT(
     if (error) throw error;
 
     // ══════════════════════════════════════════════════════════════════
-    // NOTIFICATION : si l'horaire ou la salle a changé et que des
-    // candidats sont inscrits, on les prévient du changement.
+    // RATTACHEMENT À L'OUVERTURE DE LA SALLE D'ARRIVÉE
     // ══════════════════════════════════════════════════════════════════
-    const timeOrRoomChanged =
-      startTime !== undefined || endTime !== undefined || room !== undefined;
-    const activeEnrollments = (slot?.enrollments || []).filter(
-      (e: any) => !e.status || e.status === "active",
-    );
-    if (timeOrRoomChanged && activeEnrollments.length > 0) {
-      const dateStr = slot?.date
-        ? new Date(slot.date).toLocaleDateString("fr-FR", {
+    // Un créneau déplacé qui garderait `opening_id` sur l'ouverture de son
+    // ANCIENNE salle ferait mentir le tableau des ouvertures — et surtout, la
+    // prochaine modification de cette ouverture le ramènerait silencieusement
+    // dans la salle d'origine (cf. « mettre à jour la salle des créneaux
+    // conservés », PUT /api/openings/[id]). On le rattache donc à l'ouverture
+    // de la salle d'arrivée si elle couvre son horaire, sinon on le détache :
+    // il devient un créneau autonome, que plus aucune ouverture ne déplacera.
+    // Fail-soft : l'échec de ce rattachement ne doit pas annuler un
+    // changement de salle déjà appliqué et déjà annoncé.
+    if (roomChanged) {
+      try {
+        const dateStr = String(before.date).split("T")[0];
+        const slotStart = timeToMinutes(String(slot.start_time).slice(0, 5));
+        const slotEnd = timeToMinutes(String(slot.end_time).slice(0, 5));
+        const { data: openings } = await supabaseAdmin
+          .from("room_openings")
+          .select("id, room, start_time, end_time")
+          .eq("epreuve_id", before.epreuve_id)
+          .eq("date", dateStr);
+        const match = (openings || []).find(
+          (o: any) =>
+            normalizeRoom(o.room) === normalizeRoom(slot.room) &&
+            timeToMinutes(String(o.start_time).slice(0, 5)) <= slotStart &&
+            timeToMinutes(String(o.end_time).slice(0, 5)) >= slotEnd,
+        );
+        await supabaseAdmin
+          .from("evaluation_slots")
+          .update({ opening_id: match?.id ?? null })
+          .eq("id", id);
+      } catch (e) {
+        console.error("Rattachement ouverture (changement de salle) échec:", e);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AVERTIR LES INTÉRESSÉS
+    // ══════════════════════════════════════════════════════════════════
+    // Les DEUX côtés du rendez-vous : les candidats inscrits (message privé
+    // + email) et les examinateurs affectés (notification in-app + email).
+    // Prévenir les seuls candidats laisserait le jury dans l'ancienne salle.
+    const notified = { candidates: 0, members: 0, emails: 0 };
+
+    if (shouldNotify && before && (roomChanged || timeChanged)) {
+      const dateLabel = before.date
+        ? new Date(before.date).toLocaleDateString("fr-FR", {
             weekday: "long",
             day: "numeric",
             month: "long",
@@ -174,26 +248,100 @@ export async function PUT(
         : "";
       const newStart = String(slot?.start_time || "").substring(0, 5);
       const newEnd = String(slot?.end_time || "").substring(0, 5);
-      const epName = (slot as any)?.epreuve?.name || "Épreuve";
+      const timeLabel = `${newStart} – ${newEnd}`;
+      const epName = (before as any)?.epreuve?.name || "Épreuve";
       const newRoom = slot?.room || "—";
+      const oldRoom = before.room || "—";
+      // Salle seule : l'horaire ne bouge pas, on le dit — c'est ce qui évite
+      // qu'un candidat croie devoir revérifier toute sa journée.
+      const roomOnly = roomChanged && !timeChanged;
 
-      const rows = activeEnrollments.map((e: any) => ({
-        sender_id: null,
-        sender_role: "admin",
-        sender_name: "Système",
-        recipient_id: e.candidate_id,
-        recipient_role: "candidate",
-        message: `⚠️ Votre créneau "${epName}" a été modifié : il a désormais lieu le ${dateStr} de ${newStart} à ${newEnd} (salle ${newRoom}). Vérifiez votre calendrier.`,
-      }));
+      const activeEnrollments = (before.enrollments || []).filter(
+        filterActiveEnrollments,
+      );
+      const assignedMembers = (before.members || [])
+        .map((m: any) => m.member)
+        .filter((m: any) => m?.id);
 
-      try {
-        await supabaseAdmin.from("private_messages").insert(rows);
-      } catch (e) {
-        console.error("Notification candidats (modif créneau) échec:", e);
+      // ── Candidats : message privé ──
+      if (activeEnrollments.length > 0) {
+        const message = roomOnly
+          ? `📍 Changement de salle : votre créneau "${epName}" du ${dateLabel} à ${newStart} a désormais lieu en salle ${newRoom} (au lieu de ${oldRoom}). L'horaire ne change pas.`
+          : `⚠️ Votre créneau "${epName}" a été modifié : il a désormais lieu le ${dateLabel} de ${newStart} à ${newEnd} (salle ${newRoom}). Vérifiez votre calendrier.`;
+        const rows = activeEnrollments.map((e: any) => ({
+          sender_id: null,
+          sender_role: "admin",
+          sender_name: "Système",
+          recipient_id: e.candidate_id,
+          recipient_role: "candidate",
+          message,
+        }));
+        try {
+          const { error: msgErr } = await supabaseAdmin
+            .from("private_messages")
+            .insert(rows);
+          if (msgErr) throw msgErr;
+          notified.candidates = rows.length;
+        } catch (e) {
+          console.error("Notification candidats (modif créneau) échec:", e);
+        }
+      }
+
+      // ── Examinateurs : notification in-app ──
+      if (assignedMembers.length > 0) {
+        notified.members = await notifyMembers(
+          assignedMembers.map((m: any) => m.id),
+          {
+            type: roomOnly ? "slot_room_changed" : "slot_updated",
+            title: roomOnly ? "📍 Changement de salle" : "⚠️ Créneau modifié",
+            body: roomOnly
+              ? `${epName} — ${dateLabel} ${timeLabel} : salle ${oldRoom} → salle ${newRoom}. L'horaire ne change pas.`
+              : `${epName} — désormais le ${dateLabel} de ${newStart} à ${newEnd}, salle ${newRoom}.`,
+            link: "/dashboard/planning",
+          },
+        );
+      }
+
+      // ── Email (candidats + examinateurs) ──
+      // Uniquement pour un changement de SALLE à horaire constant : le
+      // gabarit `sendRoomChangeEmail` affirme « la date et l'heure restent
+      // identiques ». Un déplacement d'horaire ne passe donc que par les
+      // messages ci-dessus plutôt que par un email qui mentirait.
+      if (roomOnly) {
+        const targets = [
+          ...activeEnrollments.map((e: any) => ({
+            email: e.candidate?.email,
+            firstName: e.candidate?.first_name ?? null,
+            role: "candidate" as const,
+          })),
+          ...assignedMembers.map((m: any) => ({
+            email: m.email,
+            firstName: m.first_name ?? null,
+            role: "member" as const,
+          })),
+        ].filter((t) => !!t.email);
+
+        const results = await Promise.allSettled(
+          targets.map((t) =>
+            sendRoomChangeEmail({
+              to: t.email,
+              firstName: t.firstName,
+              epreuve: epName,
+              dateLabel,
+              timeLabel,
+              oldRoom: before.room || null,
+              newRoom: slot?.room || null,
+              role: t.role,
+            }),
+          ),
+        );
+        notified.emails = results.filter(
+          (r) => r.status === "fulfilled",
+        ).length;
       }
     }
 
-    return Response.json(slot);
+    return Response.json({ ...slot, _notified: notified });
   } catch (error) {
     console.error("Update slot error:", error);
     return Response.json({ error: "Failed to update slot" }, { status: 500 });
