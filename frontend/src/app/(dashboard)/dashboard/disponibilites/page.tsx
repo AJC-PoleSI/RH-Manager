@@ -749,16 +749,26 @@ export default function TeamAvailabilityPage() {
         >
           <p className="-mt-3 mb-4 text-xs text-gray-500">
             {minutesToHHMM(openBlock.startMin)}–
-            {minutesToHHMM(openBlock.endMin)} ·{" "}
-            {openBlock.names.length} examinateur
-            {openBlock.names.length > 1 ? "s" : ""} disponible
-            {openBlock.names.length > 1 ? "s" : ""}
+            {minutesToHHMM(openBlock.endMin)} · {openBlock.people.length}{" "}
+            examinateur
+            {openBlock.people.length > 1 ? "s" : ""} sur tout ou partie du
+            créneau
           </p>
           <ul className="space-y-1 text-sm text-gray-800">
-            {openBlock.names.map((n) => (
-              <li key={n}>{n}</li>
+            {openBlock.people.map((p) => (
+              <li key={p.name} className="flex justify-between gap-3">
+                <span>{p.name}</span>
+                {p.range && (
+                  <span className="shrink-0 tabular-nums text-xs text-amber-700">
+                    {p.range}
+                  </span>
+                )}
+              </li>
             ))}
           </ul>
+          <p className="mt-3 text-[11px] text-gray-400">
+            En orange : disponible seulement sur une partie du créneau.
+          </p>
         </Modal>
       )}
     </div>
