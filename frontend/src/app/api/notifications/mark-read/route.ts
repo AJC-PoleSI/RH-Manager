@@ -4,13 +4,15 @@ import { NextRequest } from "next/server";
 
 // POST /api/notifications/mark-read
 // Body: { ids?: string[] } — marque les notifications listées comme lues,
-// ou TOUTES les non-lues du membre si ids est absent.
+// ou TOUTES les non-lues de l'utilisateur (membre OU candidat) si ids est
+// absent. Le filtre par propriétaire vient du jeton, jamais du corps.
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
-  if (user.role !== "member") {
-    return Response.json({ error: "Accès interdit" }, { status: 403 });
-  }
+
+  const isCandidate = user.role === "candidate";
+  const table = isCandidate ? "candidate_notifications" : "notifications";
+  const ownerColumn = isCandidate ? "candidate_id" : "member_id";
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -19,9 +21,9 @@ export async function POST(req: NextRequest) {
       : undefined;
 
     let query = supabaseAdmin
-      .from("notifications")
+      .from(table)
       .update({ read_at: new Date().toISOString() })
-      .eq("member_id", user.id)
+      .eq(ownerColumn, user.id)
       .is("read_at", null);
 
     if (ids && ids.length > 0) {

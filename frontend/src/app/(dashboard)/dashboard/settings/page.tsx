@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import AnnouncementComposer from "@/components/announcements/AnnouncementComposer";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
@@ -665,6 +666,11 @@ export default function CreationPage() {
           Tours, épreuves et inscriptions
         </p>
       </div>
+
+      {/* ================================================================ */}
+      {/*  0. Annonce générale (admin)                                      */}
+      {/* ================================================================ */}
+      {user?.isAdmin && <AnnouncementComposer />}
 
       {/* ================================================================ */}
       {/*  0. Backup complet                                                */}

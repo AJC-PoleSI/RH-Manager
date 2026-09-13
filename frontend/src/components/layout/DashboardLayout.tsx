@@ -52,7 +52,9 @@ function TopNav({ onChangePassword }: { onChangePassword: () => void }) {
 
       {/* Right: Notifications + user name + logout */}
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        {role === "member" && <NotificationBell />}
+        {/* La cloche sert aussi aux candidats depuis les annonces générales :
+            même composant, l'API sert la bonne table selon le rôle. */}
+        {(role === "member" || role === "candidate") && <NotificationBell />}
         <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">{displayName}</span>
         {role === "member" && (
           <button

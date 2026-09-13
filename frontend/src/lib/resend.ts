@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { escapeHtml } from "./html";
+import { chunk, EMAIL_BATCH_SIZE } from "./announcements";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -447,4 +448,78 @@ export async function sendRoomChangeEmail(opts: {
     subject: `Changement de salle — ${opts.epreuve} du ${opts.dateLabel}`,
     html,
   });
+}
+
+/**
+ * Envoi d'une ANNONCE GÉNÉRALE à une liste de destinataires.
+ *
+ * Passe par `resend.batch.send` (100 emails par requête) plutôt que par un
+ * `Promise.all` de `send()` : Resend limite à 2 requêtes/seconde, donc un
+ * envoi parallèle à 100 destinataires se fait jeter en 429 — sans erreur
+ * visible pour l'admin, qui croit son annonce partie.
+ *
+ * Renvoie le détail (envoyés / en échec) au lieu de throw : une annonce
+ * reste utile même si l'email échoue, la notification in-app, elle, est
+ * déjà écrite en base.
+ */
+export async function sendAnnouncementEmails(
+  recipients: { email: string; firstName?: string | null }[],
+  title: string,
+  message: string,
+): Promise<{ sent: number; failed: number }> {
+  if (recipients.length === 0) return { sent: 0, failed: 0 };
+
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message).replace(/\n/g, "<br/>");
+
+  const payloads = recipients.map((r) => {
+    const safeName = escapeHtml((r.firstName || "").trim());
+    return {
+      from: FROM,
+      to: r.email,
+      subject: `${title} · Audencia Junior Conseil`,
+      html: `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2563EB;padding:32px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Audencia Junior Conseil</p>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">${safeTitle}</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px 28px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour${safeName ? " " + safeName : ""},</p>
+          <div style="margin:0;font-size:15px;color:#4b5563;line-height:1.6;">${safeMessage}</div>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim(),
+    };
+  });
+
+  let sent = 0;
+  let failed = 0;
+
+  const lots = chunk(payloads, EMAIL_BATCH_SIZE);
+  for (let i = 0; i < lots.length; i++) {
+    // 600 ms entre deux lots : marge confortable sous les 2 req/s de Resend.
+    if (i > 0) await new Promise((r) => setTimeout(r, 600));
+    try {
+      const result = await resend.batch.send(lots[i]);
+      if (result.error) throw new Error(result.error.message || result.error.name);
+      sent += lots[i].length;
+    } catch (e) {
+      console.error(`sendAnnouncementEmails: lot ${i + 1}/${lots.length} en échec —`, e);
+      failed += lots[i].length;
+    }
+  }
+
+  return { sent, failed };
 }

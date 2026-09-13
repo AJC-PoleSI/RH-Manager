@@ -666,3 +666,58 @@ UPDATE evaluation_slots
    SET is_locked = true, locked_at = now(), locked_reason = 'publication'
  WHERE is_locked = false
    AND status IN ('published', 'full');
+
+
+-- ------------------------------------------------------------
+-- 13) Annonces générales (message à toute l'audience choisie)
+--     (supabase-migration-annonces.sql)
+-- ------------------------------------------------------------
+-- Un admin écrit un message depuis Création → « Annonce générale » et choisit
+-- son audience : membres (tous ou un pôle) et/ou candidats (tous, encore en
+-- lice, admis à un tour, refusés). Chaque destinataire reçoit une
+-- notification in-app ; les candidats voient en plus un bandeau sur leur
+-- dashboard tant qu'ils ne l'ont pas lue. L'email est optionnel et plafonné
+-- (quota Resend : 100/jour sur le plan gratuit).
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title              TEXT NOT NULL,
+  body               TEXT NOT NULL,
+  target_members     BOOLEAN NOT NULL DEFAULT false,
+  member_pole        TEXT,
+  target_candidates  BOOLEAN NOT NULL DEFAULT false,
+  candidate_filter   TEXT,
+  members_count      INTEGER NOT NULL DEFAULT 0,
+  candidates_count   INTEGER NOT NULL DEFAULT 0,
+  email_requested    BOOLEAN NOT NULL DEFAULT false,
+  email_sent         INTEGER NOT NULL DEFAULT 0,
+  email_failed       INTEGER NOT NULL DEFAULT 0,
+  created_by         UUID REFERENCES members(id) ON DELETE SET NULL,
+  created_by_name    TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_announcements_created
+  ON announcements (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS candidate_notifications (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  candidate_id     UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+  announcement_id  UUID REFERENCES announcements(id) ON DELETE CASCADE,
+  type             TEXT NOT NULL DEFAULT 'annonce',
+  title            TEXT NOT NULL,
+  body             TEXT,
+  link             TEXT,
+  read_at          TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_notifications_candidate
+  ON candidate_notifications (candidate_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_notifications_unread
+  ON candidate_notifications (candidate_id)
+  WHERE read_at IS NULL;
+
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS announcement_id UUID REFERENCES announcements(id) ON DELETE CASCADE;

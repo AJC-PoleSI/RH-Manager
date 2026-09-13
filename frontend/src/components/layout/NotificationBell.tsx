@@ -25,7 +25,8 @@ function timeAgo(iso: string): string {
   return `il y a ${days} j`;
 }
 
-// Cloche de notifications du header (membres uniquement).
+// Cloche de notifications du header (membres ET candidats — /api/notifications
+// sert la table correspondant au rôle du jeton).
 // Polling toutes les 60s + rafraîchissement à l'ouverture du panneau.
 export default function NotificationBell() {
   const router = useRouter();
