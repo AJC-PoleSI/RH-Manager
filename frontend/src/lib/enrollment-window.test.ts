@@ -159,20 +159,14 @@ describe("isLastMinuteWaived", () => {
   });
 });
 
-/** Client minimal qui rend `value` (ou une erreur) pour la clé attendue. */
-function fakeClient(
+/** Lecteur de réglage qui rend `value` (ou une erreur) et note la clé lue. */
+function fakeReader(
   result: { data: { value?: string | null } | null; error: unknown },
   seen: { key?: string } = {},
-): SettingsClient {
-  return {
-    from: () => ({
-      select: () => ({
-        eq: (_col: string, val: string) => {
-          seen.key = val;
-          return { maybeSingle: async () => result };
-        },
-      }),
-    }),
+): SettingReader {
+  return async (key: string) => {
+    seen.key = key;
+    return result;
   };
 }
 
