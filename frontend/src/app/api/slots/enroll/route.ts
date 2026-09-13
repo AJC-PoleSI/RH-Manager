@@ -192,7 +192,13 @@ export async function POST(req: NextRequest) {
     const windowVerdict = checkEnrollmentWindow({
       date: slot.date,
       startTime: slot.start_time,
-      waiveUntil: await readLastMinuteWaiveUntil(supabaseAdmin),
+      waiveUntil: await readLastMinuteWaiveUntil((key) =>
+        supabaseAdmin
+          .from("system_settings")
+          .select("value")
+          .eq("key", key)
+          .maybeSingle(),
+      ),
     });
     if (!windowVerdict.allowed) {
       return Response.json(
