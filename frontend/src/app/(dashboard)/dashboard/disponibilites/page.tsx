@@ -18,7 +18,7 @@
  * /slots/all, déjà réservées au staff.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -755,7 +755,7 @@ function EmptyState({
   icon,
   text,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   text: string;
 }) {
   return (
@@ -801,7 +801,7 @@ function Modal({
 }: {
   title: string;
   onClose: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div

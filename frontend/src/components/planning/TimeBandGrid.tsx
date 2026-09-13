@@ -54,6 +54,12 @@ export interface Overlay {
   color?: string;
   /** Aucun candidat inscrit sur ce créneau — rendu atténué pour le distinguer. */
   hasCandidates?: boolean;
+  /**
+   * Masque la coche « affectation confirmée ». Les blocs qui ne décrivent pas
+   * une affectation (un agrégat de disponibilités, par exemple) ne doivent pas
+   * emprunter son vocabulaire visuel.
+   */
+  hideCheck?: boolean;
 }
 
 interface Props {
