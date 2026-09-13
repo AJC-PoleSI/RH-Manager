@@ -60,6 +60,7 @@ export default function MessagesPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch contacts (candidates + members)
   const fetchContacts = useCallback(async () => {
@@ -154,6 +155,16 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentMessages.length]);
 
+  // La zone de saisie grandit avec le texte (jusqu'à ~6 lignes) puis
+  // devient scrollable : un message multi-lignes doit rester lisible
+  // pendant qu'on l'écrit, sans manger toute la conversation.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [inputValue, selectedContact]);
+
   const handleSend = async () => {
     if (!inputValue.trim() || !selectedContact || sending) return;
 
@@ -220,7 +231,14 @@ export default function MessagesPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Entrée envoie ; Maj/Alt/Ctrl + Entrée saute une ligne.
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey
+    ) {
       e.preventDefault();
       handleSend();
     }
@@ -454,7 +472,7 @@ export default function MessagesPage() {
                               : "bg-gray-100 text-gray-900 rounded-bl-md"
                           }`}
                         >
-                          <p>{msg.text}</p>
+                          <p className="whitespace-pre-wrap">{msg.text}</p>
                           <p
                             className={`text-xs mt-1 ${msg.isMine ? "text-blue-200" : "text-gray-400"}`}
                           >
@@ -479,14 +497,15 @@ export default function MessagesPage() {
                       {notice.text}
                     </p>
                   )}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      ref={textareaRef}
+                      rows={2}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Tapez votre message..."
-                      className="flex-1 min-w-0 px-4 py-2 min-h-[44px] border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Tapez votre message... (Maj + Entrée pour aller à la ligne)"
+                      className="flex-1 min-w-0 px-4 py-2 min-h-[72px] max-h-40 resize-none overflow-y-auto border border-gray-300 rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <button
                       onClick={handleSend}
@@ -576,7 +595,7 @@ export default function MessagesPage() {
             allMessages.map((msg) => (
               <div key={msg.id} className="flex justify-start">
                 <div className="max-w-[85%] sm:max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm break-words bg-gray-100 text-gray-900 rounded-bl-md">
-                  <p>{msg.text}</p>
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
                   <p className="text-xs mt-1 text-gray-400">
                     {msg.senderName} &bull; {msg.time}
                   </p>
