@@ -5,6 +5,11 @@ import {
   isActiveEnrollment,
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
+import {
+  checkEnrollmentWindow,
+  readLastMinuteWaiveUntil,
+  ENROLLMENT_WINDOW_MESSAGES,
+} from "@/lib/enrollment-window";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
