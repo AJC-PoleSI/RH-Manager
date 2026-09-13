@@ -34,7 +34,7 @@ export function normalizeRoom(room: string | null | undefined): string {
  * le fuseau de l'appli (Europe/Paris, UTC+1/+2), ça tombe toujours entre
  * 10h et 11h UTC, donc largement à l'intérieur de ces bornes.
  */
-function dayRangeUTC(dateStr: string): { start: string; end: string } {
+export function dayRangeUTC(dateStr: string): { start: string; end: string } {
   const [y, m, d] = dateStr.split("-").map(Number);
   return {
     start: new Date(Date.UTC(y, (m || 1) - 1, d || 1, 0, 0, 0, 0)).toISOString(),
