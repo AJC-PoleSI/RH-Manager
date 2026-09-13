@@ -145,7 +145,7 @@ export function entretiensAffiches(
 /**
  * Lignes de texte (sans l'en-tête) pour une journée.
  *
- * Un créneau sans candidat reste listé (« — libre — ») quand `masquerVides`
+ * Un créneau sans candidat reste listé (« (libre) ») quand `masquerVides`
  * est faux : c'est utile pour repérer les trous du planning au collage.
  */
 export function lignesTexte(
@@ -160,8 +160,10 @@ export function lignesTexte(
 
     if (noms.length === 0) {
       if (opts.masquerVides) continue;
+      // « (libre) » et pas « — libre — » : le séparateur de colonne est déjà
+      // un tiret cadratin, on obtiendrait « — — libre — — ».
       lignes.push(
-        [heure(e, opts), "— libre —", salle, ...suffixes(e, opts)].join(" — "),
+        [heure(e, opts), "(libre)", salle, ...suffixes(e, opts)].join(" — "),
       );
       continue;
     }

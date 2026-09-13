@@ -26,8 +26,9 @@ import { useToast } from "@/components/ui/toast";
 import { localYmd } from "@/lib/availability-bands";
 import {
   DEFAULT_FORMAT_OPTIONS,
+  entretiensAffiches,
   formatEntretiens,
-  trierEntretiens,
+  libelleSalle,
   nomComplet,
   type EntretienLigne,
   type FormatOptions,
@@ -84,7 +85,12 @@ export default function EntretiensPage() {
     [date, aujourdHui, entretiens, options],
   );
 
-  const lignesTriees = useMemo(() => trierEntretiens(entretiens), [entretiens]);
+  // Même source que le texte copié : l'aperçu ne doit jamais montrer autre
+  // chose que ce qui partira dans le presse-papier.
+  const lignesTriees = useMemo(
+    () => entretiensAffiches(entretiens, options),
+    [entretiens, options],
+  );
   const nbCandidats = useMemo(
     () => entretiens.reduce((n, e) => n + e.candidats.length, 0),
     [entretiens],
@@ -297,6 +303,7 @@ export default function EntretiensPage() {
                 label="Une ligne par candidat (épreuves de groupe)"
               />
               <Case champ="avecHeureFin" label="Afficher l'heure de fin" />
+              <Case champ="prefixerSalle" label="Écrire « Salle » devant" />
               <Case champ="avecEpreuve" label="Ajouter l'épreuve" />
               <Case champ="avecJury" label="Ajouter le jury" />
               <Case
@@ -312,7 +319,9 @@ export default function EntretiensPage() {
               <div className="max-h-[420px] overflow-y-auto">
                 {lignesTriees.length === 0 ? (
                   <p className="text-sm text-gray-500 p-4">
-                    Aucun créneau ce jour-là.
+                    {entretiens.length === 0
+                      ? "Aucun créneau ce jour-là."
+                      : "Aucun candidat inscrit ce jour-là — décochez « Masquer les créneaux sans candidat » pour voir les créneaux vides."}
                   </p>
                 ) : (
                   <table className="w-full text-sm">
@@ -327,9 +336,7 @@ export default function EntretiensPage() {
                           </td>
                           <td className="px-2 py-2 text-gray-900">
                             {e.candidats.length === 0 ? (
-                              <span className="text-amber-600">
-                                — sans candidat —
-                              </span>
+                              <span className="text-amber-600">(libre)</span>
                             ) : (
                               e.candidats.map(nomComplet).join(", ")
                             )}
@@ -338,7 +345,7 @@ export default function EntretiensPage() {
                             </span>
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap text-gray-600 align-top">
-                            {e.room || "—"}
+                            {libelleSalle(e.room, options.prefixerSalle)}
                           </td>
                         </tr>
                       ))}

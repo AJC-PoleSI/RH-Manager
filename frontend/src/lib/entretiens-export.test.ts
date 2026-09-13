@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_FORMAT_OPTIONS,
   enTeteJour,
+  entretiensAffiches,
   formatEntretiens,
+  libelleSalle,
   lignesTexte,
   nomComplet,
   trierEntretiens,
@@ -120,7 +122,7 @@ describe("lignesTexte", () => {
         ...DEFAULT_FORMAT_OPTIONS,
         masquerVides: false,
       }),
-    ).toEqual(["09:00 — — libre — — Salle A"]);
+    ).toEqual(["09:00 — (libre) — Salle A"]);
   });
 
   it("ajoute épreuve, jury et heure de fin à la demande", () => {
@@ -149,6 +151,59 @@ describe("lignesTexte", () => {
     expect(lignesTexte([base({ room: "  " })], DEFAULT_FORMAT_OPTIONS)).toEqual(
       ["09:00 — Jean Dupont — Salle à définir"],
     );
+  });
+
+  it("préfixe les salles nues (« 205 ») sans doubler « Salle »", () => {
+    expect(lignesTexte([base({ room: "205" })], DEFAULT_FORMAT_OPTIONS)).toEqual(
+      ["09:00 — Jean Dupont — Salle 205"],
+    );
+    expect(
+      lignesTexte([base({ room: "205" })], {
+        ...DEFAULT_FORMAT_OPTIONS,
+        prefixerSalle: false,
+      }),
+    ).toEqual(["09:00 — Jean Dupont — 205"]);
+  });
+});
+
+describe("libelleSalle", () => {
+  it("préfixe une salle nue", () => {
+    expect(libelleSalle("205", true)).toBe("Salle 205");
+    expect(libelleSalle("238-240", true)).toBe("Salle 238-240");
+  });
+
+  it("ne double jamais le mot « Salle »", () => {
+    expect(libelleSalle("Salle A", true)).toBe("Salle A");
+    expect(libelleSalle("salle 12", true)).toBe("salle 12");
+    expect(libelleSalle("Salles 1-2", true)).toBe("Salles 1-2");
+  });
+
+  it("ne confond pas un nom qui commence par « Salle… »", () => {
+    expect(libelleSalle("Sallenave", true)).toBe("Salle Sallenave");
+  });
+
+  it("laisse la salle brute si le préfixe est désactivé", () => {
+    expect(libelleSalle("205", false)).toBe("205");
+  });
+
+  it("annonce une salle manquante", () => {
+    expect(libelleSalle("  ", true)).toBe("Salle à définir");
+  });
+});
+
+describe("entretiensAffiches", () => {
+  it("renvoie exactement les créneaux que le texte listera", () => {
+    const avec = base({ id: "avec" });
+    const sans = base({ id: "sans", startTime: "08:00", candidats: [] });
+    expect(
+      entretiensAffiches([avec, sans], DEFAULT_FORMAT_OPTIONS).map((e) => e.id),
+    ).toEqual(["avec"]);
+    expect(
+      entretiensAffiches([avec, sans], {
+        ...DEFAULT_FORMAT_OPTIONS,
+        masquerVides: false,
+      }).map((e) => e.id),
+    ).toEqual(["sans", "avec"]);
   });
 });
 
