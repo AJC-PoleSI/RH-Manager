@@ -274,11 +274,11 @@ export default function EntretiensPage() {
               </div>
             </div>
 
-            {/* Modifiable : on peut retoucher le texte avant de le copier. */}
+            {/* Lecture seule : le contenu est piloté par les cases à droite.
+                Reste sélectionnable à la main si la copie automatique échoue. */}
             <textarea
               id="entretiens-texte"
               value={texte}
-              onChange={() => {}}
               readOnly
               spellCheck={false}
               rows={Math.min(30, Math.max(10, texte.split("\n").length + 1))}
