@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import PhotoNudge from "@/components/candidates/PhotoNudge";
 import AnnouncementBanner from "@/components/candidates/AnnouncementBanner";
 import {
+  pendingEpreuves,
+  underfilledEnrollments,
+  type SignupSlot,
+} from "@/lib/candidate-signup-status";
+import {
   Loader2, Calendar, Clock, MapPin, ChevronLeft, ChevronRight,
-  X as XIcon, AlertTriangle, Bell, BookOpen, DoorOpen,
+  X as XIcon, AlertTriangle, Bell, BookOpen, DoorOpen, Users,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════
@@ -97,13 +103,18 @@ export default function CandidateCalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Créneaux réservables par le candidat : sert aux deux relances
+  // (épreuves sans créneau, créneau réservé encore incomplet).
+  const [availableSlots, setAvailableSlots] = useState<SignupSlot[]>([]);
 
   const fetchEvents = useCallback(async () => {
     try {
-      const [calRes, enrollRes] = await Promise.all([
+      const [calRes, enrollRes, slotsRes] = await Promise.all([
         api.get("/calendar"),
         api.get("/slots/my-enrollments").catch(() => ({ data: [] })),
+        api.get("/slots/available").catch(() => ({ data: [] })),
       ]);
+      setAvailableSlots(Array.isArray(slotsRes.data) ? slotsRes.data : []);
 
       const calEvents: CalendarEvent[] = [];
       (calRes.data || []).forEach((ev: any) => {
@@ -299,6 +310,18 @@ export default function CandidateCalendarPage() {
     }
   };
 
+  // ═══ Relances d'inscription ═══
+  // Épreuves encore sans créneau réservé, et créneaux réservés qui manquent
+  // encore de candidats (cf. candidate-signup-status).
+  const pending = useMemo(
+    () => pendingEpreuves(availableSlots),
+    [availableSlots],
+  );
+  const underfilled = useMemo(
+    () => underfilledEnrollments(availableSlots),
+    [availableSlots],
+  );
+
   // Upcoming events list (next 7 days)
   const upcomingEvents = useMemo(() => {
     const now = new Date();
@@ -336,6 +359,103 @@ export default function CandidateCalendarPage() {
 
       {/* Relance photo (disparaît une fois la photo déposée) */}
       <PhotoNudge />
+
+      {/* ═══ Relance : épreuves encore sans créneau ═══
+          Le candidat atterrit ici en premier ; c'est l'endroit où lui dire
+          ce qu'il lui reste à réserver. */}
+      {pending.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              size={18}
+              className="text-rose-500 flex-shrink-0 mt-0.5"
+            />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-rose-800">
+                Il vous reste {pending.length} épreuve
+                {pending.length > 1 ? "s" : ""} sans créneau
+              </h2>
+              <ul className="mt-2 space-y-1.5">
+                {pending.map((ep) => (
+                  <li
+                    key={ep.epreuveId}
+                    className="flex items-center gap-2 flex-wrap text-sm text-rose-700"
+                  >
+                    <span className="font-medium">{ep.name}</span>
+                    <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                      Tour {ep.tour}
+                    </span>
+                    <span className="text-xs text-rose-600">
+                      {ep.freeSlots > 0
+                        ? `${ep.freeSlots} créneau${ep.freeSlots > 1 ? "x" : ""} encore libre${ep.freeSlots > 1 ? "s" : ""}`
+                        : "plus aucune place libre — prévenez l'équipe recrutement"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/candidates/epreuves"
+                className="mt-3 inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+              >
+                <Calendar size={15} />
+                Choisir mes créneaux
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Relance : créneau réservé encore incomplet ═══
+          Un candidat seul sur une épreuve de groupe ne doit pas croire que
+          son créneau est bouclé : il manque du monde, et les prochains
+          inscrits de cet horaire seront placés avec lui en priorité. */}
+      {underfilled.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Users size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 space-y-2">
+              {underfilled.map((u) => {
+                const d = u.date
+                  ? new Date(String(u.date).split("T")[0] + "T12:00:00")
+                  : null;
+                const when = d
+                  ? d.toLocaleDateString("fr-FR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })
+                  : "";
+                return (
+                  <p key={u.slotId} className="text-sm text-amber-800">
+                    {u.alone ? (
+                      <>
+                        Vous êtes pour l&apos;instant{" "}
+                        <strong>seul(e) inscrit(e)</strong> sur «&nbsp;{u.name}
+                        &nbsp;»
+                      </>
+                    ) : (
+                      <>
+                        Votre créneau «&nbsp;{u.name}&nbsp;» compte{" "}
+                        <strong>{u.sessionEnrolled} inscrits</strong>
+                      </>
+                    )}
+                    {when ? ` (${when}${u.startTime ? ` à ${String(u.startTime).slice(0, 5)}` : ""})` : ""}
+                    .{" "}
+                    <strong>
+                      Il manque encore {u.missingCandidates} candidat
+                      {u.missingCandidates > 1 ? "s" : ""}
+                    </strong>{" "}
+                    pour que la session se tienne : les prochains inscrits sur
+                    cet horaire seront placés avec vous en priorité, alors
+                    n&apos;hésitez pas à inviter les autres candidats à
+                    remplir ce créneau plutôt qu&apos;à en ouvrir un nouveau.
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upcoming events banner */}
       {upcomingEvents.length > 0 && (

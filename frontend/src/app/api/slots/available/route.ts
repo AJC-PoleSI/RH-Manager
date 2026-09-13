@@ -4,7 +4,11 @@ import {
   filterActiveEnrollments,
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
-import { slotGroupKey, pickPackedRoom } from "@/lib/room-packing";
+import {
+  slotGroupKey,
+  pickPackedRoom,
+  sessionFillState,
+} from "@/lib/room-packing";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
@@ -213,6 +217,31 @@ export async function GET(req: NextRequest) {
       const isFull = enrolledCount >= effectiveMax;
       const isEnrolled = Boolean(mine);
 
+      // ── Remplissage de LA SALLE que le candidat rejoindrait ──
+      //
+      // `slot` est le représentant de l'horaire : la salle du candidat s'il
+      // est inscrit, sinon celle que le packing lui attribuerait. Le minimum
+      // de candidats d'une épreuve de groupe se compte PAR SALLE (une session
+      // de business game se tient dans une salle), jamais sur la somme des
+      // salles parallèles : à 2 salles de 5, un total de 7 inscrits pouvait
+      // masquer une salle à 2/5 qui, elle, manque encore de 3 candidats.
+      const sessionEnrolled = slot.enrollments?.length || 0;
+      const sessionCapacity = effectiveMaxCandidates(slot);
+      // Minimum applicable : celui du créneau s'il en porte un, sinon celui de
+      // l'épreuve. Le reste du calcul (plafond par la capacité de la salle,
+      // sessions vides non signalées) est dans `sessionFillState`.
+      const {
+        minCandidates: minPerSession,
+        missingCandidates,
+        needsCandidates,
+      } = sessionFillState({
+        enrolled: sessionEnrolled,
+        capacity: sessionCapacity,
+        minCandidates: slot.epreuve?.is_group_epreuve
+          ? slot.min_candidates ?? slot.epreuve?.min_candidates ?? null
+          : null,
+      });
+
       // Salle masquée tant que le candidat n'est pas inscrit ; une fois
       // inscrit, il voit la sienne.
       const visibleRoom = isCandidate
@@ -240,13 +269,27 @@ export async function GET(req: NextRequest) {
         room: visibleRoom,
         tour: slot.tour,
         maxCandidates: effectiveMax,
-        // Minimum de candidats visé pour cette épreuve de groupe (business
-        // game, etc.) — null si non applicable (épreuve individuelle ou
-        // minimum non configuré). Sert à inciter les candidats à rejoindre
-        // un créneau déjà entamé plutôt que d'en ouvrir un nouveau.
-        minCandidates: slot.epreuve?.is_group_epreuve
-          ? slot.epreuve?.min_candidates ?? null
-          : null,
+        // Minimum de candidats visé pour la SESSION (une salle) d'une épreuve
+        // de groupe — null si non applicable (épreuve individuelle ou minimum
+        // non configuré). Sert à inciter les candidats à rejoindre un créneau
+        // déjà entamé plutôt que d'en ouvrir un nouveau.
+        minCandidates: minPerSession,
+        // Combien de candidats manquent ENCORE à cette session pour qu'elle
+        // atteigne son minimum. 0 = rien à combler.
+        missingCandidates,
+        // true quand cette session est entamée mais encore sous son minimum :
+        // signal d'incitation à afficher au candidat.
+        needsCandidates,
+        // Remplissage de la session (salle) proposée au candidat, à distinguer
+        // de `enrolledCount`/`maxCandidates` qui portent sur tout l'horaire
+        // (salles parallèles additionnées).
+        sessionEnrolled,
+        sessionCapacity,
+        // Nombre de salles parallèles regroupées sous cet horaire : sert à
+        // expliquer au candidat pourquoi il voit plus de places que la taille
+        // d'une session, et pourquoi sa salle ne lui est donnée qu'après
+        // inscription.
+        parallelRooms: group.length,
         enrolledCount,
         isFull,
         isEnrolled,

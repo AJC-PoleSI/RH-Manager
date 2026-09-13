@@ -3,6 +3,7 @@ import {
   slotGroupKey,
   pickPackedRoom,
   regroupEnrollments,
+  sessionFillState,
   type RoomOption,
 } from "./room-packing";
 
@@ -199,5 +200,62 @@ describe("regroupEnrollments", () => {
     expect(
       regroupEnrollments([room("A", 3, 6)], new Map([["A", ["a", "b", "c"]]])),
     ).toEqual([]);
+  });
+});
+
+describe("sessionFillState", () => {
+  it("compte les candidats manquants sur la salle, pas sur l'horaire", () => {
+    // Deux salles de 5 au même horaire : 5/5 et 2/5, soit 7 inscrits au total.
+    // Le total masquait le déficit — la salle rejointe manque bien de 3.
+    expect(sessionFillState({ enrolled: 2, capacity: 5, minCandidates: 5 }))
+      .toEqual({
+        minCandidates: 5,
+        missingCandidates: 3,
+        needsCandidates: true,
+      });
+  });
+
+  it("plafonne le minimum par la capacité réelle de la salle", () => {
+    // 3 examinateurs seulement : demander 5 candidats est impossible.
+    expect(sessionFillState({ enrolled: 1, capacity: 3, minCandidates: 5 }))
+      .toEqual({
+        minCandidates: 3,
+        missingCandidates: 2,
+        needsCandidates: true,
+      });
+  });
+
+  it("ne signale pas une session encore vide", () => {
+    const fill = sessionFillState({
+      enrolled: 0,
+      capacity: 5,
+      minCandidates: 4,
+    });
+    expect(fill.missingCandidates).toBe(4);
+    expect(fill.needsCandidates).toBe(false);
+  });
+
+  it("ne signale plus rien une fois le minimum atteint", () => {
+    expect(sessionFillState({ enrolled: 4, capacity: 5, minCandidates: 4 }))
+      .toEqual({
+        minCandidates: 4,
+        missingCandidates: 0,
+        needsCandidates: false,
+      });
+  });
+
+  it("reste neutre sans minimum configuré (épreuve individuelle)", () => {
+    expect(sessionFillState({ enrolled: 0, capacity: 1 })).toEqual({
+      minCandidates: null,
+      missingCandidates: 0,
+      needsCandidates: false,
+    });
+    expect(
+      sessionFillState({ enrolled: 0, capacity: 1, minCandidates: null }),
+    ).toEqual({
+      minCandidates: null,
+      missingCandidates: 0,
+      needsCandidates: false,
+    });
   });
 });

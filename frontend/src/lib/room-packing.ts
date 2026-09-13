@@ -76,6 +76,56 @@ export function pickPackedRoom(options: RoomOption[]): RoomOption | null {
   return sorted[0];
 }
 
+/** Remplissage de la session (une salle) proposée au candidat. */
+export interface SessionFill {
+  /** Minimum réellement atteignable dans cette salle, ou null si non applicable. */
+  minCandidates: number | null;
+  /** Candidats encore nécessaires pour atteindre ce minimum. */
+  missingCandidates: number;
+  /** Session entamée mais sous son minimum → à compléter en priorité. */
+  needsCandidates: boolean;
+}
+
+/**
+ * Combien de candidats manquent à la session que le candidat rejoindrait ?
+ *
+ * Le minimum d'une épreuve de groupe se compte PAR SALLE : une session de
+ * business game se tient dans une salle. Le lire sur la somme des salles
+ * parallèles d'un horaire masque les salles en sous-effectif — à 2 salles de
+ * 5, un total de 7 inscrits cachait une salle à 2/5 qui manquait encore de 3
+ * candidats.
+ *
+ * Deux garde-fous :
+ *   • le minimum est plafonné par la capacité réelle de la salle — une salle
+ *     à 3 examinateurs ne peut pas accueillir les 5 candidats du minimum ;
+ *   • une session ENCORE VIDE n'est pas signalée comme « en manque » : il y a
+ *     toujours plus de créneaux ouverts que de candidats, l'alerte tomberait
+ *     sur presque chaque carte. Seule une session déjà entamée mérite d'être
+ *     complétée en priorité.
+ */
+export function sessionFillState(input: {
+  enrolled: number;
+  capacity: number;
+  minCandidates?: number | null;
+}): SessionFill {
+  const enrolled = Math.max(0, Number(input.enrolled) || 0);
+  const capacity = Math.max(0, Number(input.capacity) || 0);
+  const rawMin =
+    input.minCandidates == null ? null : Number(input.minCandidates);
+
+  if (rawMin == null || !Number.isFinite(rawMin) || rawMin <= 0) {
+    return { minCandidates: null, missingCandidates: 0, needsCandidates: false };
+  }
+
+  const minCandidates = Math.min(rawMin, capacity);
+  const missingCandidates = Math.max(0, minCandidates - enrolled);
+  return {
+    minCandidates,
+    missingCandidates,
+    needsCandidates: missingCandidates > 0 && enrolled > 0,
+  };
+}
+
 /** Un déplacement d'inscription proposé par le regroupement. */
 export interface EnrollmentMove {
   candidateId: string;

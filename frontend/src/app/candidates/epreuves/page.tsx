@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import { underfilledEnrollments } from "@/lib/candidate-signup-status";
 import {
   Loader2, Calendar, MapPin, FileText, Clock,
   ChevronDown, ChevronUp, Users, BookOpen, X, Check,
@@ -39,6 +40,15 @@ interface AvailableSlot {
   enrolledCount: number;
   maxCandidates: number;
   minCandidates?: number | null;
+  /** Candidats manquants sur la session (salle) proposée — 0 si rien à combler. */
+  missingCandidates?: number;
+  /** Session entamée mais encore sous son minimum : à compléter en priorité. */
+  needsCandidates?: boolean;
+  /** Inscrits / places de LA session proposée, hors salles parallèles. */
+  sessionEnrolled?: number;
+  sessionCapacity?: number;
+  /** Nombre de salles parallèles regroupées sous cet horaire. */
+  parallelRooms?: number;
   isFull: boolean;
   isEnrolled: boolean;
   epreuve?: { id?: string; name: string; tour: number; type?: string; durationMinutes?: number } | null;
@@ -302,17 +312,35 @@ export default function CandidateEpreuvesPage() {
     [allSlots, isTourLocked],
   );
 
-  // ═══ Créneaux de groupe sous leur minimum de candidats ═══
-  // Sert à afficher un bandeau incitant les candidats à rejoindre un
-  // créneau déjà entamé plutôt que d'en ouvrir un nouveau.
+  // ═══ Sessions de groupe sous leur minimum de candidats ═══
+  // Le compte vient de l'API : il porte sur LA salle que le candidat
+  // rejoindrait, pas sur la somme des salles parallèles de l'horaire.
+  // Sert au bandeau qui invite à compléter une session déjà entamée
+  // plutôt qu'à en ouvrir une nouvelle.
   const slotsNeedingCandidates = useMemo(
     () =>
       visibleSlots.filter(
-        (s) =>
-          !s.isFull &&
-          s.minCandidates != null &&
-          s.enrolledCount < s.minCandidates,
+        (s) => !s.isFull && !s.isEnrolled && s.needsCandidates === true,
       ),
+    [visibleSlots],
+  );
+
+  // Total de places encore à pourvoir sur ces sessions : chiffre concret à
+  // mettre dans le bandeau ("il manque encore N candidats").
+  const totalMissingCandidates = useMemo(
+    () =>
+      slotsNeedingCandidates.reduce(
+        (n, s) => n + (s.missingCandidates ?? 0),
+        0,
+      ),
+    [slotsNeedingCandidates],
+  );
+
+  // ═══ Créneaux RÉSERVÉS par le candidat et encore incomplets ═══
+  // Juste après son inscription, c'est ici qu'il faut lui dire qu'il est
+  // seul et que la session a besoin de monde.
+  const myUnderfilled = useMemo(
+    () => underfilledEnrollments(visibleSlots),
     [visibleSlots],
   );
 
@@ -594,13 +622,74 @@ export default function CandidateEpreuvesPage() {
         </div>
       )}
 
-      {/* Bandeau : créneaux de groupe sous leur minimum de candidats */}
+      {/* Bandeau : le candidat est inscrit sur une session encore incomplète */}
+      {myUnderfilled.length > 0 && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-900">
+          <Users size={18} className="flex-shrink-0 mt-0.5 text-orange-500" />
+          <div className="flex-1 space-y-1.5">
+            {myUnderfilled.map((u) => (
+              <p key={u.slotId}>
+                {u.alone ? (
+                  <>
+                    Vous êtes <strong>seul(e) inscrit(e)</strong> sur votre
+                    créneau «&nbsp;{u.name}&nbsp;»
+                  </>
+                ) : (
+                  <>
+                    Votre créneau «&nbsp;{u.name}&nbsp;» compte{" "}
+                    <strong>{u.sessionEnrolled} inscrits</strong>
+                  </>
+                )}
+                {u.date
+                  ? ` du ${formatDateShort(String(u.date).split("T")[0])}`
+                  : ""}
+                {u.startTime ? ` à ${formatTime(u.startTime)}` : ""}.{" "}
+                <strong>
+                  Il manque encore {u.missingCandidates} candidat
+                  {u.missingCandidates > 1 ? "s" : ""}
+                </strong>{" "}
+                pour que la session se tienne. Les prochains inscrits sur cet
+                horaire seront placés avec vous en priorité : invitez les
+                autres candidats à remplir ce créneau plutôt qu&apos;à en
+                ouvrir un nouveau.
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bandeau : sessions de groupe sous leur minimum de candidats */}
       {slotsNeedingCandidates.length > 0 && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
           <Users size={18} className="flex-shrink-0 mt-0.5 text-amber-500" />
           <span className="flex-1">
-            Certains créneaux de groupe n&apos;ont pas encore atteint leur nombre minimum de candidats.
-            Merci de privilégier ces créneaux déjà entamés plutôt que d&apos;en choisir un nouveau, afin de les remplir en priorité.
+            {slotsNeedingCandidates.length === 1 ? (
+              <>
+                <strong>Un créneau attend encore des candidats</strong> — il
+                manque {totalMissingCandidates} inscription
+                {totalMissingCandidates > 1 ? "s" : ""} pour qu&apos;il se
+                tienne. Il porte le badge{" "}
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold">
+                  À compléter
+                </span>{" "}
+                dans le calendrier : merci de le choisir en priorité plutôt que
+                d&apos;en ouvrir un nouveau.
+              </>
+            ) : (
+              <>
+                <strong>
+                  {slotsNeedingCandidates.length} créneaux attendent encore des
+                  candidats
+                </strong>{" "}
+                — il manque {totalMissingCandidates} inscriptions au total pour
+                qu&apos;ils se tiennent. Ils portent le badge{" "}
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold">
+                  À compléter
+                </span>{" "}
+                dans le calendrier : merci de les choisir en priorité plutôt
+                que d&apos;en ouvrir un nouveau.
+              </>
+            )}
           </span>
         </div>
       )}
@@ -757,6 +846,13 @@ export default function CandidateEpreuvesPage() {
                                     const epreuveId = epreuves.find((ep) => ep.name === epreuveName)?.id;
                                     const isEpreuveEnrolled = epreuveId ? enrolledEpreuves.has(epreuveId) : false;
                                     const spotsLeft = slot.maxCandidates - slot.enrolledCount;
+                                    // Session (salle) sous son minimum : on la met en avant
+                                    // pour qu'elle soit choisie avant d'en ouvrir une autre.
+                                    const missing = slot.missingCandidates ?? 0;
+                                    const needsCandidates =
+                                      !isSlotEnrolled &&
+                                      !slot.isFull &&
+                                      slot.needsCandidates === true;
 
                                     return (
                                       <button
@@ -767,6 +863,8 @@ export default function CandidateEpreuvesPage() {
                                             ? "bg-green-50 border-green-300 ring-2 ring-green-200"
                                             : slot.isFull
                                             ? "bg-gray-50 border-gray-200 opacity-50"
+                                            : needsCandidates
+                                            ? `${color.bg} border-amber-300 ring-2 ring-amber-200 hover:ring-amber-300`
                                             : `${color.bg} ${color.border} hover:ring-2 hover:ring-offset-1`
                                         }`}
                                         style={
@@ -800,15 +898,32 @@ export default function CandidateEpreuvesPage() {
                                             </span>
                                           )}
                                         </div>
-                                        {!isSlotEnrolled &&
-                                          !slot.isFull &&
+                                        {isSlotEnrolled &&
                                           slot.minCandidates != null &&
-                                          slot.enrolledCount < slot.minCandidates && (
-                                            <p className="mt-1 text-amber-700 font-medium">
-                                              Il manque {slot.minCandidates - slot.enrolledCount} candidat
-                                              {slot.minCandidates - slot.enrolledCount > 1 ? "s" : ""} (minimum {slot.minCandidates})
+                                          (slot.missingCandidates ?? 0) > 0 && (
+                                            <p className="mt-1 text-orange-700 font-semibold leading-tight">
+                                              {(slot.sessionEnrolled ?? 0) <= 1
+                                                ? "Seul(e) pour l'instant"
+                                                : `${slot.sessionEnrolled} inscrits`}{" "}
+                                              · il manque {slot.missingCandidates}
                                             </p>
                                           )}
+                                        {needsCandidates && (
+                                          <div className="mt-1 rounded-md bg-amber-100 border border-amber-300 px-1.5 py-1">
+                                            <p className="text-[10px] uppercase tracking-wide font-bold text-amber-600 leading-tight">
+                                              À compléter
+                                            </p>
+                                            <p className="text-amber-800 font-bold leading-tight">
+                                              Il manque {missing} candidat
+                                              {missing > 1 ? "s" : ""}
+                                            </p>
+                                            <p className="text-amber-700 leading-tight">
+                                              {slot.sessionEnrolled ?? 0}/
+                                              {slot.minCandidates} inscrits sur cette
+                                              session
+                                            </p>
+                                          </div>
+                                        )}
                                       </button>
                                     );
                                   })}
@@ -1157,23 +1272,105 @@ export default function CandidateEpreuvesPage() {
                       <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                         <Users size={18} className="text-gray-500 flex-shrink-0" />
                         <div>
-                          <p className="text-xs text-gray-400 font-medium">Places</p>
+                          <p className="text-xs text-gray-400 font-medium">
+                            {(selectedSlot.parallelRooms ?? 1) > 1
+                              ? `Places (${selectedSlot.parallelRooms} salles en parallèle)`
+                              : "Places"}
+                          </p>
                           <p className="text-sm font-semibold text-gray-900">
                             {selectedSlot.enrolledCount} / {selectedSlot.maxCandidates}
                             <span className={`ml-2 text-xs font-medium ${spotsLeft <= 1 && spotsLeft > 0 ? "text-orange-600" : spotsLeft === 0 ? "text-red-500" : "text-green-600"}`}>
                               ({spotsLeft > 0 ? `${spotsLeft} place${spotsLeft > 1 ? "s" : ""} restante${spotsLeft > 1 ? "s" : ""}` : "Complet"})
                             </span>
                           </p>
-                          {!selectedSlot.isFull &&
-                            selectedSlot.minCandidates != null &&
-                            selectedSlot.enrolledCount < selectedSlot.minCandidates && (
-                              <p className="text-xs font-medium text-amber-700 mt-0.5">
-                                Il manque {selectedSlot.minCandidates - selectedSlot.enrolledCount} candidat
-                                {selectedSlot.minCandidates - selectedSlot.enrolledCount > 1 ? "s" : ""} pour atteindre le minimum de {selectedSlot.minCandidates}.
-                              </p>
-                            )}
                         </div>
                       </div>
+
+                      {/* Session sous son minimum : chiffre concret + jauge,
+                          pour donner envie de compléter ce créneau plutôt que
+                          d'en ouvrir un autre. */}
+                      {!selectedSlot.isFull &&
+                        !isSlotEnrolled &&
+                        selectedSlot.needsCandidates === true &&
+                        selectedSlot.minCandidates != null && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                            <p className="text-sm font-bold text-amber-800">
+                              Il manque {selectedSlot.missingCandidates} candidat
+                              {(selectedSlot.missingCandidates ?? 0) > 1 ? "s" : ""}{" "}
+                              sur ce créneau
+                            </p>
+                            <div className="mt-2 h-2 w-full rounded-full bg-amber-100 overflow-hidden">
+                              <div
+                                className="h-full bg-amber-500 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.round(
+                                    ((selectedSlot.sessionEnrolled ?? 0) /
+                                      Math.max(1, selectedSlot.minCandidates)) *
+                                      100,
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-amber-700 mt-1.5">
+                              {selectedSlot.sessionEnrolled ?? 0} inscrit
+                              {(selectedSlot.sessionEnrolled ?? 0) > 1 ? "s" : ""} sur
+                              les {selectedSlot.minCandidates} nécessaires. En vous
+                              inscrivant ici, vous aidez ce créneau à se tenir — les
+                              sessions incomplètes doivent être regroupées ou annulées.
+                            </p>
+                          </div>
+                        )}
+
+                      {/* Le candidat est inscrit ici mais la session n'a pas
+                          encore son compte : lui dire clairement, et lui
+                          donner le geste utile (en parler aux autres). */}
+                      {isSlotEnrolled &&
+                        selectedSlot.minCandidates != null &&
+                        (selectedSlot.missingCandidates ?? 0) > 0 && (
+                          <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                            <p className="text-sm font-bold text-orange-900">
+                              {(selectedSlot.sessionEnrolled ?? 0) <= 1
+                                ? "Vous êtes seul(e) inscrit(e) sur ce créneau"
+                                : `Vous êtes ${selectedSlot.sessionEnrolled} inscrits sur ce créneau`}
+                            </p>
+                            <div className="mt-2 h-2 w-full rounded-full bg-orange-100 overflow-hidden">
+                              <div
+                                className="h-full bg-orange-500 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.round(
+                                    ((selectedSlot.sessionEnrolled ?? 0) /
+                                      Math.max(1, selectedSlot.minCandidates)) *
+                                      100,
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-orange-800 mt-1.5">
+                              Il manque encore {selectedSlot.missingCandidates}{" "}
+                              candidat
+                              {(selectedSlot.missingCandidates ?? 0) > 1
+                                ? "s"
+                                : ""}{" "}
+                              sur les {selectedSlot.minCandidates} nécessaires.
+                              Les prochains inscrits sur cet horaire seront
+                              placés avec vous en priorité : invitez les autres
+                              candidats à remplir ce créneau plutôt qu&apos;à en
+                              ouvrir un nouveau.
+                            </p>
+                          </div>
+                        )}
+
+                      {/* Plusieurs salles en parallèle : expliquer pourquoi le
+                          nombre de places dépasse la taille d'une session et
+                          pourquoi la salle n'est donnée qu'après inscription. */}
+                      {!isSlotEnrolled && (selectedSlot.parallelRooms ?? 1) > 1 && (
+                        <p className="text-xs text-gray-500 px-1">
+                          Plusieurs salles se tiennent en parallèle à cet horaire. Vous
+                          choisissez l&apos;horaire : votre salle vous est attribuée
+                          automatiquement (celle déjà entamée en priorité) et
+                          s&apos;affiche dès votre inscription.
+                        </p>
+                      )}
                     </div>
 
                     {/* Action button */}
