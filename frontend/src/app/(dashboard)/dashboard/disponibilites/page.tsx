@@ -18,7 +18,13 @@
  * /slots/all, déjà réservées au staff.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -271,12 +277,14 @@ export default function TeamAvailabilityPage() {
       return hay.includes(q);
     });
     return list.sort((a, b) => {
-      if (sortByLeast && a.availMin !== b.availMin) return a.availMin - b.availMin;
+      if (sortByLeast && a.availMin !== b.availMin)
+        return a.availMin - b.availMin;
       return fullName(a.member).localeCompare(fullName(b.member), "fr");
     });
   }, [weeks, query, sortByLeast]);
 
-  const selected = selectedId === ALL ? null : weekById.get(selectedId) ?? null;
+  const selected =
+    selectedId === ALL ? null : (weekById.get(selectedId) ?? null);
 
   // ─── Vue d'ensemble : combien de monde, demi-heure par demi-heure ──
 
@@ -461,9 +469,9 @@ export default function TeamAvailabilityPage() {
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
           {/* ─── Colonne gauche : l'équipe ─── */}
-          <aside className="rounded-xl border border-gray-200 bg-white">
+          <aside className="min-w-0 rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 p-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -562,7 +570,7 @@ export default function TeamAvailabilityPage() {
           </aside>
 
           {/* ─── Colonne droite : la vue ─── */}
-          <section>
+          <section className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div className="scroll-x flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5">
                 <button
@@ -627,7 +635,7 @@ export default function TeamAvailabilityPage() {
               ) : sansDispo === weeks.length ? (
                 <EmptyState
                   icon={<Users className="h-6 w-6" />}
-                  text="Personne n'a déclaré de disponibilité cette semaine."
+                  text="Personne n'a déclaré de disponibilité cette semaine. Regardez la semaine suivante."
                 />
               ) : (
                 <>
@@ -814,7 +822,9 @@ function DensityMap({
                         ? "cursor-default bg-gray-50 text-transparent"
                         : "text-white hover:scale-[1.06]"
                     }`}
-                    style={n > 0 ? { backgroundColor: countColor(n) } : undefined}
+                    style={
+                      n > 0 ? { backgroundColor: countColor(n) } : undefined
+                    }
                     title={
                       n === 0
                         ? "Personne"
@@ -833,13 +843,7 @@ function DensityMap({
   );
 }
 
-function EmptyState({
-  icon,
-  text,
-}: {
-  icon: ReactNode;
-  text: string;
-}) {
+function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <div className="flex h-64 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 text-gray-400">
       {icon}
