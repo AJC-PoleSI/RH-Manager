@@ -127,14 +127,10 @@ export function checkEnrollmentWindow({
  * injoignable) rend `null` → la règle des 24h s'applique.
  */
 export async function readLastMinuteWaiveUntil(
-  client: SettingsClient,
+  read: SettingReader,
 ): Promise<string | null> {
   try {
-    const { data, error } = await client
-      .from("system_settings")
-      .select("value")
-      .eq("key", LAST_MINUTE_SETTING_KEY)
-      .maybeSingle();
+    const { data, error } = await read(LAST_MINUTE_SETTING_KEY);
     if (error) return null;
     return toDay(data?.value);
   } catch {
