@@ -177,6 +177,12 @@ export default function CreationPage() {
   const [deadlineMembres, setDeadlineMembres] = useState("");
   const [savingDeadlines, setSavingDeadlines] = useState(false);
 
+  /**
+   * Réservation de dernière minute : date (AAAA-MM-JJ) jusqu'à laquelle les
+   * créneaux échappent au préavis de 24h. Vide = règle des 24h partout.
+   */
+  const [lastMinuteUntil, setLastMinuteUntil] = useState("");
+
   /* ---- tours ---- */
   const [tours, setTours] = useState<Tour[]>([]);
   /**
