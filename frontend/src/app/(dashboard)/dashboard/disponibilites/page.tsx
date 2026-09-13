@@ -649,25 +649,14 @@ export default function TeamAvailabilityPage() {
                     days={days}
                     bands={[]}
                     overlays={teamOverlays}
-                    onOverlayClick={(o) => {
-                      const ids = weeks
-                        .filter((w) =>
-                          w.bands.some(
-                            (b) =>
-                              b.dayIndex === o.dayIndex &&
-                              b.startMin <= o.startMin &&
-                              b.endMin >= o.endMin,
-                          ),
-                        )
-                        .map((w) => fullName(w.member))
-                        .sort((a, b) => a.localeCompare(b, "fr"));
+                    onOverlayClick={(o) =>
                       setOpenBlock({
                         dayIndex: o.dayIndex,
                         startMin: o.startMin,
                         endMin: o.endMin,
-                        names: ids,
-                      });
-                    }}
+                        people: whoIsFree(o.dayIndex, o.startMin, o.endMin),
+                      })
+                    }
                     readOnly
                     pxPerMin={1.3}
                   />
