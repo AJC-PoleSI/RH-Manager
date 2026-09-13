@@ -753,17 +753,19 @@ export default function TimeBandGrid({
                           durée du créneau (un entretien individuel de 25min
                           doit rester aussi lisible qu'un Business Game d'1h). */}
                       <div className="flex items-center gap-1 truncate px-1.5 pt-1 text-[10px] font-bold leading-tight tabular-nums text-white">
-                        <svg
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="h-2.5 w-2.5 shrink-0 opacity-90"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                        {!o.hideCheck && (
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="h-2.5 w-2.5 shrink-0 opacity-90"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
                         <span>
                           {minutesToHHMM(o.startMin)}–{minutesToHHMM(o.endMin)}
                         </span>
