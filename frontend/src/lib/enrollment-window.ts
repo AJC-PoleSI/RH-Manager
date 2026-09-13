@@ -28,24 +28,20 @@ export const LAST_MINUTE_SETTING_KEY = "inscription_sans_delai_jusqu_au";
 /** Préavis exigé par défaut, en heures. */
 export const MIN_NOTICE_HOURS = 24;
 
-/** Sous-ensemble minimal du client Supabase utilisé ici. */
-export interface SettingsClient {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (
-        col: string,
-        val: string,
-      ) => {
-        // PromiseLike et non Promise : le query builder Supabase est un
-        // thenable, pas une vraie Promise (il n'a ni .catch ni .finally).
-        maybeSingle: () => PromiseLike<{
-          data: { value?: string | null } | null;
-          error: unknown;
-        }>;
-      };
-    };
-  };
-}
+/**
+ * Lecture d'UNE ligne de `system_settings`, injectée par l'appelant.
+ *
+ * On injecte une fonction plutôt que le client Supabase : ses types génériques
+ * sont trop profonds pour être comparés à une interface maison (TS2589), et
+ * cela garde ce module testable sans base.
+ *
+ * PromiseLike et non Promise : le query builder Supabase est un thenable, il
+ * n'a ni .catch ni .finally.
+ */
+export type SettingReader = (key: string) => PromiseLike<{
+  data: { value?: string | null } | null;
+  error: unknown;
+}>;
 
 /** Jour "AAAA-MM-JJ" d'une valeur stockée ("2026-09-14" ou ISO complet). */
 function toDay(value: unknown): string | null {
