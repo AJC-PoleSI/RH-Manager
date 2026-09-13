@@ -156,7 +156,7 @@ export default function TeamAvailabilityPage() {
     dayIndex: number;
     startMin: number;
     endMin: number;
-    names: string[];
+    people: { name: string; range: string | null }[];
   } | null>(null);
 
   const days = useMemo(() => {
