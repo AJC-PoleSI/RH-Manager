@@ -365,6 +365,9 @@ export default function CreationPage() {
       await api.put("/settings", {
         deadline_candidats: datetimeLocalToISO(deadlineCandidats),
         deadline_membres: datetimeLocalToISO(deadlineMembres),
+        // Date brute AAAA-MM-JJ : c'est un JOUR de créneau, pas un instant —
+        // le convertir en ISO le décalerait d'un fuseau.
+        [LAST_MINUTE_SETTING_KEY]: lastMinuteUntil,
       });
       toast("Fenêtre d\u2019inscription sauvegardée", "success");
     } catch {
