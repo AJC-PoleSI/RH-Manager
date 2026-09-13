@@ -84,6 +84,36 @@ export async function postSigned(
   });
 }
 
+// ─── Propagation de la vérification d'email vers Befast ────────────────────
+
+/**
+ * Une inscription = une identité, donc une seule vérification à faire par le
+ * candidat. Befast → RH était déjà couvert (/api/internal/provision pose
+ * email_verified). Ceci ferme le sens inverse : valider son email sur RH
+ * valide aussi le compte Befast.
+ *
+ * Sans cette propagation, le compte Befast restait « pending_validation »
+ * derrière un lien qui finissait par expirer, sans que personne ne le voie
+ * (incident du 13/09/2026 : 17 candidats bloqués).
+ */
+export async function markVerifiedOnBefast(
+  email: string,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  try {
+    const res = await postSigned(
+      `${BEFAST_BASE_URL}/api/onboarding/mark-verified`,
+      { email: email.trim().toLowerCase() },
+    );
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, status: json?.status, error: json?.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, status: json?.status };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 // ─── Token SSO / deep-link (login inter-apps) ──────────────────────────────
 
 export type SsoTarget = "rh" | "befast";

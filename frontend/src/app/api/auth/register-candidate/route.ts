@@ -8,7 +8,13 @@ import crypto from "crypto";
 
 // Bidirectionnalité : une inscription directe sur RH crée aussi le compte
 // Befast (le maître). Best-effort — ne doit jamais faire échouer l'inscription
-// RH. Befast est idempotent (keyé sur l'email) et enverra son propre email.
+// RH. Befast est idempotent (keyé sur l'email).
+//
+// `sendVerification: false` : Befast n'envoie PAS son propre email. Le
+// candidat en recevait deux pour une seule inscription et n'en cliquait
+// qu'un ; l'autre expirait en silence et laissait un compte à moitié ouvert
+// (incident du 13/09/2026). Un seul email désormais — celui de RH — dont la
+// validation est propagée à Befast par /api/auth/verify-email.
 async function mirrorToBefast(input: {
   firstName: string;
   lastName: string;
@@ -17,14 +23,23 @@ async function mirrorToBefast(input: {
 }): Promise<void> {
   try {
     const password = crypto.randomBytes(18).toString("base64url"); // provisoire
-    await postSigned(`${BEFAST_BASE_URL}/api/onboarding/register`, {
+    const res = await postSigned(`${BEFAST_BASE_URL}/api/onboarding/register`, {
       firstName: input.firstName,
       lastName: input.lastName,
       email: input.email,
       dateOfBirth: input.dateOfBirth,
       password,
       source: "rh_direct",
+      sendVerification: false,
     });
+    if (!res.ok) {
+      const details = await res.text().catch(() => "");
+      console.error("mirrorToBefast: Befast a refusé la création", {
+        email: input.email,
+        status: res.status,
+        details: details.slice(0, 300),
+      });
+    }
   } catch (e) {
     console.error("mirrorToBefast failed (best-effort):", e);
   }

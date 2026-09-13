@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
+import { markVerifiedOnBefast } from "@/lib/integration";
 import { NextRequest } from "next/server";
 
 // GET /api/auth/verify-email?token=xxx
@@ -60,6 +61,19 @@ export async function GET(req: NextRequest) {
       .eq("id", candidate.id);
 
     if (updateError) throw updateError;
+
+    // Le candidat n'a qu'un email à valider : on propage à Befast pour que
+    // son compte y soit actif aussi. Best-effort — un incident Befast ne
+    // doit pas rejeter une vérification déjà enregistrée ici — mais l'échec
+    // est tracé, et la commande de rattrapage
+    // `scripts/backfill-befast-verification.ts` rejoue les retardataires.
+    const propagated = await markVerifiedOnBefast(candidate.email);
+    if (!propagated.ok) {
+      console.error(
+        "[verify-email] propagation Befast échouée (compte Befast encore en attente):",
+        { email: candidate.email, status: propagated.status, error: propagated.error },
+      );
+    }
 
     // Issue JWT so the user is logged in right away
     const jwt = signToken({
