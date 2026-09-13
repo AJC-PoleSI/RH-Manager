@@ -127,6 +127,22 @@ function heure(e: EntretienLigne, opts: FormatOptions): string {
 }
 
 /**
+ * Créneaux effectivement listés, dans l'ordre du rendu.
+ *
+ * Partagé avec l'aperçu tabulaire de la page : l'écran doit montrer
+ * EXACTEMENT ce que le bouton « Copier » met dans le presse-papier.
+ */
+export function entretiensAffiches(
+  entretiens: EntretienLigne[],
+  opts: FormatOptions,
+): EntretienLigne[] {
+  const tries = trierEntretiens(entretiens);
+  return opts.masquerVides
+    ? tries.filter((e) => e.candidats.some((c) => nomComplet(c)))
+    : tries;
+}
+
+/**
  * Lignes de texte (sans l'en-tête) pour une journée.
  *
  * Un créneau sans candidat reste listé (« — libre — ») quand `masquerVides`
@@ -139,7 +155,7 @@ export function lignesTexte(
   const lignes: string[] = [];
 
   for (const e of trierEntretiens(entretiens)) {
-    const salle = (e.room || "").trim() || "Salle à définir";
+    const salle = libelleSalle(e.room, opts.prefixerSalle);
     const noms = e.candidats.map(nomComplet).filter(Boolean);
 
     if (noms.length === 0) {
