@@ -288,50 +288,75 @@ export default function TeamAvailabilityPage() {
     if (selectedId !== ALL) return [];
     const out: Overlay[] = [];
     for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
-      let run: { start: number; end: number; ids: string[]; key: string } | null =
-        null;
+      // On fusionne sur l'EFFECTIF, pas sur la composition : à composition
+      // identique exigée, la grille se brisait en blocs de 15 min dès qu'une
+      // personne entrait ou sortait — illisible. Ici, la couleur dit « combien
+      // de jurys je peux monter à ce moment-là » ; le clic dit qui, avec les
+      // horaires de chacun quand ils ne couvrent pas tout le bloc.
+      let run: { start: number; end: number; count: number } | null = null;
       const flush = () => {
-        if (!run || run.ids.length === 0) return;
+        if (!run || run.count === 0) return;
         out.push({
           id: `agg-${dayIndex}-${run.start}`,
           dayIndex,
           laneId: "",
           startMin: run.start,
           endMin: run.end,
-          label: `${run.ids.length} dispo`,
-          sublabel:
-            run.ids.length <= 2
-              ? run.ids
-                  .map((id) => fullName(weekById.get(id)?.member ?? {}))
-                  .join(", ")
-              : undefined,
-          color: countColor(run.ids.length),
+          label: `${run.count} dispo`,
+          color: countColor(run.count),
+          hideCheck: true,
         });
       };
 
       for (let t = GRID_START_MIN; t < GRID_END_MIN; t += STEP_MIN) {
-        const ids = weeks
-          .filter((w) =>
-            w.bands.some(
-              (b) =>
-                b.dayIndex === dayIndex &&
-                b.startMin <= t &&
-                b.endMin >= t + STEP_MIN,
-            ),
-          )
-          .map((w) => w.member.id);
-        const key = ids.slice().sort().join("|");
-        if (run && run.key === key) {
+        const count = weeks.filter((w) =>
+          w.bands.some(
+            (b) =>
+              b.dayIndex === dayIndex &&
+              b.startMin <= t &&
+              b.endMin >= t + STEP_MIN,
+          ),
+        ).length;
+        if (run && run.count === count) {
           run.end = t + STEP_MIN;
         } else {
           flush();
-          run = { start: t, end: t + STEP_MIN, ids, key };
+          run = { start: t, end: t + STEP_MIN, count };
         }
       }
       flush();
     }
     return out;
-  }, [selectedId, weeks, weekById, days.length]);
+  }, [selectedId, weeks, days.length]);
+
+  /** Qui est là sur [start, end[, et sur quelle portion exactement. */
+  const whoIsFree = useCallback(
+    (dayIndex: number, start: number, end: number) =>
+      weeks
+        .flatMap((w) => {
+          const segs = w.bands
+            .filter((b) => b.dayIndex === dayIndex)
+            .map((b) => ({
+              s: Math.max(b.startMin, start),
+              e: Math.min(b.endMin, end),
+            }))
+            .filter((x) => x.e > x.s);
+          if (segs.length === 0) return [];
+          const whole = segs.some((x) => x.s <= start && x.e >= end);
+          return [
+            {
+              name: fullName(w.member),
+              range: whole
+                ? null
+                : segs
+                    .map((x) => `${minutesToHHMM(x.s)}–${minutesToHHMM(x.e)}`)
+                    .join(", "),
+            },
+          ];
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr")),
+    [weeks],
+  );
 
   // ─── Onglet planning : les affectations du membre sélectionné ──────
 
