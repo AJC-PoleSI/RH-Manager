@@ -986,8 +986,13 @@ function TeamLoadTable({
                     <span className="font-medium text-rose-600">0</span>
                   )}
                 </td>
-                <td className="max-w-xs truncate px-4 py-2 text-xs text-gray-500">
-                  {epreuves.join(" · ") || "—"}
+                <td className="px-4 py-2 text-xs text-gray-500">
+                  <span
+                    className="block max-w-[18rem] truncate"
+                    title={epreuves.join(" · ")}
+                  >
+                    {epreuves.join(" · ") || "—"}
+                  </span>
                 </td>
               </tr>
             );
