@@ -236,9 +236,6 @@ export default function PlanningPage() {
   const [activeTab, setActiveTab] = useState<
     "creation" | "evaluators" | "candidates"
   >("creation");
-  const [memberAvailsSummary, setMemberAvailsSummary] = useState<
-    { email: string; count: number; details: string }[]
-  >([]);
 
   // Éditeur de salle de la modale de détail (« ✏️ Changer »).
   const [roomEditOpen, setRoomEditOpen] = useState(false);
@@ -427,58 +424,6 @@ export default function PlanningPage() {
       setAvailabilityDetails(details);
     }
   }, [isAdmin, selectedEpreuveId]);
-
-  const fetchMemberAvailabilitiesSummary = useCallback(async () => {
-    if (!isAdmin || !selectedEpreuveId) return;
-    const ep: any = epreuves.find((e) => (e as any).id === selectedEpreuveId);
-    if (!ep || !ep.dateDebut || !ep.dateFin) return;
-
-    try {
-      const res = await api.get(
-        `/availability/all?start=${ep.dateDebut}&end=${ep.dateFin}`,
-      );
-      const data = res.data || [];
-
-      const grouped: Record<string, any[]> = {};
-      data.forEach((av: any) => {
-        const email = av.member?.email || "Inconnu";
-        if (!grouped[email]) grouped[email] = [];
-        grouped[email].push(av);
-      });
-
-      const summary = Object.entries(grouped).map(([email, slots]) => {
-        const parts = slots.map((s) => {
-          const d = new Date(s.date).toLocaleDateString("fr-FR", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-          });
-          const st = (s.start_time || s.startTime || "")
-            .split(":")
-            .slice(0, 2)
-            .join("h");
-          const et = (s.end_time || s.endTime || "")
-            .split(":")
-            .slice(0, 2)
-            .join("h");
-          return `${d} ${st}-${et}`;
-        });
-        return {
-          email,
-          count: slots.length,
-          details: parts.join(" | "),
-        };
-      });
-
-      setMemberAvailsSummary(summary.sort((a, b) => b.count - a.count));
-    } catch (e) {
-      console.error("Erreur chargement member summary:", e);
-    }
-  }, [isAdmin, selectedEpreuveId, epreuves]);
-
-  useEffect(() => {
-    fetchMemberAvailabilitiesSummary();
-  }, [fetchMemberAvailabilitiesSummary]);
 
   // Fetch slots for inscription data + reconstruct repartition from DB
   const fetchSlotData = useCallback(async () => {
@@ -1195,15 +1140,12 @@ export default function PlanningPage() {
       setAllSlotsGlobal([]);
       setInscriptionData([]);
       setShowResetConfirm(false);
-      // Vider le récapitulatif des saisies (la saisie reste toujours ouverte)
-      setMemberAvailsSummary([]);
       toast(
         `${deleted} créneau(x) et ${availsDeleted} disponibilité(s) supprimé(s)`,
         "success",
       );
       fetchSlotData();
       fetchAllSlotsGlobal();
-      fetchMemberAvailabilitiesSummary();
     } catch (e) {
       console.error("Erreur reset:", e);
       toast("Erreur lors de la réinitialisation", "error");
@@ -2463,37 +2405,6 @@ export default function PlanningPage() {
                   </div>
                 </div>
 
-                {/* Récapitulatif des inscriptions */}
-                {memberAvailsSummary.length > 0 && (
-                  <div className="p-4 border border-gray-200 rounded-xl bg-gray-50/50">
-                    <h4 className="text-sm font-semibold mb-3 text-gray-800">
-                      Récapitulatif des disponibilités ({memberAvailsSummary.length} membre{memberAvailsSummary.length > 1 ? "s" : ""})
-                    </h4>
-                    <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-100 bg-white">
-                      <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0 border-b border-gray-100">
-                          <tr>
-                            <th className="px-4 py-2">Membre</th>
-                            <th className="px-4 py-2 text-center">Créneaux</th>
-                            <th className="px-4 py-2">Détail</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {memberAvailsSummary.map((mem, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50/50">
-                              <td className="px-4 py-2 font-medium text-gray-800">{mem.email}</td>
-                              <td className="px-4 py-2 text-center">
-                                <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-semibold">{mem.count}</span>
-                              </td>
-                              <td className="px-4 py-2 text-gray-500 text-xs truncate max-w-xs" title={mem.details}>{mem.details}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
                 {/* BOUTON 2 — Publier les nouveaux créneaux aux candidats */}
                 <div className="p-4 rounded-xl border bg-purple-50/40 border-purple-200">
                   <div className="flex items-start justify-between gap-3 mb-3">
@@ -2556,7 +2467,7 @@ export default function PlanningPage() {
                 <span>
                   {existingSlots.length} créneau(x) créé(s) pour cette épreuve
                 </span>
-                {(existingSlots.length > 0 || memberAvailsSummary.length > 0) && (
+                {existingSlots.length > 0 && (
                   <button
                     onClick={() => setShowResetConfirm(true)}
                     className="text-red-500 hover:text-red-700 hover:underline transition-colors"
