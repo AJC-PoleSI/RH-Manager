@@ -523,3 +523,78 @@ export async function sendAnnouncementEmails(
 
   return { sent, failed };
 }
+
+/**
+ * Doublon email d'un message privé envoyé depuis la messagerie.
+ *
+ * La messagerie in-app n'envoie aucune notification : un candidat qui ne se
+ * reconnecte pas ne voit jamais le message. Cet email reprend le texte tel
+ * quel et renvoie vers la messagerie — il ne remplace pas le message, il
+ * le double.
+ *
+ * Ne throw pas : le message est déjà écrit en base quand on arrive ici, un
+ * envoi raté ne doit pas faire échouer la conversation. L'appelant reçoit
+ * `{ sent: false, error }` et l'affiche à l'admin.
+ */
+export async function sendDirectMessageEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  senderName: string;
+  message: string;
+  recipientRole: "candidate" | "member";
+}): Promise<{ sent: boolean; error?: string }> {
+  const safeName = escapeHtml((opts.firstName || "").trim());
+  const safeSender = escapeHtml(opts.senderName.trim());
+  const safeMessage = escapeHtml(opts.message).replace(/\n/g, "<br/>");
+  // Les candidats et les membres n'ont pas la même messagerie.
+  const messagesUrl =
+    opts.recipientRole === "candidate"
+      ? `${APP_URL}/candidates/messages`
+      : `${APP_URL}/dashboard/messages`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2563EB;padding:32px 40px;text-align:center;">
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Audencia Junior Conseil</p>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Nouveau message</h1>
+        </td></tr>
+        <tr><td style="padding:36px 40px 28px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour${safeName ? " " + safeName : ""},</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#4b5563;line-height:1.6;">
+            Vous avez re&ccedil;u un message de <strong>${safeSender}</strong> sur la plateforme de recrutement :
+          </p>
+          <div style="margin:0 0 24px;padding:16px 18px;background:#f9fafb;border-left:3px solid #2563EB;border-radius:6px;font-size:15px;color:#111827;line-height:1.6;">${safeMessage}</div>
+          <p style="margin:0 0 24px;text-align:center;">
+            <a href="${messagesUrl}" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;">Voir la conversation</a>
+          </p>
+          <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+            R&eacute;pondez depuis la plateforme : cette adresse ne re&ccedil;oit pas les r&eacute;ponses.
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+
+  try {
+    await send({
+      from: FROM,
+      to: opts.to,
+      subject: `Nouveau message de ${opts.senderName} · AJC Recrutement`,
+      html,
+    });
+    return { sent: true };
+  } catch (e) {
+    console.error("sendDirectMessageEmail:", e);
+    return { sent: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}

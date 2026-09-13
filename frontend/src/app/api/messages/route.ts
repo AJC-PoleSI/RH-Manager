@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { sendDirectMessageEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
 
 /**
@@ -21,6 +22,49 @@ async function resolveSenderName(user: {
 
   const full = `${data?.first_name ?? ""} ${data?.last_name ?? ""}`.trim();
   return full || user.email.split("@")[0];
+}
+
+/**
+ * Destinataire réel, résolu à partir du seul `recipientId`.
+ *
+ * Le `recipientRole` envoyé par le client n'est pas digne de confiance : il
+ * décide dans quelle table on va chercher l'adresse email. On interroge donc
+ * les deux tables et on garde celle qui répond — c'est aussi ce qui garantit
+ * qu'on n'envoie pas d'email à un id inexistant.
+ */
+async function resolveRecipient(recipientId: string): Promise<{
+  role: "candidate" | "member";
+  email: string | null;
+  firstName: string | null;
+} | null> {
+  const [candidate, member] = await Promise.all([
+    supabaseAdmin
+      .from("candidates")
+      .select("id, email, first_name")
+      .eq("id", recipientId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("members")
+      .select("id, email, first_name")
+      .eq("id", recipientId)
+      .maybeSingle(),
+  ]);
+
+  if (candidate.data) {
+    return {
+      role: "candidate",
+      email: candidate.data.email,
+      firstName: candidate.data.first_name,
+    };
+  }
+  if (member.data) {
+    return {
+      role: "member",
+      email: member.data.email,
+      firstName: member.data.first_name,
+    };
+  }
+  return null;
 }
 
 // GET /api/messages - Fetch private messages for current user
@@ -74,11 +118,21 @@ export async function POST(req: NextRequest) {
     // laissait n'importe qui écrire sous une fausse identité — un candidat
     // pouvait s'adresser à un examinateur sous le nom « Admin AJC ».
     // Le nom est reconstruit côté serveur à partir du jeton.
-    const { recipientId, recipientRole, message } = await req.json();
+    const { recipientId, message, sendEmail } = await req.json();
 
     if (!recipientId || !message?.trim()) {
       return Response.json(
         { error: "recipientId and message are required" },
+        { status: 400 },
+      );
+    }
+
+    // Le rôle du destinataire est déduit de la base, pas du client :
+    // il détermine à quelle adresse part le doublon email.
+    const recipient = await resolveRecipient(recipientId);
+    if (!recipient) {
+      return Response.json(
+        { error: "Destinataire introuvable" },
         { status: 400 },
       );
     }
@@ -96,13 +150,36 @@ export async function POST(req: NextRequest) {
         sender_role: role,
         sender_name: senderName,
         recipient_id: recipientId,
-        recipient_role: recipientRole || "member",
+        recipient_role: recipient.role,
         message: message.trim(),
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // ── Doublon email (optionnel) ───────────────────────────────────────
+    // Réservé aux admins : la messagerie côté candidat/membre est en
+    // lecture seule, et ouvrir l'envoi d'email à tous transformerait le
+    // chat en relais de spam sur le domaine AJC (quota Resend compris).
+    // Fail-soft : le message est déjà enregistré, un email raté ne doit
+    // pas faire échouer l'envoi — l'admin voit juste l'avertissement.
+    let email: { sent: boolean; error?: string } | undefined;
+    if (sendEmail === true) {
+      if (!user.isAdmin) {
+        email = { sent: false, error: "Envoi email réservé aux admins" };
+      } else if (!recipient.email) {
+        email = { sent: false, error: "Ce contact n'a pas d'adresse email" };
+      } else {
+        email = await sendDirectMessageEmail({
+          to: recipient.email,
+          firstName: recipient.firstName,
+          senderName,
+          message: message.trim(),
+          recipientRole: recipient.role,
+        });
+      }
+    }
 
     return Response.json(
       {
@@ -119,6 +196,8 @@ export async function POST(req: NextRequest) {
           hour: "2-digit",
           minute: "2-digit",
         }),
+        emailSent: email?.sent ?? false,
+        emailError: email?.error,
       },
       { status: 201 },
     );

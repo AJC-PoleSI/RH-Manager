@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 
@@ -18,7 +18,29 @@ interface Message {
 interface Contact {
   id: string;
   name: string;
+  email: string;
   type: "candidat" | "membre";
+}
+
+/**
+ * Clé de recherche : minuscules et sans accents.
+ * Sans ça, chercher « zoe » ne trouve pas « Zoé » — le cas le plus courant
+ * dans une liste de prénoms français.
+ */
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Le contact correspond-il à la recherche ? (nom OU email, mots dans le désordre) */
+function matchesQuery(contact: Contact, query: string): boolean {
+  const haystack = normalize(`${contact.name} ${contact.email}`);
+  return normalize(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((token) => haystack.includes(token));
 }
 
 export default function MessagesPage() {
@@ -29,34 +51,68 @@ export default function MessagesPage() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [allMessages, setAllMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [search, setSearch] = useState("");
+  const [alsoEmail, setAlsoEmail] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState<{
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch contacts (candidates + members)
   const fetchContacts = useCallback(async () => {
     try {
-      const [candidatesRes, membersRes] = await Promise.all([
-        api.get("/candidates?limit=100"),
+      const [candidateRows, membersRes] = await Promise.all([
+        // La liste des candidats est paginée côté API : sans cette boucle,
+        // seuls les 100 premiers candidats étaient joignables — les suivants
+        // n'apparaissaient dans aucune recherche.
+        (async () => {
+          const rows: any[] = [];
+          let page = 1;
+          let totalPages = 1;
+          do {
+            const res = await api.get(`/candidates?limit=200&page=${page}`);
+            rows.push(...(res.data?.data || []));
+            totalPages = res.data?.pagination?.totalPages ?? 1;
+            page++;
+          } while (page <= totalPages && page <= 20);
+          return rows;
+        })(),
         api.get("/members"),
       ]);
 
-      const candidatContacts: Contact[] = (candidatesRes.data?.data || []).map(
-        (c: any) => ({
-          id: c.id,
-          name: `${c.firstName || c.first_name || ""} ${c.lastName || c.last_name || ""}`.trim(),
-          type: "candidat" as const,
-        }),
-      );
+      const candidatContacts: Contact[] = candidateRows.map((c: any) => ({
+        id: c.id,
+        name:
+          `${c.firstName || c.first_name || ""} ${c.lastName || c.last_name || ""}`.trim() ||
+          c.email ||
+          "Candidat",
+        email: c.email || "",
+        type: "candidat" as const,
+      }));
 
       const membreContacts: Contact[] = (membersRes.data || [])
         .map((m: any) => ({
           id: m.id,
-          name: m.email.split("@")[0],
+          // Le nom réel quand il est renseigné : « marie.dupont » ne dit pas
+          // toujours à qui on écrit.
+          name:
+            `${m.firstName || ""} ${m.lastName || ""}`.trim() ||
+            m.email.split("@")[0],
+          email: m.email || "",
           type: "membre" as const,
         }))
         .filter((m: Contact) => m.id !== user?.id);
 
-      setContacts([...candidatContacts, ...membreContacts]);
+      const byName = (a: Contact, b: Contact) =>
+        a.name.localeCompare(b.name, "fr");
+
+      setContacts([
+        ...candidatContacts.sort(byName),
+        ...membreContacts.sort(byName),
+      ]);
     } catch (e) {
       console.error("Failed to fetch contacts:", e);
     }
@@ -99,17 +155,21 @@ export default function MessagesPage() {
   }, [currentMessages.length]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !selectedContact) return;
+    if (!inputValue.trim() || !selectedContact || sending) return;
 
     const messageText = inputValue.trim();
+    const recipient = selectedContact;
     setInputValue("");
+    setNotice(null);
+    setSending(true);
 
     // Optimistic update
+    const tempId = `temp-${Date.now()}`;
     const tempMsg: Message = {
-      id: Date.now().toString(),
+      id: tempId,
       senderId: user?.id || "",
       senderName: user?.email?.split("@")[0] || "Moi",
-      recipientId: selectedContact.id,
+      recipientId: recipient.id,
       text: messageText,
       time: new Date().toLocaleTimeString("fr-FR", {
         hour: "2-digit",
@@ -120,16 +180,42 @@ export default function MessagesPage() {
     };
     setAllMessages((prev) => [...prev, tempMsg]);
 
+    const wantsEmail = alsoEmail && !!recipient.email;
+
     try {
-      await api.post("/messages", {
-        recipientId: selectedContact.id,
-        recipientRole:
-          selectedContact.type === "candidat" ? "candidate" : "member",
+      const res = await api.post("/messages", {
+        recipientId: recipient.id,
         message: messageText,
-        senderName: user?.email?.split("@")[0] || "Moi",
+        sendEmail: wantsEmail,
       });
+
+      // Le message provisoire est remplacé par celui du serveur : sinon il
+      // reste affiché en double jusqu'au prochain rafraîchissement.
+      setAllMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId ? { ...res.data, isMine: true } : m,
+        ),
+      );
+
+      if (wantsEmail) {
+        setNotice(
+          res.data?.emailSent
+            ? { kind: "ok", text: `Message envoyé et email parti à ${recipient.email}.` }
+            : {
+                kind: "error",
+                text: `Message envoyé, mais l'email n'est pas parti${
+                  res.data?.emailError ? ` : ${res.data.emailError}` : ""
+                }.`,
+              },
+        );
+      }
     } catch (e) {
       console.error("Failed to send message:", e);
+      setAllMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setInputValue(messageText);
+      setNotice({ kind: "error", text: "Échec de l'envoi du message." });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -140,8 +226,16 @@ export default function MessagesPage() {
     }
   };
 
-  const candidats = contacts.filter((c) => c.type === "candidat");
-  const membres = contacts.filter((c) => c.type === "membre");
+  const { candidats, membres, totalFiltres } = useMemo(() => {
+    const filtered = search.trim()
+      ? contacts.filter((c) => matchesQuery(c, search))
+      : contacts;
+    return {
+      candidats: filtered.filter((c) => c.type === "candidat"),
+      membres: filtered.filter((c) => c.type === "membre"),
+      totalFiltres: filtered.length,
+    };
+  }, [contacts, search]);
 
   // Admin view: split layout
   if (isAdmin) {
@@ -163,10 +257,64 @@ export default function MessagesPage() {
               selectedContact ? "hidden md:flex" : "flex"
             }`}
           >
-            <div className="p-3 border-b border-gray-100 bg-gray-50">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Contacts
-              </p>
+            <div className="p-3 border-b border-gray-100 bg-gray-50 space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Contacts
+                </p>
+                <span className="text-xs text-gray-400">
+                  {search.trim()
+                    ? `${totalFiltres}/${contacts.length}`
+                    : contacts.length || ""}
+                </span>
+              </div>
+              {/* Recherche : la liste dépasse vite la centaine de contacts,
+                  faire défiler pour trouver une personne n'est pas tenable. */}
+              <div className="relative">
+                <svg
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
+                  />
+                </svg>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Rechercher un contact..."
+                  aria-label="Rechercher un contact"
+                  className="w-full pl-8 pr-8 py-2 min-h-[40px] bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent [&::-webkit-search-cancel-button]:appearance-none"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Effacer la recherche"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               {candidats.length > 0 && (
@@ -225,6 +373,16 @@ export default function MessagesPage() {
                 </>
               )}
 
+              {totalFiltres === 0 && contacts.length > 0 && (
+                <div className="px-3 py-8 text-center text-sm text-gray-400">
+                  Aucun contact ne correspond à
+                  <br />
+                  <span className="font-medium text-gray-600">
+                    &laquo; {search.trim()} &raquo;
+                  </span>
+                </div>
+              )}
+
               {contacts.length === 0 && !loading && (
                 <div className="px-3 py-8 text-center text-sm text-gray-400">
                   Aucun contact
@@ -265,10 +423,13 @@ export default function MessagesPage() {
                     <p className="font-semibold text-gray-900 truncate">
                       {selectedContact.name}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 truncate">
                       {selectedContact.type === "candidat"
                         ? "Candidat"
                         : "Membre JE"}
+                      {selectedContact.email
+                        ? ` · ${selectedContact.email}`
+                        : " · aucune adresse email"}
                     </p>
                   </div>
                 </div>
@@ -306,7 +467,18 @@ export default function MessagesPage() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="p-3 border-t border-gray-200 bg-white">
+                <div className="p-3 border-t border-gray-200 bg-white space-y-2">
+                  {notice && (
+                    <p
+                      className={`text-xs ${
+                        notice.kind === "ok"
+                          ? "text-green-600"
+                          : "text-amber-600"
+                      }`}
+                    >
+                      {notice.text}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -318,12 +490,33 @@ export default function MessagesPage() {
                     />
                     <button
                       onClick={handleSend}
-                      disabled={!inputValue.trim()}
+                      disabled={!inputValue.trim() || sending}
                       className="shrink-0 px-4 py-2 min-h-[44px] bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      Envoyer
+                      {sending ? "Envoi..." : "Envoyer"}
                     </button>
                   </div>
+                  {/* Doublon email : la messagerie in-app ne notifie personne,
+                      un candidat qui ne se reconnecte pas ne voit jamais le
+                      message. Décochable — le quota Resend est de 100/jour. */}
+                  <label
+                    className={`flex items-center gap-2 text-xs ${
+                      selectedContact.email
+                        ? "text-gray-600 cursor-pointer"
+                        : "text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={alsoEmail && !!selectedContact.email}
+                      disabled={!selectedContact.email}
+                      onChange={(e) => setAlsoEmail(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    {selectedContact.email
+                      ? "Envoyer aussi par email"
+                      : "Envoi email impossible (pas d'adresse)"}
+                  </label>
                 </div>
               </>
             ) : (
