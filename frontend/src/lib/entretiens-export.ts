@@ -39,6 +39,8 @@ export interface FormatOptions {
   avecJury: boolean;
   /** Afficher la plage horaire complète (09:00–09:30) plutôt que l'heure de début. */
   avecHeureFin: boolean;
+  /** Écrire « Salle 205 » là où la base ne stocke que « 205 ». */
+  prefixerSalle: boolean;
   /** Masquer les créneaux sans aucun candidat inscrit. */
   masquerVides: boolean;
 }
@@ -48,8 +50,23 @@ export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
   avecEpreuve: false,
   avecJury: false,
   avecHeureFin: false,
+  prefixerSalle: true,
   masquerVides: true,
 };
+
+/**
+ * Libellé de salle affichable.
+ *
+ * Les salles sont saisies telles quelles : tantôt « Salle 1 », tantôt « 205 »
+ * ou « 238-240 ». Le préfixe n'est ajouté que s'il manque, pour ne jamais
+ * produire « Salle Salle 1 ».
+ */
+export function libelleSalle(room: string, prefixer: boolean): string {
+  const brut = (room || "").trim();
+  if (!brut) return "Salle à définir";
+  if (!prefixer || /^salles?\b/i.test(brut)) return brut;
+  return `Salle ${brut}`;
+}
 
 /** « Jean Dupont » — un nom vide ne doit pas produire d'espace parasite. */
 export function nomComplet(p: EntretienPersonne): string {
