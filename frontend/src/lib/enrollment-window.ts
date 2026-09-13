@@ -36,7 +36,9 @@ export interface SettingsClient {
         col: string,
         val: string,
       ) => {
-        maybeSingle: () => Promise<{
+        // PromiseLike et non Promise : le query builder Supabase est un
+        // thenable, pas une vraie Promise (il n'a ni .catch ni .finally).
+        maybeSingle: () => PromiseLike<{
           data: { value?: string | null } | null;
           error: unknown;
         }>;
