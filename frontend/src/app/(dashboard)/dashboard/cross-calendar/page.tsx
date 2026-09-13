@@ -810,7 +810,7 @@ export default function CrossCalendarPage() {
           </Card>
         ) : (
           <div className="border rounded-lg overflow-hidden bg-white">
-            <div className="overflow-x-auto">
+            <div className="scroll-x">
             <table className="w-full text-sm text-left min-w-[720px]">
               <thead className="bg-gray-50 text-xs uppercase border-b">
                 <tr>
@@ -932,7 +932,7 @@ export default function CrossCalendarPage() {
     );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+    <div className="flex flex-col min-h-[calc(100dvh-10rem)] md:h-[calc(100dvh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-semibold">
@@ -946,7 +946,9 @@ export default function CrossCalendarPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 shrink-0 w-fit">
+      {/* Sur iPhone les trois onglets ne tiennent pas sur une ligne : la barre
+          défile horizontalement au lieu de rogner le dernier. */}
+      <div className="scroll-x flex gap-1 bg-gray-100 rounded-lg p-1 shrink-0 w-full sm:w-fit">
         {[
           {
             key: "availabilities" as TabType,
@@ -968,7 +970,7 @@ export default function CrossCalendarPage() {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors",
+              "flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2 min-h-[40px] text-sm font-medium rounded-md transition-colors",
               activeTab === tab.key
                 ? "bg-white shadow text-gray-900"
                 : "text-gray-500 hover:text-gray-700",

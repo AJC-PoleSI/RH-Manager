@@ -31,16 +31,18 @@ export default async function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Employés</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Employés
+          </h1>
           <p className="mt-2 text-gray-600">
             Gérez les informations de vos employés
           </p>
         </div>
         <Link
           href="/employees/new"
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+          className="inline-flex items-center justify-center shrink-0 px-4 py-2 min-h-[44px] bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
         >
           + Nouvel employé
         </Link>

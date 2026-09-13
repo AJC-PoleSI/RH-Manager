@@ -112,7 +112,7 @@ export default function EpreuveSlotsSummary() {
           Aucun créneau ouvert pour le moment.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="scroll-x">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 border-b border-gray-100">

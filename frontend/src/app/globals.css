@@ -6,6 +6,16 @@
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
+  /* Encoches / barre d'accueil iPhone. Repli à 0 sur les autres appareils. */
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  /* Safari iOS grossit le texte des blocs larges en paysage sans ceci. */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -17,4 +27,110 @@ input,
 textarea,
 select {
   color: #111827;
+}
+
+@layer base {
+  /* Supprime le délai de 300 ms au tap sur les contrôles. */
+  button,
+  a,
+  [role="button"],
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  /*
+   * Conteneur défilable horizontalement sur mobile (tableaux, calendriers).
+   * `overscroll-x: contain` empêche le geste de défilement d'être capté par
+   * Safari comme un « retour arrière » quand on arrive en bout de course.
+   */
+  .scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hauteur plein écran fiable sur iPhone : 100vh ignore la barre d'URL
+     de Safari et rogne le bas de la page. */
+  .min-h-dscreen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .h-dscreen {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /*
+   * Hauteur max d'une fenêtre modale. Sur iPhone, `vh` se réfère à l'écran
+   * barre d'URL masquée : une modale en 90vh dépasse donc sous la zone
+   * visible et ses boutons deviennent inatteignables. `dvh` suit la hauteur
+   * réelle ; la déclaration `vh` reste en repli pour les navigateurs anciens.
+   */
+  .max-h-modal {
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
+  .max-h-modal-85 {
+    max-height: 85vh;
+    max-height: 85dvh;
+  }
+  .max-h-modal-80 {
+    max-height: 80vh;
+    max-height: 80dvh;
+  }
+
+  /* Marges de sécurité sous l'encoche et autour en paysage. */
+  .pt-safe {
+    padding-top: var(--safe-top);
+  }
+  .pb-safe {
+    padding-bottom: var(--safe-bottom);
+  }
+  .px-safe {
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+  .pl-safe {
+    padding-left: var(--safe-left);
+  }
+  .ml-safe {
+    margin-left: var(--safe-left);
+  }
+}
+
+/* Barres de défilement discrètes mais visibles sur les zones scrollables
+   horizontalement : sur iPhone rien n'indique qu'un tableau se fait glisser. */
+.scroll-x::-webkit-scrollbar {
+  height: 6px;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+  background-color: rgba(107, 114, 128, 0.35);
+  border-radius: 9999px;
+}
+
+/*
+ * iPhone : Safari zoome automatiquement sur un champ dont la police fait moins
+ * de 16px, et ne dézoome jamais ensuite — la page reste décalée et l'en-tête
+ * sort de l'écran. On force donc 16px sous le point de rupture `md`.
+ *
+ * Les `:not([hidden])` ne filtrent rien d'utile : ils sont là pour que la règle
+ * pèse plus lourd qu'une classe utilitaire Tailwind (`text-sm`, `text-xs`…)
+ * posée sur le champ, qui gagnerait sinon. Le rendu desktop n'est pas touché.
+ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select:not([hidden]),
+  textarea:not([hidden]) {
+    font-size: 16px;
+  }
+
+  /* Les cases à cocher natives sont minuscules au doigt. */
+  input[type="checkbox"]:not([hidden]),
+  input[type="radio"]:not([hidden]) {
+    min-width: 18px;
+    min-height: 18px;
+  }
 }

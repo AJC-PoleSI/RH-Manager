@@ -24,7 +24,7 @@ export default async function EditEmployeePage({
         <Link href="/employees" className="text-blue-600 hover:text-blue-900">
           ← Retour
         </Link>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 sm:p-6">
           <p className="text-red-700">Employé non trouvé</p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default async function EditEmployeePage({
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <EmployeeForm initialData={decrypted} isEditing={true} />
       </div>
     </div>

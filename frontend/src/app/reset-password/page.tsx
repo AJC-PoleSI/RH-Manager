@@ -77,7 +77,7 @@ function ResetPasswordForm() {
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-dscreen flex items-center justify-center bg-gray-50 px-4">
         <p className="text-gray-500 text-sm">Vérification du lien…</p>
       </div>
     );
@@ -85,7 +85,7 @@ function ResetPasswordForm() {
 
   if (tokenError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-dscreen flex items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-[440px] bg-white rounded-xl shadow-lg p-8 text-center">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl">
             ⚠️
@@ -108,8 +108,8 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-[440px] bg-white rounded-xl shadow-lg p-6 sm:p-8">
+    <div className="min-h-dscreen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-[440px] bg-white rounded-xl shadow-lg p-4 sm:p-6 sm:p-8">
         <h1 className="text-xl font-semibold text-gray-900 text-center">
           Choisissez votre mot de passe
         </h1>
@@ -186,7 +186,7 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="min-h-dscreen flex items-center justify-center bg-gray-50">
           <p className="text-gray-500 text-sm">Chargement…</p>
         </div>
       }

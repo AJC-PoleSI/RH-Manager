@@ -451,28 +451,32 @@ export default function CandidateCalendarPage() {
         <>
           {/* ═══ VUE MOIS ═══ */}
           {viewMode === "month" && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-              <div className="grid grid-cols-7 border-b border-gray-200 min-w-[640px]">
+            <div className="bg-white border border-gray-200 rounded-xl scroll-x sm:overflow-x-auto">
+              {/* Sur mobile la grille se compacte pour tenir dans la largeur de
+                  l'écran : plus de défilement horizontal, le détail d'un créneau
+                  s'ouvre au tap. */}
+              <div className="grid grid-cols-7 border-b border-gray-200 min-w-0 sm:min-w-[640px]">
                 {DAYS.map((d) => (
-                  <div key={d} className="py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    {d}
+                  <div key={d} className="py-2 sm:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <span className="sm:hidden">{d.slice(0, 1)}</span>
+                    <span className="hidden sm:inline">{d}</span>
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 min-w-[640px]">
+              <div className="grid grid-cols-7 min-w-0 sm:min-w-[640px]">
                 {cells.map((day, i) => {
                   const dayEvents = day ? getEventsForDay(day) : [];
                   return (
                     <div
                       key={i}
-                      className={`min-h-[100px] border-b border-r border-gray-100 p-1.5 ${
+                      className={`min-h-[76px] sm:min-h-[100px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 ${
                         day === null ? "bg-gray-50/50" : "bg-white"
                       } ${i % 7 === 6 ? "border-r-0" : ""}`}
                     >
                       {day !== null && (
                         <>
                           <div
-                            className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${
+                            className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full ${
                               isToday(day) ? "bg-blue-600 text-white" : "text-gray-700"
                             }`}
                           >
@@ -487,17 +491,21 @@ export default function CandidateCalendarPage() {
                                 <button
                                   key={ev.id}
                                   onClick={() => { setCancelError(null); setSelectedEvent(ev); }}
-                                  className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${classes}`}
+                                  className={`w-full text-left text-[9px] sm:text-[11px] leading-tight px-1 sm:px-1.5 py-0.5 sm:py-1 rounded sm:rounded-md truncate font-medium transition-opacity hover:opacity-80 ${classes}`}
                                   style={customStyle}
                                   title={`${ev.title}${ev.room ? ` — Salle: ${ev.room}` : ""}${ev.startTime ? ` ${ev.startTime.slice(0, 5)}` : ""}`}
                                 >
                                   {ev.startTime && (
                                     <span className="font-semibold">{ev.startTime.slice(0, 5)} </span>
                                   )}
-                                  {ev.title}
-                                  {ev.room && (
-                                    <span className="ml-1 opacity-70">({ev.room})</span>
-                                  )}
+                                  {/* Le libellé ne tient pas dans une case de 50px :
+                                      sur mobile l'heure suffit, le détail est au tap. */}
+                                  <span className="hidden sm:inline">
+                                    {ev.title}
+                                    {ev.room && (
+                                      <span className="ml-1 opacity-70">({ev.room})</span>
+                                    )}
+                                  </span>
                                 </button>
                               );
                             })}
@@ -513,8 +521,10 @@ export default function CandidateCalendarPage() {
 
           {/* ═══ VUE SEMAINE ═══ */}
           {viewMode === "week" && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-              <div className="grid grid-cols-7 min-w-[640px]">
+            <div className="bg-white border border-gray-200 rounded-xl scroll-x sm:overflow-x-auto">
+              {/* Sept colonnes sont illisibles sur un iPhone : la semaine se
+                  déroule verticalement, un bloc par jour. */}
+              <div className="grid grid-cols-1 sm:grid-cols-7 sm:min-w-[640px]">
                 {weekDates.map((wd, i) => {
                   const dateEvents = getEventsForDate(wd);
                   const isTodayDate =
@@ -522,11 +532,11 @@ export default function CandidateCalendarPage() {
                     wd.getMonth() === today.getMonth() &&
                     wd.getDate() === today.getDate();
                   return (
-                    <div key={i} className="border-r border-gray-100 last:border-r-0">
+                    <div key={i} className="border-b sm:border-b-0 sm:border-r border-gray-100 last:border-b-0 sm:last:border-r-0">
                       {/* Day header */}
-                      <div className={`p-3 text-center border-b border-gray-200 ${isTodayDate ? "bg-blue-50" : "bg-gray-50"}`}>
+                      <div className={`p-2 sm:p-3 flex sm:block items-baseline gap-2 border-b border-gray-200 sm:text-center ${isTodayDate ? "bg-blue-50" : "bg-gray-50"}`}>
                         <p className="text-xs font-semibold text-gray-500 uppercase">{DAYS[i]}</p>
-                        <p className={`text-xl font-bold mt-0.5 ${isTodayDate ? "text-blue-600" : "text-gray-900"}`}>
+                        <p className={`text-lg sm:text-xl font-bold sm:mt-0.5 ${isTodayDate ? "text-blue-600" : "text-gray-900"}`}>
                           {wd.getDate()}
                         </p>
                         <p className="text-xs text-gray-400">
@@ -534,7 +544,7 @@ export default function CandidateCalendarPage() {
                         </p>
                       </div>
                       {/* Events */}
-                      <div className="p-2 min-h-[200px] space-y-1.5">
+                      <div className="p-2 min-h-[64px] sm:min-h-[200px] space-y-1.5">
                         {dateEvents.length === 0 && (
                           <p className="text-xs text-gray-300 text-center mt-4">—</p>
                         )}
@@ -591,7 +601,7 @@ export default function CandidateCalendarPage() {
       {selectedEvent && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-modal overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Color accent bar */}
@@ -601,7 +611,7 @@ export default function CandidateCalendarPage() {
               return <div className="h-2" style={{ backgroundColor: dotColor }} />;
             })()}
 
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-4 sm:px-6 py-5 space-y-4">
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>

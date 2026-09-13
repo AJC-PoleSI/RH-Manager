@@ -57,26 +57,26 @@ export function EmployeesTable({
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="scroll-x">
       <table className="w-full">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Nom
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Email
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Poste
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Département
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Statut
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
             </th>
           </tr>
@@ -84,19 +84,19 @@ export function EmployeesTable({
         <tbody className="divide-y divide-gray-200">
           {employees.map((employee) => (
             <tr key={employee.id} className="hover:bg-gray-50">
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 {employee.first_name} {employee.last_name}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                 {employee.email}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                 {employee.position}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                 {employee.department || "-"}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                 <span
                   className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
                     employee.status
@@ -105,7 +105,7 @@ export function EmployeesTable({
                   {employee.status}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+              <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                 <Link
                   href={`/employees/${employee.id}`}
                   className="text-blue-600 hover:text-blue-900"

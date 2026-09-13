@@ -1346,7 +1346,7 @@ export default function PlanningPage() {
     const capacite = sallesParCreneau * evalParSalle;
 
     return (
-      <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-col gap-6 p-4 sm:p-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -1498,10 +1498,10 @@ export default function PlanningPage() {
                   <span className="text-xl">🗺️</span> Vue Globale du Recrutement
                   <span className="text-xs font-normal text-gray-400 ml-1">— clic pour détails</span>
                 </h3>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setSwapOpen(true)}
-                    className="px-3 py-1.5 text-sm font-medium rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    className="px-3 py-1.5 min-h-[36px] text-sm font-medium rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                     title="Échanger deux examinateurs de salle"
                   >
                     ⇄ Échanger
@@ -1517,13 +1517,13 @@ export default function PlanningPage() {
               </div>
 
               {/* Navigation */}
-              <div className="flex items-center gap-2">
-                <button onClick={prevPeriod} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">‹</button>
-                <span className="text-base font-semibold text-gray-900 min-w-[200px] text-center">
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={prevPeriod} className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">‹</button>
+                <span className="text-sm sm:text-base font-semibold text-gray-900 flex-1 sm:flex-none sm:min-w-[200px] text-center">
                   {adminCalView === "month" ? `${ADMIN_MONTHS[acMonth]} ${acYear}` : weekLabel}
                 </span>
-                <button onClick={nextPeriod} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">›</button>
-                <button onClick={() => setAdminCalDate(new Date())} className="ml-2 px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors">Aujourd&apos;hui</button>
+                <button onClick={nextPeriod} className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors">›</button>
+                <button onClick={() => setAdminCalDate(new Date())} className="ml-1 sm:ml-2 shrink-0 px-3 py-1.5 min-h-[36px] text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors">Aujourd&apos;hui</button>
               </div>
 
               {/* Légende */}
@@ -1543,35 +1543,41 @@ export default function PlanningPage() {
                 <>
                   {/* VUE MOIS */}
                   {adminCalView === "month" && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-                      <div className="grid grid-cols-7 border-b border-gray-200 min-w-[640px]">
+                    <div className="bg-white border border-gray-200 rounded-xl scroll-x sm:overflow-x-auto">
+                      {/* Sur mobile la grille se compacte pour tenir dans la largeur
+                          de l'écran ; le détail d'un créneau s'ouvre au tap. */}
+                      <div className="grid grid-cols-7 border-b border-gray-200 min-w-0 sm:min-w-[640px]">
                         {ADMIN_DAYS.map(d => (
-                          <div key={d} className="py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">{d}</div>
+                          <div key={d} className="py-2 sm:py-2.5 text-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            <span className="sm:hidden">{d.slice(0, 1)}</span>
+                            <span className="hidden sm:inline">{d}</span>
+                          </div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-7 min-w-[640px]">
+                      <div className="grid grid-cols-7 min-w-0 sm:min-w-[640px]">
                         {cells.map((day, i) => {
                           const ds = day ? `${acYear}-${String(acMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}` : "";
                           const dayEvs = day ? getEventsForDay(ds) : [];
                           const todayDay = day && today.getFullYear()===acYear && today.getMonth()===acMonth && today.getDate()===day;
                           return (
-                            <div key={i} className={`min-h-[90px] border-b border-r border-gray-100 p-1.5 ${day===null?"bg-gray-50/50":"bg-white"} ${i%7===6?"border-r-0":""}`}>
+                            <div key={i} className={`min-h-[72px] sm:min-h-[90px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 ${day===null?"bg-gray-50/50":"bg-white"} ${i%7===6?"border-r-0":""}`}>
                               {day !== null && (
                                 <>
-                                  <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${todayDay?"bg-blue-600 text-white":"text-gray-700"}`}>{day}</div>
+                                  <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full ${todayDay?"bg-blue-600 text-white":"text-gray-700"}`}>{day}</div>
                                   <div className="space-y-0.5">
                                     {dayEvs.slice(0,3).map(ev => (
                                       <button key={ev.id} onClick={() => handleEvClick(ev)}
-                                        className="w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded-md truncate font-medium transition-opacity hover:opacity-80"
+                                        className="w-full text-left text-[9px] sm:text-[10px] leading-tight px-1 sm:px-1.5 py-0.5 rounded sm:rounded-md truncate font-medium transition-opacity hover:opacity-80"
                                         style={{ backgroundColor: ev.bg, color: ev.textColor }}
                                         title={ev.title}
                                       >
                                         {ev.startTime && <span className="font-bold">{ev.startTime} </span>}
-                                        {ev.title}
+                                        {/* Le libellé ne tient pas dans une case de 50px. */}
+                                        <span className="hidden sm:inline">{ev.title}</span>
                                       </button>
                                     ))}
                                     {dayEvs.length > 3 && (
-                                      <p className="text-[10px] text-gray-400 px-1">+{dayEvs.length-3} autres</p>
+                                      <p className="text-[9px] sm:text-[10px] text-gray-400 px-1">+{dayEvs.length-3}<span className="hidden sm:inline"> autres</span></p>
                                     )}
                                   </div>
                                 </>
@@ -1585,20 +1591,22 @@ export default function PlanningPage() {
 
                   {/* VUE SEMAINE */}
                   {adminCalView === "week" && (
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-                      <div className="grid grid-cols-7 min-w-[640px]">
+                    <div className="bg-white border border-gray-200 rounded-xl scroll-x sm:overflow-x-auto">
+                      {/* Sept colonnes sont illisibles sur un iPhone : la semaine
+                          se déroule verticalement, un bloc par jour. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-7 sm:min-w-[640px]">
                         {weekDates.map((wd, i) => {
                           const ds = dateStr(wd);
                           const dayEvs = getEventsForDay(ds);
                           const todayWd = isToday(wd);
                           return (
-                            <div key={i} className="border-r border-gray-100 last:border-r-0">
-                              <div className={`p-3 text-center border-b border-gray-200 ${todayWd?"bg-blue-50":"bg-gray-50"}`}>
+                            <div key={i} className="border-b sm:border-b-0 sm:border-r border-gray-100 last:border-b-0 sm:last:border-r-0">
+                              <div className={`p-2 sm:p-3 flex sm:block items-baseline gap-2 border-b border-gray-200 sm:text-center ${todayWd?"bg-blue-50":"bg-gray-50"}`}>
                                 <p className="text-xs font-semibold text-gray-500 uppercase">{ADMIN_DAYS[i]}</p>
-                                <p className={`text-xl font-bold mt-0.5 ${todayWd?"text-blue-600":"text-gray-900"}`}>{wd.getDate()}</p>
+                                <p className={`text-lg sm:text-xl font-bold sm:mt-0.5 ${todayWd?"text-blue-600":"text-gray-900"}`}>{wd.getDate()}</p>
                                 <p className="text-xs text-gray-400">{wd.toLocaleDateString("fr-FR",{month:"short"})}</p>
                               </div>
-                              <div className="p-2 min-h-[180px] space-y-1.5">
+                              <div className="p-2 min-h-[64px] sm:min-h-[180px] space-y-1.5">
                                 {dayEvs.length === 0 && <p className="text-xs text-gray-300 text-center mt-4">—</p>}
                                 {dayEvs.map(ev => (
                                   <button key={ev.id} onClick={() => handleEvClick(ev)}
@@ -1992,7 +2000,7 @@ export default function PlanningPage() {
                                         toggleMemberOnSlot(s, mid, "remove");
                                       }}
                                       disabled={memberPickerBusy === mid}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 flex-shrink-0 disabled:opacity-40"
+                                      className="transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 text-red-500 hover:text-red-700 text-xs px-2 py-1 min-h-[32px] min-w-[32px] rounded hover:bg-red-50 flex-shrink-0 disabled:opacity-40"
                                       title="Retirer cet examinateur"
                                     >
                                       ✕
@@ -2114,7 +2122,7 @@ export default function PlanningPage() {
                                           alert(err?.response?.data?.error || "Erreur lors de la désinscription");
                                         }
                                       }}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 text-xs px-1.5 py-0.5 rounded hover:bg-red-50 flex-shrink-0"
+                                      className="transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 text-red-500 hover:text-red-700 text-xs px-2 py-1 min-h-[32px] min-w-[32px] rounded hover:bg-red-50 flex-shrink-0"
                                       title="Désinscrire ce candidat"
                                     >
                                       ✕
@@ -2667,7 +2675,7 @@ export default function PlanningPage() {
   // La saisie est permanente : l'examinateur voit les créneaux et
   // peut s'inscrire / se désinscrire à tout moment.
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
 
       {ModeToggle && (
         <div className="flex justify-end">{ModeToggle}</div>
@@ -2896,7 +2904,7 @@ export default function PlanningPage() {
             style={{ animation: "slideInRight 0.25s ease-out" }}
           >
             {/* Header modale */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between z-10">
               <h2 className="text-lg font-semibold text-gray-900">
                 Details du creneau
               </h2>
@@ -2915,7 +2923,7 @@ export default function PlanningPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* ── Horaire ── */}
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -3018,7 +3026,7 @@ export default function PlanningPage() {
                                       alert(err?.response?.data?.error || "Erreur lors de la désinscription");
                                     }
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-500 hover:text-red-700 px-2 py-0.5 rounded hover:bg-red-50 border border-red-200 flex-shrink-0"
+                                  className="transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 text-xs text-red-500 hover:text-red-700 px-2 py-1.5 min-h-[36px] rounded hover:bg-red-50 border border-red-200 flex-shrink-0"
                                 >
                                   Désinscrire
                                 </button>

@@ -17,7 +17,7 @@ export default function NewEmployeePage() {
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <EmployeeForm />
       </div>
     </div>

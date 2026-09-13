@@ -98,7 +98,7 @@ export default function NotificationBell() {
           setOpen((o) => !o);
           if (!open) fetchNotifications();
         }}
-        className="relative p-1.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+        className="relative flex h-10 w-10 md:h-8 md:w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
         aria-label="Notifications"
       >
         <svg

@@ -237,7 +237,7 @@ export default function AvailabilityPage() {
   const wasMerged = !dirty && rowCount > bands.length && bands.length > 0;
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="px-0 py-1 sm:p-6 max-w-[1400px] mx-auto">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -250,11 +250,11 @@ export default function AvailabilityPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="scroll-x flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-0.5">
             <button
               onClick={() => setTab("dispo")}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 min-h-[40px] text-sm font-medium transition-colors ${
                 tab === "dispo"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -264,7 +264,7 @@ export default function AvailabilityPage() {
             </button>
             <button
               onClick={() => setTab("planning")}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 min-h-[40px] text-sm font-medium transition-colors ${
                 tab === "planning"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -279,21 +279,21 @@ export default function AvailabilityPage() {
             </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
+          <div className="flex items-center justify-between gap-1 rounded-lg border border-gray-200 p-0.5">
             <button
               onClick={() => setWeekOffset((w) => w - 1)}
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
+              className="shrink-0 rounded-md p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-gray-500 hover:bg-gray-50"
               aria-label="Semaine précédente"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="px-2 text-sm font-medium text-gray-700">
+            <span className="px-2 text-sm font-medium text-gray-700 whitespace-nowrap">
               {format(days[0], "d MMM", { locale: fr })} –{" "}
               {format(days[4], "d MMM yyyy", { locale: fr })}
             </span>
             <button
               onClick={() => setWeekOffset((w) => w + 1)}
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-50"
+              className="shrink-0 rounded-md p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-gray-500 hover:bg-gray-50"
               aria-label="Semaine suivante"
             >
               <ChevronRight className="h-4 w-4" />

@@ -146,7 +146,7 @@ export default function KPIsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <Card key={stat.label}>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-lg ${stat.color}`}>
                   <stat.icon size={24} />
@@ -216,7 +216,7 @@ export default function KPIsPage() {
                 Aucun créneau rattaché à une épreuve pour le moment.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="scroll-x">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-500 border-b">

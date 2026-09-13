@@ -23,7 +23,7 @@ export default async function EmployeeDetailPage({
         <Link href="/employees" className="text-blue-600 hover:text-blue-900">
           ← Retour
         </Link>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 sm:p-6">
           <p className="text-red-700">Employé non trouvé</p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default async function EmployeeDetailPage({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Public Information */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Informations générales
           </h2>
@@ -160,7 +160,7 @@ export default async function EmployeeDetailPage({
         </div>
 
         {/* Encrypted Information */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Informations sensibles (chiffrées)
           </h2>

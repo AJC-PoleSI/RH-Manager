@@ -372,7 +372,7 @@ export default function CandidateWishesPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">
             Pôles disponibles
           </h2>
@@ -502,7 +502,7 @@ export default function CandidateWishesPage() {
         </h2>
 
         {state.selectedPoles.length === 0 ? (
-          <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-400">
+          <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 sm:p-6 text-center text-sm text-gray-400">
             Sélectionnez 3 pôles dans la liste ci-dessous
           </div>
         ) : (

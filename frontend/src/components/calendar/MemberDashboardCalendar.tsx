@@ -330,8 +330,8 @@ export default function MemberDashboardCalendar({
             )}
 
             {/* Controls */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <button
                         onClick={() => {
                             if (memberViewMode === "month") setCurrentDate(new Date(memberYear, memberMonth - 1, 1));
@@ -341,7 +341,7 @@ export default function MemberDashboardCalendar({
                     >
                         <ChevronLeft size={16} />
                     </button>
-                    <span className="text-lg font-semibold text-gray-900 min-w-[200px] text-center">
+                    <span className="text-base sm:text-lg font-semibold text-gray-900 flex-1 sm:flex-none sm:min-w-[200px] text-center">
                         {memberViewMode === "month"
                             ? `${MONTHS_LABELS[memberMonth]} ${memberYear}`
                             : `${memberWeekDates[0].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} - ${memberWeekDates[6].toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
@@ -358,13 +358,13 @@ export default function MemberDashboardCalendar({
                     </button>
                     <button
                         onClick={() => setCurrentDate(new Date())}
-                        className="ml-2 px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors"
+                        className="ml-1 sm:ml-2 shrink-0 px-3 py-1.5 min-h-[36px] text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors"
                     >
                         Aujourd&apos;hui
                     </button>
                 </div>
 
-                <div className="flex bg-gray-100 rounded-full p-0.5">
+                <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0">
                     {(["month", "week"] as const).map((mode) => (
                         <button
                             key={mode}
@@ -408,12 +408,16 @@ export default function MemberDashboardCalendar({
             {/* ═══ VUE MOIS ═══ */}
             {memberViewMode === "month" && (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[640px]">
+                  {/* Sur mobile la grille se compacte pour tenir dans la largeur
+                      de l'écran : plus de défilement horizontal, les créneaux
+                      n'affichent que leur heure et s'ouvrent au tap. */}
+                  <div className="scroll-x sm:overflow-visible">
+                    <div className="min-w-0 sm:min-w-[640px]">
                     <div className="grid grid-cols-7 border-b border-gray-200">
                         {DAYS_LABELS.map((d) => (
-                            <div key={d} className="py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                {d}
+                            <div key={d} className="py-2 sm:py-3 text-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                <span className="sm:hidden">{d.slice(0, 1)}</span>
+                                <span className="hidden sm:inline">{d}</span>
                             </div>
                         ))}
                     </div>
@@ -423,14 +427,14 @@ export default function MemberDashboardCalendar({
                             return (
                                 <div
                                     key={i}
-                                    className={`min-h-[100px] border-b border-r border-gray-100 p-1.5 ${
+                                    className={`min-h-[76px] sm:min-h-[100px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 ${
                                         day === null ? "bg-gray-50/50" : "bg-white"
                                     } ${i % 7 === 6 ? "border-r-0" : ""}`}
                                 >
                                     {day !== null && (
                                         <>
                                             <div
-                                                className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${
+                                                className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full ${
                                                     isMemberToday(day) ? "bg-blue-600 text-white" : "text-gray-700"
                                                 }`}
                                             >
@@ -447,15 +451,19 @@ export default function MemberDashboardCalendar({
                                                         <button
                                                             key={ev.id}
                                                             onClick={() => setSelectedMemberSlot(ev)}
-                                                            className={`w-full text-left text-[11px] leading-tight px-1.5 py-1 rounded-md truncate font-medium transition-opacity hover:opacity-80 ${emptyOpacity} ${classes}`}
+                                                            className={`w-full text-left text-[9px] sm:text-[11px] leading-tight px-1 sm:px-1.5 py-0.5 sm:py-1 rounded sm:rounded-md truncate font-medium transition-opacity hover:opacity-80 ${emptyOpacity} ${classes}`}
                                                             style={customStyle}
                                                             title={`${ev.title}${ev.room ? ` — ${ev.room}` : ""}${ev.startTime ? ` ${ev.startTime.slice(0, 5)}` : ""}`}
                                                         >
                                                             {ev.startTime && (
                                                                 <span className="font-semibold">{ev.startTime.slice(0, 5)} </span>
                                                             )}
-                                                            {ev.title}
-                                                            {ev.isHidden && " 🙈"}
+                                                            {/* Le libellé ne tient pas dans une case de 50px :
+                                                                sur mobile l'heure suffit, le détail est au tap. */}
+                                                            <span className="hidden sm:inline">
+                                                                {ev.title}
+                                                                {ev.isHidden && " 🙈"}
+                                                            </span>
                                                         </button>
                                                     );
                                                 })}
@@ -474,8 +482,10 @@ export default function MemberDashboardCalendar({
             {/* ═══ VUE SEMAINE ═══ */}
             {memberViewMode === "week" && (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <div className="grid grid-cols-7 min-w-[640px]">
+                  {/* Sept colonnes sont illisibles sur un iPhone : la semaine
+                      se déroule verticalement, un bloc par jour. */}
+                  <div className="scroll-x sm:overflow-visible">
+                    <div className="grid grid-cols-1 sm:grid-cols-7 sm:min-w-[640px]">
                         {memberWeekDates.map((wd, i) => {
                             const dateEvents = getMemberEventsForDate(wd);
                             const isTodayDate =
@@ -483,17 +493,17 @@ export default function MemberDashboardCalendar({
                                 wd.getMonth() === memberToday.getMonth() &&
                                 wd.getDate() === memberToday.getDate();
                             return (
-                                <div key={i} className="border-r border-gray-100 last:border-r-0">
-                                    <div className={`p-3 text-center border-b border-gray-200 ${isTodayDate ? "bg-blue-50" : "bg-gray-50"}`}>
+                                <div key={i} className="border-b sm:border-b-0 sm:border-r border-gray-100 last:border-b-0 sm:last:border-r-0">
+                                    <div className={`p-2 sm:p-3 flex sm:block items-baseline gap-2 border-b border-gray-200 sm:text-center ${isTodayDate ? "bg-blue-50" : "bg-gray-50"}`}>
                                         <p className="text-xs font-semibold text-gray-500 uppercase">{DAYS_LABELS[i]}</p>
-                                        <p className={`text-xl font-bold mt-0.5 ${isTodayDate ? "text-blue-600" : "text-gray-900"}`}>
+                                        <p className={`text-lg sm:text-xl font-bold sm:mt-0.5 ${isTodayDate ? "text-blue-600" : "text-gray-900"}`}>
                                             {wd.getDate()}
                                         </p>
                                         <p className="text-xs text-gray-400">
                                             {wd.toLocaleDateString("fr-FR", { month: "short" })}
                                         </p>
                                     </div>
-                                    <div className="p-2 min-h-[200px] space-y-1.5">
+                                    <div className="p-2 min-h-[64px] sm:min-h-[200px] space-y-1.5">
                                         {dateEvents.length === 0 && (
                                             <p className="text-xs text-gray-300 text-center mt-4">—</p>
                                         )}
@@ -551,7 +561,7 @@ export default function MemberDashboardCalendar({
             {selectedMemberSlot && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setSelectedMemberSlot(null)}>
                     <div
-                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
+                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-modal overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Color accent */}
@@ -560,7 +570,7 @@ export default function MemberDashboardCalendar({
                             return <div className="h-2" style={{ backgroundColor: dotColor }} />;
                         })()}
 
-                        <div className="px-6 py-5 space-y-4">
+                        <div className="px-4 sm:px-6 py-5 space-y-4">
                             {/* Header */}
                             <div className="flex items-start justify-between">
                                 <div>
@@ -718,7 +728,7 @@ export default function MemberDashboardCalendar({
                             </div>
                         </div>
 
-                        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+                        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
                             {(selectedMemberSlot.type === 'slot_filled' || selectedMemberSlot.type === 'slot_empty') && selectedMemberSlot.date && selectedMemberSlot.startTime ? (
                                 <button
                                     onClick={() => {

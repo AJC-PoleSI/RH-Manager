@@ -406,7 +406,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Upcoming epreuves */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
                         <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Prochaines épreuves</h1>
                         {epreuves.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-48 text-gray-300">
@@ -440,7 +440,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* ── TOUR PROGRESS TIMELINE ────────────── */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
                     <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-6">Progression des tours</h1>
                     <div className="flex items-center gap-0">
                         {Array.from({ length: Math.max(toursCreated, 3) }).map((_, idx) => {
@@ -476,7 +476,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* ── QUICK ACCESS ──────────────────────── */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
                     <h1 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-5">Accès rapides</h1>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {quickLinks.map((link) => (

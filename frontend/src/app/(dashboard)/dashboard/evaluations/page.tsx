@@ -248,26 +248,26 @@ function AdminView() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                     <h1 className="text-2xl font-semibold text-gray-900">Évaluateurs</h1>
                     <p className="text-gray-500 mt-1">Comptes membres JE et notations</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
                     <button
                         onClick={sendAllResetLinks}
                         disabled={bulkSending}
-                        className="flex items-center gap-2 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium px-4 py-2 min-h-[44px] rounded-lg text-sm transition-colors disabled:opacity-50"
                         title="Chaque membre reçoit un email pour choisir lui-même son mot de passe"
                     >
-                        <MailCheck size={16} />
+                        <MailCheck size={16} className="shrink-0" />
                         {bulkSending ? 'Envoi…' : 'Envoyer les liens mot de passe'}
                     </button>
                     <button
                         onClick={() => setShowCreateForm(!showCreateForm)}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                        className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 min-h-[44px] rounded-lg text-sm transition-colors"
                     >
-                        <UserPlus size={16} />
+                        <UserPlus size={16} className="shrink-0" />
                         Nouvel évaluateur
                     </button>
                 </div>
@@ -291,7 +291,7 @@ function AdminView() {
 
             {/* Create evaluator form (collapsible) */}
             {showCreateForm && (
-                <div className="bg-white border rounded-xl p-6 animate-in fade-in duration-200">
+                <div className="bg-white border rounded-xl p-4 sm:p-6 animate-in fade-in duration-200">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-gray-900">Créer un compte évaluateur</h2>
                         <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-gray-600">
@@ -372,19 +372,19 @@ function AdminView() {
 
             {/* Table: All evaluators */}
             <div className="bg-white border rounded-xl overflow-hidden">
-                <div className="px-6 py-4 border-b">
+                <div className="px-4 sm:px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold text-gray-900">Tous les évaluateurs</h2>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="scroll-x">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                             <tr>
-                                <th className="px-6 py-3">Membre</th>
-                                <th className="px-6 py-3">Pôle</th>
-                                <th className="px-6 py-3">Email</th>
-                                <th className="px-6 py-3 text-center">Évals</th>
-                                <th className="px-6 py-3 text-center">Note moyenne</th>
-                                <th className="px-6 py-3 text-right">Actions</th>
+                                <th className="px-3 sm:px-6 py-3">Membre</th>
+                                <th className="px-3 sm:px-6 py-3">Pôle</th>
+                                <th className="px-3 sm:px-6 py-3">Email</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Évals</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Note moyenne</th>
+                                <th className="px-3 sm:px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -403,7 +403,7 @@ function AdminView() {
                                     const groupMembers = groups.get(poleKey)!;
                                     const header = (
                                         <tr key={`hdr-${poleKey}`} className="bg-gray-50/80">
-                                            <td colSpan={6} className="px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            <td colSpan={6} className="px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                                 {poleKey === '__none__' ? 'Sans pôle' : poleKey}
                                                 <span className="ml-2 text-gray-400 font-normal normal-case">
                                                     {groupMembers.length} membre{groupMembers.length > 1 ? 's' : ''}
@@ -420,7 +420,7 @@ function AdminView() {
                                 const displayName = `${m.firstName || ''} ${m.lastName || ''}`.trim();
                                 return (
                                     <tr key={m.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-3">
+                                        <td className="px-3 sm:px-6 py-3">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                                                     {getInitials(m.firstName, m.lastName)}
@@ -437,15 +437,15 @@ function AdminView() {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3">
+                                        <td className="px-3 sm:px-6 py-3">
                                             {m.pole ? (
                                                 <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{m.pole}</span>
                                             ) : (
                                                 <span className="text-gray-400">-</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3 text-gray-600 text-xs">{m.email}</td>
-                                        <td className="px-6 py-3 text-center">
+                                        <td className="px-3 sm:px-6 py-3 text-gray-600 text-xs">{m.email}</td>
+                                        <td className="px-3 sm:px-6 py-3 text-center">
                                             {mEvals > 0 ? (
                                                 <span className="inline-flex items-center gap-1 text-green-700 font-semibold">
                                                     <BarChart3 size={12} />
@@ -455,18 +455,18 @@ function AdminView() {
                                                 <span className="text-gray-400">0</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3 text-center">
+                                        <td className="px-3 sm:px-6 py-3 text-center">
                                             {mAvg !== null ? (
                                                 <span className="font-bold text-blue-600">{mAvg}/20</span>
                                             ) : (
                                                 <span className="text-gray-400">-</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3 text-right">
+                                        <td className="px-3 sm:px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => openEditModal(m)}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    className="inline-flex h-9 w-9 sm:h-7 sm:w-7 items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                     title="Modifier"
                                                 >
                                                     <Pencil size={14} />
@@ -474,7 +474,7 @@ function AdminView() {
                                                 <button
                                                     onClick={() => sendResetLink(m)}
                                                     disabled={sendingLink === m.id}
-                                                    className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                                                    className="inline-flex h-9 w-9 sm:h-7 sm:w-7 items-center justify-center text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
                                                     title="Envoyer un lien pour choisir son mot de passe"
                                                 >
                                                     <KeyRound size={14} />
@@ -482,7 +482,7 @@ function AdminView() {
                                                 {!m.isSuperAdmin && (
                                                 <button
                                                     onClick={() => handleDelete(m.id)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    className="inline-flex h-9 w-9 sm:h-7 sm:w-7 items-center justify-center text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                     title="Supprimer"
                                                 >
                                                     <Trash2 size={14} />
@@ -506,21 +506,21 @@ function AdminView() {
 
             {/* Table: Evaluation recap with collective scores */}
             <div className="bg-white border rounded-xl overflow-hidden">
-                <div className="px-6 py-4 border-b">
+                <div className="px-4 sm:px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold text-gray-900">Récap des évaluations données</h2>
                     <p className="text-xs text-gray-400 mt-1">Note individuelle de chaque évaluateur + note collective (moyenne automatique)</p>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="scroll-x">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                             <tr>
-                                <th className="px-6 py-3">Évaluateur</th>
-                                <th className="px-6 py-3">Candidat</th>
-                                <th className="px-6 py-3">Épreuve</th>
-                                <th className="px-6 py-3 text-center">Tour</th>
-                                <th className="px-6 py-3 text-center">Note individuelle</th>
-                                <th className="px-6 py-3 text-center">Note collective</th>
-                                <th className="px-6 py-3">Commentaire</th>
+                                <th className="px-3 sm:px-6 py-3">Évaluateur</th>
+                                <th className="px-3 sm:px-6 py-3">Candidat</th>
+                                <th className="px-3 sm:px-6 py-3">Épreuve</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Tour</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Note individuelle</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Note collective</th>
+                                <th className="px-3 sm:px-6 py-3">Commentaire</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -542,31 +542,31 @@ function AdminView() {
 
                                 return (
                                     <tr key={ev.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-3 font-medium text-gray-900">
+                                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900">
                                             {ev.member ? `${ev.member.firstName || ''} ${ev.member.lastName || ''}`.trim() || ev.member.email : '-'}
                                         </td>
-                                        <td className="px-6 py-3 text-gray-700">
+                                        <td className="px-3 sm:px-6 py-3 text-gray-700">
                                             {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
                                         </td>
-                                        <td className="px-6 py-3 text-gray-600">{ev.epreuve?.name || '-'}</td>
-                                        <td className="px-6 py-3 text-center">
+                                        <td className="px-3 sm:px-6 py-3 text-gray-600">{ev.epreuve?.name || '-'}</td>
+                                        <td className="px-3 sm:px-6 py-3 text-center">
                                             <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
                                                 T{ev.epreuve?.tour || '?'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-3 text-center font-bold text-blue-600">
+                                        <td className="px-3 sm:px-6 py-3 text-center font-bold text-blue-600">
                                             {hasAnyScore(ev.scores) ? `${getScoreOn20(ev)}/20` : '—'}
                                             {ev.isGroup && (
                                                 <span className="block text-[10px] font-normal text-indigo-500">note partagée</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3 text-center">
+                                        <td className="px-3 sm:px-6 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className="font-bold text-green-700">{collectiveScore}/20</span>
                                                 <span className="text-xs text-gray-400">({groupCount} eval{groupCount > 1 ? 's' : ''})</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
+                                        <td className="px-3 sm:px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
                                     </tr>
                                 );
                             })}
@@ -582,7 +582,7 @@ function AdminView() {
             {editingMember && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                     <div
-                        className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
+                        className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4 sm:p-6 max-h-modal overflow-y-auto"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-5">
@@ -768,21 +768,21 @@ function MemberView() {
             </div>
 
             {/* History card */}
-            <div className="bg-white border rounded-xl p-6">
+            <div className="bg-white border rounded-xl p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Historique</h2>
                 {evaluations.length === 0 ? (
                     <p className="text-center text-gray-400 py-8">Vous n&apos;avez encore soumis aucune évaluation.</p>
                 ) : (
                     <div className="space-y-3">
                         {evaluations.map(ev => (
-                            <div key={ev.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div key={ev.id} className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                                 {/* Avatar */}
                                 <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
                                     {getInitials(ev.candidate?.firstName, ev.candidate?.lastName)}
                                 </div>
 
                                 {/* Info */}
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-[140px]">
                                     <p className="font-medium text-gray-900">
                                         {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
                                     </p>
@@ -795,7 +795,7 @@ function MemberView() {
                                 </div>
 
                                 {/* Score */}
-                                <div className="flex flex-col items-center flex-shrink-0 px-3">
+                                <div className="flex flex-col items-center flex-shrink-0 px-1 sm:px-3">
                                     <span className="text-2xl font-bold text-blue-600">{getScoreOn20(ev)}</span>
                                     <span className="text-[10px] text-gray-400">/20</span>
                                 </div>
@@ -803,7 +803,7 @@ function MemberView() {
                                 {/* Link */}
                                 <a
                                     href={`/dashboard/candidates/${ev.candidate?.id}`}
-                                    className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0"
+                                    className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right inline-flex items-center justify-end min-h-[36px]"
                                 >
                                     Voir fiche
                                 </a>
@@ -814,7 +814,7 @@ function MemberView() {
             </div>
 
             {/* Next candidates card */}
-            <div className="bg-white border rounded-xl p-6">
+            <div className="bg-white border rounded-xl p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-gray-900">Prochains candidats à évaluer</h2>
                     {nextCandidates.length > 0 && (

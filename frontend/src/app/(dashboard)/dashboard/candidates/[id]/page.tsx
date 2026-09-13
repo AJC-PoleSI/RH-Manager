@@ -181,8 +181,8 @@ export default function CandidateDetailPage({
       </button>
 
       {/* Candidate Header */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <CandidatePhoto
             candidateId={candidate.id}
             firstName={candidate.firstName || candidate.first_name}
@@ -191,17 +191,23 @@ export default function CandidateDetailPage({
             version={candidate.photoUpdatedAt}
             size={64}
           />
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
               {candidate.firstName || candidate.first_name}{" "}
               {candidate.lastName || candidate.last_name}
             </h1>
-            <p className="text-gray-500">{candidate.email}</p>
-            <div className="flex gap-4 mt-1 text-sm text-gray-400">
-              {candidate.phone && <span>{candidate.phone}</span>}
+            <p className="text-gray-500 text-sm sm:text-base break-words">
+              {candidate.email}
+            </p>
+            {/* Ces trois méta-données se compressaient en colonnes de trois
+                caractères sur iPhone : elles passent à la ligne. */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-400">
+              {candidate.phone && (
+                <span className="whitespace-nowrap">{candidate.phone}</span>
+              )}
               {candidate.formation && <span>{candidate.formation}</span>}
               {(candidate.date_of_birth || candidate.dateOfBirth) && (
-                <span>
+                <span className="whitespace-nowrap">
                   Ne(e) le {candidate.date_of_birth || candidate.dateOfBirth}
                 </span>
               )}
@@ -253,7 +259,7 @@ export default function CandidateDetailPage({
 
       {/* Voeux de pôle */}
       {candidate.wishes && candidate.wishes.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <svg
               width="16"
@@ -343,7 +349,7 @@ export default function CandidateDetailPage({
             className="bg-white rounded-xl border border-gray-200"
           >
             {/* Header épreuve + note collective */}
-            <div className="px-6 py-4 border-b border-gray-100">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -391,7 +397,7 @@ export default function CandidateDetailPage({
                   : "Evaluateur inconnu";
 
                 return (
-                  <div key={ev.id || evIdx} className="px-6 py-4">
+                  <div key={ev.id || evIdx} className="px-4 sm:px-6 py-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         {/* Avatar évaluateur */}

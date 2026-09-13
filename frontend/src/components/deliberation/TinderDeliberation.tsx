@@ -182,7 +182,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                 </p>
                 <button
                     onClick={onShowReserve}
-                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-lg shadow-lg transition-all hover:shadow-xl"
+                    className="px-4 sm:px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-lg shadow-lg transition-all hover:shadow-xl"
                 >
                     👀 Voir les réserves
                 </button>
@@ -256,7 +256,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                     onTouchEnd={onTouchEnd}
                 >
                     {/* Card Header */}
-                    <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-5 text-white">
+                    <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 sm:px-6 py-5 text-white">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
                                 {/* Trombinoscope : le visage d'abord, c'est ce qui
@@ -324,7 +324,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
                     </div>
 
                     {/* Card Body - Scrollable */}
-                    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
                         {/* Wishes */}
                         {currentCandidate.wishes?.length > 0 && (
                             <div className="flex items-center gap-2 flex-wrap">
@@ -443,7 +443,7 @@ export default function TinderDeliberation({ candidates, selectedTour, onDecisio
             {/* Reserve Modal */}
             {showReserveModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowReserveModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 space-y-4" onClick={e => e.stopPropagation()}>
                         <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                             <HelpCircle size={20} className="text-orange-500" />
                             Mise sous réserve

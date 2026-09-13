@@ -204,7 +204,7 @@ function LoginForm() {
     // ─── LANDING VIEW ──────────────────────────────────────────────
     if (view === 'landing') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+            <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-2xl text-center">
                     <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 tracking-tight">
                         Audencia Junior Conseil
@@ -257,7 +257,7 @@ function LoginForm() {
     // ─── CANDIDATE CHOICE VIEW ──────────────────────────────────────
     if (view === 'candidate-choice') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+            <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-2xl text-center">
                     <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
                         Espace Candidat
@@ -315,8 +315,8 @@ function LoginForm() {
     // ─── CANDIDATE LOGIN ─────────────────────────────────────────────
     if (view === 'candidate-login') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
+            <div className="min-h-dscreen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-4 sm:p-6 sm:p-8">
                     <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Candidat</h1>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez votre email et date de naissance
@@ -393,8 +393,8 @@ function LoginForm() {
     // ─── LOGIN MODAL (Member) ──────────────────────────────────────
     if (view === 'login') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
+            <div className="min-h-dscreen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-4 sm:p-6 sm:p-8">
                     <h1 className="text-xl font-semibold text-gray-900 text-center">Connexion Staff</h1>
                     <p className="mt-1 text-sm text-gray-500 text-center">
                         Entrez vos identifiants AJC
@@ -474,8 +474,8 @@ function LoginForm() {
     // ─── MOT DE PASSE OUBLIÉ (Member) ──────────────────────────────
     if (view === 'forgot-password') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black/40 px-4">
-                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
+            <div className="min-h-dscreen flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-[440px] bg-white rounded-xl shadow-2xl p-4 sm:p-6 sm:p-8">
                     {forgotSent ? (
                         <>
                             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-2xl">
@@ -551,7 +551,7 @@ function LoginForm() {
     // ─── EMAIL PENDING ──────────────────────────────────────────────
     if (view === 'email-pending') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white px-4">
+            <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
                 <div className="w-full max-w-md text-center">
                     <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: '#FFF0F3' }}>
                         <svg className="h-8 w-8" style={{ color: '#E8446A' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -606,8 +606,8 @@ function LoginForm() {
 
     // ─── INSCRIPTION MODAL (Candidate) ─────────────────────────────
     return (
-        <div className="min-h-screen flex items-center justify-center bg-black/40 px-4 py-8">
-            <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-6 sm:p-8">
+        <div className="min-h-dscreen flex items-center justify-center bg-black/40 px-4 py-8">
+            <div className="w-full max-w-[520px] bg-white rounded-xl shadow-2xl p-4 sm:p-6 sm:p-8">
                 <h1 className="text-xl font-semibold text-gray-900 text-center">Inscription Candidat</h1>
 
                 {/* Progress bar */}
@@ -849,7 +849,7 @@ export default function LoginPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="min-h-dscreen flex items-center justify-center bg-gray-50">
                     <p className="text-gray-500 text-sm">Chargement…</p>
                 </div>
             }

@@ -78,7 +78,7 @@ export default function ChangePasswordModal({
         className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-3">
+        <div className="px-4 sm:px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold text-gray-900">
               {forced ? "Choisissez votre mot de passe" : "Changer mon mot de passe"}
@@ -100,7 +100,7 @@ export default function ChangePasswordModal({
         </div>
 
         {done ? (
-          <div className="px-6 py-8 text-center">
+          <div className="px-4 sm:px-6 py-8 text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-xl">
               ✓
             </div>
@@ -115,7 +115,7 @@ export default function ChangePasswordModal({
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
               <div className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
                 {error}

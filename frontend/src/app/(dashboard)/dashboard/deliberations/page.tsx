@@ -892,7 +892,7 @@ export default function DeliberationsPage() {
 
           {showPoleKpis && (
             <div className="px-5 pb-5 border-t border-gray-100">
-              <div className="overflow-x-auto mt-3">
+              <div className="scroll-x mt-3">
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-gray-200">
@@ -967,7 +967,7 @@ export default function DeliberationsPage() {
 
           {showTour3Tracking && (
             <div className="px-5 pb-5 border-t border-gray-100 pt-3">
-              <div className="overflow-x-auto">
+              <div className="scroll-x">
                 <table className="w-full text-sm text-left min-w-[480px]">
                   <thead>
                     <tr className="text-xs text-gray-400 uppercase">
@@ -1034,7 +1034,7 @@ export default function DeliberationsPage() {
 
           {showTour3Final && (
             <div className="px-5 pb-5 border-t border-gray-100 pt-3">
-              <div className="overflow-x-auto">
+              <div className="scroll-x">
                 <table className="w-full text-sm text-left min-w-[480px]">
                   <thead>
                     <tr className="text-xs text-gray-400 uppercase">
@@ -1097,7 +1097,7 @@ export default function DeliberationsPage() {
                   <h3 className="font-semibold text-gray-900">{pole}</h3>
                   <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{poleCandidates.length} candidat{poleCandidates.length > 1 ? "s" : ""}</span>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="scroll-x">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                       <tr>
@@ -1476,7 +1476,7 @@ export default function DeliberationsPage() {
 
                       {/* EXPANDED DETAILS */}
                       {expanded && (
-                        <div className="border-t border-gray-100 px-6 py-5 space-y-4 bg-gray-50/50" onClick={(e) => e.stopPropagation()}>
+                        <div className="border-t border-gray-100 px-4 sm:px-6 py-5 space-y-4 bg-gray-50/50" onClick={(e) => e.stopPropagation()}>
                           {/* Contact info */}
                           <div>
                             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Informations</h3>
@@ -1718,14 +1718,14 @@ export default function DeliberationsPage() {
       {/* Reserve Modal */}
       {showReserveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-modal-80 overflow-y-auto mx-4">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h1 className="text-lg font-semibold text-gray-900">Candidats en reserve ({reserveCandidates.length})</h1>
               <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {reserveCandidates.length === 0 && (
                 <p className="text-center text-gray-400 py-8">Aucun candidat en reserve pour ce tour.</p>
               )}
@@ -1768,14 +1768,14 @@ export default function DeliberationsPage() {
       {/* Validate & Send Modal */}
       {showValidateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-modal-80 overflow-y-auto mx-4">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h1 className="text-lg font-semibold text-gray-900">Valider et Envoyer</h1>
               <button onClick={() => setShowValidateModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Summary Stats */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-xl p-4 text-center bg-green-50">

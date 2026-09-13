@@ -11,7 +11,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "RH Manager",
   description: "Application de gestion RH et recrutement",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
+  // viewport-fit=cover : la page occupe tout l'écran des iPhone à encoche,
+  // les marges de sécurité étant reprises via env(safe-area-inset-*) en CSS.
+  viewport:
+    "width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover",
 };
 
 export default function RootLayout({

@@ -295,7 +295,7 @@ function PreviewModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-modal-85 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 border-b border-gray-100 flex items-start justify-between">

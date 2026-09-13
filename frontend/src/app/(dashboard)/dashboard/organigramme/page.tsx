@@ -538,7 +538,7 @@ function CandidateTile({
                 : "Coup de cœur"
           }
           className={cn(
-            "inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all",
+            "inline-flex items-center justify-center w-10 h-10 sm:w-8 sm:h-8 rounded-full border transition-all",
             c.isFavorite
               ? "bg-rose-500 border-rose-500 text-white hover:bg-rose-600"
               : "bg-white border-gray-200 text-gray-300 hover:text-rose-400 hover:border-rose-200",

@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 export default function PolitiqueConfidentialitePage() {
   const router = useRouter();
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-6 py-16">
+    <div className="min-h-dscreen bg-gray-50">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
         <button
           onClick={() => router.back()}
           className="text-sm text-blue-600 hover:underline mb-8 inline-block"

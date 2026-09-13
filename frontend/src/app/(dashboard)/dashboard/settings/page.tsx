@@ -822,7 +822,7 @@ export default function CreationPage() {
       {tourToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[420px] mx-4 p-6 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[420px] mx-4 p-4 sm:p-6 max-h-modal overflow-y-auto">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
               Supprimer le tour
             </h2>
@@ -880,7 +880,7 @@ export default function CreationPage() {
 
         {/* Table */}
         <div className="bg-white border border-gray-200 rounded-[10px] overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="scroll-x">
           <table className="w-full text-sm text-left min-w-[760px]">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
@@ -950,7 +950,7 @@ export default function CreationPage() {
           <div className="absolute inset-0 bg-black/40" />
 
           {/* Panel */}
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[620px] max-h-[90vh] overflow-y-auto mx-4 p-6">
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-[620px] max-h-modal overflow-y-auto mx-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-5">
               {editingEpreuveId
                 ? "Modifier l\u0027épreuve"

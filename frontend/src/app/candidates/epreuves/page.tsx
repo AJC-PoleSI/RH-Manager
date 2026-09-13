@@ -703,7 +703,7 @@ export default function CandidateEpreuvesPage() {
 
                   {/* Calendar grid */}
                   <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <div className="scroll-x">
                       <div
                         className="min-w-[700px]"
                         style={{
@@ -1087,7 +1087,7 @@ export default function CandidateEpreuvesPage() {
           onClick={() => setSelectedSlot(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-modal overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header with color accent */}
@@ -1107,7 +1107,7 @@ export default function CandidateEpreuvesPage() {
                     style={{ backgroundColor: isSlotEnrolled ? "#22C55E" : color.accent }}
                   />
 
-                  <div className="px-6 py-5">
+                  <div className="px-4 sm:px-6 py-5">
                     {/* Close button */}
                     <div className="flex items-start justify-between mb-4">
                       <div>
@@ -1251,7 +1251,7 @@ export default function CandidateEpreuvesPage() {
           onClick={() => setConflictModal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-4 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3 mb-4">

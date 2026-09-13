@@ -2,8 +2,8 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-300 mt-auto">
-      <div className="max-w-6xl mx-auto px-6 py-10">
+    <footer className="bg-gray-900 text-gray-300 mt-auto pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex flex-col md:flex-row md:justify-between gap-8">
           {/* Bloc 1 : Infos Audencia Junior Conseil */}
           <div className="space-y-3">
@@ -95,7 +95,7 @@ export default function Footer() {
 
       {/* Barre basse */}
       <div className="border-t border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
           <p className="text-xs text-gray-500 text-center">
             AJC Recrutement - Application de gestion RH
           </p>

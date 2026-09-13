@@ -89,7 +89,7 @@ export default function DeleteAccountRequest() {
             aria-modal="true"
             aria-labelledby="titre-suppression-compte"
             onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-gray-200 rounded-xl shadow-xl w-full max-w-md p-6"
+            className="bg-white border border-gray-200 rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6"
           >
             {state === "sent" ? (
               <>

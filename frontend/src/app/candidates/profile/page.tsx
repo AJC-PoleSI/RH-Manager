@@ -76,7 +76,7 @@ export default function CandidateProfilePage() {
         </div>
       )}
 
-      <section className="bg-white border border-gray-200 rounded-xl p-6">
+      <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">Ma photo</h2>
         <CandidatePhotoUpload
           candidateId={candidate.id}
@@ -89,7 +89,7 @@ export default function CandidateProfilePage() {
         />
       </section>
 
-      <section className="bg-white border border-gray-200 rounded-xl p-6">
+      <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">
           Mes informations
         </h2>

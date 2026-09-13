@@ -422,7 +422,7 @@ export default function CandidatesPage() {
                 {/* Create Modal */}
                 {isCreating && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
                             <CardHeader><CardTitle>Nouveau Candidat</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleCreate} className="space-y-4">
@@ -444,7 +444,7 @@ export default function CandidatesPage() {
                 {/* Edit Modal */}
                 {editingCandidate && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
                             <CardHeader><CardTitle>Modifier Candidat</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSaveEdit} className="space-y-4">
@@ -466,7 +466,7 @@ export default function CandidatesPage() {
                 {/* Comment Modal */}
                 {commentCandidate && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
                             <CardHeader><CardTitle>Commentaire pour {commentCandidate.firstName}</CardTitle></CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSaveComment} className="space-y-4">
@@ -489,8 +489,8 @@ export default function CandidatesPage() {
 
                 {/* Candidate Table */}
                 <Card>
-                    <div className="p-4 border-b border-gray-100 flex gap-4">
-                        <div className="relative flex-1">
+                    <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <div className="relative flex-1 min-w-0">
                             <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                             <Input
                                 placeholder="Rechercher un candidat..."
@@ -500,12 +500,12 @@ export default function CandidatesPage() {
                             />
                         </div>
                         {/* Phase 3 — Filtre Pôle Choix n°1 */}
-                        <div className="relative">
-                            <Filter className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                        <div className="relative w-full sm:w-auto">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                             <select
                                 value={filterPole}
                                 onChange={e => { setFilterPole(e.target.value); }}
-                                className="pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:min-w-[200px] sm:w-auto"
+                                className="pl-9 pr-3 py-2 min-h-[44px] border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:min-w-[200px] sm:w-auto"
                             >
                                 <option value="all">Tous les pôles</option>
                                 <option value="Système d'information">SI</option>
@@ -540,8 +540,8 @@ export default function CandidatesPage() {
                                         className={`p-4 flex items-center justify-between hover:bg-gray-50 group cursor-pointer transition-colors ${selectedCandidate?.id === candidate.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
                                         onClick={() => openDetail(candidate)}
                                     >
-                                        <div className="flex items-center gap-4">
-                                            <div className="relative">
+                                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                            <div className="relative shrink-0">
                                                 <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm">
                                                     {candidate.firstName?.[0]}{candidate.lastName?.[0]}
                                                 </div>
@@ -552,8 +552,8 @@ export default function CandidatesPage() {
                                                     />
                                                 )}
                                             </div>
-                                            <div>
-                                                <p className="font-semibold text-gray-900 flex items-center gap-2">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-gray-900 flex flex-wrap items-center gap-x-2 gap-y-1">
                                                     {candidate.firstName} {candidate.lastName}
                                                     {candidate.email_verified === false && (
                                                         <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold border border-red-200">
@@ -561,9 +561,9 @@ export default function CandidatesPage() {
                                                         </span>
                                                     )}
                                                 </p>
-                                                <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                                                    <span>{candidate.email}</span>
-                                                    {candidate.phone && <><span>·</span><span>{candidate.phone}</span></>}
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 mt-0.5">
+                                                    <span className="break-words">{candidate.email}</span>
+                                                    {candidate.phone && <><span className="hidden sm:inline">·</span><span className="whitespace-nowrap">{candidate.phone}</span></>}
                                                     {/* Pole badge */}
                                                     {candidate.wishes?.[0]?.pole && (
                                                         <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
@@ -573,19 +573,21 @@ export default function CandidatesPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                <button className="p-1.5 hover:bg-gray-200 rounded text-gray-500" onClick={() => setEditingCandidate({ ...candidate })} title="Modifier"><Edit size={14} /></button>
-                                                <button className="p-1.5 hover:bg-red-100 rounded text-red-500" onClick={() => handleDelete(candidate.id)} title="Supprimer"><Trash2 size={14} /></button>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {/* Un iPhone n'a pas de survol : ces actions restent visibles
+                                                sur mobile, et ne se révèlent au survol qu'à partir de md. */}
+                                            <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100" onClick={e => e.stopPropagation()}>
+                                                <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-gray-200 rounded text-gray-500" onClick={() => setEditingCandidate({ ...candidate })} title="Modifier" aria-label="Modifier"><Edit size={16} /></button>
+                                                <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-red-100 rounded text-red-500" onClick={() => handleDelete(candidate.id)} title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
                                             </div>
-                                            <ChevronRight size={16} className="text-gray-300" />
+                                            <ChevronRight size={16} className="text-gray-300 shrink-0" />
                                         </div>
                                     </div>
                                 ))}
                                 {candidates.length === 0 && <div className="p-8 text-center text-gray-500">Aucun candidat trouvé</div>}
                             </div>
                         )}
-                        <div className="p-4 border-t flex justify-between items-center">
+                        <div className="p-4 border-t flex justify-between items-center gap-2">
                             <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Précédent</Button>
                             <span className="text-sm text-gray-500">Page {page} / {totalPages}</span>
                             <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Suivant</Button>

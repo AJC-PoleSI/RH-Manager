@@ -64,7 +64,7 @@ export default function VerifyEmailPage() {
   // ─── VERIFYING ─────────────────────────────────────────────────────
   if (status === "verifying") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-dscreen flex items-center justify-center bg-white">
         <div className="text-center">
           <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-pink-500" />
           <p className="text-gray-500 text-sm">Vérification en cours…</p>
@@ -76,7 +76,7 @@ export default function VerifyEmailPage() {
   // ─── SUCCESS ────────────────────────────────────────────────────────
   if (status === "success") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
         <div className="w-full max-w-md text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -92,7 +92,7 @@ export default function VerifyEmailPage() {
           </div>
           <button
             onClick={() => router.push("/candidates/dashboard")}
-            className="mt-6 inline-block rounded-lg px-6 py-2.5 text-sm font-semibold text-white"
+            className="mt-6 inline-block rounded-lg px-4 sm:px-6 py-2.5 text-sm font-semibold text-white"
             style={{ backgroundColor: "#E8446A" }}
           >
             Accéder à mon espace →
@@ -105,7 +105,7 @@ export default function VerifyEmailPage() {
   // ─── EXPIRED ────────────────────────────────────────────────────────
   if (status === "expired") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
         <div className="w-full max-w-md text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-100">
             <svg className="h-8 w-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -159,7 +159,7 @@ export default function VerifyEmailPage() {
 
   // ─── ERROR ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
+    <div className="min-h-dscreen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-md text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
           <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -170,7 +170,7 @@ export default function VerifyEmailPage() {
         <p className="mt-2 text-gray-500 text-sm">{errorMsg}</p>
         <button
           onClick={() => router.push("/login")}
-          className="mt-6 inline-block rounded-lg px-6 py-2.5 text-sm font-semibold text-white"
+          className="mt-6 inline-block rounded-lg px-4 sm:px-6 py-2.5 text-sm font-semibold text-white"
           style={{ backgroundColor: "#E8446A" }}
         >
           Retour à la connexion

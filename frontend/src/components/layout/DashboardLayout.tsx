@@ -33,44 +33,48 @@ function TopNav({ onChangePassword }: { onChangePassword: () => void }) {
         : "bg-blue-50 text-blue-600";
 
   return (
-    <header className="h-14 min-h-[56px] bg-white border-b border-gray-200 sticky top-0 z-50 flex items-center justify-between pl-14 pr-3 md:px-5 gap-2">
-      {/* Left: Logo + role chip */}
-      <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-pink-400 inline-block" />
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
-        </div>
-        <span className="text-[13px] md:text-[15px] font-semibold text-gray-900 tracking-tight truncate">
-          AJC Recrutement
-        </span>
-        <span
-          className={`hidden sm:inline-block text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${chipColor}`}
-        >
-          {roleLabel}
-        </span>
-      </div>
-
-      {/* Right: Notifications + user name + logout */}
-      <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        {/* La cloche sert aussi aux candidats depuis les annonces générales :
-            même composant, l'API sert la bonne table selon le rôle. */}
-        {(role === "member" || role === "candidate") && <NotificationBell />}
-        <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">{displayName}</span>
-        {role === "member" && (
-          <button
-            onClick={onChangePassword}
-            className="text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
-            title="Changer mon mot de passe"
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 pt-[var(--safe-top)]">
+      <div className="h-14 min-h-[56px] flex items-center justify-between gap-2 pl-[calc(3.5rem+var(--safe-left))] pr-[calc(0.75rem+var(--safe-right))] md:pl-[calc(1.25rem+var(--safe-left))] md:pr-[calc(1.25rem+var(--safe-right))]">
+        {/* Left: Logo + role chip */}
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-pink-400 inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
+          </div>
+          <span className="text-[13px] md:text-[15px] font-semibold text-gray-900 tracking-tight truncate">
+            AJC Recrutement
+          </span>
+          <span
+            className={`hidden sm:inline-block text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${chipColor}`}
           >
-            🔑<span className="hidden lg:inline ml-1">Mot de passe</span>
+            {roleLabel}
+          </span>
+        </div>
+
+        {/* Right: Notifications + user name + logout */}
+        <div className="flex items-center gap-1.5 md:gap-4 shrink-0">
+          {/* La cloche sert aussi aux candidats depuis les annonces générales :
+              même composant, l'API sert la bonne table selon le rôle. */}
+          {(role === "member" || role === "candidate") && <NotificationBell />}
+          <span className="hidden md:inline text-sm text-gray-700 font-medium truncate max-w-[200px]">
+            {displayName}
+          </span>
+          {role === "member" && (
+            <button
+              onClick={onChangePassword}
+              className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
+              title="Changer mon mot de passe"
+            >
+              🔑<span className="hidden lg:inline ml-1">Mot de passe</span>
+            </button>
+          )}
+          <button
+            onClick={logout}
+            className="inline-flex items-center justify-center min-h-[36px] text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
+          >
+            Déconnexion
           </button>
-        )}
-        <button
-          onClick={logout}
-          className="text-xs md:text-sm text-gray-500 border border-gray-300 rounded-md px-2 md:px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors whitespace-nowrap"
-        >
-          Déconnexion
-        </button>
+        </div>
       </div>
     </header>
   );
@@ -119,7 +123,7 @@ function DashboardContent({
   // Show loading while initializing, redirecting, or role-checking.
   if (!isInitialized || !token || roleMismatch) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-dscreen">
         <p className="text-gray-600">Chargement...</p>
       </div>
     );
@@ -136,12 +140,14 @@ function DashboardContent({
       {!mustChangePassword && showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
       )}
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-dscreen">
         <TopNav onChangePassword={() => setShowPasswordModal(true)} />
         <div className="flex flex-1 relative">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-y-auto">
-            <main className="flex-1 bg-gray-50 p-4 md:p-[26px_30px]">{children}</main>
+            <main className="flex-1 bg-gray-50 py-4 md:py-[26px] pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))] md:pl-[calc(30px+var(--safe-left))] md:pr-[calc(30px+var(--safe-right))]">
+              {children}
+            </main>
             <Footer />
           </div>
         </div>

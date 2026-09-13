@@ -31,6 +31,17 @@ const Sidebar = () => {
     setIsMobileOpen(false);
   }, [pathname]);
 
+  // Tiroir ouvert : on fige le défilement de la page derrière lui, sinon
+  // sur iPhone le doigt fait défiler le contenu masqué au lieu du menu.
+  useEffect(() => {
+    if (!isMobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isMobileOpen]);
+
   const adminSections: NavSection[] = [
     {
       title: "Navigation",
@@ -118,7 +129,7 @@ const Sidebar = () => {
       {/* Bouton hamburger mobile */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="md:hidden fixed top-3 left-3 z-[60] bg-white border border-gray-200 rounded-lg p-2 shadow-sm"
+        className="md:hidden fixed top-[calc(0.625rem+var(--safe-top))] left-[calc(0.75rem+var(--safe-left))] z-[60] flex h-10 w-10 items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm active:bg-gray-100"
         aria-label="Ouvrir le menu"
       >
         <svg
@@ -160,6 +171,7 @@ const Sidebar = () => {
             : "md:w-[68px]",
           // Mobile : off-canvas
           "max-md:fixed max-md:top-0 max-md:left-0 max-md:z-[80] max-md:h-full max-md:shadow-xl max-md:w-[260px]",
+          "max-md:pt-[var(--safe-top)] max-md:pb-[var(--safe-bottom)] max-md:pl-[var(--safe-left)] max-md:overscroll-contain",
           isMobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
         )}
       >
@@ -168,7 +180,7 @@ const Sidebar = () => {
           {/* Fermer sur mobile */}
           <button
             onClick={() => setIsMobileOpen(false)}
-            className="md:hidden text-gray-400 hover:text-gray-600"
+            className="md:hidden -ml-1 flex h-10 w-10 items-center justify-center text-gray-400 hover:text-gray-600"
             aria-label="Fermer le menu"
           >
             <svg
@@ -225,7 +237,7 @@ const Sidebar = () => {
                       href={item.href}
                       title={!isExpanded ? item.label : undefined}
                       className={cn(
-                        "flex items-center gap-3 py-2.5 text-sm rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden",
+                        "flex items-center gap-3 py-2.5 max-md:min-h-[44px] text-sm rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden",
                         isExpanded ? "px-3" : "md:px-0 md:justify-center",
                         // Mobile toujours expanded
                         "max-md:px-3 max-md:justify-start",
