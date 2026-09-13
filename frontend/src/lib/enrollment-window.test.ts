@@ -4,7 +4,7 @@ import {
   isLastMinuteWaived,
   readLastMinuteWaiveUntil,
   LAST_MINUTE_SETTING_KEY,
-  type SettingsClient,
+  type SettingReader,
 } from "./enrollment-window";
 
 /** Dimanche 13/09/2026 15:44 — l'instant qui a motivé le réglage. */
@@ -174,7 +174,7 @@ describe("readLastMinuteWaiveUntil", () => {
   it("lit la bonne clé et rend le jour", async () => {
     const seen: { key?: string } = {};
     const got = await readLastMinuteWaiveUntil(
-      fakeClient({ data: { value: "2026-09-14" }, error: null }, seen),
+      fakeReader({ data: { value: "2026-09-14" }, error: null }, seen),
     );
     expect(got).toBe("2026-09-14");
     expect(seen.key).toBe(LAST_MINUTE_SETTING_KEY);
@@ -182,30 +182,28 @@ describe("readLastMinuteWaiveUntil", () => {
 
   it("réglage absent → null", async () => {
     expect(
-      await readLastMinuteWaiveUntil(fakeClient({ data: null, error: null })),
+      await readLastMinuteWaiveUntil(fakeReader({ data: null, error: null })),
     ).toBeNull();
   });
 
   it("erreur base → null (on retombe sur les 24h)", async () => {
     expect(
       await readLastMinuteWaiveUntil(
-        fakeClient({ data: null, error: { message: "boom" } }),
+        fakeReader({ data: null, error: { message: "boom" } }),
       ),
     ).toBeNull();
   });
 
   it("valeur vidée par l'admin → null", async () => {
     expect(
-      await readLastMinuteWaiveUntil(fakeClient({ data: { value: "" }, error: null })),
+      await readLastMinuteWaiveUntil(fakeReader({ data: { value: "" }, error: null })),
     ).toBeNull();
   });
 
-  it("client qui lève → null", async () => {
-    const client = {
-      from: () => {
-        throw new Error("réseau");
-      },
-    } as unknown as SettingsClient;
-    expect(await readLastMinuteWaiveUntil(client)).toBeNull();
+  it("lecture qui lève → null", async () => {
+    const read: SettingReader = () => {
+      throw new Error("réseau");
+    };
+    expect(await readLastMinuteWaiveUntil(read)).toBeNull();
   });
 });

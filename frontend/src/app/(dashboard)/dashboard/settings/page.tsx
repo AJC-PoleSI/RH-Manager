@@ -6,6 +6,7 @@ import AnnouncementComposer from "@/components/announcements/AnnouncementCompose
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
+import { LAST_MINUTE_SETTING_KEY } from "@/lib/enrollment-window";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
