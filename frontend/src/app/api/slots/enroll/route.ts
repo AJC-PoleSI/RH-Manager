@@ -181,20 +181,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback: block enrollment if slot starts in less than 24h
-    if (slot.date && slot.start_time) {
-      const slotDate = slot.date.split("T")[0];
-      const slotStart = new Date(`${slotDate}T${slot.start_time}`);
-      const hoursUntil = (slotStart.getTime() - Date.now()) / (1000 * 60 * 60);
-      if (hoursUntil < 24) {
-        return Response.json(
-          {
-            error:
-              "Les inscriptions sont fermées pour ce créneau (moins de 24h avant l'épreuve).",
-          },
-          { status: 403 },
-        );
-      }
+    // DÉLAI D'INSCRIPTION : 24h de préavis, sauf pour les créneaux couverts
+    // par l'exception datée `inscription_sans_delai_jusqu_au` (réglage admin,
+    // cf. lib/enrollment-window.ts). Réglage absent ou base muette → 24h.
+    const windowVerdict = checkEnrollmentWindow({
+      date: slot.date,
+      startTime: slot.start_time,
+      waiveUntil: await readLastMinuteWaiveUntil(supabaseAdmin),
+    });
+    if (!windowVerdict.allowed) {
+      return Response.json(
+        { error: ENROLLMENT_WINDOW_MESSAGES[windowVerdict.reason] },
+        { status: 403 },
+      );
     }
 
     // Note: min_members check removed — status published/ready is the source of truth
