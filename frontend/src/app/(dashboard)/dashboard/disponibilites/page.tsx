@@ -73,10 +73,6 @@ function colorFor(id: string): string {
   return EPREUVE_COLORS[h % EPREUVE_COLORS.length];
 }
 
-/** Pas d'échantillonnage de la vue d'ensemble. 15 min = le pas de tracé de la
- *  grille : aucune plage déclarée ne peut être coupée en deux par l'agrégat. */
-const STEP_MIN = 15;
-
 /** Plus c'est foncé, plus il y a de monde. Le rouge isole le cas critique
  *  (un seul examinateur dispo : aucun jury possible à deux). */
 function countColor(n: number): string {
@@ -282,52 +278,42 @@ export default function TeamAvailabilityPage() {
 
   const selected = selectedId === ALL ? null : weekById.get(selectedId) ?? null;
 
-  // ─── Vue d'ensemble : combien de monde, minute par minute ──────────
+  // ─── Vue d'ensemble : combien de monde, demi-heure par demi-heure ──
 
-  const teamOverlays: Overlay[] = useMemo(() => {
+  /**
+   * Carte de densité, une ligne par demi-heure.
+   *
+   * Premier essai : réutiliser TimeBandGrid avec un bloc agrégé par plage.
+   * Injouable — avec 46 membres, l'effectif change tous les quarts d'heure et
+   * la grille se brisait en dizaines de blocs étiquetés. Un tableau dense
+   * répond bien mieux à la seule question qu'on pose à une vue d'équipe :
+   * « à quel moment ai-je assez de monde ? ». Les deux vues individuelles,
+   * elles, restent la grille exacte du membre.
+   *
+   * L'effectif compté est celui qui couvre TOUTE la demi-heure : c'est ce
+   * qu'il faut pour tenir un créneau, pas « qui passe par là ».
+   */
+  const heatRows = useMemo(() => {
     if (selectedId !== ALL) return [];
-    const out: Overlay[] = [];
-    for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
-      // On fusionne sur l'EFFECTIF, pas sur la composition : à composition
-      // identique exigée, la grille se brisait en blocs de 15 min dès qu'une
-      // personne entrait ou sortait — illisible. Ici, la couleur dit « combien
-      // de jurys je peux monter à ce moment-là » ; le clic dit qui, avec les
-      // horaires de chacun quand ils ne couvrent pas tout le bloc.
-      let run: { start: number; end: number; count: number } | null = null;
-      const flush = () => {
-        if (!run || run.count === 0) return;
-        out.push({
-          id: `agg-${dayIndex}-${run.start}`,
-          dayIndex,
-          laneId: "",
-          startMin: run.start,
-          endMin: run.end,
-          label: `${run.count} dispo`,
-          color: countColor(run.count),
-          hideCheck: true,
-        });
-      };
-
-      for (let t = GRID_START_MIN; t < GRID_END_MIN; t += STEP_MIN) {
-        const count = weeks.filter((w) =>
-          w.bands.some(
-            (b) =>
-              b.dayIndex === dayIndex &&
-              b.startMin <= t &&
-              b.endMin >= t + STEP_MIN,
-          ),
-        ).length;
-        if (run && run.count === count) {
-          run.end = t + STEP_MIN;
-        } else {
-          flush();
-          run = { start: t, end: t + STEP_MIN, count };
-        }
-      }
-      flush();
+    const rows: { startMin: number; counts: number[] }[] = [];
+    for (let t = GRID_START_MIN; t < GRID_END_MIN; t += 30) {
+      rows.push({
+        startMin: t,
+        counts: days.map(
+          (_, dayIndex) =>
+            weeks.filter((w) =>
+              w.bands.some(
+                (b) =>
+                  b.dayIndex === dayIndex &&
+                  b.startMin <= t &&
+                  b.endMin >= t + 30,
+              ),
+            ).length,
+        ),
+      });
     }
-    return out;
-  }, [selectedId, weeks, days.length]);
+    return rows;
+  }, [selectedId, weeks, days]);
 
   /** Qui est là sur [start, end[, et sur quelle portion exactement. */
   const whoIsFree = useCallback(
@@ -638,30 +624,27 @@ export default function TeamAvailabilityPage() {
                 ) : (
                   <TimeBandGrid days={days} bands={selected.bands} readOnly />
                 )
-              ) : teamOverlays.length === 0 ? (
+              ) : sansDispo === weeks.length ? (
                 <EmptyState
                   icon={<Users className="h-6 w-6" />}
                   text="Personne n'a déclaré de disponibilité cette semaine."
                 />
               ) : (
                 <>
-                  <TimeBandGrid
+                  <DensityMap
                     days={days}
-                    bands={[]}
-                    overlays={teamOverlays}
-                    onOverlayClick={(o) =>
+                    rows={heatRows}
+                    onPick={(dayIndex, startMin) =>
                       setOpenBlock({
-                        dayIndex: o.dayIndex,
-                        startMin: o.startMin,
-                        endMin: o.endMin,
-                        people: whoIsFree(o.dayIndex, o.startMin, o.endMin),
+                        dayIndex,
+                        startMin,
+                        endMin: startMin + 30,
+                        people: whoIsFree(dayIndex, startMin, startMin + 30),
                       })
                     }
-                    readOnly
-                    pxPerMin={1.3}
                   />
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                    <span>Nombre d&apos;examinateurs disponibles :</span>
+                    <span>Examinateurs dispos sur toute la demi-heure :</span>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <span key={n} className="flex items-center gap-1">
                         <span
@@ -672,7 +655,7 @@ export default function TeamAvailabilityPage() {
                       </span>
                     ))}
                     <span className="text-gray-400">
-                      · cliquez un bloc pour voir qui
+                      · cliquez une case pour voir qui
                     </span>
                   </div>
                 </>
@@ -775,6 +758,81 @@ export default function TeamAvailabilityPage() {
   );
 }
 
+/**
+ * Carte de densité des disponibilités : une colonne par jour, une ligne par
+ * demi-heure, l'effectif en clair dans la case. Volontairement dense — c'est
+ * une vue de survol, pas une vue de saisie.
+ */
+function DensityMap({
+  days,
+  rows,
+  onPick,
+}: {
+  days: Date[];
+  rows: { startMin: number; counts: number[] }[];
+  onPick: (dayIndex: number, startMin: number) => void;
+}) {
+  return (
+    <div className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-white">
+      <table className="w-full border-separate border-spacing-0 text-center text-xs">
+        <thead className="sticky top-0 z-10 bg-white">
+          <tr>
+            <th className="w-14 border-b border-gray-100 bg-white py-2" />
+            {days.map((d) => (
+              <th
+                key={d.toISOString()}
+                className="border-b border-gray-100 bg-white px-1 py-2 font-semibold text-gray-700"
+              >
+                <span className="uppercase text-[10px] text-gray-400">
+                  {format(d, "EEE", { locale: fr })}
+                </span>
+                <br />
+                {format(d, "d MMM", { locale: fr })}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.startMin}>
+              <td
+                className={`sticky left-0 bg-white pr-2 text-right tabular-nums ${
+                  r.startMin % 60 === 0
+                    ? "font-medium text-gray-600"
+                    : "text-[10px] text-gray-300"
+                }`}
+              >
+                {minutesToHHMM(r.startMin)}
+              </td>
+              {r.counts.map((n, dayIndex) => (
+                <td key={dayIndex} className="p-px">
+                  <button
+                    disabled={n === 0}
+                    onClick={() => onPick(dayIndex, r.startMin)}
+                    className={`flex h-6 w-full items-center justify-center rounded-[3px] font-semibold tabular-nums transition-transform ${
+                      n === 0
+                        ? "cursor-default bg-gray-50 text-transparent"
+                        : "text-white hover:scale-[1.06]"
+                    }`}
+                    style={n > 0 ? { backgroundColor: countColor(n) } : undefined}
+                    title={
+                      n === 0
+                        ? "Personne"
+                        : `${n} examinateur${n > 1 ? "s" : ""} — voir qui`
+                    }
+                  >
+                    {n || "·"}
+                  </button>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function EmptyState({
   icon,
   text,
@@ -827,6 +885,14 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
@@ -837,7 +903,9 @@ function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
-          <h3 className="font-semibold capitalize text-gray-900">{title}</h3>
+          <h3 className="font-semibold text-gray-900 first-letter:uppercase">
+            {title}
+          </h3>
           <button
             onClick={onClose}
             className="rounded-lg bg-gray-100 p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
