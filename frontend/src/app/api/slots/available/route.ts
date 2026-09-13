@@ -11,6 +11,7 @@ import {
 } from "@/lib/room-packing";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { getToursByNumber } from "@/lib/tour-status";
+import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/available — créneaux que le candidat peut voir
@@ -56,17 +57,6 @@ export async function GET(req: NextRequest) {
         .map((e: any) => e.slot_id);
     }
 
-    let query = supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        `
-        *,
-        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size, min_candidates, is_pole_test, pole),
-        enrollments:slot_enrollments(candidate_id, status),
-        members:slot_member_assignments(id)
-      `,
-      );
-
     // PUBLICATION PAR ÉPREUVE : un candidat ne voit que les créneaux
     // explicitement publiés ("published"/"full"). Les statuts draft/open/
     // ready restent invisibles tant que l'admin n'a pas publié l'épreuve.
@@ -74,22 +64,47 @@ export async function GET(req: NextRequest) {
     const candidateStatuses = ["published", "full"];
     const memberStatuses = ["open", "published", "ready", "full"];
 
-    if (isCandidate && candidateEnrolledSlotIds.length > 0) {
-      // Include slots matching the visible statuses OR any slot the
-      // candidate is enrolled in (regardless of status).
-      const idList = candidateEnrolledSlotIds.join(",");
-      query = query.or(
-        `status.in.(${candidateStatuses.join(",")}),id.in.(${idList})`,
-      );
-    } else if (isCandidate) {
-      query = query.in("status", candidateStatuses);
-    } else {
-      query = query.in("status", memberStatuses);
-    }
+    const buildQuery = () => {
+      let query = supabaseAdmin
+        .from("evaluation_slots")
+        .select(
+          `
+        *,
+        epreuve:epreuves(id, name, tour, type, duration_minutes, is_group_epreuve, group_size, min_candidates, is_pole_test, pole),
+        enrollments:slot_enrollments(candidate_id, status),
+        members:slot_member_assignments(id)
+      `,
+        );
 
-    const { data: rawSlots, error } = await query
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true });
+      if (isCandidate && candidateEnrolledSlotIds.length > 0) {
+        // Include slots matching the visible statuses OR any slot the
+        // candidate is enrolled in (regardless of status).
+        const idList = candidateEnrolledSlotIds.join(",");
+        query = query.or(
+          `status.in.(${candidateStatuses.join(",")}),id.in.(${idList})`,
+        );
+      } else if (isCandidate) {
+        query = query.in("status", candidateStatuses);
+      } else {
+        query = query.in("status", memberStatuses);
+      }
+
+      return query
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .order("id", { ascending: true });
+    };
+
+    // Lecture PAGINÉE : PostgREST tronque toute lecture non paginée à 1000
+    // lignes, sans erreur. La prod dépasse déjà 1000 créneaux au total (1076
+    // au 12/09/2026) ; le filtre candidat reste sous le plafond aujourd'hui
+    // (477 publiés), mais une troncature ici ferait disparaître des créneaux
+    // de l'écran d'inscription SANS aucun signal — et la branche
+    // membre/admin, qui inclut open/ready, dépasse déjà le plafond.
+    // `.order("id")` en dernier garantit un parcours stable entre les pages.
+    const { data: rawSlots, error } = await fetchAllRows<any>((from, to) =>
+      buildQuery().range(from, to),
+    );
 
     if (error) throw error;
 
