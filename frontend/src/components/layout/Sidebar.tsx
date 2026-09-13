@@ -57,6 +57,11 @@ const Sidebar = () => {
           icon: "🌙",
         },
         { href: "/dashboard/planning", label: "Planning", icon: "📅" },
+        {
+          href: "/dashboard/disponibilites",
+          label: "Dispos équipe",
+          icon: "✅",
+        },
         { href: "/dashboard/entretiens", label: "Liste à copier", icon: "📋" },
         { href: "/dashboard/kpis", label: "Statistiques", icon: "📈" },
       ],
