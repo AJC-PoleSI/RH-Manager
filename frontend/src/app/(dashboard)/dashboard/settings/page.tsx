@@ -313,6 +313,9 @@ export default function CreationPage() {
         setDeadlineCandidats(isoToDatetimeLocal(res.data.deadline_candidats));
       if (res.data.deadline_membres)
         setDeadlineMembres(isoToDatetimeLocal(res.data.deadline_membres));
+      setLastMinuteUntil(
+        String(res.data[LAST_MINUTE_SETTING_KEY] || "").slice(0, 10),
+      );
     } catch (e) {
       console.error(e);
     }
