@@ -13,6 +13,10 @@ import {
   scoreValidationMessage,
   validateScores,
 } from "@/lib/evaluation-criteria";
+import {
+  getExaminersByEvaluation,
+  mergeExaminers,
+} from "@/lib/evaluation-examiners";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -59,6 +63,13 @@ export async function GET(req: NextRequest) {
     );
 
     if (error) throw error;
+
+    // Examinateurs crédités : une note partagée (binôme / collective) est
+    // saisie par un seul membre mais appartient à TOUS les examinateurs
+    // inscrits au créneau, même à celui qui ne s'est jamais connecté.
+    const examinersByEval = await getExaminersByEvaluation(
+      (evaluations || []).map((e: any) => e.id),
+    );
 
     const parsed = (evaluations || []).map((e: any) => ({
       id: e.id,
