@@ -25,6 +25,12 @@ interface EvaluationData {
     candidate: { id: string; firstName: string; lastName: string };
     epreuve: { id?: string; name: string; tour: number; type: string; maxTotal?: number };
     member?: { id: string; firstName?: string; lastName?: string; email: string };
+    /**
+     * Tous les examinateurs au nom desquels la note compte : l'auteur, plus
+     * les co-examinateurs inscrits au créneau d'une note partagée (binôme /
+     * collective) — même ceux qui ne se sont jamais connectés.
+     */
+    examiners?: { id: string; firstName?: string; lastName?: string; email: string }[];
     /** Note partagée (binôme / collective) plutôt qu'avis individuel. */
     isGroup?: boolean;
     closedAt?: string | null;
@@ -50,6 +56,21 @@ function getScoreTotal(scores: Record<string, number | string>): number {
  */
 function getScoreOn20(ev: EvaluationData): number {
     return toTwenty(getScoreTotal(ev.scores), ev.epreuve?.maxTotal || 20);
+}
+
+/**
+ * Noms de tous les examinateurs crédités d'une note : l'auteur d'abord, puis
+ * les co-examinateurs inscrits au même créneau (note partagée en binôme ou
+ * note collective). Repli sur le seul auteur pour les notes antérieures au
+ * suivi des co-examinateurs.
+ */
+function examinerNames(ev: EvaluationData): string[] {
+    const list = ev.examiners?.length
+        ? ev.examiners
+        : ev.member
+            ? [ev.member]
+            : [];
+    return list.map(m => `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email);
 }
 
 /**
@@ -231,10 +252,17 @@ function AdminView() {
     const memberEvalCounts: Record<string, number> = {};
     const memberEvalAverages: Record<string, number[]> = {};
     evaluations.forEach(ev => {
-        const mId = ev.member?.id || '';
-        memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
-        if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
-        if (hasAnyScore(ev.scores)) memberEvalAverages[mId].push(getScoreOn20(ev));
+        // Une note partagée compte pour CHAQUE examinateur inscrit au créneau,
+        // pas seulement pour celui qui l'a saisie (l'autre a fait passer
+        // l'entretien même s'il ne s'est pas connecté).
+        const ids = ev.examiners?.length
+            ? ev.examiners.map(ex => ex.id)
+            : [ev.member?.id || ''];
+        ids.forEach(mId => {
+            memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
+            if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
+            if (hasAnyScore(ev.scores)) memberEvalAverages[mId].push(getScoreOn20(ev));
+        });
     });
 
     if (loading) {
@@ -543,7 +571,16 @@ function AdminView() {
                                 return (
                                     <tr key={ev.id} className="hover:bg-gray-50">
                                         <td className="px-3 sm:px-6 py-3 font-medium text-gray-900">
-                                            {ev.member ? `${ev.member.firstName || ''} ${ev.member.lastName || ''}`.trim() || ev.member.email : '-'}
+                                            {examinerNames(ev).length > 0 ? (
+                                                examinerNames(ev).map((name, i) => (
+                                                    <span key={i} className="block">
+                                                        {name}
+                                                        {i > 0 && (
+                                                            <span className="ml-1 text-[10px] font-normal text-indigo-500">co-examinateur</span>
+                                                        )}
+                                                    </span>
+                                                ))
+                                            ) : '-'}
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-gray-700">
                                             {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
@@ -789,6 +826,11 @@ function MemberView() {
                                     <p className="text-sm text-gray-500">
                                         {ev.epreuve?.name || ''} &middot; Tour {ev.epreuve?.tour || '?'}
                                     </p>
+                                    {ev.isGroup && examinerNames(ev).length > 1 && (
+                                        <p className="text-xs text-indigo-500">
+                                            Note partagée &middot; {examinerNames(ev).join(' & ')}
+                                        </p>
+                                    )}
                                     {ev.comment && (
                                         <p className="text-sm text-gray-400 italic mt-1 truncate">{ev.comment}</p>
                                     )}

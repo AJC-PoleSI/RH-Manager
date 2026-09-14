@@ -199,6 +199,25 @@ export default function CandidatesPage() {
             const res = await api.get('/candidates/export');
             const data: any[] = res.data?.data || [];
 
+            // Examinateurs crédités d'une note : l'auteur + les co-examinateurs
+            // inscrits au créneau pour une note partagée (binôme / collective),
+            // y compris celui qui ne s'est pas connecté pour la saisir.
+            const examinerNames = (e: any): string => {
+                const list: any[] = e.examiners?.length
+                    ? e.examiners
+                    : e.members
+                        ? [{ firstName: e.members.first_name, lastName: e.members.last_name, email: e.members.email }]
+                        : [];
+                const names = list
+                    .map((m) =>
+                        m.firstName
+                            ? `${m.firstName} ${m.lastName || ''}`.trim()
+                            : m.email || '',
+                    )
+                    .filter(Boolean);
+                return names.join(' & ');
+            };
+
             const parseScores = (raw: any): Record<string, number> => {
                 try {
                     const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -241,9 +260,7 @@ export default function CandidatesPage() {
                 const tourComments = (tour: number) =>
                     (evalsByTour[tour] || [])
                         .map((e) => {
-                            const who = e.members?.first_name
-                                ? `${e.members.first_name} ${e.members.last_name || ''}`.trim()
-                                : e.members?.email || 'Évaluateur';
+                            const who = examinerNames(e) || 'Évaluateur';
                             const ep = e.epreuves?.name || '';
                             return e.comment ? `[${ep} — ${who}] ${e.comment}` : '';
                         })
@@ -290,9 +307,7 @@ export default function CandidatesPage() {
                         Tour: e.epreuves?.tour ?? '',
                         Épreuve: e.epreuves?.name || '',
                         Type: e.epreuves?.type || '',
-                        Évaluateur: e.members?.first_name
-                            ? `${e.members.first_name} ${e.members.last_name || ''}`.trim()
-                            : e.members?.email || '',
+                        Évaluateur: examinerNames(e),
                         'Détail des notes': scoreEntries.map(([k, v]) => `${k}: ${v}`).join(' | '),
                         Total: maxTotal > 0 ? `${total} / ${maxTotal}` : total,
                         'Note /20': noteOn20,

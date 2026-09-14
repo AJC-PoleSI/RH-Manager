@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { isMissingColumnError } from "@/lib/evaluation-access";
+import { getAllExaminerCredits } from "@/lib/evaluation-examiners";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -47,10 +48,10 @@ export async function GET(req: NextRequest) {
         .from("members")
         .select("id", { count: "exact", head: true }),
       // Paginé : le total d'évaluations dépassera 1000 au fil des tours.
-      fetchAllRows<{ member_id: string }>((from, to) =>
+      fetchAllRows<{ id: string; member_id: string }>((from, to) =>
         supabaseAdmin
           .from("candidate_evaluations")
-          .select("member_id")
+          .select("id, member_id")
           .order("id")
           .range(from, to),
       ),
@@ -69,13 +70,32 @@ export async function GET(req: NextRequest) {
         .select("id", { count: "exact", head: true }),
     ]);
 
-    const evaluationsPerMember: Record<string, number> = {};
+    // Une note partagée (binôme / collective) est saisie par un seul membre
+    // mais compte pour TOUS les examinateurs inscrits au créneau
+    // (evaluator_tracking) — y compris celui qui ne s'est pas connecté. On
+    // dédoublonne par paire (évaluation, membre) : l'auteur, déjà tracké,
+    // ne doit pas être compté deux fois.
+    const credits = await getAllExaminerCredits();
+    const pairs = new Set<string>();
+    const knownEvalIds = new Set<string>();
     if (perMemberRes.data) {
       for (const row of perMemberRes.data) {
-        evaluationsPerMember[row.member_id] =
-          (evaluationsPerMember[row.member_id] || 0) + 1;
+        knownEvalIds.add(row.id);
+        if (row.member_id) pairs.add(`${row.id}::${row.member_id}`);
       }
     }
+    for (const c of credits) {
+      // Ligne de suivi orpheline (évaluation supprimée hors application) :
+      // elle ne doit créditer personne.
+      if (!knownEvalIds.has(c.evaluationId)) continue;
+      pairs.add(`${c.evaluationId}::${c.memberId}`);
+    }
+
+    const evaluationsPerMember: Record<string, number> = {};
+    Array.from(pairs).forEach((pair) => {
+      const memberId = pair.split("::")[1];
+      evaluationsPerMember[memberId] = (evaluationsPerMember[memberId] || 0) + 1;
+    });
 
     const evaluationsPerMemberArray = Object.entries(evaluationsPerMember)
       .map(([memberId, count]) => ({ memberId, _count: { id: count } }))

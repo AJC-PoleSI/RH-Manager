@@ -32,6 +32,12 @@ interface Evaluation {
   createdAt: string;
   epreuve: { id: string; name: string; tour: number; type: string } | null;
   member: EvalMember | null;
+  /**
+   * Tous les examinateurs crédités : l'auteur, plus les co-examinateurs
+   * inscrits au créneau pour une note partagée (binôme / collective) — même
+   * celui qui ne s'est pas connecté pour la saisir.
+   */
+  examiners?: EvalMember[] | null;
 }
 
 interface EpreuveGroup {
@@ -391,10 +397,18 @@ export default function CandidateDetailPage({
             {/* Notes individuelles par évaluateur */}
             <div className="divide-y divide-gray-50">
               {group.evaluations.map((ev, evIdx) => {
-                const memberName = ev.member
-                  ? `${ev.member.firstName || ""} ${ev.member.lastName || ""}`.trim() ||
-                    ev.member.email
-                  : "Evaluateur inconnu";
+                const examiners =
+                  ev.examiners && ev.examiners.length > 0
+                    ? ev.examiners
+                    : ev.member
+                      ? [ev.member]
+                      : [];
+                const names = examiners.map(
+                  (m) =>
+                    `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.email,
+                );
+                const memberName =
+                  names.length > 0 ? names.join(" & ") : "Evaluateur inconnu";
 
                 return (
                   <div key={ev.id || evIdx} className="px-4 sm:px-6 py-4">
@@ -413,6 +427,12 @@ export default function CandidateDetailPage({
                           <p className="text-sm font-medium text-gray-900">
                             {memberName}
                           </p>
+                          {names.length > 1 && (
+                            <p className="text-[11px] text-indigo-500">
+                              note partagée entre les {names.length}{" "}
+                              examinateurs du créneau
+                            </p>
+                          )}
                           <p className="text-xs text-gray-400">
                             {new Date(ev.createdAt).toLocaleDateString(
                               "fr-FR",

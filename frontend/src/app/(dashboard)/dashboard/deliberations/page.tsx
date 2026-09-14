@@ -77,6 +77,23 @@ interface Evaluation {
     maxTotal?: number;
   };
   member?: { email: string; firstName?: string; lastName?: string };
+  /**
+   * Tous les examinateurs crédités de la note : l'auteur, plus les
+   * co-examinateurs inscrits au créneau d'une note partagée (binôme /
+   * collective), y compris celui qui ne s'est pas connecté.
+   */
+  examiners?: { email: string; firstName?: string; lastName?: string }[];
+}
+
+/**
+ * Libellé des examinateurs d'une note : « Marie & Paul » pour une note
+ * partagée, le seul auteur sinon (et pour les notes antérieures au suivi des
+ * co-examinateurs).
+ */
+function examinerLabel(ev: Evaluation): string {
+  const list = ev.examiners?.length ? ev.examiners : ev.member ? [ev.member] : [];
+  const names = list.map((m) => m.firstName || m.email).filter(Boolean);
+  return names.length > 0 ? names.join(" & ") : "Evaluateur";
 }
 
 interface Deliberation {
@@ -1436,7 +1453,7 @@ export default function DeliberationsPage() {
                                     {ev.comment || "Pas de commentaire"}
                                   </p>
                                   <p className={`text-gray-400 mt-0.5 ${focusMode ? "text-sm" : "text-xs"}`}>
-                                    {ev.member?.firstName || ev.member?.email || "Evaluateur"} &middot; {ev.epreuve?.name || ""} &middot; Note: {(() => {
+                                    {examinerLabel(ev)} &middot; {ev.epreuve?.name || ""} &middot; Note: {(() => {
                                       const { note, coef } = getNoteSur20(ev);
                                       if (note === null) return `${getScoreTotal(ev.scores)} (bareme inconnu)`;
                                       return `${note}/20${coef !== 1 ? ` (coef x${formatCoef(coef)})` : ""}`;
@@ -1533,7 +1550,7 @@ export default function DeliberationsPage() {
                                         })()}
                                       </div>
                                       <p className="text-xs text-gray-400 mb-1">
-                                        Par {ev.member?.firstName || ev.member?.email || "Evaluateur"}
+                                        Par {examinerLabel(ev)}
                                       </p>
                                       {scores && Object.keys(scores).length > 0 && (
                                         <div className="flex gap-1.5 flex-wrap mb-1">

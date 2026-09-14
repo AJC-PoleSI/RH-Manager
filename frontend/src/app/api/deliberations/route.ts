@@ -2,6 +2,10 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { latestTourWishes } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
+import {
+  getExaminersByEvaluation,
+  mergeExaminers,
+} from "@/lib/evaluation-examiners";
 import { NextRequest } from "next/server";
 
 // GET /api/deliberations - Fetch all deliberations with candidate info
@@ -111,6 +115,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Examinateurs crédités de chaque note : une note partagée (binôme /
+    // collective) appartient aux deux examinateurs inscrits au créneau, pas
+    // au seul qui l'a saisie.
+    const examinersByEval = await getExaminersByEvaluation(
+      (candidates || []).flatMap((c: any) =>
+        (c.candidate_evaluations || []).map((ev: any) => ev.id),
+      ),
+    );
+
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
@@ -122,7 +135,20 @@ export async function GET(req: NextRequest) {
       }
 
       evaluations = evaluations.map((ev: any) => {
-        const isOwnEval = ev.member_id === payload.id;
+        const author = ev.members
+          ? {
+              id: ev.member_id,
+              email: ev.members.email,
+              firstName: ev.members.first_name || "",
+              lastName: ev.members.last_name || "",
+            }
+          : null;
+        const examiners = mergeExaminers(author, examinersByEval[ev.id]);
+        // « Sa » note : celle qu'il a saisie OU la note partagée dont il est
+        // co-examinateur inscrit.
+        const isOwnEval =
+          ev.member_id === payload.id ||
+          examiners.some((ex) => ex.id === payload.id);
         return {
           id: ev.id,
           scores:
@@ -136,6 +162,12 @@ export async function GET(req: NextRequest) {
                 lastName: ev.members.last_name,
               }
             : null,
+          // Tous les examinateurs au nom desquels la note compte.
+          examiners: examiners.map((ex) => ({
+            email: ex.email,
+            firstName: ex.firstName,
+            lastName: ex.lastName,
+          })),
           epreuve: ev.epreuves
             ? {
                 id: ev.epreuves.id,

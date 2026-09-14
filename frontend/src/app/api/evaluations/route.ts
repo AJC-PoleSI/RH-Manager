@@ -108,6 +108,19 @@ export async function GET(req: NextRequest) {
             email: e.members.email,
           }
         : null,
+      // Tous les examinateurs au nom desquels cette note compte (auteur en
+      // premier). Une note individuelle n'en a qu'un : son auteur.
+      examiners: mergeExaminers(
+        e.members
+          ? {
+              id: e.members.id,
+              firstName: e.members.first_name || "",
+              lastName: e.members.last_name || "",
+              email: e.members.email,
+            }
+          : null,
+        examinersByEval[e.id],
+      ),
     }));
 
     return Response.json(parsed);

@@ -8,6 +8,10 @@ import {
   sumScores,
   toTwenty,
 } from "@/lib/evaluation-criteria";
+import {
+  getExaminersByEvaluation,
+  mergeExaminers,
+} from "@/lib/evaluation-examiners";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -41,6 +45,13 @@ export async function GET(
 
     const canSeeAllComments = payload.isAdmin;
 
+    // Examinateurs crédités (evaluator_tracking) : une note partagée compte
+    // au nom des deux examinateurs inscrits au créneau, même si l'un d'eux ne
+    // s'est jamais connecté pour la saisir.
+    const examinersByEval = await getExaminersByEvaluation(
+      (evaluations || []).map((e: any) => e.id),
+    );
+
     // Parse scores and format each evaluation
     const parsed = (evaluations || []).map((e: any) => {
       const scores = normalizeScores(e.scores);
@@ -49,7 +60,12 @@ export async function GET(
       // sur 20 comparable entre épreuves (même règle que /api/deliberations).
       const maxTotal = getTotalMaxPoints(e.epreuves?.evaluation_questions);
 
-      const isOwnEval = e.member_id === payload.id;
+      // « Sa » note : celle qu'il a saisie, mais aussi la note partagée dont
+      // il est co-examinateur inscrit — sinon le binôme qui ne s'est pas
+      // connecté le jour J ne verrait jamais le commentaire de SA note.
+      const isOwnEval =
+        e.member_id === payload.id ||
+        (examinersByEval[e.id] || []).some((ex) => ex.id === payload.id);
 
       return {
         id: e.id,
@@ -82,6 +98,18 @@ export async function GET(
               lastName: e.members.last_name || "",
             }
           : null,
+        // Auteur + co-examinateurs crédités (auteur en premier).
+        examiners: mergeExaminers(
+          e.members
+            ? {
+                id: e.members.id,
+                email: e.members.email,
+                firstName: e.members.first_name || "",
+                lastName: e.members.last_name || "",
+              }
+            : null,
+          examinersByEval[e.id],
+        ),
       };
     });
 
