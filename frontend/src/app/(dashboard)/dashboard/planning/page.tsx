@@ -226,6 +226,18 @@ export default function PlanningPage() {
   // Dispos de TOUS les membres pour la seule journée du créneau ouvert :
   // elles servent à distinguer « disponible » de « à forcer » dans la liste.
   const [dayAvailabilities, setDayAvailabilities] = useState<any[]>([]);
+  // Sélecteur « + candidat » de la modale de détail.
+  //
+  // Contrairement aux examinateurs (une trentaine, déjà en mémoire), les
+  // candidats se comptent en centaines : la liste complète ne serait ni
+  // lisible ni utile. On interroge donc le serveur à la frappe et on
+  // n'affiche RIEN tant que la recherche n'a pas commencé.
+  const [candPickerOpen, setCandPickerOpen] = useState(false);
+  const [candQuery, setCandQuery] = useState("");
+  const [candResults, setCandResults] = useState<any[]>([]);
+  const [candSearching, setCandSearching] = useState(false);
+  const [candBusy, setCandBusy] = useState<string | null>(null);
+  const [candNotify, setCandNotify] = useState(true);
   const [repartitionLoading, setRepartitionLoading] = useState(false);
   const [repartitionResult, setRepartitionResult] = useState<any>(null);
   const [resetLoading, setResetLoading] = useState(false);
@@ -657,10 +669,143 @@ export default function PlanningPage() {
     [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
   );
 
-  // Un autre créneau ouvert, c'est un autre contexte : refermer l'éditeur
-  // plutôt que de proposer sur ce créneau-ci la salle saisie pour le précédent.
+  /**
+   * Recherche de candidats à la frappe (250 ms de répit), côté serveur.
+   *
+   * En dessous de 2 caractères on ne cherche pas : la liste complète des
+   * candidats n'a rien à faire dans un sélecteur, et un échantillon
+   * arbitraire de 12 noms ne rendrait service à personne.
+   */
+  useEffect(() => {
+    if (!candPickerOpen) return;
+    const q = candQuery.trim();
+    const slotId = globalDetailSlot?.raw?.id;
+    if (q.length < 2 || !slotId) {
+      setCandResults([]);
+      setCandSearching(false);
+      return;
+    }
+    setCandSearching(true);
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(
+          `/candidates/search?q=${encodeURIComponent(q)}&creneauId=${slotId}`,
+        );
+        // Une réponse lente ne doit pas écraser le résultat d'une frappe
+        // plus récente.
+        if (!cancelled) setCandResults(res.data?.data || []);
+      } catch {
+        if (!cancelled) setCandResults([]);
+      } finally {
+        if (!cancelled) setCandSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [candQuery, candPickerOpen, globalDetailSlot?.raw?.id]);
+
+  /**
+   * Pose un candidat sur un créneau (admin) — ou l'y DÉPLACE.
+   *
+   * S'il était déjà inscrit sur un autre créneau de la même épreuve, le
+   * serveur libère l'ancien tout seul : c'est l'intention même du geste.
+   * Deux refus sont forçables (créneau complet, candidat déjà attendu
+   * ailleurs au même moment) — on les pose en question plutôt que de les
+   * opposer à l'admin, qui sait souvent pourquoi il insiste.
+   */
+  const assignCandidateToSlot = useCallback(
+    async (slot: any, cand: any) => {
+      const name =
+        `${cand.first_name || ""} ${cand.last_name || ""}`.trim() || "Ce candidat";
+
+      const attempt = async (force: boolean): Promise<void> => {
+        setCandBusy(cand.id);
+        try {
+          const res = await api.post("/creneaux/affecter-candidat", {
+            creneauId: slot.id,
+            candidateId: cand.id,
+            force,
+            notify: candNotify,
+          });
+          toast(res.data?.message || `${name} inscrit(e)`, "success");
+          setCandQuery("");
+          setCandResults([]);
+          setCandPickerOpen(false);
+          await refreshDetailSlot(slot.id);
+          setRepartitionResult(null);
+          fetchSlotData();
+          fetchAllSlotsGlobal();
+        } catch (e: any) {
+          const data = e?.response?.data;
+          const forcable =
+            data?.code === "SLOT_FULL" || data?.code === "TIME_CONFLICT";
+          if (forcable && !force) {
+            setCandBusy(null);
+            if (
+              window.confirm(
+                `${data.error}\n\nInscrire ${name} sur ce créneau quand même ?`,
+              )
+            ) {
+              await attempt(true);
+            }
+            return;
+          }
+          toast(data?.error || "Inscription impossible", "error");
+        } finally {
+          setCandBusy(null);
+        }
+      };
+
+      await attempt(false);
+    },
+    [
+      candNotify,
+      refreshDetailSlot,
+      fetchSlotData,
+      fetchAllSlotsGlobal,
+      toast,
+    ],
+  );
+
+  /**
+   * Retire un candidat d'un créneau (admin), depuis la modale de détail.
+   * Le serveur rouvre le créneau et lève le verrou « inscription » si plus
+   * personne n'y est attendu.
+   */
+  const unenrollCandidate = useCallback(
+    async (slot: any, candidateId: string, name: string) => {
+      if (!window.confirm(`Désinscrire ${name} de ce créneau ?`)) return;
+      setCandBusy(candidateId);
+      try {
+        await api.delete(`/slots/enroll/${slot.id}?candidateId=${candidateId}`);
+        await refreshDetailSlot(slot.id);
+        setRepartitionResult(null);
+        fetchSlotData();
+        fetchAllSlotsGlobal();
+        toast(`${name} a été désinscrit(e)`, "success");
+      } catch (e: any) {
+        toast(
+          e?.response?.data?.error || "Désinscription impossible",
+          "error",
+        );
+      } finally {
+        setCandBusy(null);
+      }
+    },
+    [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
+  );
+
+  // Un autre créneau ouvert, c'est un autre contexte : refermer les éditeurs
+  // plutôt que de proposer sur ce créneau-ci la salle saisie pour le précédent
+  // ou une recherche de candidat entamée ailleurs.
   useEffect(() => {
     setRoomEditOpen(false);
+    setCandPickerOpen(false);
+    setCandQuery("");
+    setCandResults([]);
   }, [globalDetailSlot?.raw?.id]);
 
   // Salles proposées pour déplacer le créneau ouvert dans la modale (logique
@@ -2040,7 +2185,26 @@ export default function PlanningPage() {
                         })()}
                       </div>
                       <div>
-                        <p className="text-xs uppercase text-gray-400 mb-1.5">Candidats ({candCount}/{maxCands})</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs uppercase text-gray-400">Candidats ({candCount}/{maxCands})</p>
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                setCandPickerOpen(!candPickerOpen);
+                                setCandQuery("");
+                                setCandResults([]);
+                              }}
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                                candPickerOpen
+                                  ? "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                                  : "bg-green-600 text-white hover:bg-green-700"
+                              }`}
+                              title={candPickerOpen ? "Fermer" : "Inscrire / déplacer un candidat"}
+                            >
+                              {candPickerOpen ? "×" : "+"}
+                            </button>
+                          )}
+                        </div>
                         {candCount === 0 ? (
                           <p className="text-red-700 text-sm italic">Aucun candidat inscrit</p>
                         ) : (
@@ -2055,16 +2219,9 @@ export default function PlanningPage() {
                                   <span className="flex-1">{name}</span>
                                   {isAdmin && cid && (
                                     <button
-                                      onClick={async () => {
-                                        if (!confirm(`Désinscrire ${name} de ce créneau ?`)) return;
-                                        try {
-                                          await api.delete(`/slots/enroll/${s.id}?candidateId=${cid}`);
-                                          fetchSlotData();
-                                        } catch (err: any) {
-                                          alert(err?.response?.data?.error || "Erreur lors de la désinscription");
-                                        }
-                                      }}
-                                      className="transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 text-red-500 hover:text-red-700 text-xs px-2 py-1 min-h-[32px] min-w-[32px] rounded hover:bg-red-50 flex-shrink-0"
+                                      onClick={() => unenrollCandidate(s, cid, name)}
+                                      disabled={candBusy === cid}
+                                      className="transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 text-red-500 hover:text-red-700 text-xs px-2 py-1 min-h-[32px] min-w-[32px] rounded hover:bg-red-50 flex-shrink-0 disabled:opacity-40"
                                       title="Désinscrire ce candidat"
                                     >
                                       ✕
@@ -2074,6 +2231,82 @@ export default function PlanningPage() {
                               );
                             })}
                           </ul>
+                        )}
+
+                        {/* ── Sélecteur de candidat ──
+                            On CHERCHE, on ne feuillette pas : plusieurs
+                            centaines de candidats, et l'admin en vise un
+                            précis. Chaque résultat indique où le candidat est
+                            attendu aujourd'hui pour CETTE épreuve — sans
+                            cette ligne, on déplacerait à l'aveugle sans
+                            savoir ce qu'on défait. */}
+                        {isAdmin && candPickerOpen && (
+                          <div className="mt-3 border border-gray-200 rounded-lg p-2 bg-gray-50">
+                            <input
+                              autoFocus
+                              value={candQuery}
+                              onChange={(ev) => setCandQuery(ev.target.value)}
+                              placeholder="Rechercher un candidat (nom, prénom, email)…"
+                              className="w-full text-sm px-2 py-1.5 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                            <label className="flex items-start gap-2 text-xs text-gray-600 mt-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={candNotify}
+                                onChange={(ev) => setCandNotify(ev.target.checked)}
+                                className="mt-0.5"
+                              />
+                              <span>
+                                Prévenir le candidat
+                                <span className="text-gray-400"> — message + email avec son nouveau créneau</span>
+                              </span>
+                            </label>
+
+                            <div className="max-h-56 overflow-y-auto mt-2">
+                              {candQuery.trim().length < 2 ? (
+                                <p className="text-xs text-gray-500 italic px-2 py-2">
+                                  Tapez au moins 2 caractères pour chercher.
+                                </p>
+                              ) : candSearching ? (
+                                <p className="text-xs text-gray-500 italic px-2 py-2">Recherche…</p>
+                              ) : candResults.length === 0 ? (
+                                <p className="text-sm text-gray-500 italic px-2 py-2">
+                                  Aucun candidat ne correspond.
+                                </p>
+                              ) : (
+                                candResults.map((c: any) => {
+                                  const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email;
+                                  const cur = c.current;
+                                  const curLabel = cur
+                                    ? `${new Date(String(cur.date).substring(0, 10) + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} ${String(cur.start_time || "").substring(0, 5)}${cur.room ? ` · ${cur.room}` : ""}`
+                                    : null;
+                                  return (
+                                    <button
+                                      key={c.id}
+                                      onClick={() => assignCandidateToSlot(s, c)}
+                                      disabled={candBusy === c.id || c.here}
+                                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-green-50 flex items-center gap-2 text-sm disabled:opacity-40 disabled:hover:bg-transparent"
+                                      title={c.here ? "Déjà sur ce créneau" : "Inscrire sur ce créneau"}
+                                    >
+                                      <span className="flex-1 min-w-0">
+                                        <span className="block truncate">{name}</span>
+                                        <span className="block text-[11px] text-gray-500 truncate">
+                                          {c.here
+                                            ? "déjà sur ce créneau"
+                                            : curLabel
+                                              ? `actuellement : ${curLabel}`
+                                              : "aucun créneau sur cette épreuve"}
+                                        </span>
+                                      </span>
+                                      <span className="text-green-600 font-bold flex-shrink-0">
+                                        {c.here ? "✓" : curLabel ? "→" : "+"}
+                                      </span>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                       <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2">

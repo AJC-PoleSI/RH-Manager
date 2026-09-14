@@ -1,7 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
-import { filterActiveEnrollments } from "@/lib/enrollment";
-import { isMissingColumnError } from "@/lib/slot-lock";
+import { releaseSlotAfterUnenroll } from "@/lib/slot-release";
 import { NextRequest } from "next/server";
 
 // DELETE /api/slots/enroll/[slotId]
@@ -98,66 +97,10 @@ export async function DELETE(
 
     if (deleteError) throw deleteError;
 
-    // If slot was full, reopen it
-    const { data: updatedSlot } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select(
-        "*, enrollments:slot_enrollments(id, status), members:slot_member_assignments(id)",
-      )
-      .eq("id", slotId)
-      .single();
-
-    if (updatedSlot && updatedSlot.status === "full") {
-      const memberCount = updatedSlot.members?.length || 0;
-      const minMembers = updatedSlot.min_members || 0;
-
-      // FIX (audit #7): if planning is globally visible to candidates
-      // and at least one examinator is still assigned, republish to
-      // "published" — otherwise the slot disappears from the candidate
-      // list and the freshly-opened seat goes wasted.
-      const { data: vis } = await supabaseAdmin
-        .from("system_settings")
-        .select("value")
-        .eq("key", "planning_visible_candidats")
-        .maybeSingle();
-      const planningVisible =
-        vis?.value === "true" || vis?.value === true;
-
-      let newStatus: string;
-      if (planningVisible && memberCount >= 1) {
-        newStatus = "published";
-      } else if (memberCount >= minMembers) {
-        newStatus = "ready";
-      } else {
-        newStatus = "open";
-      }
-
-      await supabaseAdmin
-        .from("evaluation_slots")
-        .update({ status: newStatus })
-        .eq("id", slotId);
-    }
-
-    // ── LIBÉRATION DU VERROU ──
-    // Le créneau avait été verrouillé PARCE QU'un candidat s'y était inscrit.
-    // Le dernier inscrit vient de se désister : plus aucun rendez-vous ne
-    // l'ancre, il peut retourner au rebrassage. On ne touche évidemment PAS
-    // aux verrous posés pour une autre raison (planning publié, décision de
-    // l'admin), qui survivent au désistement.
-    if (
-      updatedSlot &&
-      updatedSlot.locked_reason === "inscription" &&
-      !(updatedSlot.enrollments || []).some(filterActiveEnrollments)
-    ) {
-      const { error: unlockErr } = await supabaseAdmin
-        .from("evaluation_slots")
-        .update({ is_locked: false, locked_at: null, locked_reason: null })
-        .eq("id", slotId)
-        .eq("locked_reason", "inscription");
-      if (unlockErr && !isMissingColumnError(unlockErr)) {
-        console.error("Déverrouillage après désistement échoué:", unlockErr);
-      }
-    }
+    // Rouvrir le créneau s'il était complet et lever le verrou « inscription »
+    // s'il ne reste plus personne (règle partagée avec le déplacement de
+    // candidat par l'admin — cf. lib/slot-release.ts).
+    await releaseSlotAfterUnenroll(slotId);
 
     return Response.json({ success: true });
   } catch (error) {

@@ -15,6 +15,7 @@ import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
 import { isMissingColumnError } from "@/lib/slot-lock";
+import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { pickPackedRoom } from "@/lib/room-packing";
 import { NextRequest } from "next/server";
 
@@ -448,32 +449,8 @@ export async function POST(req: NextRequest) {
 
       if (existingEval && existingEval.length > 0) {
         const row: any = existingEval[0];
-        const rawScores = row.scores;
-        let hasRealScores = false;
-        try {
-          const parsed =
-            typeof rawScores === "string"
-              ? JSON.parse(rawScores)
-              : rawScores;
-          if (parsed && typeof parsed === "object") {
-            const values = Object.values(parsed);
-            hasRealScores =
-              values.length > 0 &&
-              values.some(
-                (v) =>
-                  v !== null &&
-                  v !== "" &&
-                  v !== undefined &&
-                  !(typeof v === "number" && isNaN(v)),
-              );
-          }
-        } catch {
-          // unparsable scores — treat as not finalized
-          hasRealScores = false;
-        }
-        const hasComment = !!(row.comment && String(row.comment).trim());
 
-        if (hasRealScores || hasComment) {
+        if (isFinalizedEvaluation(row)) {
           // Ne jamais révéler l'identité de l'examinateur au candidat
           // (anonymat requis pour les épreuves de groupe / business game).
           return Response.json(
