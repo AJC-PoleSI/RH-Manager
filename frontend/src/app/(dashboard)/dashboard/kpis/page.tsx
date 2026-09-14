@@ -4,22 +4,23 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Users, ClipboardCheck, Award, UserCheck } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 
 interface KPIData {
   totalCandidates: number;
   totalEvaluations: number;
   totalEpreuves: number;
   totalMembers: number;
-  evaluationsPerMember: { memberId: string; _count: { id: number } }[];
+  evaluationsPerMember: {
+    memberId: string;
+    _count: { id: number };
+    /** Identité de l'évaluateur (null si le membre a été supprimé depuis). */
+    member?: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      pole: string | null;
+    } | null;
+  }[];
 }
 
 interface EpreuveSlotStats {
@@ -129,10 +130,25 @@ export default function KPIsPage() {
     },
   ];
 
-  const chartData = data.evaluationsPerMember.map((item, index) => ({
-    name: `Membre ${index + 1}`,
-    evaluations: item._count.id,
-  }));
+  // Anciennement un histogramme plein écran aux barres anonymes
+  // (« Membre 1, Membre 2… ») : illisible et très encombrant. Tableau dense
+  // et nommé à la place, la barre servant juste d'échelle visuelle.
+  const evaluatorRows = data.evaluationsPerMember.map((item) => {
+    const m = item.member;
+    const fullName = m
+      ? `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.email
+      : "Membre supprimé";
+    return {
+      id: item.memberId,
+      name: fullName,
+      pole: m?.pole || null,
+      evaluations: item._count.id,
+    };
+  });
+  const maxEvaluations = Math.max(
+    1,
+    ...evaluatorRows.map((r) => r.evaluations),
+  );
 
   return (
     <div className="space-y-6">
@@ -161,26 +177,51 @@ export default function KPIsPage() {
         ))}
       </div>
 
-      {chartData.length > 0 && (
+      {evaluatorRows.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Évaluations par membre</CardTitle>
+          <CardHeader className="p-4 pb-1">
+            <CardTitle className="text-base">Évaluations par membre</CardTitle>
+            <p className="text-xs text-gray-500">
+              {evaluatorRows.length} membre
+              {evaluatorRows.length > 1 ? "s" : ""} ayant noté · une note
+              partagée compte pour ses deux examinateurs
+            </p>
           </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar
-                    dataKey="evaluations"
-                    fill="#6366f1"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+          <CardContent className="p-4 pt-0">
+            {/* Liste dense et scrollable : la page reste lisible même avec
+                25 évaluateurs, là où l'histogramme prenait tout l'écran. */}
+            <div className="max-h-56 overflow-y-auto -mx-2 px-2">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-gray-100">
+                  {evaluatorRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="py-1 pr-3 align-middle">
+                        <span className="font-medium text-gray-900">
+                          {row.name}
+                        </span>
+                        {row.pole && (
+                          <span className="ml-2 hidden text-xs text-gray-400 sm:inline">
+                            {row.pole}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 w-1/2 align-middle">
+                        <div className="h-2 w-full rounded-full bg-gray-100">
+                          <div
+                            className="h-2 rounded-full bg-indigo-500"
+                            style={{
+                              width: `${Math.round((row.evaluations / maxEvaluations) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="py-1 pl-3 text-right font-semibold text-gray-700 tabular-nums w-12 align-middle">
+                        {row.evaluations}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>

@@ -97,9 +97,46 @@ export async function GET(req: NextRequest) {
       evaluationsPerMember[memberId] = (evaluationsPerMember[memberId] || 0) + 1;
     });
 
+    // Noms des évaluateurs concernés : le graphe KPI affichait « Membre 1,
+    // Membre 2… » (illisible pour arbitrer qui a noté). Page déjà admin-only,
+    // et le tableau des évaluateurs nomme les mêmes personnes.
+    const evaluatorIds = Object.keys(evaluationsPerMember);
+    const membersById = new Map<
+      string,
+      { firstName: string; lastName: string; email: string; pole: string | null }
+    >();
+    if (evaluatorIds.length > 0) {
+      const { data: memberRows } = await fetchAllRows<any>((from, to) =>
+        supabaseAdmin
+          .from("members")
+          .select("id, email, first_name, last_name, pole")
+          .in("id", evaluatorIds)
+          .order("id")
+          .range(from, to),
+      );
+      for (const m of memberRows || []) {
+        membersById.set(m.id, {
+          firstName: m.first_name || "",
+          lastName: m.last_name || "",
+          email: m.email,
+          pole: m.pole ?? null,
+        });
+      }
+    }
+
     const evaluationsPerMemberArray = Object.entries(evaluationsPerMember)
-      .map(([memberId, count]) => ({ memberId, _count: { id: count } }))
-      .sort((a, b) => b._count.id - a._count.id);
+      .map(([memberId, count]) => ({
+        memberId,
+        _count: { id: count },
+        member: membersById.get(memberId) ?? null,
+      }))
+      .sort(
+        (a, b) =>
+          b._count.id - a._count.id ||
+          `${a.member?.lastName ?? ""}${a.member?.firstName ?? ""}`.localeCompare(
+            `${b.member?.lastName ?? ""}${b.member?.firstName ?? ""}`,
+          ),
+      );
 
     const toursCreated = toursRes.count ?? 0;
 
