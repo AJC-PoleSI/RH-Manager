@@ -16,6 +16,7 @@ import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { isMissingColumnError, lockPatch } from "@/lib/slot-lock";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
 import { sendDirectMessageEmail } from "@/lib/resend";
+import { sendSystemMessages } from "@/lib/system-messages";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -290,22 +291,15 @@ export async function POST(req: NextRequest) {
         ? `📅 Changement de créneau : votre épreuve « ${epName} » a lieu désormais le ${describeSlot(targetRef)}, et non plus le ${describeSlot(plan.from)}. Vérifiez votre calendrier.`
         : `📅 Vous êtes inscrit(e) à l'épreuve « ${epName} » le ${describeSlot(targetRef)}. Vérifiez votre calendrier.`;
 
-      try {
-        const { error: msgErr } = await supabaseAdmin
-          .from("private_messages")
-          .insert({
-            sender_id: null,
-            sender_role: "admin",
-            sender_name: "Système",
-            recipient_id: candidateId,
-            recipient_role: "candidate",
-            message,
-          });
-        if (msgErr) throw msgErr;
-        notified = true;
-      } catch (e) {
-        console.error("Message candidat (changement de créneau) échec:", e);
-      }
+      // `private_messages.sender_id` est NOT NULL : un message sans
+      // expéditeur est rejeté en silence (cf. lib/system-messages.ts).
+      notified = (await sendSystemMessages([
+        {
+          recipientId: candidateId,
+          recipientRole: "candidate",
+          message,
+        },
+      ])) > 0;
 
       if (candidate.email) {
         // Best-effort : l'email ne doit pas faire échouer le déplacement.
