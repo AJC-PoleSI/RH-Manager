@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { samePole, POLE_LISTE_ENTRETIENS } from "@/lib/auth-poles";
 import { useState, useEffect } from "react";
+import api from "@/lib/api";
 
 interface NavItem {
   href: string;
@@ -19,12 +21,33 @@ interface NavSection {
 
 const Sidebar = () => {
   const pathname = usePathname();
-  const { role, user } = useAuth();
+  const { role, user, updateUser } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const isAdmin = role === "member" && user?.isAdmin;
   const isCandidate = role === "candidate";
+  // La « Liste » des entretiens est ouverte aux admins et au pôle Marketing,
+  // qui la diffuse (le back vérifie le pôle en base, cf. /api/entretiens).
+  const peutVoirListe = samePole(user?.pole, POLE_LISTE_ENTRETIENS);
+
+  // Les sessions ouvertes avant l'ajout du pôle au jeton n'ont pas `pole` en
+  // mémoire : on le complète une fois, sans forcer une reconnexion.
+  useEffect(() => {
+    if (role !== "member" || !user?.id || user.pole !== undefined) return;
+    let annule = false;
+    api
+      .get(`/members/${user.id}`)
+      .then((res) => {
+        if (!annule) updateUser({ pole: res.data?.pole ?? null });
+      })
+      .catch(() => {
+        if (!annule) updateUser({ pole: null });
+      });
+    return () => {
+      annule = true;
+    };
+  }, [role, user?.id, user?.pole, updateUser]);
 
   // Fermer le menu mobile quand on navigue
   useEffect(() => {
@@ -62,7 +85,7 @@ const Sidebar = () => {
           label: "Dispos équipe",
           icon: "✅",
         },
-        { href: "/dashboard/entretiens", label: "Liste à copier", icon: "📋" },
+        { href: "/dashboard/entretiens", label: "Liste", icon: "📋" },
         { href: "/dashboard/kpis", label: "Statistiques", icon: "📈" },
       ],
     },
@@ -89,6 +112,15 @@ const Sidebar = () => {
           label: "Mes disponibilités",
           icon: "✅",
         },
+        ...(peutVoirListe
+          ? [
+              {
+                href: "/dashboard/entretiens",
+                label: "Liste",
+                icon: "📋",
+              },
+            ]
+          : []),
       ],
     },
     {

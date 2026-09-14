@@ -13,7 +13,11 @@ export interface TokenPayload {
   role: "member" | "candidate";
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
+  /** Pôle d'affiliation du membre (members.pole), si renseigné. */
+  pole?: string | null;
 }
+
+export { samePole, POLE_LISTE_ENTRETIENS } from "./auth-poles";
 
 // Le compte super-admin (« admin admin ») est le seul protégé : non
 // supprimable, vue admin pure (pas de fonctions membre). Identifié par son

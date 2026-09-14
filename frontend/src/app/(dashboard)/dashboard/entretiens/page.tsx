@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * « Liste à copier » — écran admin.
+ * « Liste » — écran admin + pôle Marketing.
  *
  * Un seul but : produire, pour une journée donnée, un bloc de texte brut
  * (heure — candidat — salle) qu'on colle tel quel dans un message ou qu'on
@@ -157,7 +157,7 @@ export default function EntretiensPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <ClipboardCopy size={22} className="text-primary-600" />
-          Liste à copier
+          Liste
         </h1>
         <p className="text-sm text-gray-500 mt-1">
           La liste des entretiens d&apos;une journée, en texte brut, prête à

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const { data: member, error } = await supabaseAdmin
       .from("members")
-      .select("id, email, password_hash, is_admin")
+      .select("id, email, password_hash, is_admin, pole")
       .eq("email", emailNorm)
       .single();
 
@@ -102,6 +102,9 @@ export async function POST(req: NextRequest) {
       role: "member",
       isAdmin: member.is_admin,
       isSuperAdmin: superAdmin,
+      // Le pôle sert à ouvrir certains écrans à une équipe précise
+      // (ex. « Liste » réservée aux admins + au pôle Marketing).
+      pole: member.pole ?? null,
     });
 
     return Response.json({
@@ -111,6 +114,7 @@ export async function POST(req: NextRequest) {
         email: member.email,
         isAdmin: member.is_admin,
         isSuperAdmin: superAdmin,
+        pole: member.pole ?? null,
         // true → le dashboard impose le choix d'un nouveau mot de passe
         // avant toute autre action (cf. ForcePasswordChange).
         mustChangePassword,

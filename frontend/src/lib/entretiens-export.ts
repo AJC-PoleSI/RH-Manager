@@ -1,7 +1,7 @@
 /**
  * entretiens-export — mise en forme TEXTE de la liste des entretiens du jour.
  *
- * Sert l'écran admin « Liste à copier » (/dashboard/entretiens) : on produit
+ * Sert l'écran « Liste » (/dashboard/entretiens) : on produit
  * un bloc de texte brut, prêt à être collé dans un message (WhatsApp, mail,
  * affichage papier), du type :
  *

@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import {
+  getTokenFromRequest,
+  unauthorized,
+  forbidden,
+  samePole,
+  POLE_LISTE_ENTRETIENS,
+} from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
 import { dayRangeUTC } from "@/lib/slot-conflicts";
 import { fetchAllRows } from "@/lib/supabase-paging";
@@ -10,7 +16,7 @@ export const dynamic = "force-dynamic";
 // GET /api/entretiens?date=YYYY-MM-DD
 //
 // Liste à plat des entretiens d'UNE journée (heure, candidat, salle, jury),
-// pour l'écran admin « Liste à copier ». Renvoie aussi les jours qui portent
+// pour l'écran « Liste ». Renvoie aussi les jours qui portent
 // au moins un créneau, pour que la page propose directement les bonnes dates.
 //
 // Nommée "entretiens" et non "slots" : les bloqueurs de pub (EasyList et
@@ -18,12 +24,29 @@ export const dynamic = "force-dynamic";
 // "/slots" — la requête n'atteint jamais le serveur, sans la moindre erreur
 // visible (cf. /api/kpis/creneaux, même contournement).
 //
-// SECURITY : admin uniquement. La réponse contient l'identité des candidats
-// ET la composition des jurys de la journée.
+// SECURITY : admins + membres du pôle Marketing (ce sont eux qui diffusent
+// la liste). La réponse contient l'identité des candidats ET la composition
+// des jurys de la journée. Le pôle est relu en base : les jetons émis avant
+// cette fonctionnalité ne le portent pas, et une affiliation peut changer
+// après la connexion.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
-  if (!payload.isAdmin) return forbidden();
+  if (!payload.isAdmin) {
+    if (payload.role !== "member") return forbidden();
+    const { data: membre, error: membreError } = await supabaseAdmin
+      .from("members")
+      .select("pole")
+      .eq("id", payload.id)
+      .maybeSingle();
+    if (membreError) {
+      console.error("Lecture du pôle impossible:", membreError);
+      return forbidden();
+    }
+    if (!samePole(membre?.pole, POLE_LISTE_ENTRETIENS)) {
+      return forbidden();
+    }
+  }
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
