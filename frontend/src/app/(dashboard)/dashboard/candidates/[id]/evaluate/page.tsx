@@ -13,6 +13,10 @@ import {
   getMaxPoints,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
+import {
+  GROUP_EVALUATION_MAX,
+  GROUP_EVALUATION_QUESTIONS,
+} from "@/lib/group-evaluation-criteria";
 
 type Question = EvaluationCriterion;
 
