@@ -9,9 +9,12 @@ import {
 
 describe("normalizeSlotLinkUrl", () => {
   it("accepte une URL http/https telle quelle", () => {
-    const res = normalizeSlotLinkUrl("https://drive.google.com/file/d/abc/view");
+    const res = normalizeSlotLinkUrl(
+      "https://drive.google.com/file/d/abc/view",
+    );
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.url).toBe("https://drive.google.com/file/d/abc/view");
+    if (res.ok)
+      expect(res.url).toBe("https://drive.google.com/file/d/abc/view");
   });
 
   it("préfixe https:// quand l'admin colle une adresse sans schéma", () => {
@@ -44,8 +47,14 @@ describe("normalizeSlotLinkUrl", () => {
 
   it("refuse une saisie vide ou non textuelle", () => {
     expect(normalizeSlotLinkUrl("")).toEqual({ ok: false, error: "missing" });
-    expect(normalizeSlotLinkUrl("   ")).toEqual({ ok: false, error: "missing" });
-    expect(normalizeSlotLinkUrl(undefined)).toEqual({ ok: false, error: "missing" });
+    expect(normalizeSlotLinkUrl("   ")).toEqual({
+      ok: false,
+      error: "missing",
+    });
+    expect(normalizeSlotLinkUrl(undefined)).toEqual({
+      ok: false,
+      error: "missing",
+    });
     expect(normalizeSlotLinkUrl(42)).toEqual({ ok: false, error: "missing" });
   });
 
@@ -58,7 +67,10 @@ describe("normalizeSlotLinkUrl", () => {
 
   it("refuse une URL démesurée", () => {
     const long = `https://ajc.fr/${"a".repeat(MAX_SLOT_LINK_URL)}`;
-    expect(normalizeSlotLinkUrl(long)).toEqual({ ok: false, error: "too_long" });
+    expect(normalizeSlotLinkUrl(long)).toEqual({
+      ok: false,
+      error: "too_long",
+    });
   });
 });
 

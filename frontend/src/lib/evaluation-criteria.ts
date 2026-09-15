@@ -137,6 +137,18 @@ export function parseScoreInput(value: unknown): number | null {
 }
 
 /**
+ * Frappe autorisée dans une case de note : des chiffres, un seul séparateur
+ * décimal (virgule OU point) et au plus deux décimales. « 3,5 » et « 3, »
+ * (saisie en cours) passent ; « 3,5,5 » et « abc » sont refusés.
+ *
+ * Sert à FILTRER la frappe, pas à la corriger : une saisie refusée n'est pas
+ * réécrite, sinon « 3, » redeviendrait « 3 » avant que la décimale arrive.
+ */
+export function isScoreInput(value: string): boolean {
+  return value === "" || /^\d*[.,]?\d{0,2}$/.test(value);
+}
+
+/**
  * Affiche une note à la française : séparateur virgule, décimales seulement
  * quand il y en a (3 → « 3 », 3.5 → « 3,5 »).
  */

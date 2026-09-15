@@ -4,7 +4,7 @@ import {
   filterActiveEnrollments,
   effectiveMaxCandidates,
 } from "@/lib/enrollment";
-import { fetchSlotLinks } from "@/lib/slot-links";
+import { fetchSlotLinks } from "@/lib/slot-links-db";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 

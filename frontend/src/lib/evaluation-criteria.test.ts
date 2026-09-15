@@ -327,3 +327,100 @@ describe("averageOn20ByEpreuve", () => {
     ).toBe(20);
   });
 });
+
+// ── Notes à virgule (15/09/2026) ─────────────────────────────────────────
+//
+// Les examinateurs notaient en entiers : le champ était un `type="number"`
+// au pas de 1 et `Number("3,5")` valant NaN, une demi-note tapée à la
+// française était silencieusement jetée — la case repassait à « pas de note »
+// sans le moindre message.
+import {
+  formatScore,
+  isScoreInput,
+  parseScoreInput,
+  sumScores,
+} from "./evaluation-criteria";
+
+describe("parseScoreInput", () => {
+  it("lit la virgule française comme séparateur décimal", () => {
+    expect(parseScoreInput("3,5")).toBe(3.5);
+    expect(parseScoreInput("0,25")).toBe(0.25);
+    expect(parseScoreInput(" 4,5 ")).toBe(4.5);
+  });
+
+  it("lit aussi le point et les nombres déjà numériques", () => {
+    expect(parseScoreInput("3.5")).toBe(3.5);
+    expect(parseScoreInput(3.5)).toBe(3.5);
+    expect(parseScoreInput("4")).toBe(4);
+  });
+
+  it("tolère la saisie en cours « 3, » (la décimale n'est pas encore tapée)", () => {
+    expect(parseScoreInput("3,")).toBe(3);
+  });
+
+  it("arrondit au centième plutôt que de traîner des flottants", () => {
+    expect(parseScoreInput("3,456")).toBe(3.46);
+  });
+
+  it("une case vide ou illisible n'est pas une note (et surtout pas 0)", () => {
+    expect(parseScoreInput("")).toBeNull();
+    expect(parseScoreInput("   ")).toBeNull();
+    expect(parseScoreInput("abc")).toBeNull();
+    expect(parseScoreInput("3,5,5")).toBeNull();
+    expect(parseScoreInput(null)).toBeNull();
+    expect(parseScoreInput(undefined)).toBeNull();
+  });
+});
+
+describe("notes à virgule de bout en bout", () => {
+  it("normalizeScores enregistre « 3,5 » comme 3.5", () => {
+    expect(normalizeScores({ "0": "3,5", "1": "2" })).toEqual({
+      "0": 3.5,
+      "1": 2,
+    });
+  });
+
+  it("validateScores compare la demi-note au barème, virgule comprise", () => {
+    expect(validateScores(QUESTIONS, { "1": "4,5" })).toBeNull();
+    expect(validateScores(QUESTIONS, { "1": "5,5" })?.reason).toBe("above_max");
+    expect(validateScores(QUESTIONS, { "0": "-0,5" })?.reason).toBe("negative");
+  });
+
+  it("une demi-note pèse bien dans la somme et la moyenne", () => {
+    expect(sumScores({ "0": "3,5", "1": "1,5" })).toBe(5);
+    expect(
+      averageOn20ByEpreuve([{ epreuveKey: "e1", obtained: 5.5, maxTotal: 10 }]),
+    ).toBe(11);
+  });
+});
+
+describe("formatScore", () => {
+  it("affiche à la française, sans décimale inutile", () => {
+    expect(formatScore(3)).toBe("3");
+    expect(formatScore(3.5)).toBe("3,5");
+    expect(formatScore("3.5")).toBe("3,5");
+    expect(formatScore("3,5")).toBe("3,5");
+  });
+
+  it("rend une chaîne vide quand il n'y a pas de note", () => {
+    expect(formatScore("")).toBe("");
+    expect(formatScore(undefined)).toBe("");
+  });
+});
+
+describe("isScoreInput", () => {
+  it("laisse taper une note décimale, virgule ou point", () => {
+    expect(isScoreInput("")).toBe(true);
+    expect(isScoreInput("3")).toBe(true);
+    expect(isScoreInput("3,")).toBe(true);
+    expect(isScoreInput("3,5")).toBe(true);
+    expect(isScoreInput("3.25")).toBe(true);
+  });
+
+  it("refuse la frappe qui ne peut pas faire une note", () => {
+    expect(isScoreInput("abc")).toBe(false);
+    expect(isScoreInput("3,5,5")).toBe(false);
+    expect(isScoreInput("3,555")).toBe(false);
+    expect(isScoreInput("-1")).toBe(false);
+  });
+});

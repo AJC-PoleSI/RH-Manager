@@ -12,6 +12,7 @@ import {
   formatScore,
   getCriterionLabel,
   getMaxPoints,
+  isScoreInput,
   parseScoreInput,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
@@ -23,11 +24,27 @@ import {
 type Question = EvaluationCriterion;
 
 /**
- * Frappe autorisée dans une case de note : des chiffres, un seul séparateur
- * décimal (virgule OU point) et au plus deux décimales. « 3,5 » et « 3. »
- * (saisie en cours) passent ; « 3,5,5 » et « abc » sont refusés.
+ * Fusionne les notes renvoyées par le serveur avec la saisie déjà à l'écran.
+ * Une case dont le texte local vaut DÉJÀ la même note est laissée intacte :
+ * sans ça, « 3, » (décimale pas encore tapée, enregistrée comme 3) revenait
+ * en « 3 » au rafraîchissement suivant et la frappe du « 5 » donnait « 35 ».
  */
-const SCORE_INPUT_RE = /^\d*[.,]?\d{0,2}$/;
+function mergeScores(
+  local: Record<number, string>,
+  incoming: Record<string, unknown>,
+): Record<number, string> {
+  const out: Record<number, string> = {};
+  for (const [key, value] of Object.entries(incoming || {})) {
+    const idx = Number(key);
+    const localVal = local[idx];
+    out[idx] =
+      localVal !== undefined &&
+      parseScoreInput(localVal) === parseScoreInput(value)
+        ? localVal
+        : formatScore(value);
+  }
+  return out;
+}
 
 function ScoreGrid({
   questions,
@@ -70,11 +87,7 @@ function ScoreGrid({
                   className={scoreErrors[idx] ? "border-red-500" : ""}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\s/g, "");
-                    // Frappe filtrée plutôt que corrigée : on refuse la
-                    // touche qui ne peut pas faire une note (une lettre, un
-                    // second séparateur), on ne réécrit jamais la saisie en
-                    // cours — sinon « 3, » redevient « 3 » avant la décimale.
-                    if (val !== "" && !SCORE_INPUT_RE.test(val)) return;
+                    if (!isScoreInput(val)) return;
                     onChange(idx, val, maxPoints);
                   }}
                 />
@@ -239,11 +252,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       if (groupDirty.current || groupSaveTimer.current) return;
       if (res.data?.exists) {
         setGroupEvalId(res.data.id);
-        const sc: Record<number, string> = {};
-        Object.entries(res.data.scores || {}).forEach(([k, v]) => {
-          sc[Number(k)] = formatScore(v);
-        });
-        setGroupScores(sc);
+        setGroupScores((prev) => mergeScores(prev, res.data.scores || {}));
         setGroupComment(res.data.comment || "");
         setGroupSavedAt(res.data.updatedAt);
         setGroupLastEditor(res.data.lastEditor);
@@ -310,11 +319,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       setNoteUnavailable(null);
       if (res.data?.exists) {
         setNoteId(res.data.id);
-        const sc: Record<number, string> = {};
-        Object.entries(res.data.scores || {}).forEach(([k, v]) => {
-          sc[Number(k)] = formatScore(v);
-        });
-        setNoteScores(sc);
+        setNoteScores((prev) => mergeScores(prev, res.data.scores || {}));
         setNoteComment(res.data.comment || "");
         setNoteSavedAt(res.data.updatedAt);
         setNoteOwner(res.data.owner || null);

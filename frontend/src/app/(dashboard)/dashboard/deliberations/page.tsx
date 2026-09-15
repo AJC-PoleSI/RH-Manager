@@ -30,6 +30,19 @@ interface Wish {
   posteDetail?: string | null;
 }
 
+/** Note DU GROUPE sur un business game — indicative, hors moyenne. */
+export interface GroupEvaluation {
+  id: string;
+  epreuve?: { id: string; name: string; tour: number | null } | null;
+  criteria: Array<{ label: string; score: number | null; maxPoints: number }>;
+  scoreTotal: number;
+  maxTotal: number;
+  scoreOn20: number;
+  comment: string;
+  author?: { firstName: string; lastName: string; email: string } | null;
+  updatedAt?: string | null;
+}
+
 export interface Candidate {
   id: string;
   firstName: string;
@@ -38,6 +51,8 @@ export interface Candidate {
   phone?: string;
   formation?: string;
   evaluations?: Evaluation[];
+  /** Notes du groupe des créneaux de business game du candidat. */
+  groupEvaluations?: GroupEvaluation[];
   deliberation?: Deliberation;
   wishes?: Wish[];
   /** Trombinoscope : les octets de la photo sont servis par une route dédiée. */
@@ -68,6 +83,12 @@ interface Evaluation {
   id: string;
   scores: any;
   comment?: string;
+  /**
+   * Ancienne « note collective » d'une épreuve de groupe : conservée pour son
+   * commentaire mais exclue de la moyenne (le travail du groupe est désormais
+   * noté à part, cf. GroupEvaluation).
+   */
+  isLegacyCollective?: boolean;
   epreuve?: {
     id?: string;
     name: string;
@@ -413,7 +434,7 @@ export default function DeliberationsPage() {
   const getAvgScore = (c: Candidate): number | null =>
     averageOn20ByEpreuve(
       evalsForTour(c)
-        .filter((ev) => hasAnyScore(ev.scores))
+        .filter((ev) => hasAnyScore(ev.scores) && !ev.isLegacyCollective)
         .map((ev) => ({
           epreuveKey: ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve",
           obtained: sumScores(ev.scores),
@@ -1510,6 +1531,59 @@ export default function DeliberationsPage() {
                               )}
                             </div>
                           </div>
+
+                          {/* Évaluation du groupe (business game) : note du
+                              créneau, indicative — hors moyenne. */}
+                          {c.groupEvaluations && c.groupEvaluations.length > 0 && (
+                            <div>
+                              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                Évaluation du groupe (hors moyenne)
+                              </h3>
+                              <div className="space-y-2">
+                                {c.groupEvaluations.map((ge) => (
+                                  <div
+                                    key={ge.id}
+                                    className="bg-white rounded-lg border border-emerald-200 p-3"
+                                  >
+                                    <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                                      <span className="text-sm font-medium text-gray-800">
+                                        👥 {ge.epreuve?.name || "Épreuve de groupe"}
+                                      </span>
+                                      <span className="text-lg font-bold text-emerald-600">
+                                        {ge.scoreTotal}/{ge.maxTotal}
+                                        <span className="text-[11px] font-medium text-emerald-400">
+                                          {" "}({ge.scoreOn20}/20)
+                                        </span>
+                                      </span>
+                                    </div>
+                                    {ge.author && (
+                                      <p className="text-xs text-gray-400 mb-1">
+                                        Par{" "}
+                                        {`${ge.author.firstName} ${ge.author.lastName}`.trim() ||
+                                          ge.author.email}
+                                      </p>
+                                    )}
+                                    <div className="flex gap-1.5 flex-wrap mb-1">
+                                      {ge.criteria.map((cr, i) => (
+                                        <span
+                                          key={i}
+                                          className="text-xs bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium"
+                                        >
+                                          {cr.label} : {cr.score === null ? "—" : cr.score}/
+                                          {cr.maxPoints}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    {ge.comment && (
+                                      <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+                                        {ge.comment}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {/* All evaluations */}
                           {c.evaluations && c.evaluations.length > 0 && (

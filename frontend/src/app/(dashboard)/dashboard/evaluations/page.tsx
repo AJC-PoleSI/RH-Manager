@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { hasAnyScore, toTwenty } from '@/lib/evaluation-criteria';
+import { slotLinkHost } from '@/lib/slot-links';
 import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
 
 interface MemberData {
@@ -902,6 +903,22 @@ function MemberView() {
                                                 {timeLabel && <span>🕐 {timeLabel}</span>}
                                                 {c.slotRoom && <span>🏫 {c.slotRoom}</span>}
                                             </div>
+                                            {/* Lien du business game de CE créneau.
+                                                Il ne parvient ici que par les affectations
+                                                de l'examinateur connecté : les candidats et
+                                                les autres groupes ne le reçoivent jamais. */}
+                                            {c.slotLink && (
+                                                <a
+                                                    href={c.slotLink.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline mt-1"
+                                                    title={c.slotLink.url}
+                                                >
+                                                    🔗 {c.slotLink.label || slotLinkHost(c.slotLink.url) || 'Lien du BG'}
+                                                </a>
+                                            )}
                                             {c.epreuve?.isGroupEpreuve && c.slotId && (
                                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                     <label className="flex items-center gap-1.5 text-xs font-medium text-gray-700 cursor-pointer select-none">

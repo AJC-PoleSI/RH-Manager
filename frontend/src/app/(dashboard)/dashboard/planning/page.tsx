@@ -15,6 +15,7 @@ import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
 import { lockReasonLabel } from "@/lib/slot-lock";
+import { slotLinkHost } from "@/lib/slot-links";
 import { availabilityMatchesSlot } from "@/lib/dispatch-core";
 import { roomChoicesForSlot } from "@/lib/room-choices";
 
@@ -54,6 +55,11 @@ interface MySlot {
   label: string;
   status: string;
   epreuve?: { name: string; tour: string; type: string };
+  /**
+   * Lien du business game, servi par /api/slots/my-slots aux seuls
+   * examinateurs affectés à ce créneau. null quand l'admin n'en a pas posé.
+   */
+  link?: { url: string; label: string | null; updatedAt: string | null } | null;
   enrollments?: {
     candidate: { id: string; first_name: string; last_name: string };
   }[];
@@ -214,6 +220,20 @@ export default function PlanningPage() {
   const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
   const [existingSlots, setExistingSlots] = useState<any[]>([]);
   const [allSlotsGlobal, setAllSlotsGlobal] = useState<any[]>([]); // Tous les créneaux de toutes les épreuves pour la vue globale
+
+  // ── Liens de business game ──
+  // slotId → { url, label, updatedAt }. Chargé pour l'admin seul : c'est la
+  // seule vue qui montre les liens hors du périmètre d'un jury (un examinateur
+  // reçoit le lien de SES créneaux par /slots/my-slots).
+  const [slotLinks, setSlotLinks] = useState<Record<string, any>>({});
+  const [linksMigrationPending, setLinksMigrationPending] = useState(false);
+  // Éditeur de lien de la modale de détail (« + Ajouter » / « ✏️ Modifier »).
+  const [linkEditOpen, setLinkEditOpen] = useState(false);
+  const [linkEditUrl, setLinkEditUrl] = useState("");
+  const [linkEditLabel, setLinkEditLabel] = useState("");
+  const [linkEditNotify, setLinkEditNotify] = useState(true);
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
   // Modal détail créneau cliqué dans la vue calendrier globale
   const [globalDetailSlot, setGlobalDetailSlot] = useState<any | null>(null);
@@ -332,11 +352,26 @@ export default function PlanningPage() {
     }
   }, [isAdmin]);
 
+  // Liens de BG de tous les créneaux (admin) : sert à badger le planning et
+  // à repérer les groupes qui n'ont pas encore leur lien.
+  const fetchSlotLinks = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get("/slots/links");
+      setSlotLinks(res.data?.links || {});
+      setLinksMigrationPending(res.data?.migrationPending === true);
+    } catch (e) {
+      console.error("Erreur chargement des liens BG:", e);
+      setSlotLinks({});
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     fetchEpreuves();
     fetchGlobalCalendarEvents();
     fetchAllSlotsGlobal();
-  }, [fetchEpreuves, fetchGlobalCalendarEvents, fetchAllSlotsGlobal]);
+    fetchSlotLinks();
+  }, [fetchEpreuves, fetchGlobalCalendarEvents, fetchAllSlotsGlobal, fetchSlotLinks]);
 
   // ══════════════════════════════════════════════════════════════════
   // PERSISTANCE : Charger l'état admin depuis les settings au montage
@@ -900,6 +935,74 @@ export default function PlanningPage() {
       fetchAllSlotsGlobal,
       toast,
     ],
+  );
+
+  /**
+   * Pose (ou remplace) le lien du business game ouvert dans la modale.
+   *
+   * Le serveur revalide l'URL et refuse les créneaux qui ne sont pas des
+   * épreuves de groupe : ce qui est fait ici n'est qu'un confort de saisie.
+   */
+  const saveSlotLink = useCallback(
+    async (slot: any) => {
+      const url = linkEditUrl.trim();
+      if (!url) {
+        setLinkError("Indiquez un lien.");
+        return;
+      }
+      setLinkSaving(true);
+      setLinkError(null);
+      try {
+        const res = await api.put(`/slots/${slot.id}/link`, {
+          url,
+          label: linkEditLabel.trim() || null,
+          notify: linkEditNotify,
+        });
+        const link = res.data?.link;
+        setSlotLinks((prev) => ({ ...prev, [slot.id]: link }));
+        setLinkEditOpen(false);
+        const n = res.data?._notified || 0;
+        toast(
+          n > 0
+            ? `Lien enregistré · ${n} examinateur(s) prévenu(s)`
+            : "Lien enregistré",
+          "success",
+        );
+      } catch (e: any) {
+        setLinkError(
+          e?.response?.data?.error || "Enregistrement du lien impossible",
+        );
+      } finally {
+        setLinkSaving(false);
+      }
+    },
+    [linkEditUrl, linkEditLabel, linkEditNotify, toast],
+  );
+
+  /** Retire le lien du créneau. Sans notification : voir DELETE de la route. */
+  const removeSlotLink = useCallback(
+    async (slot: any) => {
+      if (!window.confirm("Retirer le lien de ce business game ?")) return;
+      setLinkSaving(true);
+      setLinkError(null);
+      try {
+        await api.delete(`/slots/${slot.id}/link`);
+        setSlotLinks((prev) => {
+          const next = { ...prev };
+          delete next[slot.id];
+          return next;
+        });
+        setLinkEditOpen(false);
+        toast("Lien retiré", "success");
+      } catch (e: any) {
+        setLinkError(
+          e?.response?.data?.error || "Suppression du lien impossible",
+        );
+      } finally {
+        setLinkSaving(false);
+      }
+    },
+    [toast],
   );
 
   useEffect(() => {
@@ -1524,10 +1627,13 @@ export default function PlanningPage() {
             // Cadenas : ce créneau est figé, ni le dispatch ni une édition
             // manuelle ne le feront bouger (cf. slot-lock.ts).
             const lockMark = s.is_locked ? "🔒 " : "";
+            // 🔗 : ce business game a son lien. Son absence sur un créneau de
+            // groupe se voit donc d'un coup d'œil, sans ouvrir la modale.
+            const linkMark = slotLinks[s.id] ? "🔗 " : "";
             allAdminEvents.push({
               id: `slot-${s.id}`,
               date: toDateStr(s.date),
-              title: `${lockMark}${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
+              title: `${lockMark}${linkMark}${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
               startTime: (s.start_time || "").substring(0, 5),
               bg, textColor: txt, dotColor: dot, kind: "slot", raw: s,
             });
@@ -1567,6 +1673,9 @@ export default function PlanningPage() {
             // le laisser ouvert l'afficherait sur le suivant, avec les dispos
             // de la mauvaise journée.
             setMemberPickerOpen(false);
+            // Même raison pour l'éditeur de lien : ouvert, il afficherait
+            // l'URL du créneau qu'on vient de quitter.
+            setLinkEditOpen(false);
             if (ev.kind === "slot") {
               const s = ev.raw;
               const mc = s.members?.length||0, cc=s.enrollments?.length||0;
@@ -1819,7 +1928,7 @@ export default function PlanningPage() {
         {globalDetailSlot && (
           <div
             className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-            onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }}
+            onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); setLinkEditOpen(false); }}
           >
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
@@ -1833,7 +1942,7 @@ export default function PlanningPage() {
                   <div className="p-5 border-b border-gray-100 bg-blue-50">
                     <div className="flex items-center justify-between">
                       <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
-                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); setLinkEditOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
                     </div>
                     <p className="text-sm font-semibold text-gray-800 mt-3">{raw.title}</p>
                     {raw.description && (
@@ -1891,7 +2000,7 @@ export default function PlanningPage() {
                         <h2 className="text-base font-semibold flex items-center gap-2">
                           {icon} {s.epreuve?.name || "Créneau"}
                         </h2>
-                        <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); }} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
+                        <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); setLinkEditOpen(false); }} className="opacity-60 hover:opacity-100 text-2xl leading-none">×</button>
                       </div>
                       <p className="text-xs mt-1 opacity-80">{label}</p>
                     </div>
@@ -2044,6 +2153,124 @@ export default function PlanningPage() {
                           <span className="font-medium text-gray-500">Libre — l&apos;algorithme peut réaffecter les examinateurs</span>
                         )}
                       </div>
+                      {/* ── LIEN DU BUSINESS GAME ──
+                          Déposé ici par l'admin, servi aux SEULS examinateurs
+                          affectés à ce créneau (/api/slots/my-slots part de
+                          leurs affectations). Ni les candidats, ni les
+                          examinateurs des autres groupes n'y ont accès — le
+                          lien vit dans sa propre table, qu'aucun select("*")
+                          sur les créneaux ne ramasse. */}
+                      {s.epreuve?.is_group_epreuve === true && (() => {
+                        const link = slotLinks[s.id];
+                        return (
+                          <div className="flex items-start gap-3">
+                            <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Lien BG</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {link ? (
+                                  <a
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium text-blue-700 hover:underline truncate max-w-[220px]"
+                                    title={link.url}
+                                  >
+                                    🔗 {link.label || slotLinkHost(link.url) || "Lien"}
+                                  </a>
+                                ) : (
+                                  <span className="font-medium text-gray-500">Aucun lien</span>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => {
+                                      if (linkEditOpen) { setLinkEditOpen(false); return; }
+                                      setLinkEditUrl(link?.url || "");
+                                      setLinkEditLabel(link?.label || "");
+                                      setLinkEditNotify(true);
+                                      setLinkError(null);
+                                      setLinkEditOpen(true);
+                                    }}
+                                    className="text-xs px-2 py-0.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                                    title="Lien réservé aux examinateurs de ce créneau"
+                                  >
+                                    {linkEditOpen ? "Annuler" : link ? "✏️ Modifier" : "+ Ajouter"}
+                                  </button>
+                                )}
+                              </div>
+
+                              {isAdmin && linkEditOpen && (
+                                <div className="mt-2 border border-gray-200 rounded-lg p-2.5 bg-gray-50 space-y-2">
+                                  <input
+                                    autoFocus
+                                    value={linkEditUrl}
+                                    onChange={(e) => setLinkEditUrl(e.target.value)}
+                                    placeholder="https://drive.google.com/…"
+                                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
+                                  />
+                                  <input
+                                    value={linkEditLabel}
+                                    onChange={(e) => setLinkEditLabel(e.target.value)}
+                                    placeholder="Libellé affiché (facultatif) — ex. Sujet du BG"
+                                    className="w-full text-sm border border-gray-300 rounded-md px-2 py-1.5"
+                                  />
+
+                                  {memberCount === 0 ? (
+                                    <p className="text-xs text-gray-500">
+                                      Aucun examinateur sur ce créneau — personne à prévenir. Le lien attendra le jury.
+                                    </p>
+                                  ) : (
+                                    <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={linkEditNotify}
+                                        onChange={(e) => setLinkEditNotify(e.target.checked)}
+                                        className="mt-0.5"
+                                      />
+                                      <span>
+                                        Prévenir les {memberCount} examinateur(s) du créneau
+                                        <span className="text-gray-400"> — notification in-app</span>
+                                      </span>
+                                    </label>
+                                  )}
+
+                                  <p className="text-xs text-gray-500">
+                                    🔒 Visible uniquement par les examinateurs affectés à ce créneau — ni les candidats, ni les autres groupes.
+                                  </p>
+
+                                  {linkError && (
+                                    <p className="text-xs text-red-600">{linkError}</p>
+                                  )}
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => saveSlotLink(s)}
+                                      disabled={linkSaving || !linkEditUrl.trim()}
+                                      className="flex-1 bg-blue-600 text-white text-sm font-medium rounded-md py-1.5 hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                                    >
+                                      {linkSaving ? "Enregistrement…" : "Enregistrer le lien"}
+                                    </button>
+                                    {link && (
+                                      <button
+                                        onClick={() => removeSlotLink(s)}
+                                        disabled={linkSaving}
+                                        className="px-3 text-sm font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                                      >
+                                        Retirer
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {linksMigrationPending && (
+                                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5">
+                                      ⚠️ Migration <code>supabase-migration-bg-links.sql</code> pas encore appliquée : l&apos;enregistrement échouera tant que la table n&apos;existe pas.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <hr className="my-2" />
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
@@ -3000,6 +3227,17 @@ export default function PlanningPage() {
                                     <span>👤</span> {candidateNames.join(", ")}
                                   </span>
                                 )}
+
+                                {/* Lien du BG : un repère sur la carte, le
+                                    lien cliquable est dans la modale. Sans
+                                    lui, l'examinateur n'a aucune raison
+                                    d'ouvrir le détail pour aller le chercher. */}
+                                {slot.link && (
+                                  <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                    <span>🔗</span>{" "}
+                                    {slot.link.label || "Lien du BG"}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -3128,6 +3366,36 @@ export default function PlanningPage() {
                   </p>
                 </div>
               </div>
+
+              {/* ── Lien du business game ──
+                  Il n'arrive jusqu'ici que parce que ce créneau fait partie
+                  des affectations de l'examinateur connecté : la réponse de
+                  /api/slots/my-slots ne contient que les siens. */}
+              {selectedSlot.link && (
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <span className="text-lg">🔗</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                      Lien du business game
+                    </p>
+                    <a
+                      href={selectedSlot.link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-base font-semibold text-blue-700 hover:underline break-all"
+                    >
+                      {selectedSlot.link.label ||
+                        slotLinkHost(selectedSlot.link.url) ||
+                        selectedSlot.link.url}
+                    </a>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Réservé aux examinateurs de ce créneau — ne pas le transmettre aux candidats.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* ── Candidat(s) à évaluer ── */}
               <div className="flex items-start gap-4">

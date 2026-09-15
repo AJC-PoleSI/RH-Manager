@@ -19,9 +19,11 @@ import {
     getMaxPoints,
     getTotalMaxPoints,
     hasAnyScore,
+    isScoreInput,
     sumScores,
     toTwenty,
 } from '@/lib/evaluation-criteria';
+import { isLegacyCollectiveNote } from '@/lib/group-evaluation-criteria';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -253,9 +255,12 @@ export default function CandidatesPage() {
                 // de son barème, moyenne par épreuve, pondération par le barème,
                 // résultat /20. (Avant : moyenne brute des points par critère, où un
                 // critère /5 pesait autant qu'un critère /20.)
+                // Les anciennes « notes collectives » des épreuves de groupe
+                // sont exclues : le travail du groupe est désormais noté à
+                // part et n'entre pas dans la moyenne du candidat.
                 const toScored = (list: any[]) =>
                     list
-                        .filter((e) => hasAnyScore(e.scores))
+                        .filter((e) => hasAnyScore(e.scores) && !isLegacyCollectiveNote(e))
                         .map((e) => ({
                             epreuveKey: e.epreuves?.id || e.epreuves?.name || 'sans-epreuve',
                             obtained: sumScores(e.scores),
@@ -755,7 +760,7 @@ export default function CandidatesPage() {
                                                                             value={editScores[scoreKey] ?? ''}
                                                                             onChange={e => {
                                                                                 const val = e.target.value.replace(/\s/g, '');
-                                                                                if (val !== '' && !SCORE_INPUT_RE.test(val)) return;
+                                                                                if (!isScoreInput(val)) return;
                                                                                 setEditScores({ ...editScores, [scoreKey]: val });
                                                                             }}
                                                                         />
@@ -781,7 +786,7 @@ export default function CandidatesPage() {
                                                                             value={editScores[key] ?? ''}
                                                                             onChange={e => {
                                                                                 const val = e.target.value.replace(/\s/g, '');
-                                                                                if (val !== '' && !SCORE_INPUT_RE.test(val)) return;
+                                                                                if (!isScoreInput(val)) return;
                                                                                 setEditScores({ ...editScores, [key]: val });
                                                                             }}
                                                                         />

@@ -2,6 +2,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { latestTourWishes } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
+import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
+import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
 import {
   getExaminersByEvaluation,
   mergeExaminers,
@@ -39,8 +41,9 @@ export async function GET(req: NextRequest) {
           comment,
           member_id,
           created_at,
+          is_group,
           members!member_id(email, first_name, last_name),
-          epreuves(id, name, tour, type, evaluation_questions)
+          epreuves(id, name, tour, type, evaluation_questions, is_group_epreuve)
         ),
         candidate_wishes(
           id,
@@ -124,6 +127,12 @@ export async function GET(req: NextRequest) {
       ),
     );
 
+    // Évaluations DU GROUPE (business games) : une grille par créneau,
+    // indicative — elle n'entre dans aucune moyenne.
+    const groupEvalsByCandidate = await getGroupEvaluationsByCandidate(
+      (candidates || []).map((c: any) => c.id),
+    );
+
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
@@ -151,6 +160,9 @@ export async function GET(req: NextRequest) {
           examiners.some((ex) => ex.id === payload.id);
         return {
           id: ev.id,
+          // Ancienne « note collective » d'une épreuve de groupe : listée
+          // pour son commentaire, mais écartée de la moyenne côté client.
+          isLegacyCollective: isLegacyCollectiveNote(ev),
           scores:
             typeof ev.scores === "string" ? JSON.parse(ev.scores) : ev.scores,
           comment: canSeeAllComments || isOwnEval ? ev.comment : null,
@@ -233,6 +245,7 @@ export async function GET(req: NextRequest) {
           : null,
         wishes,
         evaluations,
+        groupEvaluations: groupEvalsByCandidate[c.id] || [],
       };
     });
 

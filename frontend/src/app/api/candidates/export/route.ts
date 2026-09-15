@@ -33,8 +33,9 @@ export async function GET(req: NextRequest) {
           scores,
           comment,
           created_at,
+          is_group,
           members!member_id(id, email, first_name, last_name),
-          epreuves(id, name, tour, type, evaluation_questions)
+          epreuves(id, name, tour, type, evaluation_questions, is_group_epreuve)
         )
       `,
       )

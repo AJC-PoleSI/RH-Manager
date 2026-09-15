@@ -1,5 +1,3 @@
-import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
-
 /**
  * slot-links — Le lien attaché à un créneau de business game.
  *
@@ -16,6 +14,11 @@ import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
  * de `slot_member_assignments.member_id = <moi>` (/slots/my-slots,
  * /evaluations/next-candidates) : le périmètre d'accès est celui, déjà
  * éprouvé, des affectations.
+ *
+ * MODULE PUR : il est importé par des composants client (planning,
+ * évaluations) pour afficher un lien. Les lectures en base vivent dans
+ * `slot-links-db.ts`, pour que ni le client Supabase ni la clé service_role
+ * ne se retrouvent dans le bundle navigateur.
  */
 
 /** Ce qu'une route renvoie au client. Jamais l'auteur ni la ligne brute. */
@@ -121,88 +124,4 @@ export function slotLinkHost(url: string | null | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-/** Ligne telle qu'elle sort de la base. */
-interface SlotLinkRow {
-  slot_id: string;
-  url: string;
-  label: string | null;
-  updated_at: string | null;
-}
-
-function toSlotLink(row: SlotLinkRow): SlotLink {
-  return {
-    url: row.url,
-    label: row.label ?? null,
-    updatedAt: row.updated_at ?? null,
-  };
-}
-
-/**
- * Par paquets de 200 identifiants : un `.in()` se traduit par une liste dans
- * l'URL de la requête, et 1000 UUID la feraient dépasser la limite de taille
- * de PostgREST. Chaque paquet reste aussi loin du plafond de 1000 lignes qui
- * tronque silencieusement les lectures (cf. lib/supabase-paging.ts).
- */
-const ID_CHUNK = 200;
-
-/**
- * Liens des créneaux demandés, indexés par `slot_id`.
- *
- * FAIL-SOFT ASSUMÉ : les migrations de ce projet s'appliquent à la main. Entre
- * le déploiement et l'exécution du SQL, `slot_links` n'existe pas. Un planning
- * d'examinateur qui renverrait 500 pour un lien absent serait une régression
- * bien plus grave que l'absence du lien lui-même : on renvoie une map vide.
- */
-export async function fetchSlotLinks(
-  slotIds: string[],
-): Promise<Map<string, SlotLink>> {
-  const ids = Array.from(new Set(slotIds.filter(Boolean)));
-  const links = new Map<string, SlotLink>();
-  if (ids.length === 0) return links;
-
-  for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const chunk = ids.slice(i, i + ID_CHUNK);
-    const { data, error } = await supabaseAdmin
-      .from("slot_links")
-      .select("slot_id, url, label, updated_at")
-      .in("slot_id", chunk);
-
-    if (error) {
-      if (!isMissingTableError(error)) {
-        console.error("fetchSlotLinks error:", error);
-      }
-      return links;
-    }
-
-    for (const row of (data || []) as SlotLinkRow[]) {
-      links.set(row.slot_id, toSlotLink(row));
-    }
-  }
-
-  return links;
-}
-
-/**
- * Greffe le lien sur des objets déjà filtrés aux créneaux du membre.
- *
- * L'appelant garantit ce périmètre ; cette fonction ne le vérifie pas — elle
- * n'a pas de quoi le faire. Elle n'est donc à utiliser que sur des réponses
- * construites à partir des affectations du demandeur.
- */
-export async function attachSlotLinks<T extends Record<string, unknown>>(
-  rows: T[],
-  slotIdOf: (row: T) => string | null | undefined,
-  key = "link",
-): Promise<T[]> {
-  const links = await fetchSlotLinks(
-    rows.map((r) => slotIdOf(r)).filter((id): id is string => !!id),
-  );
-  if (links.size === 0) return rows.map((r) => ({ ...r, [key]: null }));
-
-  return rows.map((row) => {
-    const id = slotIdOf(row);
-    return { ...row, [key]: (id && links.get(id)) || null };
-  });
 }

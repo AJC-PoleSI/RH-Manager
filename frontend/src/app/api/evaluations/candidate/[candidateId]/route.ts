@@ -12,12 +12,8 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
-import {
-  GROUP_EVALUATION_MAX,
-  GROUP_EVALUATION_QUESTIONS,
-  isLegacyCollectiveNote,
-} from "@/lib/group-evaluation-criteria";
-import { isActiveEnrollment } from "@/lib/enrollment";
+import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
+import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -177,10 +173,16 @@ export async function GET(
         })),
     );
 
+    // Évaluation du groupe (business game) : une grille par créneau, notée
+    // une seule fois pour tout le groupe. Indicative — hors moyenne.
+    const groupEvaluations =
+      (await getGroupEvaluationsByCandidate([candidateId]))[candidateId] || [];
+
     return Response.json({
       evaluations: parsed,
       byEpreuve: Object.values(byEpreuve),
       globalAverage,
+      groupEvaluations,
     });
   } catch (error) {
     console.error("Fetch candidate evaluations error:", error);

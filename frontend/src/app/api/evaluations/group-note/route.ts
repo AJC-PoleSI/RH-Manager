@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ ...base, exists: false, canEdit: true });
   }
 
-  return Response.json({ ...base, ...serialize(data, user.id, user.isAdmin) });
+  return Response.json({ ...base, ...serialize(data, user.id, user.isAdmin === true) });
 }
 
 // POST /api/evaluations/group-note — crée ou met à jour la grille du créneau.
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json(serialize(data, user.id, user.isAdmin));
+    return Response.json(serialize(data, user.id, user.isAdmin === true));
   }
 
   const { data, error } = await supabaseAdmin
@@ -301,5 +301,5 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  return Response.json(serialize(data, user.id, user.isAdmin));
+  return Response.json(serialize(data, user.id, user.isAdmin === true));
 }

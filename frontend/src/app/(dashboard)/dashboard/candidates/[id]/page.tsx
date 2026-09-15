@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft } from "lucide-react";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
 import CandidatePhotoUpload from "@/components/forms/CandidatePhotoUpload";
 import CandidateSlots from "@/components/candidates/CandidateSlots";
+import { formatScore } from "@/lib/evaluation-criteria";
 
 interface EvalMember {
   id: string;
@@ -40,6 +41,23 @@ interface Evaluation {
   examiners?: EvalMember[] | null;
 }
 
+/**
+ * Évaluation DU GROUPE sur un business game : une grille par créneau, notée
+ * une seule fois pour tout le groupe. Indicative — elle n'entre pas dans la
+ * moyenne du candidat.
+ */
+interface GroupEvaluation {
+  id: string;
+  epreuve: { id: string; name: string; tour: number | null } | null;
+  criteria: Array<{ label: string; score: number | null; maxPoints: number }>;
+  scoreTotal: number;
+  maxTotal: number;
+  scoreOn20: number;
+  comment: string;
+  author: { firstName: string; lastName: string; email: string } | null;
+  updatedAt: string | null;
+}
+
 interface EpreuveGroup {
   epreuve: { id: string; name: string; tour: number; type: string } | null;
   evaluations: Evaluation[];
@@ -64,6 +82,7 @@ export default function CandidateDetailPage({
   const [candidate, setCandidate] = useState<any>(null);
   const [epreuveGroups, setEpreuveGroups] = useState<EpreuveGroup[]>([]);
   const [allEvals, setAllEvals] = useState<Evaluation[]>([]);
+  const [groupEvals, setGroupEvals] = useState<GroupEvaluation[]>([]);
   // Moyenne pondérée /20, calculée côté serveur avec la même règle que la
   // délibération (null = aucune note exploitable).
   const [globalAverage, setGlobalAverage] = useState<number | null>(null);
@@ -74,6 +93,9 @@ export default function CandidateDetailPage({
   const loadEvaluations = useCallback(async () => {
     const evalRes = await api.get(`/evaluations/candidate/${candidateId}`);
     const data = evalRes.data;
+    setGroupEvals(
+      Array.isArray(data?.groupEvaluations) ? data.groupEvaluations : [],
+    );
     if (data && data.byEpreuve) {
       setEpreuveGroups(data.byEpreuve);
       setAllEvals(data.evaluations || []);
@@ -341,12 +363,83 @@ export default function CandidateDetailPage({
         </div>
       )}
 
+      {/* Évaluation du groupe (business game) : note du créneau, pas du
+          candidat — indicative, hors moyenne. */}
+      {!isCandidate &&
+        groupEvals.map((ge) => (
+          <div
+            key={ge.id}
+            className="bg-white rounded-xl border border-emerald-200"
+          >
+            <div className="px-4 sm:px-6 py-4 border-b border-emerald-100 bg-emerald-50/50">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-semibold text-emerald-900">
+                    👥 Évaluation du groupe
+                    {ge.epreuve?.name ? ` — ${ge.epreuve.name}` : ""}
+                  </h2>
+                  <p className="text-xs text-emerald-700 mt-0.5">
+                    Note du groupe sur son créneau, pas du candidat. Indicative :
+                    elle n&apos;entre pas dans sa moyenne.
+                  </p>
+                  {ge.author && (
+                    <p className="text-xs text-emerald-600 mt-0.5">
+                      par{" "}
+                      {`${ge.author.firstName} ${ge.author.lastName}`.trim() ||
+                        ge.author.email}
+                      {ge.updatedAt
+                        ? ` · ${new Date(ge.updatedAt).toLocaleString("fr-FR", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-emerald-700">
+                    {ge.scoreTotal} / {ge.maxTotal}
+                  </p>
+                  <p className="text-xs text-emerald-500 -mt-0.5">
+                    soit {ge.scoreOn20} / 20
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="px-4 sm:px-6 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                {ge.criteria.map((c, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-baseline justify-between gap-3 text-sm border-b border-gray-50 py-1"
+                  >
+                    <span className="text-gray-600">{c.label}</span>
+                    <span className="font-semibold text-gray-900 whitespace-nowrap">
+                      {c.score === null ? "—" : c.score} / {c.maxPoints}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {ge.comment && (
+                <p className="text-sm text-gray-700 italic whitespace-pre-wrap mt-4 pt-3 border-t border-gray-100">
+                  {ge.comment}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+
       {/* Évaluations groupées par épreuve : masquées pour les candidats */}
-      {!isCandidate && epreuveGroups.length === 0 && allEvals.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
-          Aucune evaluation pour ce candidat
-        </div>
-      )}
+      {!isCandidate &&
+        epreuveGroups.length === 0 &&
+        allEvals.length === 0 &&
+        groupEvals.length === 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
+            Aucune evaluation pour ce candidat
+          </div>
+        )}
 
       {!isCandidate &&
         epreuveGroups.map((group, gIdx) => (
@@ -493,7 +586,7 @@ export default function CandidateDetailPage({
                               Critere {parseInt(key) + 1}
                             </span>
                             <span className="font-medium text-gray-800 bg-gray-50 px-2.5 py-0.5 rounded text-xs">
-                              {value}
+                              {formatScore(value) || value}
                             </span>
                           </div>
                         ))}
