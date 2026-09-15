@@ -159,8 +159,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     ({ candidateId, epreuveId } = body);
-    const { scores, comment, isGroup } = body;
-    wantGroupEval = isGroup === true;
+    const { scores, comment } = body;
 
     if (!candidateId || !epreuveId) {
       return Response.json(
