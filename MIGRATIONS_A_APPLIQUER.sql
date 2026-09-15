@@ -721,3 +721,29 @@ CREATE INDEX IF NOT EXISTS idx_candidate_notifications_unread
 
 ALTER TABLE notifications
   ADD COLUMN IF NOT EXISTS announcement_id UUID REFERENCES announcements(id) ON DELETE CASCADE;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 15/09/2026 — ÉVALUATION DU GROUPE (business games)
+-- Remplace la « note collective » partagée par une grille de groupe remplie
+-- par un seul examinateur, stockée par créneau. Détail et script d'annulation
+-- dans supabase-migration-group-note.sql.
+-- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS group_evaluations (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slot_id     UUID NOT NULL REFERENCES evaluation_slots(id) ON DELETE CASCADE,
+  epreuve_id  UUID NOT NULL REFERENCES epreuves(id) ON DELETE CASCADE,
+  member_id   UUID REFERENCES members(id) ON DELETE SET NULL,
+  scores      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  comment     TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_group_evaluations_slot
+  ON group_evaluations (slot_id);
+
+CREATE INDEX IF NOT EXISTS idx_group_evaluations_epreuve
+  ON group_evaluations (epreuve_id);
+
+ALTER TABLE group_evaluations ENABLE ROW LEVEL SECURITY;
