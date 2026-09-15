@@ -149,12 +149,11 @@ export async function POST(req: NextRequest) {
   // rattrapage de la course concurrente sur la contrainte unique, en bas).
   let candidateId: string | undefined;
   let epreuveId: string | undefined;
-  let wantGroupEval = false;
   // Décision serveur (jamais le client) : cette soumission produit-elle une
-  // ligne partagée (is_group=true) ? Vrai pour une épreuve "de groupe" dont
-  // le client demande la note collective (comportement existant), ET pour
-  // une épreuve individuelle (entretien) dont le créneau du candidat a 2
-  // examinateurs assignés ou plus — un seul note, attribué au binôme.
+  // ligne partagée (is_group=true) ? Uniquement pour une épreuve INDIVIDUELLE
+  // (entretien) dont le créneau du candidat a 2 examinateurs assignés ou plus
+  // — un seul note, la note est attribuée au binôme. Les épreuves de groupe
+  // n'en produisent plus depuis le 15/09/2026 (cf. plus bas).
   let effectiveIsGroup = false;
 
   try {
