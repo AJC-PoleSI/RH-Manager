@@ -360,8 +360,8 @@ export async function POST(req: NextRequest) {
 
     return Response.json(evaluation, { status: 201 });
   } catch (error: any) {
-    // COURSE CONCURRENTE (ex. Business Game : plusieurs examinateurs
-    // créent la note collective d'un même candidat au même instant) :
+    // COURSE CONCURRENTE (ex. entretien en binôme : les deux examinateurs
+    // enregistrent la note partagée au même instant) :
     // celui qui perd la course viole la contrainte unique
     // (candidate_id, epreuve_id) WHERE is_group=true/false. Plutôt que
     // de renvoyer une erreur brute, on relit la ligne créée par le

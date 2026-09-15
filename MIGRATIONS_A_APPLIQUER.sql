@@ -747,3 +747,25 @@ CREATE INDEX IF NOT EXISTS idx_group_evaluations_epreuve
   ON group_evaluations (epreuve_id);
 
 ALTER TABLE group_evaluations ENABLE ROW LEVEL SECURITY;
+
+
+-- ------------------------------------------------------------
+-- 14) Lien de business game, réservé au jury du créneau
+--     (supabase-migration-bg-links.sql)
+-- ------------------------------------------------------------
+-- Un lien par créneau de BG (sujet, dossier partagé…), visible des seuls
+-- examinateurs affectés à CE créneau. Table à part et non colonne sur
+-- evaluation_slots : /api/slots/all fait un select("*") ouvert à tout le
+-- staff, une colonne fuiterait vers les examinateurs des autres groupes.
+
+CREATE TABLE IF NOT EXISTS slot_links (
+  slot_id    UUID PRIMARY KEY REFERENCES evaluation_slots(id) ON DELETE CASCADE,
+  url        TEXT NOT NULL,
+  label      TEXT,
+  updated_by UUID REFERENCES members(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Le lockdown RLS a bouclé sur les tables existantes : celle-ci doit être
+-- activée explicitement (l'app n'utilise que la clé service_role, BYPASSRLS).
+ALTER TABLE slot_links ENABLE ROW LEVEL SECURITY;
