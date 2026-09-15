@@ -175,7 +175,12 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   // attribuée aux deux. Le serveur retranche déjà `examinerCount` sur
   // resolveCandidateSlot + slot_member_assignments.
   const isBinome = !isGroupEpreuve && (selectedEpreuve?.examinerCount ?? 0) >= 2;
-  const showSharedPanel = isGroupEpreuve || isBinome;
+  // La note partagée ne subsiste QUE pour le binôme sur un entretien. Sur une
+  // épreuve de groupe, elle est remplacée par la grille « Évaluation du
+  // groupe » ci-dessous (une par créneau, un seul rédacteur).
+  const showSharedPanel = isBinome;
+  // Fil de commentaires : utile dans les deux cas (groupe et binôme).
+  const showComments = isGroupEpreuve || isBinome;
 
   let questions: Question[] = [];
   try {

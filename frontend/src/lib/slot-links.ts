@@ -34,7 +34,11 @@ export const MAX_SLOT_LINK_URL = 2000;
 /** Un libellé est un repère court dans l'interface, pas une description. */
 export const MAX_SLOT_LINK_LABEL = 80;
 
-export type SlotLinkError = "missing" | "not_a_url" | "unsupported_scheme" | "too_long";
+export type SlotLinkError =
+  | "missing"
+  | "not_a_url"
+  | "unsupported_scheme"
+  | "too_long";
 
 /** L'entrée porte-t-elle déjà un schéma (`https:`, `javascript:`…) ? */
 const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
@@ -60,9 +64,12 @@ export function normalizeSlotLinkUrl(
   if (typeof raw !== "string") return { ok: false, error: "missing" };
   const trimmed = raw.trim();
   if (trimmed.length === 0) return { ok: false, error: "missing" };
-  if (trimmed.length > MAX_SLOT_LINK_URL) return { ok: false, error: "too_long" };
+  if (trimmed.length > MAX_SLOT_LINK_URL)
+    return { ok: false, error: "too_long" };
 
-  const candidate = HAS_SCHEME_RE.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const candidate = HAS_SCHEME_RE.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
 
   let parsed: URL;
   try {
