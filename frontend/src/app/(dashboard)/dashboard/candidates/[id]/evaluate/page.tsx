@@ -112,6 +112,24 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   // polling d'écraser ce que l'examinateur est en train de taper.
   const groupDirty = useRef(false);
 
+  // ── Évaluation DU GROUPE (épreuve de groupe / business game) ──
+  // Une seule grille par créneau, 9 critères propres au travail collectif.
+  // Le premier examinateur qui saisit prend la main ; les autres consultent.
+  // Cette note n'entre PAS dans la moyenne des candidats.
+  const [noteId, setNoteId] = useState<string | null>(null);
+  const [noteScores, setNoteScores] = useState<Record<number, string>>({});
+  const [noteComment, setNoteComment] = useState("");
+  const [noteErrors, setNoteErrors] = useState<Record<number, string>>({});
+  const [noteOwner, setNoteOwner] = useState<any>(null);
+  const [noteIsMine, setNoteIsMine] = useState(false);
+  const [noteCanEdit, setNoteCanEdit] = useState(true);
+  const [noteSavedAt, setNoteSavedAt] = useState<string | null>(null);
+  const [noteLoading, setNoteLoading] = useState(false);
+  /** Message bloquant (migration en attente, candidat sans créneau…). */
+  const [noteUnavailable, setNoteUnavailable] = useState<string | null>(null);
+  const noteSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const noteDirty = useRef(false);
+
   // ── Shared collaboration state (peer evals + group comment feed) ──
   const [peerEvals, setPeerEvals] = useState<any[]>([]);
   const [groupComments, setGroupComments] = useState<any[]>([]);
