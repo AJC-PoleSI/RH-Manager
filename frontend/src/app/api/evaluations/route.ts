@@ -206,16 +206,19 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════
     let attributedMemberIds = [memberId];
     const epreuveIsGroupType = epreuveRow?.is_group_epreuve === true;
-    effectiveIsGroup = epreuveIsGroupType ? wantGroupEval : false;
+    // Épreuve DE GROUPE (business game) : plus aucune note partagée. Chaque
+    // examinateur ne dépose que son avis individuel sur le candidat ; le
+    // travail du groupe est noté à part, une fois par créneau, sur sa propre
+    // grille (POST /api/evaluations/group-note). Le flag `isGroup` envoyé par
+    // le client est donc ignoré ici.
+    effectiveIsGroup = false;
 
-    if (effectiveIsGroup || !epreuveIsGroupType) {
+    if (!epreuveIsGroupType) {
       const slot = await resolveCandidateSlot(candidateId, epreuveId);
       if (slot) {
         const examinerIds = await getSlotExaminerIds(slot.slotId);
-        if (!epreuveIsGroupType && examinerIds.length >= 2) {
+        if (examinerIds.length >= 2) {
           effectiveIsGroup = true;
-          attributedMemberIds = examinerIds;
-        } else if (effectiveIsGroup && examinerIds.length) {
           attributedMemberIds = examinerIds;
         }
       }
