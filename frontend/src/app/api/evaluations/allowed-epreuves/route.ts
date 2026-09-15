@@ -49,7 +49,9 @@ export async function GET(req: NextRequest) {
     // Nombre d'examinateurs assignés au créneau du candidat, par épreuve —
     // sert au frontend à savoir si une épreuve individuelle est en binôme
     // (2+ examinateurs sur le créneau => note partagée, un seul la saisit).
-    // Non pertinent pour les épreuves "de groupe" (déjà à note collective).
+    // Non pertinent pour les épreuves "de groupe" : chaque examinateur y
+    // dépose son avis individuel, et le travail du groupe est noté à part
+    // (une grille par créneau — /api/evaluations/group-note).
     const examinerCounts: Record<string, number> = {};
     await Promise.all(
       (data || [])
