@@ -12,6 +12,12 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
+import {
+  GROUP_EVALUATION_MAX,
+  GROUP_EVALUATION_QUESTIONS,
+  isLegacyCollectiveNote,
+} from "@/lib/group-evaluation-criteria";
+import { isActiveEnrollment } from "@/lib/enrollment";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -36,7 +42,7 @@ export async function GET(
     const { data: evaluations, error } = await supabaseAdmin
       .from("candidate_evaluations")
       .select(
-        "*, epreuves(id, name, tour, type, evaluation_questions), members!member_id(id, email, first_name, last_name)",
+        "*, epreuves(id, name, tour, type, evaluation_questions, is_group_epreuve), members!member_id(id, email, first_name, last_name)",
       )
       .eq("candidate_id", candidateId)
       .order("created_at", { ascending: true });
@@ -75,6 +81,10 @@ export async function GET(
         scoreOn20: hasAnyScore(e.scores) && maxTotal > 0 ? toTwenty(total, maxTotal) : null,
         hasScores: hasAnyScore(e.scores),
         isGroup: e.is_group === true,
+        // Ancienne « note collective » d'une épreuve de groupe : conservée
+        // pour son commentaire, mais exclue de toutes les moyennes (cf.
+        // lib/group-evaluation-criteria).
+        isLegacyCollective: isLegacyCollectiveNote(e),
         closedAt: e.closed_at ?? null,
         comment: canSeeAllComments || isOwnEval ? e.comment : null,
         createdAt: e.created_at,
@@ -143,7 +153,9 @@ export async function GET(
     // Moyenne par épreuve sur 20 — les évaluations sans aucune note (ligne
     // collective créée à vide) sont listées mais ne pèsent pas 0.
     Object.values(byEpreuve).forEach((group) => {
-      const scored = group.evaluations.filter((e) => e.hasScores);
+      const scored = group.evaluations.filter(
+        (e) => e.hasScores && !e.isLegacyCollective,
+      );
       group.evaluatorCount = scored.length;
       group.collectiveScore = averageOn20ByEpreuve(
         scored.map((e) => ({
@@ -157,7 +169,7 @@ export async function GET(
     // Moyenne globale du candidat, même règle que la délibération.
     const globalAverage = averageOn20ByEpreuve(
       parsed
-        .filter((e) => e.hasScores)
+        .filter((e) => e.hasScores && !e.isLegacyCollective)
         .map((e) => ({
           epreuveKey: e.epreuve?.id || "unknown",
           obtained: e.scoreTotal,

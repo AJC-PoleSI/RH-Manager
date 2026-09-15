@@ -112,12 +112,43 @@ function parseScores(raw: unknown): Record<string, unknown> {
     : {};
 }
 
-/** Une case vide, ou non numérique, n'est PAS une note (et surtout pas 0). */
-function toScoreNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
+/** Nombre maximum de décimales conservées sur une note (0,25 point près). */
+export const SCORE_DECIMALS = 2;
+
+/**
+ * Lit une note saisie à la main. Les demi-points sont autorisés et la VIRGULE
+ * française est acceptée au même titre que le point : « 3,5 » vaut 3.5.
+ * `Number("3,5")` renvoie NaN — sans cette normalisation la note était
+ * silencieusement écartée (« pas de note ») au lieu d'être enregistrée.
+ *
+ * Une case vide, ou non numérique, n'est PAS une note (et surtout pas 0).
+ * Le résultat est arrondi au centième : une note n'a pas besoin de plus de
+ * précision, et ça évite les 3.4000000000000004 dans les totaux.
+ */
+export function parseScoreInput(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const raw =
+    typeof value === "string" ? value.trim().replace(",", ".") : value;
+  if (raw === "") return null;
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return null;
+  const factor = 10 ** SCORE_DECIMALS;
+  return Math.round(num * factor) / factor;
 }
+
+/**
+ * Affiche une note à la française : séparateur virgule, décimales seulement
+ * quand il y en a (3 → « 3 », 3.5 → « 3,5 »).
+ */
+export function formatScore(value: unknown): string {
+  const num = parseScoreInput(value);
+  if (num === null) return "";
+  return num.toLocaleString("fr-FR", {
+    maximumFractionDigits: SCORE_DECIMALS,
+  });
+}
+
+const toScoreNumber = parseScoreInput;
 
 /**
  * Normalise les notes avant écriture en base : uniquement des nombres finis,

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { fetchSlotLinks } from "@/lib/slot-links";
 import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,19 @@ export async function GET(req: NextRequest) {
       }));
     } else {
       nextCandidates = nextCandidates.map((c) => ({ ...c, targets: [] }));
+    }
+
+    // 5. Lien de business game du créneau, pour l'examinateur qui est devant
+    // le groupe. Les créneaux listés ici viennent tous des affectations du
+    // demandeur (étape 1) : lui montrer le lien n'élargit son accès à rien.
+    if (slotIds.length > 0) {
+      const links = await fetchSlotLinks(slotIds);
+      if (links.size > 0) {
+        nextCandidates = nextCandidates.map((c) => ({
+          ...c,
+          slotLink: (c.slotId && links.get(c.slotId)) || null,
+        }));
+      }
     }
 
     // Sort by slot date (upcoming first)

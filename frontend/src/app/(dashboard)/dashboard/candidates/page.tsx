@@ -14,6 +14,7 @@ import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
 import CandidateSlots from '@/components/candidates/CandidateSlots';
 import {
     averageOn20ByEpreuve,
+    formatScore,
     getCriterionLabel,
     getMaxPoints,
     getTotalMaxPoints,
@@ -153,7 +154,13 @@ export default function CandidatesPage() {
     /* ---- Start editing an evaluation ---- */
     const startEditEval = (ev: Evaluation) => {
         setEditingEvalId(ev.id);
-        setEditScores({ ...ev.scores });
+        // Notes réaffichées à la française (3.5 → « 3,5 ») : c'est ce que
+        // l'examinateur a saisi, et la virgule est acceptée au réenregistrement.
+        setEditScores(
+            Object.fromEntries(
+                Object.entries(ev.scores || {}).map(([k, v]) => [k, formatScore(v)]),
+            ),
+        );
         setEditComment(ev.comment || '');
     };
 
@@ -731,7 +738,9 @@ export default function CandidatesPage() {
                                                     {questions.length > 0 ? (
                                                         questions.map((q, idx) => {
                                                             const scoreKey = String(idx);
-                                                            const scoreVal = isEditing ? (editScores[scoreKey] ?? '') : (ev.scores[scoreKey] ?? '-');
+                                                            const scoreVal = isEditing
+                                                                ? (editScores[scoreKey] ?? '')
+                                                                : (formatScore(ev.scores[scoreKey]) || '-');
                                                             return (
                                                                 <div key={idx} className="flex items-center justify-between text-sm">
                                                                     <span className="text-gray-600">
@@ -740,11 +749,15 @@ export default function CandidatesPage() {
                                                                     </span>
                                                                     {isEditing ? (
                                                                         <Input
-                                                                            type="number"
-                                                                            min="0"
+                                                                            type="text"
+                                                                            inputMode="decimal"
                                                                             className="w-20 h-8 text-sm text-right"
                                                                             value={editScores[scoreKey] ?? ''}
-                                                                            onChange={e => setEditScores({ ...editScores, [scoreKey]: e.target.value })}
+                                                                            onChange={e => {
+                                                                                const val = e.target.value.replace(/\s/g, '');
+                                                                                if (val !== '' && !SCORE_INPUT_RE.test(val)) return;
+                                                                                setEditScores({ ...editScores, [scoreKey]: val });
+                                                                            }}
                                                                         />
                                                                     ) : (
                                                                         <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">
@@ -762,14 +775,18 @@ export default function CandidatesPage() {
                                                                     <span className="text-gray-600">Critère {parseInt(key) + 1}</span>
                                                                     {isEditing ? (
                                                                         <Input
-                                                                            type="number"
-                                                                            min="0"
+                                                                            type="text"
+                                                                            inputMode="decimal"
                                                                             className="w-20 h-8 text-sm text-right"
                                                                             value={editScores[key] ?? ''}
-                                                                            onChange={e => setEditScores({ ...editScores, [key]: e.target.value })}
+                                                                            onChange={e => {
+                                                                                const val = e.target.value.replace(/\s/g, '');
+                                                                                if (val !== '' && !SCORE_INPUT_RE.test(val)) return;
+                                                                                setEditScores({ ...editScores, [key]: val });
+                                                                            }}
                                                                         />
                                                                     ) : (
-                                                                        <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">{String(val)}</span>
+                                                                        <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">{formatScore(val) || String(val)}</span>
                                                                     )}
                                                                 </div>
                                                             ))

@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
+  formatScore,
   getCriterionLabel,
   getMaxPoints,
+  parseScoreInput,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
 import {
@@ -19,6 +21,13 @@ import {
 } from "@/lib/group-evaluation-criteria";
 
 type Question = EvaluationCriterion;
+
+/**
+ * Frappe autorisée dans une case de note : des chiffres, un seul séparateur
+ * décimal (virgule OU point) et au plus deux décimales. « 3,5 » et « 3. »
+ * (saisie en cours) passent ; « 3,5,5 » et « abc » sont refusés.
+ */
+const SCORE_INPUT_RE = /^\d*[.,]?\d{0,2}$/;
 
 function ScoreGrid({
   questions,
@@ -42,6 +51,9 @@ function ScoreGrid({
   }
   return (
     <div className="space-y-4">
+      <p className="text-xs text-gray-400">
+        Les demi-points sont acceptés (ex. 3,5).
+      </p>
       {questions.map((q, idx) => {
         const maxPoints = getMaxPoints(q);
         return (
@@ -50,14 +62,21 @@ function ScoreGrid({
               <Label>{getCriterionLabel(q)}</Label>
               <div className="flex items-center gap-2">
                 <Input
-                  type="number"
-                  min="0"
-                  max={maxPoints}
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   disabled={disabled}
                   value={scores[idx] ?? ""}
                   className={scoreErrors[idx] ? "border-red-500" : ""}
-                  onChange={(e) => onChange(idx, e.target.value, maxPoints)}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\s/g, "");
+                    // Frappe filtrée plutôt que corrigée : on refuse la
+                    // touche qui ne peut pas faire une note (une lettre, un
+                    // second séparateur), on ne réécrit jamais la saisie en
+                    // cours — sinon « 3, » redevient « 3 » avant la décimale.
+                    if (val !== "" && !SCORE_INPUT_RE.test(val)) return;
+                    onChange(idx, val, maxPoints);
+                  }}
                 />
                 <span className="text-sm text-gray-500 whitespace-nowrap font-medium">
                   / {maxPoints}
@@ -195,11 +214,15 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   }
 
   // Totaux pour la note collective et les évaluations des pairs
+  // parseScoreInput (et non Number) : une note saisie « 3,5 » doit peser 3.5
+  // dans le total, pas disparaître.
   const totalOf = (scores: Record<number | string, number | string>) =>
-    Object.values(scores || {})
-      .map(Number)
-      .filter((n) => !isNaN(n))
-      .reduce((a, b) => a + b, 0);
+    formatScore(
+      Object.values(scores || {})
+        .map(parseScoreInput)
+        .filter((n): n is number => n !== null)
+        .reduce((a, b) => a + b, 0),
+    );
   const maxTotal = questions.reduce((sum, q) => sum + getMaxPoints(q), 0);
   const otherEvals = peerEvals.filter((e) => !e.isMine);
 
@@ -218,7 +241,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         setGroupEvalId(res.data.id);
         const sc: Record<number, string> = {};
         Object.entries(res.data.scores || {}).forEach(([k, v]) => {
-          sc[Number(k)] = String(v);
+          sc[Number(k)] = formatScore(v);
         });
         setGroupScores(sc);
         setGroupComment(res.data.comment || "");
@@ -262,7 +285,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   // ── Load the shared group comment feed ──
   const loadGroupComments = useCallback(async () => {
-    if (!selectedEpreuveId || !showSharedPanel) return;
+    if (!selectedEpreuveId || !showComments) return;
     try {
       const res = await api.get(
         `/evaluations/group-comments?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
@@ -271,25 +294,80 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     } catch {
       // Silencieux : la table peut ne pas encore exister (migration)
     }
-  }, [id, selectedEpreuveId, showSharedPanel]);
+  }, [id, selectedEpreuveId, showComments]);
+
+  // ── Load the group grid (épreuve de groupe) ──
+  const loadGroupNote = useCallback(async () => {
+    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    // Ne pas écraser une saisie locale non sauvegardée
+    if (noteDirty.current || noteSaveTimer.current) return;
+    setNoteLoading(true);
+    try {
+      const res = await api.get(
+        `/evaluations/group-note?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
+      );
+      if (noteDirty.current || noteSaveTimer.current) return;
+      setNoteUnavailable(null);
+      if (res.data?.exists) {
+        setNoteId(res.data.id);
+        const sc: Record<number, string> = {};
+        Object.entries(res.data.scores || {}).forEach(([k, v]) => {
+          sc[Number(k)] = formatScore(v);
+        });
+        setNoteScores(sc);
+        setNoteComment(res.data.comment || "");
+        setNoteSavedAt(res.data.updatedAt);
+        setNoteOwner(res.data.owner || null);
+        setNoteIsMine(!!res.data.isMine);
+        setNoteCanEdit(res.data.canEdit !== false);
+      } else {
+        setNoteId(null);
+        setNoteScores({});
+        setNoteComment("");
+        setNoteSavedAt(null);
+        setNoteOwner(null);
+        setNoteIsMine(false);
+        setNoteCanEdit(true);
+      }
+    } catch (e: any) {
+      // Migration en attente, candidat sans créneau… : on explique plutôt
+      // que d'afficher une grille qui ne pourra jamais être enregistrée.
+      setNoteUnavailable(
+        e?.response?.data?.error ||
+          "Évaluation du groupe indisponible pour ce créneau.",
+      );
+    } finally {
+      setNoteLoading(false);
+    }
+  }, [id, selectedEpreuveId, isGroupEpreuve]);
 
   useEffect(() => {
     loadGroupEval();
+    loadGroupNote();
     loadPeers();
     loadGroupComments();
-  }, [loadGroupEval, loadPeers, loadGroupComments]);
+  }, [loadGroupEval, loadGroupNote, loadPeers, loadGroupComments]);
 
   // Poll all shared data every 7s so every examiner sees the others' notes,
-  // the collective score and the comment feed evolve live.
+  // the group grid and the comment feed evolve live.
   useEffect(() => {
-    if (!showSharedPanel || !selectedEpreuveId) return;
+    if ((!showSharedPanel && !showComments) || !selectedEpreuveId) return;
     const t = setInterval(() => {
       loadGroupEval();
+      loadGroupNote();
       loadPeers();
       loadGroupComments();
     }, 7000);
     return () => clearInterval(t);
-  }, [showSharedPanel, selectedEpreuveId, loadGroupEval, loadPeers, loadGroupComments]);
+  }, [
+    showSharedPanel,
+    showComments,
+    selectedEpreuveId,
+    loadGroupEval,
+    loadGroupNote,
+    loadPeers,
+    loadGroupComments,
+  ]);
 
   const validateScore = (
     idx: number,
@@ -297,10 +375,12 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     maxPoints: number,
     setErrors: (fn: (prev: Record<number, string>) => Record<number, string>) => void,
   ) => {
-    const numVal = Number(val);
-    if (val !== "" && numVal > maxPoints) {
+    const numVal = parseScoreInput(val);
+    if (val !== "" && numVal === null) {
+      setErrors((prev) => ({ ...prev, [idx]: `Nombre attendu` }));
+    } else if (val !== "" && numVal !== null && numVal > maxPoints) {
       setErrors((prev) => ({ ...prev, [idx]: `Max ${maxPoints}` }));
-    } else if (val !== "" && numVal < 0) {
+    } else if (val !== "" && numVal !== null && numVal < 0) {
       setErrors((prev) => ({ ...prev, [idx]: `Min 0` }));
     } else {
       setErrors((prev) => {
@@ -321,8 +401,8 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   // critères continuent d'être sauvegardés normalement.
   const isInvalidScore = (val: string, maxPoints: number) => {
     if (val === "") return false;
-    const n = Number(val);
-    return !Number.isFinite(n) || n < 0 || n > maxPoints;
+    const n = parseScoreInput(val);
+    return n === null || n < 0 || n > maxPoints;
   };
   const withoutInvalid = (
     scores: Record<number, string>,
@@ -466,6 +546,90 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     }
   };
 
+  // ── Évaluation du groupe : saisie + sauvegarde différée ──────────────
+  const resetNoteDirty = () => {
+    noteDirty.current = false;
+    if (noteSaveTimer.current) {
+      clearTimeout(noteSaveTimer.current);
+      noteSaveTimer.current = null;
+    }
+  };
+
+  const scheduleNoteSave = (
+    scores: Record<number, string>,
+    comment: string,
+  ) => {
+    noteDirty.current = true;
+    if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    noteSaveTimer.current = setTimeout(() => {
+      noteSaveTimer.current = null;
+      saveGroupNote(scores, comment);
+    }, 1000);
+  };
+
+  const saveGroupNote = async (
+    scores: Record<number, string>,
+    comment: string,
+  ) => {
+    try {
+      const res = await api.post("/evaluations/group-note", {
+        candidateId: id,
+        epreuveId: selectedEpreuveId,
+        scores,
+        comment,
+      });
+      setNoteId(res.data?.id ?? null);
+      setNoteOwner(res.data?.owner ?? null);
+      setNoteIsMine(res.data?.isMine !== false);
+      setNoteCanEdit(res.data?.canEdit !== false);
+      setNoteSavedAt(res.data?.updatedAt || new Date().toISOString());
+      if (!noteSaveTimer.current) noteDirty.current = false;
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const message = e?.response?.data?.error;
+      if (status === 403 || status === 409) {
+        // Un co-examinateur a pris la grille en premier : on bascule en
+        // lecture seule sur SA saisie. Le drapeau doit tomber AVANT le
+        // rechargement, sinon loadGroupNote refuse d'écraser l'écran.
+        resetNoteDirty();
+        await loadGroupNote();
+        toast(
+          message ||
+            "Un autre examinateur remplit l'évaluation du groupe : sa saisie s'affiche.",
+          "info",
+        );
+      } else if (status === 503) {
+        resetNoteDirty();
+        setNoteUnavailable(message || "Évaluation du groupe indisponible.");
+      } else {
+        console.error("Group note save failed:", e);
+        toast(
+          message || "Erreur d'enregistrement de l'évaluation du groupe",
+          "error",
+        );
+      }
+    }
+  };
+
+  const handleNoteScore = (idx: number, val: string, maxPoints: number) => {
+    if (!noteCanEdit) return;
+    setNoteScores((p) => ({ ...p, [idx]: val }));
+    validateScore(idx, val, maxPoints, setNoteErrors);
+    const nextErrors = { ...noteErrors };
+    if (isInvalidScore(val, maxPoints)) nextErrors[idx] = "invalid";
+    else delete nextErrors[idx];
+    scheduleNoteSave(
+      withoutInvalid({ ...noteScores, [idx]: val }, nextErrors),
+      noteComment,
+    );
+  };
+
+  const handleNoteComment = (val: string) => {
+    if (!noteCanEdit) return;
+    setNoteComment(val);
+    scheduleNoteSave(withoutInvalid(noteScores, noteErrors), val);
+  };
+
   // Ajoute un commentaire au fil partagé du groupe
   const handlePostComment = async () => {
     if (!newComment.trim() || !selectedEpreuveId) return;
@@ -512,16 +676,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       );
     }
     try {
-      // Épreuve de groupe : on ne crée la note collective que si le panneau
-      // partagé contient quelque chose. Une ligne collective VIDE pesait
-      // 0/40 dans la moyenne du candidat (audit du 12/09/2026).
-      const groupHasContent =
-        Object.values(groupScores).some(
-          (v) => v !== "" && Number.isFinite(Number(v)),
-        ) || groupComment.trim().length > 0;
-      if (isGroupEpreuve && !groupEvalId && groupHasContent) {
-        await saveGroupEval(withoutInvalid(groupScores, groupErrors), groupComment);
-      }
+      // Épreuve de groupe : plus aucune note collective à créer ici. Le
+      // travail du groupe est noté une seule fois par créneau, sur sa propre
+      // grille auto-sauvegardée (/api/evaluations/group-note).
       await api.post("/evaluations", {
         candidateId: id,
         epreuveId: selectedEpreuveId,
@@ -625,6 +782,107 @@ function EvaluateCandidateForm({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* ───────── Évaluation DU GROUPE (business game) : une seule grille
+          par créneau, remplie par un seul examinateur ───────── */}
+      {selectedEpreuve && isGroupEpreuve && (
+        <Card className="border-emerald-200">
+          <CardHeader className="bg-emerald-50/50">
+            <div className="flex items-start justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-emerald-900">
+                  👥 Évaluation du groupe
+                </CardTitle>
+                <p className="text-xs text-emerald-700 mt-1">
+                  Elle porte sur le GROUPE, pas sur{" "}
+                  {candidate.firstName || "ce candidat"} — une seule grille
+                  pour tout le créneau.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-emerald-700">
+                  {totalOf(noteScores)}
+                  <span className="text-xs font-medium text-emerald-400">
+                    {" "}/ {GROUP_EVALUATION_MAX}
+                  </span>
+                </p>
+                <p className="text-[10px] text-emerald-500 -mt-0.5">
+                  Note du groupe
+                </p>
+                {noteSavedAt && (
+                  <p className="text-[11px] text-emerald-600 font-medium mt-1">
+                    Enregistrée à{" "}
+                    {new Date(noteSavedAt).toLocaleTimeString("fr-FR")}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-5">
+            {noteUnavailable ? (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-sm text-amber-900">{noteUnavailable}</p>
+              </div>
+            ) : noteLoading && !noteId ? (
+              <p className="text-sm text-gray-400">Chargement…</p>
+            ) : (
+              <>
+                <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-2.5">
+                  <p className="text-xs text-emerald-800">
+                    {noteIsMine && noteId ? (
+                      <>
+                        Vous avez pris cette grille en main : vous êtes le seul
+                        à pouvoir la modifier.
+                      </>
+                    ) : noteCanEdit ? (
+                      <>
+                        C&apos;est au{" "}
+                        <strong>dernier examinateur du créneau</strong> de
+                        remplir cette grille. Si ce n&apos;est pas vous, ne la
+                        touchez pas : le premier qui saisit la verrouille pour
+                        les autres.
+                      </>
+                    ) : (
+                      <>
+                        Remplie par{" "}
+                        <strong>
+                          {noteOwner?.firstName || noteOwner?.email || "un autre examinateur"}
+                        </strong>{" "}
+                        — vous pouvez la consulter, pas la modifier.
+                      </>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-emerald-600 mt-1">
+                    Note indicative : elle éclaire la délibération et
+                    n&apos;entre pas dans la moyenne des candidats.
+                    Sauvegarde automatique.
+                  </p>
+                </div>
+
+                <ScoreGrid
+                  questions={GROUP_EVALUATION_QUESTIONS}
+                  scores={noteScores}
+                  scoreErrors={noteErrors}
+                  onChange={handleNoteScore}
+                  disabled={!noteCanEdit}
+                />
+
+                <div className="space-y-2 border-t border-emerald-100 pt-4">
+                  <Label>Synthèse sur le groupe</Label>
+                  <textarea
+                    className="w-full p-2 border rounded-md disabled:bg-gray-50 disabled:text-gray-500"
+                    rows={3}
+                    value={noteComment}
+                    disabled={!noteCanEdit}
+                    onChange={(e) => handleNoteComment(e.target.value)}
+                    placeholder="Dynamique du groupe, déroulé de l'épreuve, rendu final…"
+                  />
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ───────── Shared evaluation section : vraie épreuve de groupe, ou
           épreuve individuelle en binôme (2+ examinateurs sur le créneau) ───────── */}
@@ -746,13 +1004,24 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                   </div>
                 )}
 
-                {/* ── Fil de commentaires du groupe ── */}
-                <div className="space-y-2 border-t border-indigo-100 pt-4">
-                  <Label>Commentaires du groupe</Label>
-                  <p className="text-xs text-gray-500">
-                    Visible par tous les examinateurs du créneau — chacun peut
-                    en ajouter.
-                  </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ───────── Fil de commentaires du créneau (groupe ou binôme) ───────── */}
+      {selectedEpreuve && showComments && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Commentaires du groupe</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              Visible par tous les examinateurs du créneau — chacun peut en
+              ajouter. Mise à jour automatique toutes les 7 secondes.
+            </p>
+          </CardHeader>
+          <CardContent>
+                <div className="space-y-2">
                   {groupComments.length === 0 ? (
                     <p className="text-sm text-gray-400 italic">
                       Aucun commentaire pour l&apos;instant.
@@ -807,8 +1076,6 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                     </Button>
                   </div>
                 </div>
-              </>
-            )}
           </CardContent>
         </Card>
       )}
