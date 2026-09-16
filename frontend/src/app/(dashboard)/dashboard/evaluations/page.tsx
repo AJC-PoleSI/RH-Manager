@@ -854,7 +854,27 @@ function AdminView() {
 function MemberView() {
     const [evaluations, setEvaluations] = useState<EvaluationData[]>([]);
     const [nextCandidates, setNextCandidates] = useState<any[]>([]);
+    // Candidats de mes créneaux dont la notation est close (ma note, celle du
+    // binôme, ou celle du pair qui les a observés en business game). Ils ne
+    // sont plus proposés, mais rester visibles évite de croire à une perte.
+    const [doneCandidates, setDoneCandidates] = useState<any[]>([]);
+    // Business games terminés où un candidat n'a reçu aucune note.
+    const [coverageAlerts, setCoverageAlerts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // La route renvoie { candidates, done, alerts } ; un ancien tableau brut
+    // (réponse en cache) reste accepté.
+    const applyNext = (data: any) => {
+        if (Array.isArray(data)) {
+            setNextCandidates(data);
+            setDoneCandidates([]);
+            setCoverageAlerts([]);
+            return;
+        }
+        setNextCandidates(Array.isArray(data?.candidates) ? data.candidates : []);
+        setDoneCandidates(Array.isArray(data?.done) ? data.done : []);
+        setCoverageAlerts(Array.isArray(data?.alerts) ? data.alerts : []);
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -866,7 +886,7 @@ function MemberView() {
                 // Try to fetch next candidates to evaluate
                 try {
                     const nextRes = await api.get('/evaluations/next-candidates');
-                    setNextCandidates(nextRes.data);
+                    applyNext(nextRes.data);
                 } catch {
                     // Endpoint may not exist yet
                 }
@@ -885,7 +905,7 @@ function MemberView() {
         try {
             await api.post('/evaluations/targets', { slotId: c.slotId, candidateId: c.id, on });
             const nextRes = await api.get('/evaluations/next-candidates');
-            setNextCandidates(nextRes.data);
+            applyNext(nextRes.data);
         } catch (e) {
             console.error('Erreur cochage examinateur:', e);
         }
