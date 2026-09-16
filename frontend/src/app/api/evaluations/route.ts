@@ -281,8 +281,12 @@ export async function POST(req: NextRequest) {
       }
       const { data: existingRows } = await existingQuery;
 
-      // Une ligne vide ne bloque rien (« ghost lock » de l'audit #4).
-      const existingEval = (existingRows || []).find(isFinalizedEvaluation);
+      // Une ligne vide ne bloque rien (« ghost lock » de l'audit #4). Ma
+      // propre note prime sur celle d'un pair : « vous avez déjà évalué »
+      // est plus parlant que « un tel a déjà évalué ».
+      const finalized = (existingRows || []).filter(isFinalizedEvaluation);
+      const existingEval =
+        finalized.find((r: any) => r.member_id === memberId) || finalized[0];
 
       if (existingEval) {
         const { data: candidateData } = await supabaseAdmin
