@@ -1181,6 +1181,56 @@ function MemberView() {
                     </div>
                 )}
             </div>
+
+            {/* Notations closes : plus de bouton « Évaluer », mais on montre
+                qui a noté — sinon les candidats semblent avoir disparu. */}
+            {doneCandidates.length > 0 && (
+                <div className="bg-white border rounded-xl p-4 sm:p-6">
+                    <div className="flex items-center justify-between mb-1">
+                        <h2 className="text-lg font-semibold text-gray-900">Notations closes</h2>
+                        <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                            {doneCandidates.length}
+                        </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">
+                        Candidats de vos créneaux déjà notés. Une seule note par candidat et par épreuve.
+                    </p>
+                    <div className="space-y-2">
+                        {doneCandidates.map((c: any, i: number) => (
+                            <div
+                                key={c.id + (c.epreuve?.id || '') + i}
+                                className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                            >
+                                <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                    {getInitials(c.firstName, c.lastName)}
+                                </div>
+                                <div className="flex-1 min-w-[140px]">
+                                    <p className="font-medium text-gray-800">
+                                        {c.firstName} {c.lastName}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {c.epreuve?.name} · Tour {c.epreuve?.tour ?? '?'}
+                                    </p>
+                                </div>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 flex-shrink-0">
+                                    <Lock size={12} />
+                                    {c.closedReason === 'mine'
+                                        ? 'Évalué par vous'
+                                        : c.closedReason === 'shared'
+                                            ? `Note de binôme · ${c.closedBy?.name || 'binôme'}`
+                                            : `Évalué par ${c.closedBy?.name || 'un examinateur'}`}
+                                </span>
+                                <a
+                                    href={`/dashboard/candidates/${c.id}`}
+                                    className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right"
+                                >
+                                    Voir fiche
+                                </a>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
