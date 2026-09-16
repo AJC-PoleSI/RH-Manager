@@ -1093,7 +1093,11 @@ function MemberView() {
                     )}
                 </div>
                 {nextCandidates.length === 0 ? (
-                    <p className="text-center text-gray-400 py-8">Aucun candidat en attente d&apos;évaluation.</p>
+                    <p className="text-center text-gray-400 py-8">
+                        {doneCandidates.length > 0
+                            ? 'Tout est noté : plus aucun candidat en attente.'
+                            : 'Aucun candidat en attente d’évaluation.'}
+                    </p>
                 ) : (
                     <div className="space-y-3">
                         {nextCandidates.map((c: any, i: number) => {
