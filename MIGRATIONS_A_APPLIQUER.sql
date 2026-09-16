@@ -769,3 +769,15 @@ CREATE TABLE IF NOT EXISTS slot_links (
 -- Le lockdown RLS a bouclé sur les tables existantes : celle-ci doit être
 -- activée explicitement (l'app n'utilise que la clé service_role, BYPASSRLS).
 ALTER TABLE slot_links ENABLE ROW LEVEL SECURITY;
+
+
+-- ------------------------------------------------------------
+-- 15) Unicité des évaluations de candidat
+--     (supabase-migration-eval-unicite.sql)
+-- ------------------------------------------------------------
+-- L'anti-doublon de POST /api/evaluations est un lire-puis-écrire : deux
+-- soumissions simultanées le franchissent toutes les deux. Constaté en prod le
+-- 15/09/2026 à 18:02 (deux lignes identiques à 1,2 s d'intervalle). Le contenu
+-- complet, doublons compris, est dans supabase-migration-eval-unicite.sql —
+-- l'appliquer depuis CE fichier-là (il commence par nettoyer les doublons,
+-- sans quoi la création des index échoue).

@@ -974,7 +974,12 @@ function MemberView() {
                         <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
                         <div className="flex-1 min-w-0">
                             <p className="font-semibold text-amber-900">
-                                Business game : {coverageAlerts.length > 1 ? 'des candidats n’ont' : 'un candidat n’a'} pas été évalué
+                                {(() => {
+                                    const n = coverageAlerts.reduce((sum: number, a: any) => sum + (a.missing?.length || 0), 0);
+                                    return n > 1
+                                        ? `Business game : ${n} candidats n’ont pas été évalués`
+                                        : 'Business game : un candidat n’a pas été évalué';
+                                })()}
                             </p>
                             <p className="text-xs text-amber-700 mt-0.5">
                                 L&apos;épreuve est terminée et il manque encore des notes. Chaque candidat doit être noté une fois, par l&apos;examinateur qui l&apos;a observé.
