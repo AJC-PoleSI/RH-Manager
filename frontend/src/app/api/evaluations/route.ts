@@ -17,6 +17,7 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
+import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";

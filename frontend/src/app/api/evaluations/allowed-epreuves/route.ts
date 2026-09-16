@@ -5,6 +5,10 @@ import {
   listEvaluableEpreuveIds,
   resolveCandidateSlot,
 } from "@/lib/evaluation-access";
+import {
+  buildClosureIndex,
+  evaluationClosure,
+} from "@/lib/evaluation-closure";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/allowed-epreuves?candidateId=X
