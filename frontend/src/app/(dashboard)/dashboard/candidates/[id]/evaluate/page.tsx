@@ -1085,9 +1085,54 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         </Card>
       )}
 
+      {/* ───────── Notation close : le candidat a déjà sa note sur cette
+          épreuve. On montre par qui plutôt qu'un formulaire qui ne pourra
+          jamais être enregistré (le serveur applique la même règle). ───────── */}
+      {selectedEpreuve && !isBinome && indivClosed && (
+        <Card className="border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="flex items-center gap-2 text-gray-800">
+              🔒 Notation close
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-5">
+            <p className="text-sm text-gray-700">
+              {closureReason === "mine" ? (
+                <>
+                  Vous avez déjà évalué {candidate.firstName || "ce candidat"}{" "}
+                  sur cette épreuve.
+                </>
+              ) : closureReason === "shared" ? (
+                <>
+                  La note de ce candidat a été saisie en binôme par{" "}
+                  <strong>{closureAuthor}</strong> — elle compte pour vous deux.
+                </>
+              ) : (
+                <>
+                  {candidate.firstName || "Ce candidat"} a déjà été évalué par{" "}
+                  <strong>{closureAuthor}</strong> sur cette épreuve.
+                </>
+              )}
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              {closureReason === "peer"
+                ? "Sur un business game, chaque candidat n'est noté qu'une fois, par l'examinateur qui l'a observé."
+                : "Une seule note par candidat et par épreuve."}{" "}
+              Contactez un responsable recrutement s&apos;il faut la corriger.
+            </p>
+            <a
+              href={`/dashboard/candidates/${id}`}
+              className="inline-flex items-center mt-4 text-sm font-medium text-blue-600 hover:underline"
+            >
+              Voir la fiche du candidat
+            </a>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ───────── Individual evaluation section (masquée en binôme : une
           seule note partagée existe déjà ci-dessus) ───────── */}
-      {selectedEpreuve && !isBinome && (
+      {selectedEpreuve && !isBinome && !indivClosed && (
         <Card>
           <CardHeader>
             <CardTitle>
