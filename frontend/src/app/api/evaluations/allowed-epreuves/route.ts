@@ -68,6 +68,34 @@ export async function GET(req: NextRequest) {
         }),
     );
 
+    // Notation déjà close ? Même règle que la file d'attente
+    // (/api/evaluations/next-candidates) et que la garde d'écriture
+    // (POST /api/evaluations) : sans ça le formulaire s'ouvre grand sur un
+    // candidat déjà noté et n'échoue qu'à l'enregistrement.
+    const groupEpreuveIds = new Set(
+      (data || [])
+        .filter((e: any) => e.is_group_epreuve === true)
+        .map((e: any) => e.id),
+    );
+    const { data: existingEvals } = await supabaseAdmin
+      .from("candidate_evaluations")
+      .select(
+        "candidate_id, epreuve_id, member_id, is_group, scores, comment, member:members!member_id(id, first_name, last_name, email)",
+      )
+      .eq("candidate_id", candidateId)
+      .in(
+        "epreuve_id",
+        (data || []).map((e: any) => e.id),
+      );
+
+    const closureIndex = buildClosureIndex(existingEvals || [], (id) =>
+      groupEpreuveIds.has(id),
+    );
+    const authorById = new Map<string, any>();
+    for (const row of (existingEvals as any[]) || []) {
+      if (row.member?.id) authorById.set(row.member.id, row.member);
+    }
+
     const epreuves = (data || []).map((e: any) => ({
       id: e.id,
       name: e.name,
@@ -75,6 +103,29 @@ export async function GET(req: NextRequest) {
       tour: e.tour,
       isGroupEpreuve: e.is_group_epreuve ?? false,
       examinerCount: examinerCounts[e.id] ?? null,
+      closure: (() => {
+        const verdict = evaluationClosure(closureIndex, {
+          candidateId,
+          epreuveId: e.id,
+          memberId: user.id,
+          isGroupEpreuve: e.is_group_epreuve === true,
+        });
+        if (!verdict.closed) return { closed: false, reason: null, by: null };
+        const author = verdict.byMemberId
+          ? authorById.get(verdict.byMemberId)
+          : null;
+        return {
+          closed: true,
+          reason: verdict.reason,
+          by: author
+            ? {
+                firstName: author.first_name || "",
+                lastName: author.last_name || "",
+                email: author.email,
+              }
+            : null,
+        };
+      })(),
       evaluationQuestions:
         typeof e.evaluation_questions === "string"
           ? (() => {
