@@ -261,16 +261,29 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      const { data: existingEval } = await supabaseAdmin
+      // Sur une ÉPREUVE DE GROUPE, la note d'un pair ferme le candidat pour
+      // tout le monde : chaque candidat y est observé par un examinateur
+      // désigné, une seconde note serait un doublon (cf.
+      // lib/evaluation-closure — même règle que la file d'attente et le
+      // formulaire). Sur une épreuve individuelle, seul MON doublon est
+      // refusé.
+      let existingQuery = supabaseAdmin
         .from("candidate_evaluations")
-        .select("id, member_id, members!member_id(email, first_name, last_name)")
+        .select(
+          "id, member_id, scores, comment, members!member_id(email, first_name, last_name)",
+        )
         .eq("candidate_id", candidateId)
         .eq("epreuve_id", epreuveId)
-        .eq("is_group", false)
-        .eq("member_id", memberId)
-        .limit(1);
+        .eq("is_group", false);
+      if (!epreuveIsGroupType) {
+        existingQuery = existingQuery.eq("member_id", memberId);
+      }
+      const { data: existingRows } = await existingQuery;
 
-      if (existingEval && existingEval.length > 0) {
+      // Une ligne vide ne bloque rien (« ghost lock » de l'audit #4).
+      const existingEval = (existingRows || []).find(isFinalizedEvaluation);
+
+      if (existingEval) {
         const { data: candidateData } = await supabaseAdmin
           .from("candidates")
           .select("first_name, last_name")
@@ -279,9 +292,21 @@ export async function POST(req: NextRequest) {
         const candidateName = candidateData
           ? `${candidateData.first_name || ""} ${candidateData.last_name || ""}`.trim()
           : "ce candidat";
+        const author = (existingEval as any).members;
+        const authorName = author
+          ? `${author.first_name || ""} ${author.last_name || ""}`.trim() ||
+            author.email
+          : "un autre examinateur";
+        const mine = existingEval.member_id === memberId;
         return Response.json(
-          { error: `Vous avez déjà évalué ${candidateName} pour cette épreuve.` },
-          { status: 400 },
+          {
+            error: mine
+              ? `Vous avez déjà évalué ${candidateName} pour cette épreuve.`
+              : `${candidateName} a déjà été évalué par ${authorName} sur cette épreuve : la notation est close.`,
+            code: mine ? "INDIVIDUAL_EVAL_EXISTS" : "CANDIDATE_ALREADY_EVALUATED",
+            id: existingEval.id,
+          },
+          { status: mine ? 400 : 409 },
         );
       }
     }
