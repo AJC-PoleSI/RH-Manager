@@ -181,6 +181,27 @@ function getInitials(firstName?: string, lastName?: string): string {
     return f + l || '?';
 }
 
+/**
+ * « jeu. 15 sept. · 16:00–16:55 · salle 235 » — le créneau tel qu'un
+ * examinateur le reconnaît. `date` arrive en timestamptz : on n'en garde que
+ * le jour, les heures sont des textes locaux.
+ */
+function slotLabel(s: { date?: string | null; startTime?: string | null; endTime?: string | null; room?: string | null }): string {
+    const parts: string[] = [];
+    const day = String(s.date || '').split('T')[0];
+    if (day) {
+        const d = new Date(`${day}T12:00:00`);
+        if (!isNaN(d.getTime())) {
+            parts.push(d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }));
+        }
+    }
+    if (s.startTime) {
+        parts.push(`${s.startTime.slice(0, 5)}${s.endTime ? `–${s.endTime.slice(0, 5)}` : ''}`);
+    }
+    if (s.room) parts.push(`salle ${s.room}`);
+    return parts.join(' · ');
+}
+
 // ─── ADMIN VIEW ────────────────────────────────────────────────────────────────
 
 function AdminView() {
