@@ -945,6 +945,50 @@ function MemberView() {
                 <p className="text-gray-500 mt-1">Récapitulatif de vos notations</p>
             </div>
 
+            {/* Alerte de couverture : business game terminé, candidats sans note.
+                Personne ne s'en aperçoit avant la délibération, sinon. */}
+            {coverageAlerts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
+                        <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-amber-900">
+                                Business game : {coverageAlerts.length > 1 ? 'des candidats n’ont' : 'un candidat n’a'} pas été évalué
+                            </p>
+                            <p className="text-xs text-amber-700 mt-0.5">
+                                L&apos;épreuve est terminée et il manque encore des notes. Chaque candidat doit être noté une fois, par l&apos;examinateur qui l&apos;a observé.
+                            </p>
+                            <div className="mt-3 space-y-3">
+                                {coverageAlerts.map((a: any) => (
+                                    <div key={a.slotId} className="bg-white border border-amber-200 rounded-lg p-3">
+                                        <p className="text-sm font-medium text-gray-900">
+                                            {a.epreuveName?.trim() || 'Business game'}
+                                            {a.tour ? ` · Tour ${a.tour}` : ''}
+                                            {' · '}
+                                            {slotLabel(a)}
+                                        </p>
+                                        <p className="text-xs text-amber-700 mt-1">
+                                            {a.missing.length} candidat{a.missing.length > 1 ? 's' : ''} sur {a.totalCandidates} sans note :
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                            {a.missing.map((m: any) => (
+                                                <a
+                                                    key={m.id}
+                                                    href={`/dashboard/candidates/${m.id}/evaluate?epreuveId=${a.epreuveId}`}
+                                                    className="inline-flex items-center gap-1 text-xs font-medium bg-amber-100 hover:bg-amber-200 text-amber-900 px-2 py-1 rounded-full transition-colors"
+                                                >
+                                                    {m.name} →
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white border border-blue-200 rounded-xl p-5">
