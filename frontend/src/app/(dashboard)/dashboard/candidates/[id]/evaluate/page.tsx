@@ -207,6 +207,17 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   // attribuée aux deux. Le serveur retranche déjà `examinerCount` sur
   // resolveCandidateSlot + slot_member_assignments.
   const isBinome = !isGroupEpreuve && (selectedEpreuve?.examinerCount ?? 0) >= 2;
+  // Notation individuelle déjà close pour ce candidat sur cette épreuve :
+  // ma propre note, la note du binôme, ou — sur un business game — celle de
+  // l'examinateur qui a observé ce candidat (cf. lib/evaluation-closure).
+  const closureReason: string | null = selectedEpreuve?.closure?.closed
+    ? selectedEpreuve.closure.reason
+    : null;
+  const indivClosed = closureReason !== null;
+  const closureAuthor =
+    `${selectedEpreuve?.closure?.by?.firstName || ""} ${selectedEpreuve?.closure?.by?.lastName || ""}`.trim() ||
+    selectedEpreuve?.closure?.by?.email ||
+    "un autre examinateur";
   // La note partagée ne subsiste QUE pour le binôme sur un entretien. Sur une
   // épreuve de groupe, elle est remplacée par la grille « Évaluation du
   // groupe » ci-dessous (une par créneau, un seul rédacteur).
