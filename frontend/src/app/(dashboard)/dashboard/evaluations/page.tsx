@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { hasAnyScore, toTwenty } from '@/lib/evaluation-criteria';
+import {
+    computeExaminerStats,
+    emptyExaminerStats,
+    MIN_SCORES_FOR_CALIBRATION,
+    tendencyLabel,
+    type ExaminerEvaluationInput,
+    type ExaminerStats,
+} from '@/lib/examiner-stats';
 import { slotLinkHost } from '@/lib/slot-links';
 import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
 
@@ -24,7 +32,7 @@ interface EvaluationData {
     comment?: string;
     createdAt: string;
     candidate: { id: string; firstName: string; lastName: string };
-    epreuve: { id?: string; name: string; tour: number; type: string; maxTotal?: number };
+    epreuve: { id?: string; name: string; tour: number; type: string; isGroupEpreuve?: boolean; maxTotal?: number };
     member?: { id: string; firstName?: string; lastName?: string; email: string };
     /**
      * Tous les examinateurs au nom desquels la note compte : l'auteur, plus
@@ -34,6 +42,8 @@ interface EvaluationData {
     examiners?: { id: string; firstName?: string; lastName?: string; email: string }[];
     /** Note partagée (binôme / collective) plutôt qu'avis individuel. */
     isGroup?: boolean;
+    /** Ancienne note collective d'un business game (cf. isCollectiveNote). */
+    isLegacyCollective?: boolean;
     closedAt?: string | null;
 }
 
@@ -72,6 +82,87 @@ function examinerNames(ev: EvaluationData): string[] {
             ? [ev.member]
             : [];
     return list.map(m => `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.email);
+}
+
+/**
+ * Ancienne « note collective » d'une épreuve de groupe (business game) : une
+ * ligne par candidat du groupe, saisie avant le 15/09/2026. Elle décrit le
+ * travail DU GROUPE, pas une personne — elle ne compte donc ni comme candidat
+ * évalué ni dans une moyenne. Repli sur le type d'épreuve pour les réponses
+ * d'API antérieures au drapeau.
+ *
+ * ⚠ Ne concerne PAS la note partagée d'un binôme sur un entretien : celle-là
+ * note bien un candidat et compte pour ses deux examinateurs.
+ */
+function isCollectiveNote(ev: EvaluationData): boolean {
+    if (typeof ev.isLegacyCollective === 'boolean') return ev.isLegacyCollective;
+    const groupEpreuve = ev.epreuve?.isGroupEpreuve ?? ev.epreuve?.type === 'groupe';
+    return ev.isGroup === true && groupEpreuve;
+}
+
+/** Une évaluation, mise à la forme attendue par le calcul du barème. */
+function toStatsInput(ev: EvaluationData): ExaminerEvaluationInput {
+    const examiners = ev.examiners?.length ? ev.examiners : ev.member ? [ev.member] : [];
+    return {
+        id: ev.id,
+        examinerIds: examiners.map(m => m.id),
+        // Regroupement par épreuve : son id, à défaut son nom + son tour.
+        epreuveKey: ev.epreuve?.id || `${ev.epreuve?.name || ''}::${ev.epreuve?.tour ?? ''}`,
+        scoreOn20: hasAnyScore(ev.scores) ? getScoreOn20(ev) : null,
+        isCollective: isCollectiveNote(ev),
+    };
+}
+
+/**
+ * Le « barème » d'un examinateur : de combien ses notes s'écartent de celles
+ * des autres sur les mêmes épreuves, et par quel coefficient les multiplier
+ * pour les y ramener. Indicatif — rien n'est appliqué automatiquement.
+ */
+function BaremeCell({ stats }: { stats: ExaminerStats }) {
+    // Aucun point de comparaison : personne d'autre n'a noté ses épreuves.
+    if (stats.coefficient === null || stats.average === null || stats.tendency === null) {
+        return (
+            <span
+                className="text-gray-300"
+                title="Aucun autre examinateur n'a noté les mêmes épreuves : rien à quoi comparer son barème."
+            >
+                —
+            </span>
+        );
+    }
+    const deviation = stats.deviation ?? 0;
+    const unit = Math.abs(deviation) >= 2 ? 'pts' : 'pt';
+    // En dessous du minimum de notes, le coefficient reste affiché — mais en
+    // gris et sans qualificatif : une seule grille suffit à le faire s'envoler.
+    const tone = !stats.reliable
+        ? 'text-gray-400 bg-gray-50 border-gray-200'
+        : stats.tendency === 'severe'
+            ? 'text-amber-700 bg-amber-50 border-amber-200'
+            : stats.tendency === 'genereux'
+                ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                : 'text-gray-600 bg-gray-50 border-gray-200';
+    return (
+        <div
+            className="flex flex-col items-center gap-0.5"
+            title={
+                `Moyenne ${stats.average}/20 sur ${stats.scored} note${stats.scored > 1 ? 's' : ''} ` +
+                `(de ${stats.min} à ${stats.max}). Les autres examinateurs mettent ${stats.reference}/20 ` +
+                `sur les mêmes épreuves. Multiplier ses notes par ${stats.coefficient.toFixed(2)} les ramènerait à ce barème.` +
+                (stats.reliable
+                    ? ''
+                    : ` À prendre avec des pincettes : ${MIN_SCORES_FOR_CALIBRATION} notes sont nécessaires pour que ce soit parlant.`)
+            }
+        >
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}>
+                ×{stats.coefficient.toFixed(2)}
+            </span>
+            <span className="text-[10px] text-gray-400">
+                {stats.reliable
+                    ? `${tendencyLabel(stats.tendency)} · ${deviation > 0 ? '+' : ''}${deviation} ${unit}`
+                    : `sur ${stats.scored} note${stats.scored > 1 ? 's' : ''}`}
+            </span>
+        </div>
+    );
 }
 
 /**
@@ -238,33 +329,29 @@ function AdminView() {
     // ── Stats ──
     const evaluateurCount = members.filter(m => !m.isAdmin).length;
 
+    // Évaluations qui notent un CANDIDAT. Les anciennes notes collectives des
+    // business games (une ligne par candidat du groupe, plus créées depuis le
+    // 15/09/2026) en sont exclues partout : elles notaient le groupe, et
+    // faisaient afficher « 4 évaluations » à qui n'avait vu que 2 candidats.
+    const candidateEvaluations = evaluations.filter(ev => !isCollectiveNote(ev));
+    const collectiveCount = evaluations.length - candidateEvaluations.length;
+
     // Note moyenne GLOBALE = vraie moyenne des notes /20 (chaque évaluation
     // est d'abord ramenée à /20 selon le barème de son épreuve, sinon
     // moyenner des totaux bruts d'épreuves à barèmes différents n'a pas de sens).
     // Un 0/20 saisi est une note et compte ; une évaluation SANS aucune note
-    // (ligne collective créée à vide) est écartée.
-    const allTotals = evaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
+    // (grille créée à vide) est écartée.
+    const allTotals = candidateEvaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
-    const evalCount = evaluations.length;
+    const evalCount = candidateEvaluations.length;
 
-    // Per-member stats: nombre d'évals + moyenne des notes /20
-    const memberEvalCounts: Record<string, number> = {};
-    const memberEvalAverages: Record<string, number[]> = {};
-    evaluations.forEach(ev => {
-        // Une note partagée compte pour CHAQUE examinateur inscrit au créneau,
-        // pas seulement pour celui qui l'a saisie (l'autre a fait passer
-        // l'entretien même s'il ne s'est pas connecté).
-        const ids = ev.examiners?.length
-            ? ev.examiners.map(ex => ex.id)
-            : [ev.member?.id || ''];
-        ids.forEach(mId => {
-            memberEvalCounts[mId] = (memberEvalCounts[mId] || 0) + 1;
-            if (!memberEvalAverages[mId]) memberEvalAverages[mId] = [];
-            if (hasAnyScore(ev.scores)) memberEvalAverages[mId].push(getScoreOn20(ev));
-        });
-    });
+    // Par membre : candidats évalués, moyenne /20 et barème (écart aux autres
+    // examinateurs sur les mêmes épreuves). Une note partagée compte pour
+    // CHAQUE examinateur inscrit au créneau, pas seulement pour celui qui l'a
+    // saisie — l'autre a fait passer l'entretien même sans se connecter.
+    const examinerStats = computeExaminerStats(evaluations.map(toStatsInput));
 
     if (loading) {
         return (
@@ -315,6 +402,14 @@ function AdminView() {
                 <div className="bg-white border border-green-200 rounded-xl p-5">
                     <p className="text-sm text-green-600 font-medium">Évaluations saisies</p>
                     <p className="text-3xl font-bold text-green-700 mt-1">{evalCount}</p>
+                    {collectiveCount > 0 && (
+                        <p
+                            className="text-[11px] text-gray-400 mt-1"
+                            title="Anciennes notes collectives de business game, une ligne par candidat du groupe. Elles ne notent personne et n'entrent dans aucune moyenne."
+                        >
+                            + {collectiveCount} ligne{collectiveCount > 1 ? 's' : ''} collective{collectiveCount > 1 ? 's' : ''} archivée{collectiveCount > 1 ? 's' : ''}, hors décompte
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -403,6 +498,11 @@ function AdminView() {
             <div className="bg-white border rounded-xl overflow-hidden">
                 <div className="px-4 sm:px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold text-gray-900">Tous les évaluateurs</h2>
+                    <p className="text-xs text-gray-400 mt-1">
+                        « Évals » = candidats notés (une note en binôme compte pour ses deux examinateurs ;
+                        une note de groupe ne compte pour personne). « Barème » = son écart aux autres
+                        examinateurs sur les mêmes épreuves, et le coefficient qui l&apos;y ramènerait.
+                    </p>
                 </div>
                 <div className="scroll-x">
                     <table className="w-full text-sm text-left">
@@ -413,6 +513,7 @@ function AdminView() {
                                 <th className="px-3 sm:px-6 py-3">Email</th>
                                 <th className="px-3 sm:px-6 py-3 text-center">Évals</th>
                                 <th className="px-3 sm:px-6 py-3 text-center">Note moyenne</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Barème</th>
                                 <th className="px-3 sm:px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -432,7 +533,7 @@ function AdminView() {
                                     const groupMembers = groups.get(poleKey)!;
                                     const header = (
                                         <tr key={`hdr-${poleKey}`} className="bg-gray-50/80">
-                                            <td colSpan={6} className="px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            <td colSpan={7} className="px-4 sm:px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                                 {poleKey === '__none__' ? 'Sans pôle' : poleKey}
                                                 <span className="ml-2 text-gray-400 font-normal normal-case">
                                                     {groupMembers.length} membre{groupMembers.length > 1 ? 's' : ''}
@@ -441,11 +542,9 @@ function AdminView() {
                                         </tr>
                                     );
                                     const rows = groupMembers.map((m) => {
-                                const mEvals = memberEvalCounts[m.id] || 0;
-                                const mAvgs = memberEvalAverages[m.id] || [];
-                                const mAvg = mAvgs.length > 0
-                                    ? Math.round((mAvgs.reduce((a, b) => a + b, 0) / mAvgs.length) * 10) / 10
-                                    : null;
+                                const stats = examinerStats[m.id] || emptyExaminerStats();
+                                const mEvals = stats.evaluations;
+                                const mAvg = stats.average;
                                 const displayName = `${m.firstName || ''} ${m.lastName || ''}`.trim();
                                 return (
                                     <tr key={m.id} className="hover:bg-gray-50">
@@ -483,6 +582,14 @@ function AdminView() {
                                             ) : (
                                                 <span className="text-gray-400">0</span>
                                             )}
+                                            {stats.collectiveNotes > 0 && (
+                                                <span
+                                                    className="block text-[10px] text-indigo-500"
+                                                    title="Ancienne note collective de business game : elle note le travail du groupe, pas un candidat. Elle n'entre ni dans ce décompte ni dans les moyennes."
+                                                >
+                                                    +{stats.collectiveNotes} note{stats.collectiveNotes > 1 ? 's' : ''} de groupe
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-center">
                                             {mAvg !== null ? (
@@ -490,6 +597,9 @@ function AdminView() {
                                             ) : (
                                                 <span className="text-gray-400">-</span>
                                             )}
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-3 text-center">
+                                            <BaremeCell stats={stats} />
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -537,7 +647,10 @@ function AdminView() {
             <div className="bg-white border rounded-xl overflow-hidden">
                 <div className="px-4 sm:px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold text-gray-900">Récap des évaluations données</h2>
-                    <p className="text-xs text-gray-400 mt-1">Note individuelle de chaque évaluateur + note collective (moyenne automatique)</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                        Une ligne par note saisie. La moyenne est celle des examinateurs du candidat sur l&apos;épreuve —
+                        les anciennes notes collectives de groupe en sont exclues.
+                    </p>
                 </div>
                 <div className="scroll-x">
                     <table className="w-full text-sm text-left">
@@ -548,20 +661,22 @@ function AdminView() {
                                 <th className="px-3 sm:px-6 py-3">Épreuve</th>
                                 <th className="px-3 sm:px-6 py-3 text-center">Tour</th>
                                 <th className="px-3 sm:px-6 py-3 text-center">Note individuelle</th>
-                                <th className="px-3 sm:px-6 py-3 text-center">Note collective</th>
+                                <th className="px-3 sm:px-6 py-3 text-center">Moyenne du candidat</th>
                                 <th className="px-3 sm:px-6 py-3">Commentaire</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {evaluations.map(ev => {
-                                // Note collective = moyenne des notes /20 pour même candidat + même
-                                // épreuve (par id ; à défaut nom + tour), hors lignes sans aucune note.
+                                // Moyenne du candidat = moyenne des notes /20 des examinateurs pour
+                                // même candidat + même épreuve (par id ; à défaut nom + tour), hors
+                                // lignes sans aucune note et hors anciennes notes collectives.
                                 const sameEpreuve = (e: EvaluationData) =>
                                     ev.epreuve?.id && e.epreuve?.id
                                         ? e.epreuve.id === ev.epreuve.id
                                         : e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour;
                                 const sameGroup = evaluations.filter(
-                                    e => e.candidate?.id === ev.candidate?.id && sameEpreuve(e) && hasAnyScore(e.scores)
+                                    e => e.candidate?.id === ev.candidate?.id && sameEpreuve(e)
+                                        && hasAnyScore(e.scores) && !isCollectiveNote(e)
                                 );
                                 const groupTotals = sameGroup.map(e => getScoreOn20(e));
                                 const collectiveScore = groupTotals.length > 0
@@ -594,9 +709,16 @@ function AdminView() {
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-center font-bold text-blue-600">
                                             {hasAnyScore(ev.scores) ? `${getScoreOn20(ev)}/20` : '—'}
-                                            {ev.isGroup && (
+                                            {isCollectiveNote(ev) ? (
+                                                <span
+                                                    className="block text-[10px] font-normal text-amber-600"
+                                                    title="Ancienne note collective de business game : elle note le groupe. Elle ne compte ni pour un candidat ni pour un examinateur."
+                                                >
+                                                    note de groupe · ne compte pas
+                                                </span>
+                                            ) : ev.isGroup ? (
                                                 <span className="block text-[10px] font-normal text-indigo-500">note partagée</span>
-                                            )}
+                                            ) : null}
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
@@ -770,9 +892,19 @@ function MemberView() {
     };
 
     // Stats — moyenne globale des notes /20 (chaque évaluation ramenée à /20
-    // selon le barème de son épreuve avant d'être moyennée)
-    const totalEvals = evaluations.length;
-    const allTotals = evaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
+    // selon le barème de son épreuve avant d'être moyennée). Les anciennes
+    // notes collectives de business game ne notent pas un candidat : elles
+    // sont comptées à part, jamais dans le total ni dans la moyenne.
+    const myCandidateEvals = evaluations.filter(ev => !isCollectiveNote(ev));
+    // Une seule note de groupe par épreuve, quel que soit le nombre de
+    // candidats du groupe — même décompte que le tableau admin.
+    const myCollectiveCount = new Set(
+        evaluations
+            .filter(isCollectiveNote)
+            .map(ev => ev.epreuve?.id || `${ev.epreuve?.name || ''}::${ev.epreuve?.tour ?? ''}`)
+    ).size;
+    const totalEvals = myCandidateEvals.length;
+    const allTotals = myCandidateEvals.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
     const avgScore = allTotals.length > 0
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
@@ -796,8 +928,13 @@ function MemberView() {
             {/* Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white border border-blue-200 rounded-xl p-5">
-                    <p className="text-sm text-blue-600 font-medium">Total évaluations</p>
+                    <p className="text-sm text-blue-600 font-medium">Candidats évalués</p>
                     <p className="text-3xl font-bold text-blue-700 mt-1">{totalEvals}</p>
+                    {myCollectiveCount > 0 && (
+                        <p className="text-[11px] text-gray-400 mt-1">
+                            + {myCollectiveCount} note{myCollectiveCount > 1 ? 's' : ''} de groupe, hors décompte
+                        </p>
+                    )}
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
@@ -827,11 +964,15 @@ function MemberView() {
                                     <p className="text-sm text-gray-500">
                                         {ev.epreuve?.name || ''} &middot; Tour {ev.epreuve?.tour || '?'}
                                     </p>
-                                    {ev.isGroup && examinerNames(ev).length > 1 && (
+                                    {isCollectiveNote(ev) ? (
+                                        <p className="text-xs text-amber-600">
+                                            Ancienne note de groupe &middot; ne compte pour aucun candidat
+                                        </p>
+                                    ) : ev.isGroup && examinerNames(ev).length > 1 ? (
                                         <p className="text-xs text-indigo-500">
                                             Note partagée &middot; {examinerNames(ev).join(' & ')}
                                         </p>
-                                    )}
+                                    ) : null}
                                     {ev.comment && (
                                         <p className="text-sm text-gray-400 italic mt-1 truncate">{ev.comment}</p>
                                     )}

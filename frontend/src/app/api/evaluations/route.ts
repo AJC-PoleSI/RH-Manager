@@ -17,6 +17,7 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
+import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -80,6 +81,11 @@ export async function GET(req: NextRequest) {
       // admin ne doit pas présenter une note partagée comme celle de son
       // seul auteur, ni la moyenner avec les avis individuels.
       isGroup: e.is_group === true,
+      // Ancienne « note collective » d'une épreuve de groupe : elle décrit le
+      // travail du groupe, pas un candidat. Conservée pour son commentaire,
+      // mais hors de toute moyenne et de tout décompte de candidats évalués
+      // (cf. lib/group-evaluation-criteria).
+      isLegacyCollective: isLegacyCollectiveNote(e),
       closedAt: e.closed_at ?? null,
       candidate: e.candidates
         ? {
@@ -97,9 +103,17 @@ export async function GET(req: NextRequest) {
             name: e.epreuves.name,
             tour: e.epreuves.tour,
             type: e.epreuves.type,
+            isGroupEpreuve: e.epreuves.is_group_epreuve === true,
             maxTotal: getTotalMaxPoints(e.epreuves.evaluation_questions),
           }
-        : { id: "", name: "", tour: 0, type: "", maxTotal: 20 },
+        : {
+            id: "",
+            name: "",
+            tour: 0,
+            type: "",
+            isGroupEpreuve: false,
+            maxTotal: 20,
+          },
       member: e.members
         ? {
             id: e.members.id,

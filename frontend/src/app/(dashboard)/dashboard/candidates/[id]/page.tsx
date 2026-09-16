@@ -28,6 +28,12 @@ interface Evaluation {
   hasScores?: boolean;
   /** Note partagée (binôme / collective) plutôt qu'avis individuel. */
   isGroup?: boolean;
+  /**
+   * Ancienne note collective d'un business game : listée pour son
+   * commentaire, mais exclue de la moyenne du candidat (cf.
+   * lib/group-evaluation-criteria).
+   */
+  isLegacyCollective?: boolean;
   closedAt?: string | null;
   comment: string;
   createdAt: string;
@@ -541,12 +547,25 @@ export default function CandidateDetailPage({
                         </div>
                       </div>
 
-                      {/* Note (individuelle ou partagée) */}
+                      {/* Note (individuelle, partagée, ou ancienne collective) */}
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs text-gray-400">
-                          {ev.isGroup ? "Note partagée" : "Note individuelle"}
+                        <p
+                          className={`text-xs ${ev.isLegacyCollective ? "text-amber-600" : "text-gray-400"}`}
+                          title={
+                            ev.isLegacyCollective
+                              ? "Ancienne note collective de business game : elle notait le groupe. Elle reste affichée pour son commentaire mais n'entre dans aucune moyenne."
+                              : undefined
+                          }
+                        >
+                          {ev.isLegacyCollective
+                            ? "Note de groupe · hors moyenne"
+                            : ev.isGroup
+                              ? "Note partagée"
+                              : "Note individuelle"}
                         </p>
-                        <span className="text-xl font-bold text-blue-600">
+                        <span
+                          className={`text-xl font-bold ${ev.isLegacyCollective ? "text-gray-400" : "text-blue-600"}`}
+                        >
                           {ev.scoreOn20 !== null && ev.scoreOn20 !== undefined
                             ? `${ev.scoreOn20} / 20`
                             : "-"}

@@ -1606,12 +1606,22 @@ export default function DeliberationsPage() {
                                         <div className="flex items-center gap-2">
                                           <span className="text-sm font-medium text-gray-800">{ev.epreuve?.name || "Epreuve"}</span>
                                           <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Tour {ev.epreuve?.tour}</span>
+                                          {/* Ancienne note collective de business game : affichée pour
+                                              son commentaire, mais hors de la moyenne du candidat. */}
+                                          {ev.isLegacyCollective && (
+                                            <span
+                                              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold whitespace-nowrap"
+                                              title="Ancienne note collective : elle notait le travail du groupe, pas ce candidat. Elle n'entre pas dans sa moyenne."
+                                            >
+                                              note de groupe · hors moyenne
+                                            </span>
+                                          )}
                                         </div>
                                         {(() => {
                                           const { note, coef } = getNoteSur20(ev);
                                           return (
                                             <div className="flex items-center gap-1.5">
-                                              <span className="text-lg font-bold text-blue-600">
+                                              <span className={`text-lg font-bold ${ev.isLegacyCollective ? "text-gray-400" : "text-blue-600"}`}>
                                                 {note !== null ? `${note}/20` : getScoreTotal(ev.scores)}
                                               </span>
                                               {note !== null && coef !== 1 && (

@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { isMissingColumnError } from "@/lib/evaluation-access";
 import { getAllExaminerCredits } from "@/lib/evaluation-examiners";
+import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -48,10 +49,14 @@ export async function GET(req: NextRequest) {
         .from("members")
         .select("id", { count: "exact", head: true }),
       // Paginé : le total d'évaluations dépassera 1000 au fil des tours.
-      fetchAllRows<{ id: string; member_id: string }>((from, to) =>
+      // `is_group` + `is_group_epreuve` servent à écarter les anciennes notes
+      // collectives des business games (cf. lib/group-evaluation-criteria).
+      // `any` : le typage PostgREST annonce la jointure `epreuves` comme un
+      // tableau, alors qu'une relation to-one renvoie bien un objet.
+      fetchAllRows<any>((from, to) =>
         supabaseAdmin
           .from("candidate_evaluations")
-          .select("id, member_id")
+          .select("id, member_id, is_group, epreuves(is_group_epreuve)")
           .order("id")
           .range(from, to),
       ),
@@ -77,17 +82,24 @@ export async function GET(req: NextRequest) {
     // ne doit pas être compté deux fois.
     const credits = await getAllExaminerCredits();
     const pairs = new Set<string>();
-    const knownEvalIds = new Set<string>();
+    // Évaluations qui décrivent un CANDIDAT. Les anciennes notes collectives
+    // des business games (une ligne par candidat du groupe) en sont exclues :
+    // elles gonflaient le compteur d'un examinateur — 2 candidats notés
+    // s'affichaient « 4 évaluations ».
+    const countableEvalIds = new Set<string>();
+    let individualEvaluations = 0;
     if (perMemberRes.data) {
       for (const row of perMemberRes.data) {
-        knownEvalIds.add(row.id);
+        if (isLegacyCollectiveNote(row)) continue;
+        individualEvaluations += 1;
+        countableEvalIds.add(row.id);
         if (row.member_id) pairs.add(`${row.id}::${row.member_id}`);
       }
     }
     for (const c of credits) {
-      // Ligne de suivi orpheline (évaluation supprimée hors application) :
-      // elle ne doit créditer personne.
-      if (!knownEvalIds.has(c.evaluationId)) continue;
+      // Ligne de suivi orpheline (évaluation supprimée hors application) ou
+      // rattachée à une note collective : elle ne doit créditer personne.
+      if (!countableEvalIds.has(c.evaluationId)) continue;
       pairs.add(`${c.evaluationId}::${c.memberId}`);
     }
 
@@ -171,7 +183,13 @@ export async function GET(req: NextRequest) {
 
     return Response.json({
       totalCandidates,
-      totalEvaluations: evaluationsRes.count ?? 0,
+      // Évaluations de candidats : le décompte brut (`evaluationsRes`) inclut
+      // les anciennes notes collectives, écartées ici comme ailleurs. Repli
+      // sur lui si la lecture paginée a échoué.
+      totalEvaluations:
+        perMemberRes.data && perMemberRes.data.length > 0
+          ? individualEvaluations
+          : (evaluationsRes.count ?? 0),
       totalEpreuves: epreuvesRes.count ?? 0,
       totalMembers: membersRes.count ?? 0,
       totalSlots: slotsRes.count ?? 0,
