@@ -707,6 +707,25 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     } catch (error: any) {
       console.error(error);
       const code = error?.response?.data?.code;
+      // Un pair a noté ce candidat entre-temps (business game) : on recharge
+      // pour afficher le panneau « Notation close » plutôt qu'un formulaire
+      // qui ne passera plus.
+      if (code === "CANDIDATE_ALREADY_EVALUATED") {
+        toast(
+          error?.response?.data?.error ||
+            "Ce candidat vient d'être évalué par un autre examinateur.",
+          "info",
+        );
+        try {
+          const epRes = await api.get(
+            `/evaluations/allowed-epreuves?candidateId=${id}`,
+          );
+          setEpreuves(epRes.data?.epreuves || []);
+        } catch {
+          /* la page reste utilisable */
+        }
+        return;
+      }
       if (
         error?.response?.status === 409 &&
         (code === "GROUP_EVAL_EXISTS" || code === "INDIVIDUAL_EVAL_EXISTS")
