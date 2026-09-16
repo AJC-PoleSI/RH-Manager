@@ -13,7 +13,7 @@ import {
     type ExaminerStats,
 } from '@/lib/examiner-stats';
 import { slotLinkHost } from '@/lib/slot-links';
-import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck } from 'lucide-react';
+import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck, AlertTriangle, Lock } from 'lucide-react';
 
 interface MemberData {
     id: string;
