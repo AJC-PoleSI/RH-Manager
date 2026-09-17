@@ -16,6 +16,7 @@ import {
   parseScoreInput,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
+import { POLL, startPolling } from "@/lib/poll";
 import {
   GROUP_EVALUATION_MAX,
   GROUP_EVALUATION_QUESTIONS,
@@ -364,17 +365,19 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     loadGroupComments();
   }, [loadGroupEval, loadGroupNote, loadPeers, loadGroupComments]);
 
-  // Poll all shared data every 7s so every examiner sees the others' notes,
-  // the group grid and the comment feed evolve live.
+  // Poll all shared data every 20s (visible tab only) so every examiner sees
+  // the others' notes, the group grid and the comment feed evolve. Each tick
+  // is 5-6 Supabase reads: at 7s this page alone produced ~15 000 reads/day.
   useEffect(() => {
     if ((!showSharedPanel && !showComments) || !selectedEpreuveId) return;
-    const t = setInterval(() => {
+    // Quatre requêtes par passage : on garde le panneau vivant sans le
+    // rejouer toutes les 7 s, et jamais quand l'onglet est caché.
+    return startPolling(() => {
       loadGroupEval();
       loadGroupNote();
       loadPeers();
       loadGroupComments();
-    }, 7000);
-    return () => clearInterval(t);
+    }, POLL.chat);
   }, [
     showSharedPanel,
     showComments,

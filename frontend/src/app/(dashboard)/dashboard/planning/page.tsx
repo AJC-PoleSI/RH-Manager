@@ -18,6 +18,7 @@ import { lockReasonLabel } from "@/lib/slot-lock";
 import { slotLinkHost } from "@/lib/slot-links";
 import { availabilityMatchesSlot } from "@/lib/dispatch-core";
 import { roomChoicesForSlot } from "@/lib/room-choices";
+import { POLL, startPolling } from "@/lib/poll";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -476,7 +477,12 @@ export default function PlanningPage() {
   const fetchSlotData = useCallback(async () => {
     if (!isAdmin || !selectedEpreuveId) return;
     try {
-      const res = await api.get("/slots/all");
+      // Filtre côté SERVEUR : cet appel est rejoué en boucle par le polling.
+      // Sans `epreuve`, PostgREST renvoyait les 1000+ créneaux de toutes les
+      // épreuves (avec leurs jointures) pour n'en garder qu'une poignée ici.
+      const res = await api.get("/slots/all", {
+        params: { epreuve: selectedEpreuveId },
+      });
       const allSlots = (res.data || []).filter(
         (s: any) =>
           s.epreuve_id === selectedEpreuveId ||
@@ -1011,14 +1017,13 @@ export default function PlanningPage() {
     // Polling pour voir en temps réel les inscriptions candidats /
     // changements de jury. Toutes les 5s.
     if (isAdmin) {
-      const interval = setInterval(() => {
-        // Ne pas fetch/re-render pendant que l'onglet est en arrière-plan
-        // (économise du travail et évite de dégrader l'INP au retour).
-        if (document.hidden) return;
+      // Ces deux appels sont les plus lourds de l'app (le planning complet et
+      // toutes les dispos). À 5 s, un seul onglet admin ouvert suffisait à
+      // saturer le pool Postgres.
+      return startPolling(() => {
         fetchSlotData();
         fetchAvailabilityData();
-      }, 5000);
-      return () => clearInterval(interval);
+      }, POLL.planning);
     }
   }, [fetchAvailabilityData, fetchSlotData, isAdmin]);
 
@@ -1085,16 +1090,7 @@ export default function PlanningPage() {
   useEffect(() => {
     if (isAdmin) return;
     fetchMySlots();
-    const interval = setInterval(() => {
-      if (document.hidden) return;
-      fetchMySlots();
-    }, 5000);
-    const onFocus = () => fetchMySlots();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
+    return startPolling(fetchMySlots, POLL.planning);
   }, [isAdmin, fetchMySlots]);
 
   // ── Tour 3 : Obligation de créneaux par pôle ──
@@ -1222,7 +1218,9 @@ export default function PlanningPage() {
     if (!selectedEpreuveId) return;
     try {
       // Publier tous les créneaux draft/open de l'épreuve
-      const res = await api.get("/slots/all");
+      const res = await api.get("/slots/all", {
+        params: { epreuve: selectedEpreuveId },
+      });
       const toPublish = (res.data || []).filter(
         (s: any) =>
           (s.epreuve_id === selectedEpreuveId || s.epreuveId === selectedEpreuveId) &&
@@ -1292,7 +1290,9 @@ export default function PlanningPage() {
         console.error("Erreur fusion créneaux sous-remplis:", e);
       }
 
-      const res = await api.get("/slots/all");
+      const res = await api.get("/slots/all", {
+        params: { epreuve: selectedEpreuveId },
+      });
       const publishedSlots = (res.data || []).filter(
         (s: any) =>
           (s.epreuve_id === selectedEpreuveId ||

@@ -12,6 +12,43 @@ type RouteContext = { params: Promise<{ id: string }> };
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ---------------------------------------------------------------------------
+// Cache mémoire des photos (par instance de fonction).
+//
+// EGRESS : chaque photo pèse 30-60 Ko en base. Avant ce cache, la route lisait
+// la colonne `data` à CHAQUE requête — y compris pour répondre 304 — soit
+// ~4 000 lectures par jour (17/09/2026), le premier poste d'egress Supabase
+// du projet, qui a fait dépasser le quota du plan.
+//
+// Désormais on ne lit que `updated_at` (quelques octets) pour valider
+// l'ETag ; la colonne `data` n'est lue qu'en cas de vraie absence en cache.
+// La validité d'une entrée est portée par sa version (updated_at) : une photo
+// remplacée depuis une autre instance est détectée à la lecture suivante.
+// ---------------------------------------------------------------------------
+interface CachedPhoto {
+  version: number;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+/** ~400 photos × 60 Ko max ≈ 25 Mo, très en deçà de la mémoire d'une fonction. */
+const PHOTO_CACHE_MAX = 400;
+const photoCache = new Map<string, CachedPhoto>();
+
+function cachePut(candidateId: string, entry: CachedPhoto) {
+  photoCache.delete(candidateId);
+  if (photoCache.size >= PHOTO_CACHE_MAX) {
+    // Map itère dans l'ordre d'insertion : la première clé est la plus ancienne.
+    const oldest = photoCache.keys().next().value;
+    if (oldest !== undefined) photoCache.delete(oldest);
+  }
+  photoCache.set(candidateId, entry);
+}
+
+function photoEtag(candidateId: string, version: number): string {
+  return `"${candidateId}-${version}"`;
+}
+
 /**
  * GET /api/candidates/[id]/photo — sert la photo en binaire.
  *
@@ -20,6 +57,12 @@ const UUID_RE =
  * nu — cf. components/ui/CandidatePhoto.tsx) et n'est ouverte qu'aux membres
  * du staff et au candidat lui-même. Un candidat ne voit jamais la photo d'un
  * autre candidat.
+ *
+ * CACHE NAVIGATEUR : le client passe `?v=<version>` (lib/photo-cache.ts). Quand
+ * cette version est la version courante, la réponse est déclarée immuable :
+ * le navigateur ne redemande plus jamais cette URL, et une nouvelle photo
+ * change d'URL via `photoUpdatedAt` dans les listes. Sans `v` (ou périmé),
+ * on retombe sur une revalidation courte par ETag.
  */
 export async function GET(req: NextRequest, context: RouteContext) {
   const payload = getTokenFromRequest(req);
@@ -32,47 +75,77 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   if (payload.role === "candidate" && payload.id !== id) return forbidden();
 
-  const { data, error } = await supabaseAdmin
+  // 1. Version seule : quelques octets, jamais la colonne `data`.
+  const { data: meta, error: metaError } = await supabaseAdmin
     .from("candidate_photos")
-    .select("mime_type, data, updated_at")
+    .select("updated_at")
     .eq("candidate_id", id)
     .maybeSingle();
 
-  if (error) {
+  if (metaError) {
     // Migration pas encore appliquée : personne n'a de photo, ce qui est
     // exactement un 404. Les vignettes retombent sur les initiales.
-    if (isMissingTableError(error)) {
+    if (isMissingTableError(metaError)) {
       return Response.json({ error: "Aucune photo" }, { status: 404 });
     }
-    console.error("GET candidate photo error:", error);
+    console.error("GET candidate photo error:", metaError);
     return Response.json({ error: "Photo indisponible" }, { status: 500 });
   }
-  if (!data) return Response.json({ error: "Aucune photo" }, { status: 404 });
+  if (!meta) return Response.json({ error: "Aucune photo" }, { status: 404 });
 
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(data.data, "base64");
-  } catch {
-    return Response.json({ error: "Photo illisible" }, { status: 500 });
-  }
+  const version = new Date(meta.updated_at).getTime();
+  const etag = photoEtag(id, version);
 
-  const etag = `"${id}-${new Date(data.updated_at).getTime()}"`;
+  const requestedVersion = new URL(req.url).searchParams.get("v");
+  const immutable =
+    requestedVersion !== null && requestedVersion === String(version);
+  // `private` : cache navigateur uniquement, jamais un cache partagé —
+  // la réponse dépend du porteur du jeton.
+  const cacheControl = immutable
+    ? "private, max-age=31536000, immutable"
+    : "private, max-age=300, must-revalidate";
 
-  // Revalidation conditionnelle : l'organigramme affiche des dizaines de
-  // photos, on évite de les retransférer à chaque navigation.
+  // 2. Revalidation conditionnelle AVANT toute lecture du binaire.
   if (req.headers.get("if-none-match") === etag) {
-    return new Response(null, { status: 304, headers: { ETag: etag } });
+    return new Response(null, {
+      status: 304,
+      headers: { ETag: etag, "Cache-Control": cacheControl },
+    });
   }
 
-  return new Response(new Uint8Array(buffer), {
+  // 3. Cache mémoire, validé par la version.
+  let cached = photoCache.get(id);
+  if (!cached || cached.version !== version) {
+    const { data, error } = await supabaseAdmin
+      .from("candidate_photos")
+      .select("mime_type, data")
+      .eq("candidate_id", id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("GET candidate photo error:", error);
+      return Response.json({ error: "Photo indisponible" }, { status: 500 });
+    }
+    if (!data) return Response.json({ error: "Aucune photo" }, { status: 404 });
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(data.data, "base64");
+    } catch {
+      return Response.json({ error: "Photo illisible" }, { status: 500 });
+    }
+
+    cached = { version, mimeType: data.mime_type, buffer };
+    cachePut(id, cached);
+  }
+
+  return new Response(new Uint8Array(cached.buffer), {
     status: 200,
     headers: {
-      "Content-Type": data.mime_type,
-      "Content-Length": String(buffer.byteLength),
+      "Content-Type": cached.mimeType,
+      "Content-Length": String(cached.buffer.byteLength),
       ETag: etag,
-      // `private` : cache navigateur uniquement, jamais un cache partagé —
-      // la réponse dépend du porteur du jeton.
-      "Cache-Control": "private, max-age=300, must-revalidate",
+      "Cache-Control": cacheControl,
       "Content-Disposition": "inline",
       "X-Content-Type-Options": "nosniff",
     },
@@ -161,6 +234,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     );
   }
 
+  photoCache.delete(id);
+
   return Response.json({
     ok: true,
     byteSize: decoded.photo.byteSize,
@@ -194,6 +269,8 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     console.error("Delete candidate photo error:", error);
     return Response.json({ error: "Échec de la suppression." }, { status: 500 });
   }
+
+  photoCache.delete(id);
 
   return Response.json({ ok: true });
 }

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import { POLL, startPolling } from "@/lib/poll";
 
 interface Message {
   id: string;
@@ -138,8 +139,7 @@ export default function MessagesPage() {
   useEffect(() => {
     fetchContacts();
     fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    return startPolling(fetchMessages, POLL.chat);
   }, [fetchContacts, fetchMessages]);
 
   // Filter messages for selected contact

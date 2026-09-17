@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
+import { POLL, startPolling } from "@/lib/poll";
 
 function canCancelSlot(dateStr: string, startTime?: string): boolean {
   if (!dateStr) return false;
@@ -91,15 +92,8 @@ export default function CandidateSlotsPage() {
 
   useEffect(() => {
     fetchData();
-    // Polling toutes les 15s pour détecter changement visibilité admin
-    const interval = setInterval(fetchData, 15000);
-    // Refresh quand l'utilisateur revient sur l'onglet
-    const onFocus = () => fetchData();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
+    // `startPolling` gère déjà le retour sur l'onglet (refresh immédiat).
+    return startPolling(fetchData, POLL.candidate);
   }, [fetchData]);
 
   const handleEnroll = async (slotId: string) => {

@@ -67,21 +67,39 @@ async function resolveRecipient(recipientId: string): Promise<{
   return null;
 }
 
+/**
+ * Nombre de messages renvoyés par conversation-utilisateur. Large de côté
+ * pour ne rien tronquer en pratique, mais borné : sans plafond, la charge
+ * de cette route grandissait avec l'historique, indéfiniment.
+ */
+const MESSAGES_WINDOW = 300;
+
 // GET /api/messages - Fetch private messages for current user
 export async function GET(req: NextRequest) {
   const user = getTokenFromRequest(req);
   if (!user) return unauthorized();
 
   try {
+    // Colonnes explicites + fenêtre bornée : cette route est rejouée par le
+    // polling de la messagerie. Elle lisait l'INTÉGRALITÉ des messages de
+    // l'utilisateur à chaque passage.
+    //
+    // On prend les N PLUS RÉCENTS (`ascending: false` + `limit`), puis on
+    // rétablit l'ordre chronologique pour l'affichage. Trier en ascendant
+    // avant de limiter aurait renvoyé les plus ANCIENS — le fil aurait semblé
+    // figé une fois le plafond atteint.
     const { data, error } = await supabaseAdmin
       .from("private_messages")
-      .select("*")
+      .select(
+        "id, sender_id, sender_role, sender_name, recipient_id, recipient_role, message, read, created_at",
+      )
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .limit(MESSAGES_WINDOW);
 
     if (error) throw error;
 
-    const messages = (data || []).map((m: any) => ({
+    const messages = (data || []).reverse().map((m: any) => ({
       id: m.id,
       senderId: m.sender_id,
       senderRole: m.sender_role,

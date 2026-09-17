@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import { POLL, startPolling } from "@/lib/poll";
 
 interface Message {
   id: string;
@@ -32,8 +33,7 @@ export default function CandidateMessagesPage() {
 
   useEffect(() => {
     fetchMessages();
-    const interval = setInterval(fetchMessages, 10000);
-    return () => clearInterval(interval);
+    return startPolling(fetchMessages, POLL.chat);
   }, [fetchMessages]);
 
   useEffect(() => {

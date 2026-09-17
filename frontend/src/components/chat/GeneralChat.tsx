@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import { POLL, startPolling } from "@/lib/poll";
 
 interface ChatMessage {
   id?: string;
@@ -36,9 +37,9 @@ export default function GeneralChat() {
 
   useEffect(() => {
     fetchMessages();
-    // Poll every 5 seconds for new messages
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    // Onglet visible uniquement : un chat laissé ouvert en arrière-plan
+    // interrogeait la base 720 fois par heure pour rien.
+    return startPolling(fetchMessages, POLL.chat);
   }, [fetchMessages]);
 
   useEffect(() => {

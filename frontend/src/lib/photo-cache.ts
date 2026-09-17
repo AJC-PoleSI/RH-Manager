@@ -40,8 +40,17 @@ export async function getCandidatePhotoUrl(
   const pending = inflight.get(key);
   if (pending) return pending;
 
+  // `?v=` : quand la version passée est la version courante, le serveur
+  // déclare la réponse immuable et le navigateur ne la redemande plus jamais
+  // (une nouvelle photo change de version, donc d'URL). Sans version, on
+  // retombe sur une revalidation courte par ETag.
+  const versionMs = version ? Date.parse(version) : NaN;
+  const path = Number.isFinite(versionMs)
+    ? `/candidates/${candidateId}/photo?v=${versionMs}`
+    : `/candidates/${candidateId}/photo`;
+
   const request = api
-    .get(`/candidates/${candidateId}/photo`, { responseType: "blob" })
+    .get(path, { responseType: "blob" })
     .then((res) => {
       const url = URL.createObjectURL(res.data as Blob);
       // Une version plus ancienne du même candidat n'a plus lieu d'être.

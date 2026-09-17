@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { POLL, startPolling } from "@/lib/poll";
 
 interface NotificationItem {
   id: string;
@@ -27,7 +28,7 @@ function timeAgo(iso: string): string {
 
 // Cloche de notifications du header (membres ET candidats — /api/notifications
 // sert la table correspondant au rôle du jeton).
-// Polling toutes les 60s + rafraîchissement à l'ouverture du panneau.
+// Polling toutes les 120s (onglet visible) + rafraîchissement à l'ouverture du panneau.
 export default function NotificationBell() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,8 +48,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    const t = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(t);
+    return startPolling(fetchNotifications, POLL.notifications);
   }, [fetchNotifications]);
 
   // Fermer le panneau au clic extérieur

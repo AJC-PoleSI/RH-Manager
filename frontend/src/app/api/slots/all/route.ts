@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status");
   const start = searchParams.get("start");
   const end = searchParams.get("end");
+  // FILTRE ÉPREUVE (17/09/2026) : `CalendarAdminBuilder` envoyait déjà
+  // `?epreuve=<id>` — la route l'ignorait, et rapatriait donc TOUT le planning
+  // (1000+ créneaux et leurs jointures) pour que le client en garde une seule
+  // épreuve. Combiné au polling, c'est ce qui saturait le pool Postgres.
+  const epreuve = searchParams.get("epreuve");
 
   try {
     // Lecture PAGINÉE : la prod dépasse 1000 créneaux (1076 au 12/09/2026)
@@ -43,14 +48,14 @@ export async function GET(req: NextRequest) {
         *,
         epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size),
         members:slot_member_assignments(*, member:members(id, email, first_name, last_name)),
-        enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name, email)),
-        requests:slot_availability_requests(*, member:members(id, email))
+        enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name, email))
       `,
         )
         .order("date", { ascending: true })
         .order("start_time", { ascending: true })
         .order("id", { ascending: true });
 
+      if (epreuve) query = query.eq("epreuve_id", epreuve);
       if (tour) query = query.eq("tour", parseInt(tour));
       if (status) query = query.eq("status", status);
       if (start && end) {

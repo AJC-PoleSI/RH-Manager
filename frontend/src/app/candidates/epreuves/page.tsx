@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { underfilledEnrollments } from "@/lib/candidate-signup-status";
+import { POLL, startPolling } from "@/lib/poll";
 import {
   Loader2, Calendar, MapPin, FileText, Clock,
   ChevronDown, ChevronUp, Users, BookOpen, X, Check,
@@ -242,18 +243,10 @@ export default function CandidateEpreuvesPage() {
 
   useEffect(() => {
     fetchData();
-    // Polling toutes les 5s pour détecter rapidement les changements
-    // (auto-publication, inscription, status, etc.).
-    const interval = setInterval(() => {
-      if (document.hidden) return;
-      fetchData();
-    }, 5000);
-    const onFocus = () => fetchData();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
+    // Cet écran enchaîne CINQ requêtes par passage (settings, épreuves,
+    // inscriptions, créneaux dispos, tours) : à 5 s et multiplié par les
+    // candidats connectés, c'était le second poste de charge sur la base.
+    return startPolling(fetchData, POLL.candidate);
   }, [fetchData]);
 
   // Un tour est verrouillé quand son statut est "termine".

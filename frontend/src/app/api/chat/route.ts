@@ -13,15 +13,19 @@ export async function GET(req: NextRequest) {
   if (user.role !== "member") return forbidden();
 
   try {
+    // BUG (repéré le 17/09/2026) : `order(created_at, asc).limit(200)` renvoie
+    // les 200 messages les PLUS ANCIENS. Passé ce cap, le fil se figeait sur
+    // l'historique du début et aucun message récent n'apparaissait plus.
+    // On lit donc les plus récents, puis on rétablit l'ordre d'affichage.
     const { data, error } = await supabaseAdmin
       .from("chat_messages")
-      .select("*")
-      .order("created_at", { ascending: true })
+      .select("id, sender_id, sender_role, sender_name, message, created_at")
+      .order("created_at", { ascending: false })
       .limit(200);
 
     if (error) throw error;
 
-    const messages = (data || []).map((m: any) => ({
+    const messages = (data || []).reverse().map((m: any) => ({
       id: m.id,
       name: m.sender_name,
       text: m.message,
