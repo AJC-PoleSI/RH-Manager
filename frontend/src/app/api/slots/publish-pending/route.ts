@@ -1,6 +1,14 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { isMissingColumnError } from "@/lib/slot-lock";
+import { fetchAllRows } from "@/lib/supabase-paging";
+import {
+  planPublication,
+  publishedCount,
+  summarizePublication,
+  todayInParis,
+  type PendingSlotLike,
+} from "@/lib/publish-understaffing";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/publish-pending — publie les créneaux non encore publiés
@@ -8,35 +16,57 @@ import { NextRequest } from "next/server";
 //
 // IMPORTANT : ne touche PAS aux créneaux déjà "published" ni à leurs inscriptions.
 // Les candidats déjà inscrits restent inscrits — leur créneau ne bouge pas.
+//
+// Corps accepté :
+//   { epreuveId: string, allowUnderstaffed?: boolean }
+//
+// `allowUnderstaffed` (la case « publier quand même les créneaux en
+// sous-effectif ») publie AUSSI les créneaux qui n'ont pas leur compte
+// d'examinateurs, en ramenant leur quota à l'effectif réellement affecté —
+// voir lib/publish-understaffing.ts pour le pourquoi de cet alignement.
+// Un créneau SANS aucun examinateur n'est jamais publié, case cochée ou non.
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
   if (!payload.isAdmin) return forbidden();
 
   try {
-    const { epreuveId } = await req.json();
+    const { epreuveId, allowUnderstaffed } = await req.json();
 
     if (!epreuveId) {
       return Response.json({ error: "epreuveId requis" }, { status: 400 });
     }
 
-    // Trouver tous les créneaux non publiés pour cette épreuve
-    // ET dont le jury est AU COMPLET (>= min_members)
-    const { data: pending, error: fetchErr } = await supabaseAdmin
-      .from("evaluation_slots")
-      .select("id, status, min_members, members:slot_member_assignments(id)")
-      .eq("epreuve_id", epreuveId)
-      .in("status", ["draft", "open", "ready"]);
+    // Trouver tous les créneaux non publiés pour cette épreuve.
+    //
+    // Lecture PAGINÉE : PostgREST plafonne toute réponse à 1000 lignes sans
+    // erreur ni avertissement. L'épreuve commune dépasse ce seuil — sans
+    // pagination, les créneaux au-delà du millième ne seraient jamais publiés
+    // et personne ne saurait pourquoi (cf. supabase-paging.ts).
+    const { data: pending, error: fetchErr } = await fetchAllRows<
+      PendingSlotLike
+    >((from, to) =>
+      supabaseAdmin
+        .from("evaluation_slots")
+        .select(
+          "id, status, min_members, date, start_time, room, members:slot_member_assignments(id)",
+        )
+        .eq("epreuve_id", epreuveId)
+        .in("status", ["draft", "open", "ready"])
+        .order("id")
+        .range(from, to),
+    );
 
     if (fetchErr) throw fetchErr;
 
     // Un créneau ne s'expose aux candidats qu'avec son effectif complet
-    // d'examinateurs, pas dès le premier arrivé.
-    const ids = (pending || [])
-      .filter((s: any) => (s.members?.length || 0) >= (s.min_members || 2))
-      .map((s: any) => s.id);
-
-    const skipped = (pending || []).length - ids.length;
+    // d'examinateurs — sauf décision explicite de l'admin (case cochée), et
+    // jamais à zéro examinateur.
+    const plan = planPublication(pending, {
+      allowUnderstaffed: allowUnderstaffed === true,
+      today: todayInParis(),
+    });
+    const ids = [...plan.staffed, ...plan.understaffed.map((s) => s.slotId)];
 
     // ── VERROUILLAGE ──
     // Le planning de cette épreuve est annoncé aux candidats : ses créneaux ne
@@ -79,16 +109,51 @@ export async function POST(req: NextRequest) {
       }
     };
 
+    // Détail renvoyé au client dans TOUS les cas : l'écran planning s'en sert
+    // pour dire ce qui reste bloqué, et pourquoi.
+    const breakdown = {
+      published: publishedCount(plan),
+      published_understaffed: plan.understaffed.length,
+      // Conservé sous son nom historique : d'anciens clients le lisent.
+      skipped_no_examiner: plan.heldUnderstaffed.length + plan.noExaminer.length,
+      held_understaffed: plan.heldUnderstaffed.length,
+      past_understaffed: plan.pastUnderstaffed.length,
+      no_examiner: plan.noExaminer.length,
+      understaffed_slots: plan.understaffed,
+      held_slots: plan.heldUnderstaffed,
+      no_examiner_slots: plan.noExaminer,
+    };
+
     if (ids.length === 0) {
       await lockPublishedSlots();
       return Response.json({
-        message:
-          skipped > 0
-            ? `${skipped} créneau(x) ignoré(s) — jury incomplet. Ils seront publiés automatiquement dès que leur effectif d'examinateurs sera atteint.`
-            : "Aucun nouveau créneau à publier",
+        ...breakdown,
         published: 0,
-        skipped_no_examiner: skipped,
+        message: summarizePublication(plan),
       });
+    }
+
+    // ── QUOTA RAMENÉ À L'EFFECTIF RÉEL (créneaux en sous-effectif assumé) ──
+    //
+    // Fait AVANT le passage en "published" : si l'alignement échoue, rien
+    // n'est publié et le créneau reste dans l'état connu. Dans l'autre ordre,
+    // un créneau publié avec un quota resté trop haut serait invisible des
+    // candidats ET redescendu en "open" au prochain run du dispatch.
+    //
+    // Les créneaux sont groupés par effectif : un seul UPDATE par valeur
+    // distincte plutôt qu'un aller-retour par créneau.
+    if (plan.understaffed.length > 0) {
+      const byAssigned: Record<number, string[]> = {};
+      for (const s of plan.understaffed) {
+        (byAssigned[s.assigned] ||= []).push(s.slotId);
+      }
+      for (const [assigned, slotIds] of Object.entries(byAssigned)) {
+        const { error: quotaErr } = await supabaseAdmin
+          .from("evaluation_slots")
+          .update({ min_members: Number(assigned) })
+          .in("id", slotIds);
+        if (quotaErr) throw quotaErr;
+      }
     }
 
     // Passer en "published" — les inscriptions existantes (sur d'autres créneaux
@@ -113,12 +178,9 @@ export async function POST(req: NextRequest) {
     );
 
     return Response.json({
-      message:
-        skipped > 0
-          ? `${updated?.length || 0} créneau(x) publié(s) · ${skipped} en attente d'un jury complet`
-          : `${updated?.length || 0} créneau(x) publié(s) aux candidats`,
+      ...breakdown,
       published: updated?.length || 0,
-      skipped_no_examiner: skipped,
+      message: summarizePublication(plan),
     });
   } catch (error) {
     console.error("Publish pending slots error:", error);

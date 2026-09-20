@@ -11,6 +11,7 @@ import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
 import EpreuveSlotsSummary from "@/components/planning/EpreuveSlotsSummary";
 import UnderstaffedBanner from "@/components/planning/UnderstaffedBanner";
+import QuotaEditor from "@/components/planning/QuotaEditor";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
 import { startOfWeek, addDays } from "date-fns";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
@@ -18,6 +19,12 @@ import { lockReasonLabel } from "@/lib/slot-lock";
 import { slotLinkHost } from "@/lib/slot-links";
 import { availabilityMatchesSlot } from "@/lib/dispatch-core";
 import { roomChoicesForSlot } from "@/lib/room-choices";
+import {
+  planPublication,
+  publishedCount,
+  todayInParis,
+  type PendingSlotLike,
+} from "@/lib/publish-understaffing";
 import { POLL, startPolling } from "@/lib/poll";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
@@ -220,6 +227,11 @@ export default function PlanningPage() {
   const [saisiOuverte, setSaisiOuverte] = useState(false);
   const [inscriptionsOuvertes, setInscriptionsOuvertes] = useState(false);
   const [existingSlots, setExistingSlots] = useState<any[]>([]);
+  // « Publier quand même les créneaux en sous-effectif ». Volontairement
+  // remis à false après chaque publication : c'est une dérogation prise
+  // pour un lot précis, pas un réglage qui doit survivre à l'écran.
+  const [allowUnderstaffed, setAllowUnderstaffed] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [allSlotsGlobal, setAllSlotsGlobal] = useState<any[]>([]); // Tous les créneaux de toutes les épreuves pour la vue globale
 
   // ── Liens de business game ──
@@ -705,6 +717,83 @@ export default function PlanningPage() {
         );
       } finally {
         setMemberPickerBusy(null);
+      }
+    },
+    [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
+  );
+
+  /**
+   * Change le quota d'examinateurs ou la capacité candidats d'UN créneau.
+   *
+   * POURQUOI PAS PAR L'ÉPREUVE. Modifier `min_evaluators_per_salle` ou
+   * `group_size` sur l'épreuve répercute la valeur sur TOUS ses créneaux
+   * (cf. PUT /api/epreuves/[id]) : impossible de dire « ce business game-là
+   * se tiendra à 5 » sans redéfinir les 89 autres. Le quota vit sur le
+   * créneau, c'est donc là qu'on l'édite.
+   *
+   * Deux cas se confirment avant d'écrire, parce qu'ils ont un effet visible
+   * côté candidat que rien n'annoncerait sinon :
+   *   • remonter le quota au-dessus de l'effectif présent → le créneau sort
+   *     de la liste de réservation (cf. /api/slots/available) ;
+   *   • descendre la capacité sous le nombre d'inscrits → le créneau est
+   *     affiché complet, sans désinscrire personne.
+   */
+  const saveSlotQuota = useCallback(
+    async (
+      slot: any,
+      patch: { minMembers?: number; maxCandidates?: number },
+    ) => {
+      const memberCount = (slot.members || []).length;
+      const enrolled = (slot.enrollments || []).length;
+      const exposed = ["published", "full"].includes(slot.status);
+
+      if (
+        patch.minMembers !== undefined &&
+        exposed &&
+        patch.minMembers > memberCount
+      ) {
+        const ok = window.confirm(
+          `Ce créneau n'a que ${memberCount} examinateur(s) affecté(s).\n\n` +
+            `En exigeant ${patch.minMembers}, il disparaîtra de la liste de ` +
+            `réservation des candidats tant que l'effectif ne sera pas atteint. ` +
+            `Les candidats déjà inscrits ne sont pas désinscrits.\n\nContinuer ?`,
+        );
+        if (!ok) throw new Error("annulé");
+      }
+
+      if (patch.maxCandidates !== undefined && patch.maxCandidates < enrolled) {
+        const ok = window.confirm(
+          `${enrolled} candidat(s) sont déjà inscrits sur ce créneau.\n\n` +
+            `Avec une capacité de ${patch.maxCandidates}, il s'affichera ` +
+            `complet — personne n'est désinscrit pour autant.\n\nContinuer ?`,
+        );
+        if (!ok) throw new Error("annulé");
+      }
+
+      try {
+        // `notify: false` : changer un nombre de places ne déplace aucun
+        // rendez-vous, il n'y a rien à annoncer aux intéressés.
+        await api.put(`/slots/${slot.id}`, { ...patch, notify: false });
+        await refreshDetailSlot(slot.id);
+        setRepartitionResult(null);
+        fetchSlotData();
+        fetchAllSlotsGlobal();
+        toast(
+          patch.minMembers !== undefined
+            ? `Examinateurs requis : ${patch.minMembers}`
+            : `Capacité candidats : ${patch.maxCandidates}`,
+          "success",
+        );
+      } catch (e: any) {
+        if (e?.message !== "annulé") {
+          toast(
+            e?.response?.data?.message ||
+              e?.response?.data?.error ||
+              "Modification refusée",
+            "error",
+          );
+        }
+        throw e;
       }
     },
     [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
@@ -1334,6 +1423,26 @@ export default function PlanningPage() {
     }
   };
 
+  /**
+   * Ce que « Publier » ferait, calculé à l'écran AVANT d'appeler le serveur.
+   *
+   * Même fonction pure que la route (`lib/publish-understaffing.ts`) sur les
+   * mêmes créneaux : la case à cocher annonce donc exactement le nombre que le
+   * serveur publiera, sans divergence possible entre les deux implémentations.
+   */
+  const publicationPlan = useMemo(() => {
+    const pending = (existingSlots || []).filter((s: any) =>
+      ["draft", "open", "ready"].includes(s.status),
+    ) as PendingSlotLike[];
+    const today = todayInParis();
+    return {
+      // Ce qui partirait si la case est cochée…
+      forced: planPublication(pending, { allowUnderstaffed: true, today }),
+      // …et si elle ne l'est pas.
+      strict: planPublication(pending, { allowUnderstaffed: false, today }),
+    };
+  }, [existingSlots]);
+
   // Publier les nouveaux créneaux non encore publiés (status open/draft/ready → published)
   // Ne touche PAS aux créneaux déjà publiés ni à leurs inscriptions existantes.
   const handlePublierNouveaux = async () => {
@@ -1341,25 +1450,62 @@ export default function PlanningPage() {
       toast("Sélectionnez une épreuve d'abord", "error");
       return;
     }
+
+    // Publier en sous-effectif ouvre des créneaux aux candidats avec un jury
+    // incomplet ET baisse leur quota d'examinateurs : la décision se confirme,
+    // créneaux nommés, plutôt qu'au clic sur un bouton générique.
+    const forced = publicationPlan.forced.understaffed;
+    if (allowUnderstaffed && forced.length > 0) {
+      const apercu = forced
+        .slice(0, 8)
+        .map(
+          (s) =>
+            `· ${String(s.date).substring(8, 10)}/${String(s.date).substring(5, 7)} ` +
+            `${String(s.startTime).substring(0, 5)}${s.room ? ` salle ${s.room}` : ""} ` +
+            `— ${s.assigned} examinateur(s) au lieu de ${s.target}`,
+        )
+        .join("\n");
+      const reste =
+        forced.length > 8 ? `\n· … et ${forced.length - 8} autre(s)` : "";
+      const ok = window.confirm(
+        `Publier ${forced.length} créneau(x) en SOUS-EFFECTIF ?\n\n` +
+          `${apercu}${reste}\n\n` +
+          `Leur quota d'examinateurs sera ramené à l'effectif réellement ` +
+          `affecté, pour que les candidats puissent s'y inscrire. ` +
+          `Vous pourrez ajouter des examinateurs ensuite.`,
+      );
+      if (!ok) return;
+    }
+
+    setPublishing(true);
     try {
       const res = await api.post("/slots/publish-pending", {
         epreuveId: selectedEpreuveId,
+        allowUnderstaffed,
       });
       const count = res.data?.published || 0;
+      const sousEffectif = res.data?.published_understaffed || 0;
       if (count === 0) {
-        toast("Aucun nouveau créneau à publier", "info");
+        toast(res.data?.message || "Aucun nouveau créneau à publier", "info");
       } else {
         toast(
-          `${count} nouveau(x) créneau(x) publié(s) et figés 🔒 — l'algorithme n'y touchera plus`,
+          `${count} nouveau(x) créneau(x) publié(s) et figés 🔒 — l'algorithme n'y touchera plus` +
+            (sousEffectif > 0
+              ? ` · dont ${sousEffectif} en sous-effectif assumé`
+              : ""),
           "success",
         );
         setPlanningVisible(true);
+        // La dérogation ne vaut que pour le lot qu'on vient de publier.
+        setAllowUnderstaffed(false);
       }
       fetchSlotData();
       fetchAllSlotsGlobal();
     } catch (error: any) {
       console.error("Erreur publication créneaux :", error);
       toast(error?.response?.data?.error || "Erreur publication", "error");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -2274,7 +2420,22 @@ export default function PlanningPage() {
                       <hr className="my-2" />
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs uppercase text-gray-400">Examinateurs ({memberCount}/{minMembers}+)</p>
+                          <span className="flex items-center gap-1 min-w-0">
+                            <p className="text-xs uppercase text-gray-400">
+                              Examinateurs ({memberCount}/{minMembers}+)
+                            </p>
+                            {isAdmin && (
+                              <QuotaEditor
+                                value={minMembers}
+                                min={1}
+                                max={20}
+                                title="Modifier le nombre d'examinateurs requis sur ce créneau"
+                                onSave={(n) =>
+                                  saveSlotQuota(s, { minMembers: n })
+                                }
+                              />
+                            )}
+                          </span>
                           {isAdmin && (
                             <button
                               onClick={() => (memberPickerOpen ? setMemberPickerOpen(false) : openMemberPicker(s))}
@@ -2413,7 +2574,22 @@ export default function PlanningPage() {
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs uppercase text-gray-400">Candidats ({candCount}/{maxCands})</p>
+                          <span className="flex items-center gap-1 min-w-0">
+                            <p className="text-xs uppercase text-gray-400">
+                              Candidats ({candCount}/{maxCands})
+                            </p>
+                            {isAdmin && (
+                              <QuotaEditor
+                                value={maxCands}
+                                min={1}
+                                max={30}
+                                title="Modifier la capacité candidats de ce créneau"
+                                onSave={(n) =>
+                                  saveSlotQuota(s, { maxCandidates: n })
+                                }
+                              />
+                            )}
+                          </span>
                           {isAdmin && (
                             <button
                               onClick={() => {
@@ -2879,13 +3055,118 @@ export default function PlanningPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={handlePublierNouveaux}
-                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex-shrink-0"
-                    >
-                      Publier
-                    </button>
+                    {(() => {
+                      const aPublier = publishedCount(
+                        allowUnderstaffed
+                          ? publicationPlan.forced
+                          : publicationPlan.strict,
+                      );
+                      return (
+                        <button
+                          onClick={handlePublierNouveaux}
+                          disabled={publishing}
+                          className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {publishing
+                            ? "Publication…"
+                            : aPublier > 0
+                              ? `Publier (${aPublier})`
+                              : "Publier"}
+                        </button>
+                      );
+                    })()}
                   </div>
+
+                  {/* ══ DÉROGATION : publier malgré un jury incomplet ══
+                      Un créneau sous son quota d'examinateurs reste invisible
+                      des candidats, sans que rien ne le dise sur cet écran.
+                      La case l'ouvre quand même — et affiche ce que ça coûte. */}
+                  {(() => {
+                    const held = publicationPlan.strict.heldUnderstaffed;
+                    const vides = publicationPlan.forced.noExaminer;
+                    const passes = publicationPlan.forced.pastUnderstaffed;
+                    if (
+                      held.length === 0 &&
+                      vides.length === 0 &&
+                      passes.length === 0
+                    )
+                      return null;
+
+                    const libelle = (s: {
+                      date: string;
+                      startTime: string;
+                      room: string | null;
+                      assigned: number;
+                      target: number;
+                    }) =>
+                      `${String(s.date).substring(8, 10)}/${String(s.date).substring(5, 7)} ` +
+                      `${String(s.startTime).substring(0, 5)}` +
+                      `${s.room ? ` · salle ${s.room}` : ""} — ${s.assigned}/${s.target} examinateur(s)`;
+
+                    return (
+                      <div className="space-y-2 mb-3">
+                        {held.length > 0 && (
+                          <label className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-300 bg-amber-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={allowUnderstaffed}
+                              onChange={(e) =>
+                                setAllowUnderstaffed(e.target.checked)
+                              }
+                              className="mt-0.5 h-4 w-4 accent-amber-600 flex-shrink-0"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-amber-900">
+                                🟠 Publier quand même {held.length} créneau(x)
+                                en sous-effectif
+                              </span>
+                              <span className="block text-xs text-amber-800 mt-1 space-y-0.5">
+                                {held.slice(0, 6).map((sl) => (
+                                  <span key={sl.slotId} className="block">
+                                    · {libelle(sl)}
+                                  </span>
+                                ))}
+                                {held.length > 6 && (
+                                  <span className="block italic">
+                                    · … et {held.length - 6} autre(s)
+                                  </span>
+                                )}
+                              </span>
+                              {allowUnderstaffed && (
+                                <span className="block text-xs text-amber-900 mt-2 bg-amber-100 border border-amber-200 rounded px-2 py-1.5">
+                                  ⚠️ Le quota d&apos;examinateurs de ces
+                                  créneaux sera ramené à l&apos;effectif
+                                  réellement affecté — sans ça, ils resteraient
+                                  invisibles des candidats et l&apos;algorithme
+                                  les refermerait au prochain recalcul. Vous
+                                  pourrez ajouter ou retirer des examinateurs
+                                  ensuite depuis le créneau.
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        )}
+
+                        {vides.length > 0 && (
+                          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                            🚫 {vides.length} créneau(x) n&apos;ont{" "}
+                            <strong>aucun examinateur</strong> : ils ne seront
+                            pas publiés, même case cochée. Un candidat s&apos;y
+                            présenterait devant une salle vide.
+                          </p>
+                        )}
+
+                        {passes.length > 0 && (
+                          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            🕓 {passes.length} créneau(x) en sous-effectif sur
+                            une <strong>date déjà passée</strong> sont ignorés
+                            par la case — rouvrir la semaine dernière n&apos;a
+                            pas d&apos;objet.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Toggle visibilité du planning */}
                   <div className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
