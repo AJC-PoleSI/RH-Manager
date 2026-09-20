@@ -5,6 +5,7 @@ import {
   isMissingColumnError,
   lockPatch,
   unlockPatch,
+  type LockReason,
 } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
@@ -13,7 +14,12 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/slots/[id]/lock — figer / défiger un créneau (admin).
  *
- * Body : { locked: boolean, force?: boolean }
+ * Body : { locked: boolean, force?: boolean, reason?: LockReason }
+ *
+ * `reason` n'est pas cosmétique : c'est ce que lit le tooltip du cadenas
+ * (`lockReasonLabel`). Un créneau figé parce qu'on vient de l'ouvrir aux
+ * candidats doit dire « Planning publié aux candidats », pas « Figé
+ * manuellement » — sinon l'admin ne sait plus ce qu'il peut défaire.
  *
  * FIGER  : le jury du créneau ne sera plus rebrassé par le dispatch, et son
  *          horaire / sa salle ne peuvent plus être modifiés sans `force`.
@@ -38,6 +44,12 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const locked = body.locked !== false; // défaut : figer
     const force = body.force === true;
+    // Motif validé contre la liste fermée : une valeur libre venue du client
+    // s'afficherait telle quelle dans le tooltip du cadenas.
+    const REASONS: LockReason[] = ["publication", "inscription", "manuel"];
+    const reason: LockReason = REASONS.includes(body.reason)
+      ? body.reason
+      : "manuel";
 
     const { data: slot, error: slotErr } = await supabaseAdmin
       .from("evaluation_slots")
@@ -70,7 +82,7 @@ export async function POST(
 
     const { error: updErr } = await supabaseAdmin
       .from("evaluation_slots")
-      .update(locked ? lockPatch("manuel") : unlockPatch())
+      .update(locked ? lockPatch(reason) : unlockPatch())
       .eq("id", id);
 
     if (updErr) {
@@ -89,7 +101,7 @@ export async function POST(
     return Response.json({
       success: true,
       is_locked: locked,
-      locked_reason: locked ? "manuel" : null,
+      locked_reason: locked ? reason : null,
       message: locked ? "Créneau figé" : "Créneau déverrouillé",
     });
   } catch (error) {

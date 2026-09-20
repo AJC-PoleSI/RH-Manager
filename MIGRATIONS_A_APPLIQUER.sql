@@ -781,3 +781,9 @@ ALTER TABLE slot_links ENABLE ROW LEVEL SECURITY;
 -- complet, doublons compris, est dans supabase-migration-eval-unicite.sql —
 -- l'appliquer depuis CE fichier-là (il commence par nettoyer les doublons,
 -- sans quoi la création des index échoue).
+
+
+-- ═══ Ouverture des créneaux en sous-effectif (21/09/2026) ═══
+-- Voir supabase-migration-allow-understaffed.sql pour le pourquoi.
+ALTER TABLE evaluation_slots
+  ADD COLUMN IF NOT EXISTS allow_understaffed BOOLEAN NOT NULL DEFAULT FALSE;

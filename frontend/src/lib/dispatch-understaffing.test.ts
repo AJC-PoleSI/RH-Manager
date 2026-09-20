@@ -109,6 +109,56 @@ describe("slotStatusAfterDispatch", () => {
 });
 
 // ─── isNewlyUnderstaffed ──────────────────────────────────────────────
+describe("slotStatusAfterDispatch — ouverture en sous-effectif assumée", () => {
+  const base = { assigned: 5, minMembers: 6, candidates: 0, planningVisible: true };
+
+  it("referme un créneau sous-effectif sans inscrit ni drapeau", () => {
+    expect(slotStatusAfterDispatch(base)).toBe("open");
+  });
+
+  it("garde publié un créneau sous-effectif ouvert explicitement", () => {
+    expect(
+      slotStatusAfterDispatch({ ...base, allowUnderstaffed: true }),
+    ).toBe("published");
+  });
+
+  it("le drapeau ne ressuscite JAMAIS un créneau à zéro examinateur", () => {
+    expect(
+      slotStatusAfterDispatch({
+        ...base,
+        assigned: 0,
+        allowUnderstaffed: true,
+      }),
+    ).toBe("open");
+  });
+
+  it("reste `ready` si le planning n'est pas visible des candidats", () => {
+    expect(
+      slotStatusAfterDispatch({
+        ...base,
+        allowUnderstaffed: true,
+        planningVisible: false,
+      }),
+    ).toBe("ready");
+  });
+
+  it("un candidat inscrit suffit toujours, sans drapeau", () => {
+    expect(slotStatusAfterDispatch({ ...base, candidates: 1 })).toBe(
+      "published",
+    );
+  });
+
+  it("le drapeau ne change rien à un jury complet", () => {
+    expect(
+      slotStatusAfterDispatch({
+        ...base,
+        assigned: 6,
+        allowUnderstaffed: true,
+      }),
+    ).toBe("published");
+  });
+});
+
 describe("isNewlyUnderstaffed", () => {
   it("détecte la bascule complet → incomplet", () => {
     expect(isNewlyUnderstaffed(2, 1, 2)).toBe(true);

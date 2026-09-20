@@ -22,8 +22,8 @@ import { NextRequest } from "next/server";
 //
 // `allowUnderstaffed` (la case « publier quand même les créneaux en
 // sous-effectif ») publie AUSSI les créneaux qui n'ont pas leur compte
-// d'examinateurs, en ramenant leur quota à l'effectif réellement affecté —
-// voir lib/publish-understaffing.ts pour le pourquoi de cet alignement.
+// d'examinateurs, en posant sur eux `allow_understaffed` — leur quota ne
+// bouge PAS (voir lib/publish-understaffing.ts pour le pourquoi).
 // Un créneau SANS aucun examinateur n'est jamais publié, case cochée ou non.
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
@@ -133,26 +133,46 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── QUOTA RAMENÉ À L'EFFECTIF RÉEL (créneaux en sous-effectif assumé) ──
+    // ── SOUS-EFFECTIF ASSUMÉ : on pose le drapeau, pas un quota rabaissé ──
     //
-    // Fait AVANT le passage en "published" : si l'alignement échoue, rien
-    // n'est publié et le créneau reste dans l'état connu. Dans l'autre ordre,
-    // un créneau publié avec un quota resté trop haut serait invisible des
-    // candidats ET redescendu en "open" au prochain run du dispatch.
+    // Fait AVANT le passage en "published" : si l'écriture échoue, rien n'est
+    // publié et le créneau reste dans l'état connu. Dans l'autre ordre, un
+    // créneau publié sans son drapeau serait invisible des candidats ET
+    // redescendu en "open" au prochain run du dispatch.
     //
-    // Les créneaux sont groupés par effectif : un seul UPDATE par valeur
-    // distincte plutôt qu'un aller-retour par créneau.
+    // Repli si la migration n'est pas encore appliquée : on revient à
+    // l'alignement du quota, moins fidèle (le créneau affiche 5/5 au lieu de
+    // 5/6) mais qui ouvre quand même le créneau. Mieux vaut ça qu'une
+    // publication qui échoue sans que personne ne comprenne pourquoi.
+    let quotaFallback = false;
     if (plan.understaffed.length > 0) {
-      const byAssigned: Record<number, string[]> = {};
-      for (const s of plan.understaffed) {
-        (byAssigned[s.assigned] ||= []).push(s.slotId);
-      }
-      for (const [assigned, slotIds] of Object.entries(byAssigned)) {
-        const { error: quotaErr } = await supabaseAdmin
-          .from("evaluation_slots")
-          .update({ min_members: Number(assigned) })
-          .in("id", slotIds);
-        if (quotaErr) throw quotaErr;
+      const { error: flagErr } = await supabaseAdmin
+        .from("evaluation_slots")
+        .update({ allow_understaffed: true })
+        .in(
+          "id",
+          plan.understaffed.map((s) => s.slotId),
+        );
+
+      if (flagErr && isMissingColumnError(flagErr)) {
+        console.warn(
+          "[publish-pending] Colonne allow_understaffed absente — repli sur l'alignement du quota. Appliquez supabase-migration-allow-understaffed.sql.",
+        );
+        quotaFallback = true;
+        // Groupés par effectif : un seul UPDATE par valeur distincte.
+        const byAssigned: Record<number, string[]> = {};
+        for (const s of plan.understaffed) {
+          (byAssigned[s.assigned] ||= []).push(s.slotId);
+        }
+        for (const [assigned, slotIds] of Object.entries(byAssigned)) {
+          const { error: quotaErr } = await supabaseAdmin
+            .from("evaluation_slots")
+            .update({ min_members: Number(assigned) })
+            .in("id", slotIds);
+          if (quotaErr) throw quotaErr;
+        }
+      } else if (flagErr) {
+        throw flagErr;
       }
     }
 
@@ -180,7 +200,12 @@ export async function POST(req: NextRequest) {
     return Response.json({
       ...breakdown,
       published: updated?.length || 0,
-      message: summarizePublication(plan),
+      quota_fallback: quotaFallback,
+      message:
+        summarizePublication(plan) +
+        (quotaFallback
+          ? " · ⚠️ migration allow_understaffed non appliquée : quota ramené à l'effectif"
+          : ""),
     });
   } catch (error) {
     console.error("Publish pending slots error:", error);

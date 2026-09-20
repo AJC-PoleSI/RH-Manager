@@ -91,6 +91,8 @@ interface SlotInfo {
   /** Verrou explicite (cf. slot-lock.ts). Absent tant que la migration
    *  `supabase-migration-slot-lock.sql` n'est pas appliquée. */
   is_locked?: boolean | null;
+  /** Ouvert aux candidats malgré un jury incomplet (décision admin). */
+  allow_understaffed?: boolean | null;
   locked_reason?: string | null;
   enrollments?: Array<{ id: string; status?: string }>;
   epreuve?: {
@@ -292,9 +294,21 @@ export async function runDispatch(opts?: {
       return q.order("id").range(from, to);
     });
 
+  // Repli GRADUÉ sur les colonnes optionnelles : deux migrations manuelles
+  // peuvent manquer indépendamment. Tout retirer dès la première colonne
+  // absente ferait perdre le verrou à cause d'`allow_understaffed`, alors
+  // qu'il est peut-être déjà en base.
   let { data: slots, error: slotErr } = await readSlots(
-    `${SLOT_COLUMNS}, is_locked, locked_reason`,
+    `${SLOT_COLUMNS}, is_locked, locked_reason, allow_understaffed`,
   );
+  if (slotErr && isMissingColumnError(slotErr)) {
+    console.warn(
+      "[dispatch] Colonne allow_understaffed absente — ouverture en sous-effectif inactive. Appliquez supabase-migration-allow-understaffed.sql.",
+    );
+    ({ data: slots, error: slotErr } = await readSlots(
+      `${SLOT_COLUMNS}, is_locked, locked_reason`,
+    ));
+  }
   if (slotErr && isMissingColumnError(slotErr)) {
     console.warn(
       "[dispatch] Colonne is_locked absente — verrouillage inactif. Appliquez supabase-migration-slot-lock.sql.",
@@ -1634,6 +1648,9 @@ export async function runDispatch(opts?: {
       assigned: assignedCount,
       minMembers: needed,
       candidates,
+      // Ouvert à la main malgré le sous-effectif : le run ne doit pas le
+      // refermer sous prétexte qu'aucun candidat n'a encore réservé.
+      allowUnderstaffed: (slot as any).allow_understaffed === true,
       planningVisible:
         planningVisibleToCandidates &&
         !!slot.epreuve_id &&

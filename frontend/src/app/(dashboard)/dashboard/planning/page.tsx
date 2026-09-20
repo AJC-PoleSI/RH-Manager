@@ -232,6 +232,8 @@ export default function PlanningPage() {
   // pour un lot précis, pas un réglage qui doit survivre à l'écran.
   const [allowUnderstaffed, setAllowUnderstaffed] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Créneau dont la publication est en cours (modale de détail).
+  const [slotPublishBusy, setSlotPublishBusy] = useState<string | null>(null);
   const [allSlotsGlobal, setAllSlotsGlobal] = useState<any[]>([]); // Tous les créneaux de toutes les épreuves pour la vue globale
 
   // ── Liens de business game ──
@@ -794,6 +796,128 @@ export default function PlanningPage() {
           );
         }
         throw e;
+      }
+    },
+    [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
+  );
+
+  /**
+   * Ouvre (ou retire) UN créneau aux candidats, depuis la modale de détail.
+   *
+   * POURQUOI ICI. La publication se pilotait uniquement depuis le panneau
+   * « Gestion du workflow », à l'échelle de l'ÉPREUVE : pour ouvrir deux
+   * business games d'un mardi, il fallait accepter d'ouvrir aussi tout ce que
+   * l'épreuve comptait de créneaux publiables. Le calendrier est l'écran où
+   * l'on raisonne créneau par créneau — c'est donc là que l'action manque.
+   *
+   * Mêmes règles que la publication en masse (lib/publish-understaffing.ts) :
+   * un jury incomplet ramène le quota du créneau à l'effectif présent, un
+   * créneau SANS examinateur n'est jamais ouvert. Pas de filtre de date en
+   * revanche : cliquer sur un créneau précis est un acte délibéré, là où le
+   * bouton d'épreuve est un instrument contondant.
+   */
+  const toggleSlotPublication = useCallback(
+    async (slot: any) => {
+      const exposed = ["published", "full"].includes(String(slot.status));
+      const assigned = (slot.members || []).length;
+      const target = Number(slot.min_members ?? slot.minMembers) || 2;
+      const enrolled = (slot.enrollments || []).length;
+
+      if (!exposed && assigned === 0) {
+        toast(
+          "Aucun examinateur sur ce créneau : l'ouvrir enverrait un candidat devant une salle vide.",
+          "error",
+        );
+        return;
+      }
+
+      if (exposed) {
+        const ok = window.confirm(
+          `Retirer ce créneau des inscriptions ?\n\n` +
+            (enrolled > 0
+              ? `${enrolled} candidat(s) y sont inscrits : ils le gardent et continuent de le voir, mais personne d'autre ne pourra s'y inscrire.`
+              : `Il redeviendra invisible pour les candidats.`),
+        );
+        if (!ok) return;
+      } else if (assigned < target) {
+        const ok = window.confirm(
+          `Ouvrir ce créneau avec un jury incomplet ?\n\n` +
+            `${assigned} examinateur(s) affecté(s) pour ${target} requis.\n\n` +
+            `Le quota reste à ${target} : le créneau continuera d'afficher ` +
+            `${assigned}/${target} et l'algorithme cherchera toujours à le compléter. ` +
+            `Les candidats pourront s'y inscrire dès maintenant.`,
+        );
+        if (!ok) return;
+      }
+
+      setSlotPublishBusy(slot.id);
+      try {
+        if (exposed) {
+          // Le drapeau tombe avec la décision qui l'a posé : rouvrir plus
+          // tard devra être un choix à nouveau explicite.
+          await api.put(`/slots/${slot.id}`, {
+            status: "open",
+            allowUnderstaffed: false,
+            notify: false,
+          });
+          toast("Créneau retiré des inscriptions", "success");
+        } else {
+          const res = await api.put(`/slots/${slot.id}`, {
+            status: "published",
+            // Le quota NE BOUGE PAS. C'est le drapeau qui dit « ouvert quand
+            // même » — le créneau reste affiché 5/6 et le dispatch continue
+            // de viser 6 (cf. lib/publish-understaffing.ts).
+            ...(assigned < target ? { allowUnderstaffed: true } : {}),
+            notify: false,
+          });
+
+          // Migration `supabase-migration-allow-understaffed.sql` pas encore
+          // appliquée : le drapeau n'a pas pu être écrit. Le créneau est
+          // `published` mais resterait invisible des candidats — on se rabat
+          // sur l'alignement du quota, moins fidèle, et on le DIT.
+          if (assigned < target && res.data?._understaffedFlagUnavailable) {
+            await api.put(`/slots/${slot.id}`, {
+              minMembers: assigned,
+              notify: false,
+            });
+            toast(
+              `Créneau ouvert, mais quota ramené à ${assigned} : appliquez supabase-migration-allow-understaffed.sql pour garder ${target}.`,
+              "info",
+            );
+          }
+          // Figer : le créneau est annoncé aux candidats, le dispatch ne doit
+          // plus en rebrasser le jury. Un échec ici (migration du verrou pas
+          // appliquée) ne doit pas faire passer la publication pour ratée —
+          // elle a bien eu lieu.
+          try {
+            await api.post(`/slots/${slot.id}/lock`, {
+              locked: true,
+              reason: "publication",
+            });
+          } catch {
+            /* publication valide, seule la protection manque */
+          }
+          toast(
+            assigned < target
+              ? `Créneau ouvert aux candidats — jury à compléter (${assigned}/${target}) 🔒`
+              : "Créneau ouvert aux candidats 🔒",
+            "success",
+          );
+          setPlanningVisible(true);
+        }
+        await refreshDetailSlot(slot.id);
+        setRepartitionResult(null);
+        fetchSlotData();
+        fetchAllSlotsGlobal();
+      } catch (e: any) {
+        toast(
+          e?.response?.data?.message ||
+            e?.response?.data?.error ||
+            "Changement de statut refusé",
+          "error",
+        );
+      } finally {
+        setSlotPublishBusy(null);
       }
     },
     [refreshDetailSlot, fetchSlotData, fetchAllSlotsGlobal, toast],
@@ -2285,6 +2409,83 @@ export default function PlanningPage() {
                         <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Tour</span>
                         <span className="font-medium text-gray-800">Tour {s.tour || s.epreuve?.tour || "?"}</span>
                       </div>
+                      {/* ── STATUT + OUVERTURE AUX CANDIDATS ──
+                          Cette modale montrait le verrou mais JAMAIS le
+                          statut : impossible d'y lire si le créneau était
+                          ouvert aux candidats ou non, et aucun moyen de
+                          l'ouvrir sans passer par la publication de toute
+                          l'épreuve. Les deux manquaient. */}
+                      <div className="flex items-start gap-3">
+                        <span className="text-gray-400 w-20 flex-shrink-0 text-xs uppercase">Statut</span>
+                        <div className="flex-1 min-w-0">
+                          {(() => {
+                            const st = String(s.status || "");
+                            const exposed = ["published", "full"].includes(st);
+                            const LIBELLES: Record<string, [string, string]> = {
+                              published: ["🟢 Ouvert aux candidats", "bg-green-100 text-green-800 border-green-200"],
+                              full: ["🟢 Complet — toutes les places prises", "bg-green-100 text-green-800 border-green-200"],
+                              ready: ["🟡 Prêt — pas encore ouvert aux candidats", "bg-amber-100 text-amber-800 border-amber-200"],
+                              open: ["⚪ Non ouvert — invisible des candidats", "bg-gray-100 text-gray-700 border-gray-300"],
+                              draft: ["⚪ Brouillon — invisible des candidats", "bg-gray-100 text-gray-700 border-gray-300"],
+                              closed: ["🔴 Inscriptions fermées", "bg-red-100 text-red-800 border-red-200"],
+                            };
+                            const [libelle, classes] =
+                              LIBELLES[st] || [st || "—", "bg-gray-100 text-gray-700 border-gray-300"];
+                            const sousEffectif = memberCount > 0 && memberCount < minMembers;
+                            const busy = slotPublishBusy === s.id;
+
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${classes}`}>
+                                    {libelle}
+                                  </span>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => toggleSlotPublication(s)}
+                                      disabled={busy || (!exposed && memberCount === 0)}
+                                      className={`text-xs font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        exposed
+                                          ? "border-gray-300 text-gray-700 hover:bg-gray-50"
+                                          : "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                                      }`}
+                                      title={
+                                        !exposed && memberCount === 0
+                                          ? "Aucun examinateur affecté — ouverture impossible"
+                                          : undefined
+                                      }
+                                    >
+                                      {busy
+                                        ? "…"
+                                        : exposed
+                                          ? "Retirer des inscriptions"
+                                          : "📣 Ouvrir aux candidats"}
+                                    </button>
+                                  )}
+                                </div>
+
+                                {isAdmin && !exposed && memberCount === 0 && (
+                                  <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                                    Aucun examinateur : ouvrir ce créneau enverrait un
+                                    candidat devant une salle vide. Ajoutez d&apos;abord
+                                    un examinateur ci-dessous.
+                                  </p>
+                                )}
+                                {isAdmin && !exposed && sousEffectif && (
+                                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                                    🟠 Jury incomplet ({memberCount}/{minMembers}).
+                                    Vous pouvez l&apos;ouvrir quand même : le quota
+                                    reste à {minMembers}, le créneau continuera
+                                    d&apos;afficher son sous-effectif et
+                                    l&apos;algorithme cherchera toujours à le
+                                    compléter.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
                       {/* VERROU — pourquoi ce créneau ne bouge plus. Le motif
                           est affiché en clair : sans lui, « figé » laisse
                           deviner s'il s'agit d'une publication, d'une
@@ -3134,13 +3335,12 @@ export default function PlanningPage() {
                               </span>
                               {allowUnderstaffed && (
                                 <span className="block text-xs text-amber-900 mt-2 bg-amber-100 border border-amber-200 rounded px-2 py-1.5">
-                                  ⚠️ Le quota d&apos;examinateurs de ces
-                                  créneaux sera ramené à l&apos;effectif
-                                  réellement affecté — sans ça, ils resteraient
-                                  invisibles des candidats et l&apos;algorithme
-                                  les refermerait au prochain recalcul. Vous
-                                  pourrez ajouter ou retirer des examinateurs
-                                  ensuite depuis le créneau.
+                                  ⚠️ Ces créneaux deviendront réservables par
+                                  les candidats avec un jury incomplet. Leur
+                                  quota d&apos;examinateurs ne bouge pas : ils
+                                  continueront d&apos;afficher leur
+                                  sous-effectif et l&apos;algorithme cherchera
+                                  toujours à les compléter.
                                 </span>
                               )}
                             </span>

@@ -59,6 +59,13 @@ export interface StatusInput {
   candidates: number;
   /** Réglage global `planning_visible_candidats`. */
   planningVisible: boolean;
+  /**
+   * `evaluation_slots.allow_understaffed` : l'admin a ouvert ce créneau aux
+   * candidats en sachant son jury incomplet. Sans ce drapeau, le run suivant
+   * le refermait (`open`) faute d'inscrit — défaisant la décision en silence
+   * quelques minutes après la publication.
+   */
+  allowUnderstaffed?: boolean;
 }
 
 /**
@@ -66,8 +73,10 @@ export interface StatusInput {
  *
  * - Jury au complet → règle historique (publié si le planning est ouvert aux
  *   candidats, sinon prêt).
- * - Sous-effectif MAIS au moins un examinateur ET au moins un candidat inscrit
- *   → on garde le créneau en circulation (c'est la tolérance demandée).
+ * - Sous-effectif MAIS au moins un examinateur ET (un candidat déjà inscrit
+ *   OU l'ouverture explicite de l'admin) → on garde le créneau en
+ *   circulation. Un rendez-vous pris ne disparaît pas ; une ouverture
+ *   décidée à la main ne se referme pas toute seule.
  * - Tout le reste (sous-effectif sans candidat, ou zéro examinateur) → `open` :
  *   le créneau retourne au pool, invisible des candidats qui n'y sont pas déjà
  *   inscrits.
@@ -75,7 +84,10 @@ export interface StatusInput {
 export function slotStatusAfterDispatch(input: StatusInput): SlotStatus {
   const { assigned, minMembers, candidates, planningVisible } = input;
   const staffed = assigned >= minMembers;
-  const tolerated = !staffed && candidates > 0 && assigned >= 1;
+  const tolerated =
+    !staffed &&
+    assigned >= 1 &&
+    (candidates > 0 || input.allowUnderstaffed === true);
 
   if (!staffed && !tolerated) return "open";
   return planningVisible ? "published" : "ready";

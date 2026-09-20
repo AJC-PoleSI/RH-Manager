@@ -8,7 +8,7 @@ import {
   minutesToTime,
   normalizeRoom,
 } from "@/lib/slot-conflicts";
-import { lockReasonLabel } from "@/lib/slot-lock";
+import { lockReasonLabel, isMissingColumnError } from "@/lib/slot-lock";
 import { notifyMembers } from "@/lib/notifications";
 import { sendRoomChangeEmail } from "@/lib/resend";
 import { NextRequest } from "next/server";
@@ -106,6 +106,7 @@ export async function PUT(
       label,
       maxCandidates,
       minMembers,
+      allowUnderstaffed,
       simultaneousSlots,
       status,
       room,
@@ -128,6 +129,10 @@ export async function PUT(
     if (label !== undefined) data.label = label;
     if (maxCandidates !== undefined) data.max_candidates = maxCandidates;
     if (minMembers !== undefined) data.min_members = minMembers;
+    // Ouvert aux candidats malgré un jury incomplet (décision admin). Le
+    // quota, lui, reste celui de l'épreuve — cf. lib/publish-understaffing.ts.
+    if (allowUnderstaffed !== undefined)
+      data.allow_understaffed = allowUnderstaffed === true;
     if (simultaneousSlots !== undefined)
       data.simultaneous_slots = simultaneousSlots;
     if (status !== undefined) data.status = status;
@@ -289,20 +294,37 @@ export async function PUT(
       if (swapErr) throw swapErr;
     }
 
-    const { data: slot, error } = await supabaseAdmin
-      .from("evaluation_slots")
-      .update(data)
-      .eq("id", id)
-      .select(
-        `
+    const SLOT_RETURN = `
         *,
         epreuve:epreuves(name, tour, type),
         members:slot_member_assignments(*, member:members(id, email, first_name, last_name)),
         enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
         requests:slot_availability_requests(*, member:members(id, email, first_name, last_name))
-      `,
-      )
-      .single();
+      `;
+    const writeSlot = (patch: Record<string, any>) =>
+      supabaseAdmin
+        .from("evaluation_slots")
+        .update(patch)
+        .eq("id", id)
+        .select(SLOT_RETURN)
+        .single();
+
+    let { data: slot, error } = await writeSlot(data);
+
+    // `allow_understaffed` arrive par une migration appliquée à la main : entre
+    // le déploiement et son exécution, la colonne n'existe pas. Sans ce repli,
+    // toute modification de créneau qui la porte échouerait en bloc — y compris
+    // un simple changement de statut. On rejoue sans elle et on le signale, à
+    // charge pour l'appelant de se rabattre sur ce qu'il peut.
+    let understaffedFlagUnavailable = false;
+    if (error && data.allow_understaffed !== undefined && isMissingColumnError(error)) {
+      console.warn(
+        "[slots/:id] Colonne allow_understaffed absente. Appliquez supabase-migration-allow-understaffed.sql.",
+      );
+      understaffedFlagUnavailable = true;
+      const { allow_understaffed: _ignored, ...sansDrapeau } = data;
+      ({ data: slot, error } = await writeSlot(sansDrapeau));
+    }
 
     if (error) {
       // L'échange a déjà déplacé le créneau vide : le laisser là créerait le
@@ -463,6 +485,9 @@ export async function PUT(
       ...slot,
       _notified: notified,
       _swappedWith: swapTarget ? { id: swapTarget.id, room: before?.room } : null,
+      // L'appelant a demandé l'ouverture en sous-effectif mais la colonne
+      // n'existe pas encore : le reste a été écrit, ce drapeau-là non.
+      _understaffedFlagUnavailable: understaffedFlagUnavailable,
     });
   } catch (error) {
     console.error("Update slot error:", error);

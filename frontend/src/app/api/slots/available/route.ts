@@ -162,9 +162,15 @@ export async function GET(req: NextRequest) {
       // la publication côté dispatch (cf. `requiredForPublish`) — ce filtre
       // en est le garde-fou côté lecture, pour les créneaux gelés ou
       // verrouillés dont le statut n'est plus recalculé.
+      //
+      // EXCEPTION `allow_understaffed` : l'admin a ouvert ce créneau en
+      // connaissance de cause (cf. lib/publish-understaffing.ts). Son quota
+      // reste celui de l'épreuve — c'est la décision, pas le quota, qui
+      // change. La règle du ZÉRO examinateur, elle, ne se lève jamais.
       if (!["published", "full"].includes(slot.status)) {
         return false;
       }
+      if (slot.allow_understaffed === true) return memberCount >= 1;
       return memberCount >= (slot.min_members || 2);
     });
 

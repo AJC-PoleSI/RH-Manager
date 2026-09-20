@@ -13,9 +13,10 @@
  * un business game à 5 examinateurs déclarés pour un quota de 6 ne peut PAS
  * être ouvert aux candidats, alors que l'épreuve se tiendra très bien à 5.
  *
- * ── Pourquoi on baisse le quota du créneau ───────────────────────────
- * Publier sans toucher au quota ne suffirait pas : trois autres garde-fous
- * lisent `min_members` en aval et masqueraient quand même le créneau.
+ * ── Le drapeau, et pourquoi PAS un quota abaissé ─────────────────────
+ * Passer le `status` à `published` ne suffit pas : trois garde-fous
+ * comparent l'effectif à `min_members` en aval et masqueraient quand même le
+ * créneau.
  *
  *   1. `/api/slots/available` — un candidat ne voit que les créneaux
  *      `published` dont `members >= min_members` ;
@@ -24,11 +25,16 @@
  *      SANS inscrit repasse en `open` au run suivant, ce qui DÉFERAIT la
  *      publication en silence quelques minutes plus tard.
  *
- * Le créneau serait donc « publié » et invisible. Aligner le quota sur
- * l'effectif réellement présent dit la vérité — « ce créneau se tiendra à 5 »
- * — et fait tomber les trois verrous d'un coup, sans les affaiblir pour les
- * autres créneaux. La cible d'origine n'est pas perdue : elle reste sur
- * l'épreuve (`min_evaluators_per_salle`), ce qui permet d'afficher l'écart.
+ * Une première version baissait `min_members` à l'effectif présent : les trois
+ * verrous tombaient d'un coup, mais le créneau mentait sur lui-même. Un
+ * business game prévu à 6 qui tourne à 5 affichait « 5/5 » — l'écart
+ * disparaissait de l'écran et le dispatch cessait de chercher le sixième.
+ * Décision de Felix (21/09/2026) : « laisse la capacité à 6 ».
+ *
+ * D'où `evaluation_slots.allow_understaffed` : le quota dit ce que le créneau
+ * DEMANDE (inchangé, 6), le drapeau dit qu'on l'a ouvert QUAND MÊME. Le
+ * créneau reste affiché 5/6, le dispatch continue de viser 6, les candidats
+ * peuvent réserver.
  *
  * ── Les deux limites qu'on ne franchit pas ───────────────────────────
  * 1. Un créneau à ZÉRO examinateur n'est jamais publié, case cochée ou non :
@@ -62,12 +68,12 @@ export interface PendingSlotLike {
   room?: string | null;
 }
 
-/** Un créneau publié sous sa cible, et le quota à écrire pour lui. */
+/** Un créneau ouvert sous sa cible d'examinateurs. */
 export interface UnderstaffedPublication {
   slotId: string;
-  /** Examinateurs réellement affectés — le nouveau quota du créneau. */
+  /** Examinateurs réellement affectés. */
   assigned: number;
-  /** Quota avant publication, conservé pour l'affichage et les messages. */
+  /** Quota du créneau — il ne bouge PAS (cf. en-tête). */
   target: number;
   date: string;
   startTime: string;
@@ -78,7 +84,7 @@ export interface UnderstaffedPublication {
 export interface PublicationPlan {
   /** Jury au complet → publication normale, quota inchangé. */
   staffed: string[];
-  /** Jury incomplet publié quand même, quota ramené à l'effectif présent. */
+  /** Jury incomplet ouvert quand même (drapeau `allow_understaffed`). */
   understaffed: UnderstaffedPublication[];
   /** Jury incomplet laissé de côté (case non cochée). */
   heldUnderstaffed: UnderstaffedPublication[];
@@ -185,7 +191,7 @@ export function summarizePublication(plan: PublicationPlan): string {
   if (plan.understaffed.length > 0) {
     parts.push(
       `dont ${plan.understaffed.length} en sous-effectif assumé ` +
-        `(quota ramené à l'effectif présent)`,
+        `(quota d'examinateurs inchangé)`,
     );
   }
   if (plan.heldUnderstaffed.length > 0) {

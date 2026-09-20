@@ -91,11 +91,14 @@ export async function POST(req: NextRequest) {
     } else if (groupSlots.length > 1) {
       // Seules les salles réellement dotées (jury au complet) sont
       // réservables — même règle que la visibilité côté /slots/available.
-      const eligible = groupSlots.filter(
-        (s: any) =>
-          ["published", "full"].includes(s.status) &&
-          (s.members?.length || 0) >= (s.min_members || 2),
-      );
+      const eligible = groupSlots.filter((s: any) => {
+        if (!["published", "full"].includes(s.status)) return false;
+        const n = s.members?.length || 0;
+        // Ouvert malgré le sous-effectif : un examinateur suffit à rendre la
+        // salle réservable (cf. lib/publish-understaffing.ts). Sinon, le
+        // jury complet reste exigé.
+        return s.allow_understaffed === true ? n >= 1 : n >= (s.min_members || 2);
+      });
       const pick = pickPackedRoom(
         eligible.map((s: any) => ({
           slotId: s.id,
