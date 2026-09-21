@@ -7,8 +7,15 @@ import {
   type SettingReader,
 } from "./enrollment-window";
 
-/** Dimanche 13/09/2026 15:44 — l'instant qui a motivé le réglage. */
-const DIMANCHE = new Date("2026-09-13T15:44:00");
+/**
+ * Dimanche 13/09/2026 15:44 — l'instant qui a motivé le réglage.
+ *
+ * Les instants de test portent leur décalage (+02:00, heure d'été de Paris) :
+ * sans lui ils seraient lus dans le fuseau de la machine qui lance les tests,
+ * et ne prouveraient plus rien sur un serveur UTC — précisément le bug que
+ * `parisInstantMs` corrige.
+ */
+const DIMANCHE = new Date("2026-09-13T15:44:00+02:00");
 
 describe("checkEnrollmentWindow — règle des 24h (sans exception)", () => {
   it("refuse un créneau du lendemain matin (moins de 24h)", () => {
@@ -68,7 +75,7 @@ describe("checkEnrollmentWindow — exception datée", () => {
       date: "2026-09-14",
       startTime: "14:00",
       waiveUntil: "2026-09-14",
-      now: new Date("2026-09-14T13:59:00"),
+      now: new Date("2026-09-14T13:59:00+02:00"),
     });
     expect(v).toEqual({ allowed: true });
   });
@@ -78,7 +85,7 @@ describe("checkEnrollmentWindow — exception datée", () => {
       date: "2026-09-14",
       startTime: "09:00",
       waiveUntil: "2026-09-14",
-      now: new Date("2026-09-14T09:30:00"),
+      now: new Date("2026-09-14T09:30:00+02:00"),
     });
     expect(v).toEqual({ allowed: false, reason: "started" });
   });
@@ -89,7 +96,7 @@ describe("checkEnrollmentWindow — exception datée", () => {
       startTime: "09:00",
       waiveUntil: "2026-09-14",
       // lundi 10h : mardi 9h est à moins de 24h
-      now: new Date("2026-09-14T10:00:00"),
+      now: new Date("2026-09-14T10:00:00+02:00"),
     });
     expect(v).toEqual({ allowed: false, reason: "notice" });
   });
@@ -99,7 +106,7 @@ describe("checkEnrollmentWindow — exception datée", () => {
       date: "2026-09-15",
       startTime: "09:00",
       waiveUntil: "2026-09-14",
-      now: new Date("2026-09-14T08:00:00"),
+      now: new Date("2026-09-14T08:00:00+02:00"),
     });
     expect(v).toEqual({ allowed: true });
   });
@@ -109,7 +116,7 @@ describe("checkEnrollmentWindow — exception datée", () => {
       date: "2026-09-16",
       startTime: "09:00",
       waiveUntil: "2026-09-14",
-      now: new Date("2026-09-15T10:00:00"),
+      now: new Date("2026-09-15T10:00:00+02:00"),
     });
     expect(v).toEqual({ allowed: false, reason: "notice" });
   });
@@ -205,5 +212,80 @@ describe("readLastMinuteWaiveUntil", () => {
       throw new Error("réseau");
     };
     expect(await readLastMinuteWaiveUntil(read)).toBeNull();
+  });
+});
+
+describe("checkEnrollmentWindow — horaires ancrés sur l'heure de Paris", () => {
+  // Régression 21/09/2026 : `new Date("2026-09-22T16:00")` lisait l'horaire
+  // dans le fuseau du serveur (UTC sur Vercel) et plaçait le début à 18h
+  // parisiennes. Un business game de 16h restait donc réservable pendant
+  // qu'il se déroulait. Ces instants sont absolus (suffixe Z) : ils valent
+  // la même chose quel que soit le fuseau de la machine de test.
+
+  it("créneau dispensé : encore ouvert une minute avant le début parisien", () => {
+    const v = checkEnrollmentWindow({
+      date: "2026-09-22",
+      startTime: "16:00",
+      waiveUntil: "2026-09-22",
+      now: new Date("2026-09-22T13:59:00Z"), // 15h59 à Paris
+    });
+    expect(v).toEqual({ allowed: true });
+  });
+
+  it("créneau dispensé : fermé dès l'heure de début parisienne", () => {
+    const v = checkEnrollmentWindow({
+      date: "2026-09-22",
+      startTime: "16:00",
+      waiveUntil: "2026-09-22",
+      now: new Date("2026-09-22T14:00:00Z"), // 16h00 pile à Paris
+    });
+    expect(v).toEqual({ allowed: false, reason: "started" });
+  });
+
+  it("créneau dispensé : fermé pendant l'épreuve (le bug laissait ouvert)", () => {
+    const v = checkEnrollmentWindow({
+      date: "2026-09-22",
+      startTime: "16:00",
+      waiveUntil: "2026-09-22",
+      now: new Date("2026-09-22T15:30:00Z"), // 17h30 à Paris, BG commencé
+    });
+    expect(v).toEqual({ allowed: false, reason: "started" });
+  });
+
+  it("règle des 24h : mesurée sur le vrai début parisien, pas sur l'heure serveur", () => {
+    // Créneau du 25/09 à 09:00 Paris = 07:00Z. Pile 24h avant = 24/09 07:00Z.
+    expect(
+      checkEnrollmentWindow({
+        date: "2026-09-25",
+        startTime: "09:00",
+        now: new Date("2026-09-24T07:00:00Z"),
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      checkEnrollmentWindow({
+        date: "2026-09-25",
+        startTime: "09:00",
+        now: new Date("2026-09-24T07:01:00Z"),
+      }),
+    ).toEqual({ allowed: false, reason: "notice" });
+  });
+
+  it("heure d'hiver : le décalage suit le calendrier (+01:00 en janvier)", () => {
+    // 15/01/2027 09:00 à Paris = 08:00Z.
+    const v = checkEnrollmentWindow({
+      date: "2027-01-15",
+      startTime: "09:00",
+      waiveUntil: "2027-01-15",
+      now: new Date("2027-01-15T07:59:00Z"), // 08h59 à Paris
+    });
+    expect(v).toEqual({ allowed: true });
+    expect(
+      checkEnrollmentWindow({
+        date: "2027-01-15",
+        startTime: "09:00",
+        waiveUntil: "2027-01-15",
+        now: new Date("2027-01-15T08:00:00Z"),
+      }),
+    ).toEqual({ allowed: false, reason: "started" });
   });
 });

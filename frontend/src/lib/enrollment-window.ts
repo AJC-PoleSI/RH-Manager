@@ -18,6 +18,16 @@
  * Seule la date du CRÉNEAU distingue « lundi, dernière minute acceptée » de
  * « mardi, 24h de préavis ».
  *
+ * HEURE DE PARIS (corrigé le 21/09/2026) : un créneau stocke une date
+ * (timestamptz calée à midi UTC, donc le bon jour) et un horaire en TEXTE,
+ * en heure locale parisienne. `new Date("2026-09-22T16:00")` interprète cet
+ * horaire dans le fuseau DU SERVEUR — UTC sur Vercel — et plaçait donc le
+ * début deux heures trop tard. Concrètement, un créneau dispensé restait
+ * réservable jusqu'à 18h alors que l'épreuve commençait à 16h : on pouvait
+ * s'inscrire à un business game déjà en cours. On reconstruit désormais
+ * l'instant réel à partir du décalage de Paris (cf. `parisInstantMs`), comme
+ * le fait déjà `evaluation-closure.ts`.
+ *
  * FAIL-CLOSED : réglage absent, vide, illisible ou base injoignable → règle
  * des 24h, c'est-à-dire le comportement historique à l'identique.
  */
@@ -27,6 +37,9 @@ export const LAST_MINUTE_SETTING_KEY = "inscription_sans_delai_jusqu_au";
 
 /** Préavis exigé par défaut, en heures. */
 export const MIN_NOTICE_HOURS = 24;
+
+/** Fuseau de l'application : tous les horaires saisis sont parisiens. */
+const PARIS_TZ = "Europe/Paris";
 
 /**
  * Lecture d'UNE ligne de `system_settings`, injectée par l'appelant.
@@ -48,6 +61,34 @@ function toDay(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const m = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : null;
+}
+
+/**
+ * Décalage UTC→Paris, en millisecondes, à un instant donné (+1h ou +2h).
+ *
+ * "sv-SE" rend l'heure murale au format ISO ("2026-09-22 16:00:00") ; relue
+ * comme si elle était UTC, sa différence avec l'instant d'origine EST le
+ * décalage. Aucune table de dates de changement d'heure à maintenir.
+ */
+function parisOffsetMs(at: Date): number {
+  const wall = at.toLocaleString("sv-SE", { timeZone: PARIS_TZ });
+  const asIfUtc = Date.parse(`${wall.replace(" ", "T")}Z`);
+  return Number.isNaN(asIfUtc) ? 0 : asIfUtc - at.getTime();
+}
+
+/**
+ * Instant réel (epoch ms) d'une heure murale parisienne, ou NaN si illisible.
+ *
+ * Deux passes : le décalage dépend de l'instant, qu'on ne connaît qu'une fois
+ * corrigé. La première approximation ne se trompe que DANS l'heure du
+ * changement d'heure (fin mars / fin octobre, 2h–3h du matin) ; la seconde
+ * passe la rattrape.
+ */
+export function parisInstantMs(day: string, hhmm: string): number {
+  const naive = Date.parse(`${day}T${hhmm}:00Z`);
+  if (Number.isNaN(naive)) return NaN;
+  const approx = naive - parisOffsetMs(new Date(naive));
+  return naive - parisOffsetMs(new Date(approx));
 }
 
 /**
@@ -81,7 +122,7 @@ export const ENROLLMENT_WINDOW_MESSAGES: Record<EnrollmentRefusal, string> = {
 export interface EnrollmentWindowInput {
   /** `evaluation_slots.date` ("2026-09-14" ou ISO). */
   date: string | null | undefined;
-  /** `evaluation_slots.start_time` ("09:00" ou "09:00:00"). */
+  /** `evaluation_slots.start_time` ("09:00" ou "09:00:00"), heure de Paris. */
   startTime: string | null | undefined;
   /** Valeur du réglage `inscription_sans_delai_jusqu_au`, ou null. */
   waiveUntil?: string | null;
@@ -106,10 +147,11 @@ export function checkEnrollmentWindow({
   if (!date || !startTime) return { allowed: true };
 
   const day = String(date).split("T")[0];
-  const start = new Date(`${day}T${startTime}`);
-  if (isNaN(start.getTime())) return { allowed: true };
+  const hhmm = String(startTime).slice(0, 5);
+  const startMs = parisInstantMs(day, hhmm);
+  if (Number.isNaN(startMs)) return { allowed: true };
 
-  const hoursUntil = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const hoursUntil = (startMs - now.getTime()) / (1000 * 60 * 60);
 
   if (isLastMinuteWaived(date, waiveUntil)) {
     return hoursUntil > 0
