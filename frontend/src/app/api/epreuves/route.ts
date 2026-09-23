@@ -59,6 +59,25 @@ export async function GET(req: NextRequest) {
       isVisible: true, // TODO: add is_visible to Supabase schema
     }));
 
+    // ?scope=criteria : uniquement les grilles de notation (critères + 2e
+    // grille) de TOUTES les épreuves, pour afficher le libellé des notes en
+    // délibération. Un examinateur y voit aussi les épreuves de pôle des
+    // autres pôles : le filtre par pôle plus bas sert à l'inscription comme
+    // examinateur, pas à cacher des intitulés de critères. Jamais pour un
+    // candidat.
+    if (
+      req.nextUrl.searchParams.get("scope") === "criteria" &&
+      payload.role !== "candidate"
+    ) {
+      return Response.json(
+        parsed.map((e: any) => ({
+          id: e.id,
+          evaluationQuestions: e.evaluationQuestions,
+          secondaryGrid: e.secondaryGrid,
+        })),
+      );
+    }
+
     let result = parsed;
     if (payload.role === "candidate") {
       const wishedPoles = await getCandidateWishedPoles(payload.id);

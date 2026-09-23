@@ -307,7 +307,7 @@ export default function DeliberationsPage() {
   >({});
   useEffect(() => {
     api
-      .get("/epreuves")
+      .get("/epreuves?scope=criteria")
       .then((res) => {
         const map: Record<string, unknown> = {};
         for (const e of Array.isArray(res.data) ? res.data : []) {
@@ -320,6 +320,8 @@ export default function DeliberationsPage() {
       })
       .catch(() => {
         // Sans les grilles, les notes s'affichent « Critère N » : pas bloquant.
+        // (scope=criteria : toutes les épreuves, y compris les épreuves de
+        // pôle des autres pôles pour un examinateur non-admin.)
       });
   }, []);
 
