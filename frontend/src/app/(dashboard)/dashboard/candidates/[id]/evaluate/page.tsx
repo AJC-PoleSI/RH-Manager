@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
   formatScore,
+  getCriterionHint,
   getCriterionLabel,
   getMaxPoints,
   isScoreInput,
@@ -47,6 +48,40 @@ function mergeScores(
   return out;
 }
 
+/** Libellé d'un critère, suivi d'un « i » qui déplie sa précision s'il en a une. */
+function CriterionLabel({ question }: { question: Question }) {
+  const [open, setOpen] = useState(false);
+  const hint = getCriterionHint(question);
+  return (
+    <div>
+      <div className="flex items-start gap-1.5">
+        <Label>{getCriterionLabel(question)}</Label>
+        {hint && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            title={hint}
+            aria-label="Précision sur ce critère"
+            aria-expanded={open}
+            className={`shrink-0 w-4 h-4 mt-0.5 rounded-full border text-[10px] font-semibold italic leading-none flex items-center justify-center ${
+              open
+                ? "bg-blue-600 border-blue-600 text-white"
+                : "border-gray-400 text-gray-500 hover:border-blue-500 hover:text-blue-600"
+            }`}
+          >
+            i
+          </button>
+        )}
+      </div>
+      {hint && open && (
+        <p className="mt-1 text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ScoreGrid({
   questions,
   scores,
@@ -77,7 +112,7 @@ function ScoreGrid({
         return (
           <div key={idx} className="space-y-1">
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-4 items-center">
-              <Label>{getCriterionLabel(q)}</Label>
+              <CriterionLabel question={q} />
               <div className="flex items-center gap-2">
                 <Input
                   type="text"

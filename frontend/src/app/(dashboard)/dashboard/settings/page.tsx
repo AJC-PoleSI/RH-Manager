@@ -51,6 +51,8 @@ interface Epreuve {
 interface Critere {
   name: string;
   maxPoints: number;
+  /** Précision affichée derrière le « i » de la grille de notation. */
+  hint?: string;
 }
 
 // Barème par défaut d'un critère : /20. C'est aussi le repli utilisé par
@@ -389,6 +391,7 @@ export default function CreationPage() {
       ? ep.evaluationQuestions.map((q: any) => ({
           name: q.q || q.name || "",
           maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
+          hint: q.hint || "",
         }))
       : [{ name: "", maxPoints: DEFAULT_MAX_POINTS }];
     setForm({
@@ -465,6 +468,7 @@ export default function CreationPage() {
           q: c.name,
           // `weight` est lu par l'API comme le nombre de points max du critère.
           weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
+          ...(c.hint?.trim() ? { hint: c.hint.trim() } : {}),
         })),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
@@ -1425,7 +1429,8 @@ export default function CreationPage() {
 
               <div className="space-y-2">
                 {form.criteres.map((c, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                  <div key={idx} className="space-y-1">
+                  <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={c.name}
@@ -1466,6 +1471,14 @@ export default function CreationPage() {
                         &times;
                       </button>
                     )}
+                  </div>
+                  <input
+                    type="text"
+                    value={c.hint || ""}
+                    onChange={(e) => updateCritere(idx, "hint", e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Précision pour l'examinateur (facultatif, affichée via le « i »)"
+                  />
                   </div>
                 ))}
               </div>

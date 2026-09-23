@@ -20,6 +20,8 @@ export interface EvaluationCriterion {
   weight?: number | string;
   maxScore?: number | string;
   coefficient?: number | string;
+  /** Précision affichée derrière le « i » de la grille de notation. */
+  hint?: string;
 }
 
 /**
@@ -39,6 +41,11 @@ export function getMaxPoints(question: EvaluationCriterion | null | undefined): 
 export function getCriterionLabel(question: EvaluationCriterion | null | undefined): string {
   if (!question) return "";
   return question.q || question.question || question.name || "";
+}
+
+/** Précision d'un critère (vide si le critère est assez explicite). */
+export function getCriterionHint(question: EvaluationCriterion | null | undefined): string {
+  return typeof question?.hint === "string" ? question.hint.trim() : "";
 }
 
 /**
