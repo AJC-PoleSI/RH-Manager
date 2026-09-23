@@ -30,6 +30,61 @@ export async function sendResultEmail(
   tour: number,
   message: string,
 ) {
+  return send(buildResultEmail(email, firstName, admis, tour, message));
+}
+
+/**
+ * Envoi groupé des résultats de délibération.
+ *
+ * Même raison que `sendAnnouncementEmails` : un `Promise.all` de `send()`
+ * individuels dépasse la limite de débit Resend et se fait jeter en 429 —
+ * le 23/09/2026, 63 emails de résultat du tour 1 sur 73 sont partis en
+ * erreur de cette façon. On passe par `resend.batch.send` (100 par requête).
+ *
+ * Renvoie les `key` des envois en échec pour que l'appelant puisse relancer
+ * uniquement ceux-là (sans renvoyer de doublon aux autres).
+ */
+export async function sendResultEmails<K>(
+  items: {
+    key: K;
+    email: string;
+    firstName: string;
+    admis: boolean;
+    tour: number;
+    message: string;
+  }[],
+): Promise<{ sent: number; failedKeys: K[] }> {
+  let sent = 0;
+  const failedKeys: K[] = [];
+
+  const lots = chunk(items, EMAIL_BATCH_SIZE);
+  for (let i = 0; i < lots.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 600));
+    const lot = lots[i];
+    try {
+      const result = await resend.batch.send(
+        lot.map((it) =>
+          buildResultEmail(it.email, it.firstName, it.admis, it.tour, it.message),
+        ),
+      );
+      if (result.error) throw new Error(result.error.message || result.error.name);
+      sent += lot.length;
+    } catch (e) {
+      console.error(`sendResultEmails: lot ${i + 1}/${lots.length} en échec —`, e);
+      failedKeys.push(...lot.map((it) => it.key));
+    }
+  }
+
+  return { sent, failedKeys };
+}
+
+function buildResultEmail(
+  email: string,
+  firstName: string,
+  admis: boolean,
+  tour: number,
+  message: string,
+) {
   const accent = admis ? "#16A34A" : "#E8446A";
   const titre = admis
     ? `Félicitations — vous passez au tour suivant`
