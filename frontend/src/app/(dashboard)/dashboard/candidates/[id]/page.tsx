@@ -9,6 +9,8 @@ import CandidatePhoto from "@/components/ui/CandidatePhoto";
 import CandidatePhotoUpload from "@/components/forms/CandidatePhotoUpload";
 import CandidateSlots from "@/components/candidates/CandidateSlots";
 import { formatScore } from "@/lib/evaluation-criteria";
+import CriteriaScores from "@/components/evaluation/CriteriaScores";
+import { isBureauEligiblePole, wishDetailLabel } from "@/lib/wishes";
 
 interface EvalMember {
   id: string;
@@ -37,7 +39,14 @@ interface Evaluation {
   closedAt?: string | null;
   comment: string;
   createdAt: string;
-  epreuve: { id: string; name: string; tour: number; type: string } | null;
+  epreuve: {
+    id: string;
+    name: string;
+    tour: number;
+    type: string;
+    /** Critères de l'épreuve : donnent leur libellé aux notes. */
+    evaluationQuestions?: unknown;
+  } | null;
   member: EvalMember | null;
   /**
    * Tous les examinateurs crédités : l'auteur, plus les co-examinateurs
@@ -323,6 +332,15 @@ export default function CandidateDetailPage({
               >
                 <span className="font-bold text-xs">{w.rank}.</span>
                 {w.pole}
+                {wishDetailLabel(w) ? (
+                  <span className="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    {wishDetailLabel(w)}
+                  </span>
+                ) : isBureauEligiblePole(w.pole) ? (
+                  <span className="ml-1 text-xs font-normal text-gray-400">
+                    · sans bureau
+                  </span>
+                ) : null}
               </span>
             ))}
           </div>
@@ -594,23 +612,11 @@ export default function CandidateDetailPage({
                     </div>
 
                     {/* Détail des scores par critère */}
-                    {Object.keys(ev.scores || {}).length > 0 && (
-                      <div className="mt-3 ml-12 space-y-1">
-                        {Object.entries(ev.scores).map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex items-center justify-between text-sm"
-                          >
-                            <span className="text-gray-500">
-                              Critere {parseInt(key) + 1}
-                            </span>
-                            <span className="font-medium text-gray-800 bg-gray-50 px-2.5 py-0.5 rounded text-xs">
-                              {formatScore(value) || value}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <CriteriaScores
+                      className="mt-3 ml-12"
+                      questions={ev.epreuve?.evaluationQuestions}
+                      scores={ev.scores}
+                    />
 
                     {/* Commentaire */}
                     {ev.comment && (

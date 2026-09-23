@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { wishDetailLabel } from "@/lib/wishes";
+import CriteriaScores from "@/components/evaluation/CriteriaScores";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
@@ -295,6 +296,32 @@ export default function DeliberationsPage() {
       setLoading(false);
     }
   }, [toast]);
+
+  // Critères de chaque épreuve, pour afficher le libellé des notes
+  // (« Tenue correcte 3 / 3 ») au lieu de « C1 : 3 ». Chargés une fois : la
+  // grille ne change pas pendant la délibération. La deuxième grille d'une
+  // épreuve (propale…) est rangée sous la clé `${id}:second`, comme les
+  // notes correspondantes (cf. lib/second-grid.ts).
+  const [questionsByEpreuve, setQuestionsByEpreuve] = useState<
+    Record<string, unknown>
+  >({});
+  useEffect(() => {
+    api
+      .get("/epreuves")
+      .then((res) => {
+        const map: Record<string, unknown> = {};
+        for (const e of Array.isArray(res.data) ? res.data : []) {
+          map[e.id] = e.evaluationQuestions;
+          if (e.secondaryGrid?.questions) {
+            map[`${e.id}:second`] = e.secondaryGrid.questions;
+          }
+        }
+        setQuestionsByEpreuve(map);
+      })
+      .catch(() => {
+        // Sans les grilles, les notes s'affichent « Critère N » : pas bloquant.
+      });
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -1650,15 +1677,15 @@ export default function DeliberationsPage() {
                                       <p className="text-xs text-gray-400 mb-1">
                                         Par {examinerLabel(ev)}
                                       </p>
-                                      {scores && Object.keys(scores).length > 0 && (
-                                        <div className="flex gap-1.5 flex-wrap mb-1">
-                                          {Object.entries(scores).map(([k, v]) => (
-                                            <span key={k} className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-medium">
-                                              C{parseInt(k) + 1}: {String(v)}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
+                                      <CriteriaScores
+                                        className="mb-1"
+                                        questions={
+                                          ev.epreuve?.id
+                                            ? questionsByEpreuve[ev.epreuve.id]
+                                            : undefined
+                                        }
+                                        scores={scores}
+                                      />
                                       {ev.comment && <p className="text-sm text-gray-600 mt-1">{ev.comment}</p>}
                                     </div>
                                   );
