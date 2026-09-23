@@ -76,7 +76,7 @@ describe("secours Brevo", () => {
   it("sans clé Brevo, l'échec Resend remonte comme avant", async () => {
     delete process.env.BREVO_API_KEY;
     resendMock.emailsSend.mockResolvedValue(rateLimited);
-    await expect(run(sendPasswordResetEmail("a@b.fr", "A", "tok"))).rejects.toThrow();
+    await expect(sendPasswordResetEmail("a@b.fr", "A", "tok")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
