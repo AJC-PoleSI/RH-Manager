@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { projectCandidateForMember } from "@/lib/candidate-visibility";
+import { latestTourWishes } from "@/lib/wishes";
 import { NextRequest } from "next/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const { data, error } = await supabaseAdmin
       .from("candidates")
-      .select("*, candidate_evaluations(*), candidate_wishes(id, pole, rank)")
+      .select("*, candidate_evaluations(*), candidate_wishes(id, pole, rank, tour, wants_bureau, poste_detail)")
       .eq("id", id)
       .single();
 
@@ -64,9 +65,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // Map wishes sorted by rank
     if (data.candidate_wishes) {
-      mapped.wishes = (data.candidate_wishes as any[])
+      // Tour le plus avancé uniquement (vœux du tour 2 et du tour 3
+      // cohabitent en base — cf. lib/wishes.ts), avec l'option bureau et le
+      // poste précis.
+      mapped.wishes = latestTourWishes(data.candidate_wishes as any[])
         .sort((a: any, b: any) => (a.rank || 99) - (b.rank || 99))
-        .map((w: any) => ({ pole: w.pole, rank: w.rank }));
+        .map((w: any) => ({
+          pole: w.pole,
+          rank: w.rank,
+          wantsBureau: !!w.wants_bureau,
+          posteDetail: w.poste_detail || null,
+        }));
     } else {
       mapped.wishes = [];
     }

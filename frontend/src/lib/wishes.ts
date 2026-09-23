@@ -55,3 +55,33 @@ export function latestTourWishesByCandidate<
     (w) => Number(w.tour ?? 0) === maxByCandidate.get(String(w.candidate_id ?? "")),
   );
 }
+
+// ── Option « bureau » et poste précis d'un vœu ──────────────────────────
+//
+// Sur Développement commercial et Audit Qualité, le candidat peut cocher
+// « intéressé(e) par un poste au bureau » (+ VP / Président / Secrétaire
+// générale). Sur Trésorerie, il choisit un poste précis. Ces deux infos
+// vivent dans `candidate_wishes.wants_bureau` / `poste_detail`.
+
+/** Pôles où le candidat peut se déclarer intéressé par le bureau. */
+export const BUREAU_ELIGIBLE_POLES = ["Développement commercial", "Audit Qualité"];
+
+export function isBureauEligiblePole(pole: string | null | undefined): boolean {
+  return !!pole && BUREAU_ELIGIBLE_POLES.includes(pole);
+}
+
+interface WishDetail {
+  pole?: string | null;
+  wantsBureau?: boolean | null;
+  posteDetail?: string | null;
+}
+
+/**
+ * Complément à afficher après le nom du pôle : « + Bureau (VP) » si le
+ * candidat a coché le bureau, le poste visé en Trésorerie, sinon null.
+ */
+export function wishDetailLabel(w: WishDetail): string | null {
+  const poste = (w.posteDetail || "").trim();
+  if (w.wantsBureau) return poste ? `+ Bureau (${poste})` : "+ Bureau";
+  return poste || null;
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
+import { wishDetailLabel } from "@/lib/wishes";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
@@ -1194,7 +1195,7 @@ export default function DeliberationsPage() {
                                 {c.wishes && c.wishes.length > 0 ? (
                                   c.wishes.slice(0, 3).map((w, i) => (
                                     <span key={`wish-${w.pole}-${w.rank}`} className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500'}`}>
-                                      {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
+                                      {w.rank}. {w.pole}{wishDetailLabel(w) ? ` · ${wishDetailLabel(w)}` : ""}
                                     </span>
                                   ))
                                 ) : (
@@ -1321,7 +1322,7 @@ export default function DeliberationsPage() {
                                     key={`wish-${w.pole}-${w.rank}`}
                                     className={`text-[10px] px-1.5 py-0.5 rounded ${w.rank === 1 ? 'bg-blue-50 text-blue-700 font-semibold' : 'bg-gray-50 text-gray-500'}`}
                                   >
-                                    {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
+                                    {w.rank}. {w.pole}{wishDetailLabel(w) ? ` · ${wishDetailLabel(w)}` : ""}
                                   </span>
                                 ))}
                               </div>
@@ -1455,7 +1456,7 @@ export default function DeliberationsPage() {
                               <div className={`flex flex-wrap gap-1.5 ${focusMode ? "mt-2.5" : "mt-1.5"}`}>
                                 {c.wishes.slice(0, 3).map((w, i) => (
                                   <span key={`wish-${w.pole}-${w.rank}`} className={`rounded ${focusMode ? "text-sm px-2.5 py-1" : "text-[10px] px-1.5 py-0.5"} ${w.rank === 1 ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
-                                    {w.rank}. {w.pole}{w.posteDetail ? ` · ${w.posteDetail}` : ""}
+                                    {w.rank}. {w.pole}{wishDetailLabel(w) ? ` · ${wishDetailLabel(w)}` : ""}
                                   </span>
                                 ))}
                               </div>

@@ -3,6 +3,8 @@
 import { useEffect, useReducer, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
+import { BUREAU_ELIGIBLE_POLES } from "@/lib/wishes";
+
 
 const DEFAULT_POLES = [
   "Système d'information",
@@ -13,9 +15,6 @@ const DEFAULT_POLES = [
   "Trésorerie",
 ];
 
-// Pôles pour lesquels un candidat peut en plus se déclarer intéressé par
-// un poste au bureau (VP / Président / Secrétaire générale).
-const BUREAU_ELIGIBLE_POLES = ["Développement commercial", "Audit Qualité"];
 
 // Postes précis sélectionnables une fois l'option bureau cochée.
 const BUREAU_ROLES = ["VP", "Président", "Secrétaire générale"];
