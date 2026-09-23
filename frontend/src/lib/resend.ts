@@ -8,17 +8,80 @@ const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@audencia-junior-conseil.c
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const RESULT_EMAIL_LOT_SIZE = 10;
 
+type Mail = { from: string; to: string; subject: string; html: string };
+
+/**
+ * Secours Brevo (offre gratuite : 300 mails/jour, même compte que Be Fast).
+ *
+ * Resend reste le canal principal ; Brevo ne prend le relais que quand
+ * Resend refuse (quota de 100/jour atteint, limite de débit, panne). Le
+ * 23/09/2026, 63 résultats de délibération sont partis en 429 sans aucun
+ * filet. Sans BREVO_API_KEY / BREVO_FROM_EMAIL, le secours est inactif et
+ * on retombe sur l'ancien comportement (échec remonté à l'appelant).
+ */
+async function sendViaBrevo(mail: Mail): Promise<boolean> {
+  const apiKey = process.env.BREVO_API_KEY;
+  const from = process.env.BREVO_FROM_EMAIL;
+  if (!apiKey || !from) {
+    console.error("Brevo non configuré — pas de secours pour", mail.to);
+    return false;
+  }
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { email: from, name: "Audencia Junior Conseil" },
+        to: [{ email: mail.to }],
+        subject: mail.subject,
+        htmlContent: mail.html,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("Brevo send error:", res.status, body, "→", mail.subject, mail.to);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("Brevo send threw:", e, "→", mail.subject, mail.to);
+    return false;
+  }
+}
+
 // Le SDK Resend ne throw pas sur une erreur API (clé invalide, domaine non
 // vérifié, etc.) — il renvoie `{ data: null, error }`. Sans cette vérification,
 // un envoi qui échoue côté API est compté comme réussi par les appelants
-// (ex: Promise.allSettled le voit "fulfilled").
-async function send(params: Parameters<typeof resend.emails.send>[0]) {
+// (ex: Promise.allSettled le voit "fulfilled"). En cas d'échec Resend, on
+// tente Brevo ; on ne throw que si les deux ont échoué.
+async function send(params: Mail) {
   const result = await resend.emails.send(params);
-  if (result.error) {
-    console.error("Resend send error:", result.error, "→", params.subject, params.to);
-    throw new Error(`Resend: ${result.error.message || result.error.name}`);
+  if (!result.error) return { via: "resend" as const, error: null };
+  console.error("Resend send error:", result.error, "→", params.subject, params.to);
+  if (await sendViaBrevo(params)) return { via: "brevo" as const, error: null };
+  throw new Error(`Resend: ${result.error.message || result.error.name}`);
+}
+
+/**
+ * Envoie un lot via `resend.batch.send` (tout-ou-rien) ; si Resend refuse le
+ * lot, chaque mail est retenté un par un via Brevo. Renvoie, pour chaque
+ * mail du lot, s'il est parti.
+ */
+async function sendLot(lot: Mail[], label: string): Promise<boolean[]> {
+  try {
+    const result = await resend.batch.send(lot);
+    if (result.error) throw new Error(result.error.message || result.error.name);
+    return lot.map(() => true);
+  } catch (e) {
+    console.error(`${label} en échec côté Resend, secours Brevo —`, e);
+    const ok: boolean[] = [];
+    for (const mail of lot) ok.push(await sendViaBrevo(mail));
+    return ok;
   }
-  return result;
 }
 
 /**
@@ -52,18 +115,16 @@ export async function sendResultEmails<K>(
   for (let i = 0; i < lots.length; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 600));
     const lot = lots[i];
-    try {
-      const result = await resend.batch.send(
-        lot.map((it) =>
-          buildResultEmail(it.email, it.firstName, it.admis, it.tour, it.message),
-        ),
-      );
-      if (result.error) throw new Error(result.error.message || result.error.name);
-      sent += lot.length;
-    } catch (e) {
-      console.error(`sendResultEmails: lot ${i + 1}/${lots.length} en échec —`, e);
-      failedKeys.push(...lot.map((it) => it.key));
-    }
+    const ok = await sendLot(
+      lot.map((it) =>
+        buildResultEmail(it.email, it.firstName, it.admis, it.tour, it.message),
+      ),
+      `sendResultEmails: lot ${i + 1}/${lots.length}`,
+    );
+    ok.forEach((good, j) => {
+      if (good) sent++;
+      else failedKeys.push(lot[j].key);
+    });
   }
 
   return { sent, failedKeys };
@@ -560,13 +621,10 @@ export async function sendAnnouncementEmails(
   for (let i = 0; i < lots.length; i++) {
     // 600 ms entre deux lots : marge confortable sous les 2 req/s de Resend.
     if (i > 0) await new Promise((r) => setTimeout(r, 600));
-    try {
-      const result = await resend.batch.send(lots[i]);
-      if (result.error) throw new Error(result.error.message || result.error.name);
-      sent += lots[i].length;
-    } catch (e) {
-      console.error(`sendAnnouncementEmails: lot ${i + 1}/${lots.length} en échec —`, e);
-      failed += lots[i].length;
+    const ok = await sendLot(lots[i], `sendAnnouncementEmails: lot ${i + 1}/${lots.length}`);
+    for (const good of ok) {
+      if (good) sent++;
+      else failed++;
     }
   }
 
