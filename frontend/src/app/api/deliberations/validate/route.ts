@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
-import { sendResultEmail } from "@/lib/resend";
+import { sendResultEmails } from "@/lib/resend";
 import { NextRequest } from "next/server";
 
 // POST /api/deliberations/validate — Admin uniquement.
@@ -10,6 +10,7 @@ import { NextRequest } from "next/server";
 //   globalAccepted?: string,   // message commun aux admis (mode global)
 //   globalRefused?: string,    // message commun aux refusés (mode global)
 //   messages?: { [candidateId]: string }  // messages individualisés
+//   candidateIds?: string[]    // restreint l'envoi (relance des échecs)
 // }
 // Envoie un email de résultat à chaque candidat ayant une décision
 // (accepted / refused) pour ce tour. Débloque la validation du tour.
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest) {
     const globalAccepted: string = body.globalAccepted || "";
     const globalRefused: string = body.globalRefused || "";
     const messages: Record<string, string> = body.messages || {};
+    const onlyIds: Set<string> | null = Array.isArray(body.candidateIds)
+      ? new Set(body.candidateIds.map(String))
+      : null;
 
     const tourCol = `tour${tour}_status`;
 
@@ -44,7 +48,8 @@ export async function POST(req: NextRequest) {
         status: d[tourCol] as string,
         candidate: d.candidate,
       }))
-      .filter((t: any) => t.candidate && t.candidate.email);
+      .filter((t: any) => t.candidate && t.candidate.email)
+      .filter((t: any) => !onlyIds || onlyIds.has(t.candidate.id));
 
     if (targets.length === 0) {
       return Response.json(
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const results = await Promise.allSettled(
+    const { sent, failedKeys } = await sendResultEmails(
       targets.map((t: any) => {
         const admis = t.status === "accepted";
         const message =
@@ -62,18 +67,18 @@ export async function POST(req: NextRequest) {
               ? globalAccepted
               : globalRefused
             : messages[t.candidate.id] || "";
-        return sendResultEmail(
-          t.candidate.email,
-          t.candidate.first_name || "",
+        return {
+          key: t.candidate.id as string,
+          email: t.candidate.email,
+          firstName: t.candidate.first_name || "",
           admis,
           tour,
           message,
-        );
+        };
       }),
     );
 
-    const sent = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.length - sent;
+    const failed = failedKeys.length;
     if (failed > 0) {
       console.error(
         `deliberations/validate: ${failed} email(s) en échec (tour ${tour})`,
@@ -86,6 +91,7 @@ export async function POST(req: NextRequest) {
       total: targets.length,
       sent,
       failed,
+      failedCandidateIds: failedKeys,
     });
   } catch (error) {
     console.error("POST deliberations/validate error:", error);

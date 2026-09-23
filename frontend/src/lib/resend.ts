@@ -20,19 +20,6 @@ async function send(params: Parameters<typeof resend.emails.send>[0]) {
   return result;
 }
 
-// Email de résultat de délibération (admis / refusé), avec un message
-// libre rédigé par l'équipe recrutement (identique pour tous ou
-// individualisé). `admis` pilote le ton et le sujet.
-export async function sendResultEmail(
-  email: string,
-  firstName: string,
-  admis: boolean,
-  tour: number,
-  message: string,
-) {
-  return send(buildResultEmail(email, firstName, admis, tour, message));
-}
-
 /**
  * Envoi groupé des résultats de délibération.
  *
