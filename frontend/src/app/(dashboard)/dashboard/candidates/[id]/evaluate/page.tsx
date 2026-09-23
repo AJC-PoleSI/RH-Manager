@@ -60,7 +60,6 @@ function CriterionLabel({ question }: { question: Question }) {
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            title={hint}
             aria-label="Précision sur ce critère"
             aria-expanded={open}
             className={`shrink-0 w-4 h-4 mt-0.5 rounded-full border text-[10px] font-semibold italic leading-none flex items-center justify-center ${
