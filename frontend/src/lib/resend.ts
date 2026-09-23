@@ -65,6 +65,9 @@ export async function sendResultEmails<K>(
   return { sent, failedKeys };
 }
 
+// Email de résultat de délibération (admis / refusé), avec un message
+// libre rédigé par l'équipe recrutement (identique pour tous ou
+// individualisé). `admis` pilote le ton et le sujet.
 function buildResultEmail(
   email: string,
   firstName: string,
