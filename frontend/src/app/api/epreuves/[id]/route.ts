@@ -1,6 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { normalizeQuestions, parseQuestions } from "@/lib/evaluation-criteria";
+import {
+  isSecondGridMigrationMissing,
+  normalizeSecondGrid,
+  parseSecondGrid,
+} from "@/lib/second-grid";
 import { staleTimingCount, timingChangeWarning } from "@/lib/openings-service";
 import { NextRequest } from "next/server";
 
@@ -121,6 +126,9 @@ export async function PUT(
         normalizeQuestions(body.evaluationQuestions),
       );
     }
+    if (body.secondaryGrid !== undefined) {
+      updateData.secondary_grid = normalizeSecondGrid(body.secondaryGrid);
+    }
 
     // ══════════════════════════════════════════════════════════════════
     // CASCADE : détection des créneaux hors de la nouvelle plage de dates
@@ -213,6 +221,47 @@ export async function PUT(
               code: "EVALUATIONS_EXIST",
               evaluations: evalCount,
               error: `${evalCount} évaluation(s) ont déjà été saisies sur cette épreuve avec ${countBefore} critère(s). Passer à ${countAfter} critère(s) décalerait les notes existantes. Confirmez pour forcer la modification.`,
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
+    // Même garde pour la DEUXIÈME GRILLE : ses notes sont elles aussi
+    // indexées par position de critère.
+    if (updateData.secondary_grid !== undefined) {
+      const { data: before, error: beforeError } = await supabaseAdmin
+        .from("epreuves")
+        .select("secondary_grid")
+        .eq("id", id)
+        .maybeSingle();
+      if (beforeError && isSecondGridMigrationMissing(beforeError)) {
+        return Response.json(
+          {
+            error:
+              "La deuxième grille n'est pas encore activée en base : appliquez la migration supabase-migration-second-grid.sql.",
+            code: "MIGRATION_PENDING",
+          },
+          { status: 400 },
+        );
+      }
+      const countBefore =
+        parseSecondGrid(before?.secondary_grid)?.questions.length ?? 0;
+      const countAfter =
+        (updateData.secondary_grid as { questions?: unknown[] } | null)
+          ?.questions?.length ?? 0;
+      if (countBefore !== countAfter && body.confirmCriteriaChange !== true) {
+        const { count: evalCount } = await supabaseAdmin
+          .from("secondary_evaluations")
+          .select("id", { count: "exact", head: true })
+          .eq("epreuve_id", id);
+        if ((evalCount ?? 0) > 0) {
+          return Response.json(
+            {
+              code: "EVALUATIONS_EXIST",
+              evaluations: evalCount,
+              error: `${evalCount} note(s) ont déjà été saisies sur la deuxième grille avec ${countBefore} critère(s). Passer à ${countAfter} critère(s) décalerait ces notes. Confirmez pour forcer la modification.`,
             },
             { status: 409 },
           );

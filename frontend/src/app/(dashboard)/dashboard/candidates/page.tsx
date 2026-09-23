@@ -36,6 +36,8 @@ interface Evaluation {
     scores: Record<string, string | number>;
     comment: string;
     created_at: string;
+    /** Note de deuxième grille (propale…) : lecture seule dans ce panneau. */
+    isSecondGrid?: boolean;
     epreuves: {
         id: string;
         name: string;
@@ -129,6 +131,9 @@ export default function CandidatesPage() {
                         ? { ...ev.epreuve, evaluation_questions: ev.epreuve.evaluationQuestions ?? ev.epreuve.evaluation_questions }
                         : null,
                 members: ev.members || (ev.member ? { email: ev.member.email } : null),
+                // Deuxième grille (propale…) : se modifie depuis l'écran de
+                // notation, pas ici (ce n'est pas une ligne candidate_evaluations).
+                isSecondGrid: !!ev.isSecondGrid,
             }));
             setEvaluations(evalsData);
         } catch (e) {
@@ -722,7 +727,7 @@ export default function CandidatesPage() {
                                                                     Enregistrer
                                                                 </Button>
                                                             </>
-                                                        ) : (
+                                                        ) : ev.isSecondGrid ? null : (
                                                             <>
                                                                 <button className="p-1.5 hover:bg-blue-100 rounded text-blue-600" onClick={() => startEditEval(ev)} title="Modifier"><Edit size={14} /></button>
                                                                 <button className="p-1.5 hover:bg-red-100 rounded text-red-500" onClick={() => deleteEval(ev.id)} title="Supprimer"><Trash2 size={14} /></button>

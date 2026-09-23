@@ -14,6 +14,7 @@ import {
 } from "@/lib/evaluation-examiners";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
+import { getSecondGridEvaluationsByCandidate } from "@/lib/second-grid";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/candidate/[candidateId] - Fetch evaluations for a candidate
@@ -118,6 +119,37 @@ export async function GET(
         ),
       };
     });
+
+    // Deuxième grille (ex. proposition commerciale) : une note par épreuve,
+    // listée et moyennée comme une épreuve à part (cf. lib/second-grid.ts).
+    const secondGrid =
+      (await getSecondGridEvaluationsByCandidate([candidateId]))[candidateId] ||
+      [];
+    for (const sg of secondGrid) {
+      (parsed as any[]).push({
+        id: sg.id,
+        isSecondGrid: true,
+        scores: sg.scores,
+        scoreTotal: sg.scoreTotal,
+        maxTotal: sg.maxTotal,
+        scoreOn20: sg.maxTotal > 0 ? toTwenty(sg.scoreTotal, sg.maxTotal) : null,
+        hasScores: true,
+        isGroup: false,
+        isLegacyCollective: false,
+        closedAt: null,
+        comment: payload.isAdmin ? sg.comment : null,
+        createdAt: sg.updatedAt || sg.createdAt,
+        epreuve: {
+          id: sg.epreuve.id,
+          name: sg.epreuve.name,
+          tour: sg.epreuve.tour,
+          type: sg.epreuve.type,
+          evaluationQuestions: sg.epreuve.evaluationQuestions,
+        },
+        member: sg.member ? { id: null, ...sg.member } : null,
+        examiners: sg.member ? [{ id: null, ...sg.member }] : [],
+      });
+    }
 
     // ── Calcul des notes collectives (moyenne) par épreuve ──
     const byEpreuve: Record<

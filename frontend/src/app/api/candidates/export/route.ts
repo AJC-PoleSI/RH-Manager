@@ -4,6 +4,10 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
+import {
+  getSecondGridEvaluationsByCandidate,
+  toEvaluationRow,
+} from "@/lib/second-grid";
 import { NextRequest } from "next/server";
 
 // GET /api/candidates/export
@@ -57,9 +61,16 @@ export async function GET(req: NextRequest) {
       ),
     );
 
+    // Deuxième grille (ex. proposition commerciale) : une ligne de plus par
+    // candidat noté, comptée dans la moyenne comme une épreuve à part.
+    const secondGridByCandidate = await getSecondGridEvaluationsByCandidate(
+      (data || []).map((c: any) => c.id),
+    );
+
     const withExaminers = (data || []).map((c: any) => ({
       ...c,
-      candidate_evaluations: (c.candidate_evaluations || []).map((ev: any) => ({
+      candidate_evaluations: [
+        ...(c.candidate_evaluations || []).map((ev: any) => ({
         ...ev,
         examiners: mergeExaminers(
           ev.members
@@ -72,7 +83,9 @@ export async function GET(req: NextRequest) {
             : null,
           examinersByEval[ev.id],
         ),
-      })),
+        })),
+        ...(secondGridByCandidate[c.id] || []).map(toEvaluationRow),
+      ],
     }));
 
     return Response.json({ data: withExaminers });

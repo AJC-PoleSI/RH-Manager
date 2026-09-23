@@ -85,6 +85,12 @@ interface NewEpreuveForm {
   color: string;
   documents: FileList | null;
   criteres: Critere[];
+  /* deuxième grille (ex. proposition commerciale après un RDV client) */
+  secondGridEnabled: boolean;
+  secondGridTitle: string;
+  secondCriteres: Critere[];
+  /** L'épreuve éditée avait déjà une deuxième grille (pour pouvoir la retirer). */
+  hadSecondGrid: boolean;
 }
 
 const EVENT_COLORS = [
@@ -120,7 +126,110 @@ const EMPTY_FORM: NewEpreuveForm = {
   color: "#3B82F6",
   documents: null,
   criteres: [{ name: "", maxPoints: DEFAULT_MAX_POINTS }],
+  secondGridEnabled: false,
+  secondGridTitle: "",
+  secondCriteres: [{ name: "", maxPoints: DEFAULT_MAX_POINTS }],
+  hadSecondGrid: false,
 };
+
+/** Critère du formulaire → critère stocké ({ q, weight, hint? }). */
+function toStoredCriterion(c: Critere) {
+  return {
+    q: c.name,
+    // `weight` est lu par l'API comme le nombre de points max du critère.
+    weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
+    ...(c.hint?.trim() ? { hint: c.hint.trim() } : {}),
+  };
+}
+
+/** Critère stocké → critère du formulaire. */
+function fromStoredCriterion(q: any): Critere {
+  return {
+    name: q.q || q.name || "",
+    maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
+    hint: q.hint || "",
+  };
+}
+
+/**
+ * Éditeur d'une liste de critères : libellé, points max et précision
+ * facultative (affichée derrière le « i » de la grille de notation).
+ */
+function CriteriaEditor({
+  criteres,
+  onChange,
+}: {
+  criteres: Critere[];
+  onChange: (next: Critere[]) => void;
+}) {
+  const update = (idx: number, field: keyof Critere, value: any) => {
+    const next = [...criteres];
+    next[idx] = { ...next[idx], [field]: value };
+    onChange(next);
+  };
+  return (
+    <>
+      <div className="space-y-2">
+        {criteres.map((c, idx) => (
+          <div key={idx} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={c.name}
+                onChange={(e) => update(idx, "name", e.target.value)}
+                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Nom du critère"
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={c.maxPoints}
+                  onChange={(e) =>
+                    update(idx, "maxPoints", parseFloat(e.target.value) || 0)
+                  }
+                  className="w-20 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Points"
+                  min={1}
+                  step={1}
+                  title="Nombre de points maximum pour ce critère"
+                />
+                <span className="text-sm text-gray-500 whitespace-nowrap">
+                  pts max
+                </span>
+              </div>
+              {criteres.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => onChange(criteres.filter((_, i) => i !== idx))}
+                  className="text-red-400 hover:text-red-600 text-lg leading-none px-1"
+                  title="Supprimer"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={c.hint || ""}
+              onChange={(e) => update(idx, "hint", e.target.value)}
+              className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Précision pour l'examinateur (facultatif, affichée via le « i »)"
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          onChange([...criteres, { name: "", maxPoints: DEFAULT_MAX_POINTS }])
+        }
+        className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+      >
+        + Critère
+      </button>
+    </>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Helper components                                                  */
@@ -388,12 +497,11 @@ export default function CreationPage() {
   const openEditModal = (ep: any) => {
     setEditingEpreuveId(ep.id);
     const criteres = Array.isArray(ep.evaluationQuestions)
-      ? ep.evaluationQuestions.map((q: any) => ({
-          name: q.q || q.name || "",
-          maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
-          hint: q.hint || "",
-        }))
+      ? ep.evaluationQuestions.map(fromStoredCriterion)
       : [{ name: "", maxPoints: DEFAULT_MAX_POINTS }];
+    const secondGrid = ep.secondaryGrid;
+    const hasSecondGrid =
+      !!secondGrid && Array.isArray(secondGrid.questions) && secondGrid.questions.length > 0;
     setForm({
       name: ep.name || "",
       tourId: String(ep.tour || ""),
@@ -423,6 +531,12 @@ export default function CreationPage() {
       color: ep.color || "#3B82F6",
       documents: null,
       criteres,
+      secondGridEnabled: hasSecondGrid,
+      secondGridTitle: hasSecondGrid ? secondGrid.title || "" : "",
+      secondCriteres: hasSecondGrid
+        ? secondGrid.questions.map(fromStoredCriterion)
+        : [{ name: "", maxPoints: DEFAULT_MAX_POINTS }],
+      hadSecondGrid: hasSecondGrid,
     });
     setModalOpen(true);
   };
@@ -431,28 +545,6 @@ export default function CreationPage() {
 
   const handleFormChange = (field: keyof NewEpreuveForm, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const addCritere = () => {
-    setForm((prev) => ({
-      ...prev,
-      criteres: [...prev.criteres, { name: "", maxPoints: DEFAULT_MAX_POINTS }],
-    }));
-  };
-
-  const updateCritere = (idx: number, field: keyof Critere, value: any) => {
-    setForm((prev) => {
-      const updated = [...prev.criteres];
-      updated[idx] = { ...updated[idx], [field]: value };
-      return { ...prev, criteres: updated };
-    });
-  };
-
-  const removeCritere = (idx: number) => {
-    setForm((prev) => ({
-      ...prev,
-      criteres: prev.criteres.filter((_, i) => i !== idx),
-    }));
   };
 
   const handleCreateEpreuve = async () => {
@@ -464,12 +556,22 @@ export default function CreationPage() {
         tour: form.tourId ? parseInt(form.tourId) : 1,
         type: form.type,
         durationMinutes: form.duree ? parseInt(form.duree) : 30,
-        evaluationQuestions: form.criteres.map((c) => ({
-          q: c.name,
-          // `weight` est lu par l'API comme le nombre de points max du critère.
-          weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
-          ...(c.hint?.trim() ? { hint: c.hint.trim() } : {}),
-        })),
+        evaluationQuestions: form.criteres.map(toStoredCriterion),
+        // Deuxième grille : envoyée seulement si elle existe ou existait —
+        // sinon une sauvegarde ordinaire toucherait une colonne qui peut ne
+        // pas encore être migrée. `null` la retire.
+        ...(form.secondGridEnabled || form.hadSecondGrid
+          ? {
+              secondaryGrid: form.secondGridEnabled
+                ? {
+                    title: form.secondGridTitle.trim() || "Deuxième grille",
+                    questions: form.secondCriteres
+                      .filter((c) => c.name.trim())
+                      .map(toStoredCriterion),
+                  }
+                : null,
+            }
+          : {}),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
         isGroupEpreuve: form.type === "groupe",
@@ -1427,70 +1529,54 @@ export default function CreationPage() {
                 barème sera refusée.
               </p>
 
-              <div className="space-y-2">
-                {form.criteres.map((c, idx) => (
-                  <div key={idx} className="space-y-1">
-                  <div className="flex items-center gap-2">
+              <CriteriaEditor
+                criteres={form.criteres}
+                onChange={(next) => handleFormChange("criteres", next)}
+              />
+            </div>
+
+            {/* Deuxième grille : notée après l'épreuve (ex. proposition
+                commerciale envoyée après un rendez-vous client) */}
+            {form.type !== "groupe" && (
+              <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.secondGridEnabled}
+                    onChange={(e) =>
+                      handleFormChange("secondGridEnabled", e.target.checked)
+                    }
+                  />
+                  Deuxième grille d&apos;évaluation
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Notée à part, après l&apos;épreuve (ex. proposition
+                  commerciale envoyée après un rendez-vous client). Les
+                  examinateurs du créneau peuvent la remplir et la modifier
+                  même quand l&apos;entretien est déjà noté. Elle compte dans
+                  la moyenne comme une épreuve, au prorata de son barème.
+                </p>
+                {form.secondGridEnabled && (
+                  <div className="mt-3 space-y-2">
                     <input
                       type="text"
-                      value={c.name}
+                      value={form.secondGridTitle}
                       onChange={(e) =>
-                        updateCritere(idx, "name", e.target.value)
+                        handleFormChange("secondGridTitle", e.target.value)
                       }
-                      className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Nom du critère"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nom de la grille (ex. Proposition commerciale)"
                     />
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={c.maxPoints}
-                        onChange={(e) =>
-                          updateCritere(
-                            idx,
-                            "maxPoints",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        className="w-20 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Points"
-                        min={1}
-                        step={1}
-                        title="Nombre de points maximum pour ce critère"
-                      />
-                      <span className="text-sm text-gray-500 whitespace-nowrap">
-                        pts max
-                      </span>
-                    </div>
-                    {form.criteres.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeCritere(idx)}
-                        className="text-red-400 hover:text-red-600 text-lg leading-none px-1"
-                        title="Supprimer"
-                      >
-                        &times;
-                      </button>
-                    )}
+                    <CriteriaEditor
+                      criteres={form.secondCriteres}
+                      onChange={(next) =>
+                        handleFormChange("secondCriteres", next)
+                      }
+                    />
                   </div>
-                  <input
-                    type="text"
-                    value={c.hint || ""}
-                    onChange={(e) => updateCritere(idx, "hint", e.target.value)}
-                    className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Précision pour l'examinateur (facultatif, affichée via le « i »)"
-                  />
-                  </div>
-                ))}
+                )}
               </div>
-
-              <button
-                type="button"
-                onClick={addCritere}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                + Critère
-              </button>
-            </div>
+            )}
 
             {/* Actions */}
             <div className="flex justify-between">

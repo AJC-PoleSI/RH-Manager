@@ -4,6 +4,7 @@ import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
+import { getSecondGridEvaluationsByCandidate } from "@/lib/second-grid";
 import {
   getExaminersByEvaluation,
   mergeExaminers,
@@ -133,6 +134,12 @@ export async function GET(req: NextRequest) {
       (candidates || []).map((c: any) => c.id),
     );
 
+    // Deuxième grille (ex. proposition commerciale) : listée et moyennée
+    // comme une épreuve à part entière (cf. lib/second-grid.ts).
+    const secondGridByCandidate = await getSecondGridEvaluationsByCandidate(
+      (candidates || []).map((c: any) => c.id),
+    );
+
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
@@ -195,6 +202,28 @@ export async function GET(req: NextRequest) {
             : null,
         };
       });
+
+      const tourFilter = tour ? parseInt(tour) : null;
+      for (const sg of secondGridByCandidate[c.id] || []) {
+        if (tourFilter !== null && sg.epreuve.tour !== tourFilter) continue;
+        evaluations.push({
+          id: sg.id,
+          isSecondGrid: true,
+          isLegacyCollective: false,
+          scores: sg.scores,
+          comment: canSeeAllComments ? sg.comment : null,
+          createdAt: sg.updatedAt || sg.createdAt,
+          member: sg.member,
+          examiners: sg.member ? [sg.member] : [],
+          epreuve: {
+            id: sg.epreuve.id,
+            name: sg.epreuve.name,
+            tour: sg.epreuve.tour,
+            type: sg.epreuve.type,
+            maxTotal: sg.maxTotal,
+          },
+        });
+      }
 
       // Tour le plus avancé uniquement : les vœux du tour 2 restent en base à
       // côté de ceux du tour 3 et fausseraient le classement affiché.

@@ -6,14 +6,10 @@ import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
   formatScore,
-  getCriterionHint,
-  getCriterionLabel,
   getMaxPoints,
-  isScoreInput,
   parseScoreInput,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
@@ -1123,6 +1119,16 @@ function EvaluateCandidateForm({ id }: { id: string }) {
             </form>
           </CardContent>
         </Card>
+      )}
+
+      {/* ───────── Deuxième grille (ex. proposition commerciale) : notée
+          plus tard, modifiable même quand l'entretien est clos ───────── */}
+      {selectedEpreuve && !isGroupEpreuve && (
+        <SecondGridCard
+          key={selectedEpreuveId}
+          candidateId={id}
+          epreuveId={selectedEpreuveId}
+        />
       )}
 
       {/* ───────── Peer evaluations (other examiners, live) ───────── */}

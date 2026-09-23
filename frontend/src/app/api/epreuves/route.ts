@@ -3,6 +3,11 @@ import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { normalizeQuestions, parseQuestions } from "@/lib/evaluation-criteria";
 import { getToursByNumber } from "@/lib/tour-status";
+import {
+  isSecondGridMigrationMissing,
+  normalizeSecondGrid,
+  parseSecondGrid,
+} from "@/lib/second-grid";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +35,9 @@ export async function GET(req: NextRequest) {
       type: e.type,
       durationMinutes: e.duration_minutes,
       evaluationQuestions: parseQuestions(e.evaluation_questions),
+      // Deuxième grille (ex. proposition commerciale) — null si aucune ou si
+      // la colonne n'est pas encore migrée. Masquée aux candidats plus bas.
+      secondaryGrid: parseSecondGrid(e.secondary_grid),
       roulementMinutes: e.roulement_minutes ?? 10,
       minEvaluatorsPerSalle: e.min_evaluators_per_salle ?? 2,
       isPoleTest: e.is_pole_test ?? false,
@@ -54,9 +62,11 @@ export async function GET(req: NextRequest) {
     let result = parsed;
     if (payload.role === "candidate") {
       const wishedPoles = await getCandidateWishedPoles(payload.id);
-      result = parsed.filter(
-        (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
-      );
+      result = parsed
+        .filter(
+          (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
+        )
+        .map((e: any) => ({ ...e, secondaryGrid: null }));
       // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour
       // pas encore commencé (statut "a_venir") — ni leur existence, ni
       // combien il en reste. Filtré côté serveur, pas seulement à l'affichage.
@@ -157,6 +167,11 @@ export async function POST(req: NextRequest) {
         : {}),
       description: body.description || null,
       color: body.color || "#3B82F6",
+      // Deuxième grille : colonne ajoutée par migration, incluse seulement si
+      // fournie pour ne pas casser la création avant application.
+      ...(body.secondaryGrid !== undefined
+        ? { secondary_grid: normalizeSecondGrid(body.secondaryGrid) }
+        : {}),
       // is_visible: body.isVisible !== undefined ? body.isVisible : true, // TODO: add to Supabase schema
     };
 
@@ -166,6 +181,16 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
+    if (error && isSecondGridMigrationMissing(error)) {
+      return Response.json(
+        {
+          error:
+            "La deuxième grille n'est pas encore activée en base : appliquez la migration supabase-migration-second-grid.sql.",
+          code: "MIGRATION_PENDING",
+        },
+        { status: 400 },
+      );
+    }
     if (error) {
       console.error("Supabase INSERT error:", error);
       return Response.json(

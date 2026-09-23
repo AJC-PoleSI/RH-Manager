@@ -183,3 +183,34 @@ export async function getSecondGridEvaluationsByCandidate(
   }
   return out;
 }
+
+/**
+ * Même note, au format « ligne candidate_evaluations » (snake_case, jointures
+ * `members` / `epreuves`) attendu par l'export Excel.
+ */
+export function toEvaluationRow(v: SecondGridEvaluationView) {
+  return {
+    id: v.id,
+    isSecondGrid: true,
+    scores: v.scores,
+    comment: v.comment,
+    created_at: v.createdAt,
+    is_group: false,
+    members: v.member
+      ? {
+          email: v.member.email,
+          first_name: v.member.firstName,
+          last_name: v.member.lastName,
+        }
+      : null,
+    epreuves: {
+      id: v.epreuve.id,
+      name: v.epreuve.name,
+      tour: v.epreuve.tour,
+      type: v.epreuve.type,
+      evaluation_questions: v.epreuve.evaluationQuestions,
+      is_group_epreuve: false,
+    },
+    examiners: v.member ? [v.member] : [],
+  };
+}
