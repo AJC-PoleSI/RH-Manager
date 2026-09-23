@@ -1,83 +1,60 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+// Page Candidats : deux vues sur les mêmes candidats.
+//   • Trombinoscope (par défaut) : photos, coups de cœur.
+//   • Liste : recherche, filtre par pôle, coordonnées.
+// Dans les deux vues, un clic ouvre le même panneau de détail (vœux, créneaux,
+// évaluations, commentaire) ; l'admin y retrouve modifier / supprimer, et
+// l'export Excel + l'ajout de candidat sont dans l'en-tête commun.
+// L'ancienne URL /dashboard/organigramme redirige ici (?vue=trombinoscope).
+
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Search, Trash2, Edit, X, ChevronRight, Save, ArrowLeft, Filter } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, ChevronRight, Filter, LayoutGrid, List } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
-import { sanitizeSpreadsheetRow } from '@/lib/spreadsheet-safety';
-import CandidateSlots from '@/components/candidates/CandidateSlots';
-import {
-    averageOn20ByEpreuve,
-    formatScore,
-    getCriterionLabel,
-    getMaxPoints,
-    getTotalMaxPoints,
-    hasAnyScore,
-    isScoreInput,
-    sumScores,
-    toTwenty,
-} from '@/lib/evaluation-criteria';
-import { isLegacyCollectiveNote } from '@/lib/group-evaluation-criteria';
+import CandidateDetailPanel from '@/components/candidates/CandidateDetailPanel';
+import Trombinoscope from '@/components/candidates/Trombinoscope';
+import { exportCandidatesXlsx } from '@/lib/candidates-export';
+import { cn } from '@/lib/utils';
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-interface Evaluation {
+type View = 'trombinoscope' | 'liste';
+
+interface Selected {
     id: string;
-    candidate_id: string;
-    epreuve_id: string;
-    member_id: string;
-    scores: Record<string, string | number>;
-    comment: string;
-    created_at: string;
-    /** Note de deuxième grille (propale…) : lecture seule dans ce panneau. */
-    isSecondGrid?: boolean;
-    epreuves: {
-        id: string;
-        name: string;
-        tour: number;
-        type: string;
-        evaluation_questions: string;
-    } | null;
-    members: { email: string } | null;
+    initial?: any;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Page                                                               */
+/*  Vue liste                                                          */
 /* ------------------------------------------------------------------ */
-export default function CandidatesPage() {
-    const router = useRouter();
-    const { user } = useAuth();
-    const isAdmin = !!user?.isAdmin;
+function CandidatesList({
+    selectedId,
+    onOpen,
+    onEdit,
+    onDelete,
+    refreshKey,
+}: {
+    selectedId: string | null;
+    onOpen: (candidate: any) => void;
+    onEdit: (candidate: any) => void;
+    onDelete: (candidateId: string) => void;
+    refreshKey: number;
+}) {
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const [newCandidate, setNewCandidate] = useState({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
-    const [commentCandidate, setCommentCandidate] = useState<any>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchInput, setSearchInput] = useState('');
-    const [editingCandidate, setEditingCandidate] = useState<any>(null);
-    const { toast } = useToast();
 
     // Phase 3 — Filtre par pôle (Choix n°1)
     const [filterPole, setFilterPole] = useState<string>('all');
-
-    // --- Detail panel state ---
-    const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
-    const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-    const [loadingEvals, setLoadingEvals] = useState(false);
-    const [editingEvalId, setEditingEvalId] = useState<string | null>(null);
-    const [editScores, setEditScores] = useState<Record<string, string | number>>({});
-    const [editComment, setEditComment] = useState('');
-    const [savingEval, setSavingEval] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -104,268 +81,166 @@ export default function CandidatesPage() {
 
     useEffect(() => {
         fetchCandidates();
-    }, [fetchCandidates]);
+    }, [fetchCandidates, refreshKey]);
 
-    /* ---- Fetch evaluations for a candidate ---- */
-    const fetchEvaluations = async (candidateId: string) => {
-        setLoadingEvals(true);
-        try {
-            const res = await api.get(`/evaluations/candidate/${candidateId}`);
-            // L'API retourne { evaluations, byEpreuve } — extraire le tableau
-            const rawEvals = res.data?.evaluations || (Array.isArray(res.data) ? res.data : []);
-            // Mapper le format camelCase de l'API vers le format snake_case attendu par le panneau
-            const evalsData = rawEvals.map((ev: any) => ({
-                id: ev.id,
-                candidate_id: ev.candidateId || ev.candidate_id,
-                epreuve_id: ev.epreuveId || ev.epreuve_id || ev.epreuve?.id,
-                member_id: ev.memberId || ev.member_id || ev.member?.id,
-                scores: ev.scores || {},
-                comment: ev.comment || '',
-                created_at: ev.createdAt || ev.created_at,
-                // BUG FIX : ev.epreuve (API) porte evaluationQuestions en
-                // camelCase — sans ce mapping, parseQuestions() ne trouvait
-                // jamais evaluation_questions et retombait sur "Critère N".
-                epreuves: ev.epreuves
-                    ? ev.epreuves
-                    : ev.epreuve
-                        ? { ...ev.epreuve, evaluation_questions: ev.epreuve.evaluationQuestions ?? ev.epreuve.evaluation_questions }
-                        : null,
-                members: ev.members || (ev.member ? { email: ev.member.email } : null),
-                // Deuxième grille (propale…) : se modifie depuis l'écran de
-                // notation, pas ici (ce n'est pas une ligne candidate_evaluations).
-                isSecondGrid: !!ev.isSecondGrid,
-            }));
-            setEvaluations(evalsData);
-        } catch (e) {
-            console.error(e);
-            toast("Erreur lors du chargement des évaluations", 'error');
-        } finally {
-            setLoadingEvals(false);
-        }
+    return (
+        <Card>
+            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                    <Input
+                        placeholder="Rechercher un candidat..."
+                        className="pl-10"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                </div>
+                {/* Phase 3 — Filtre Pôle Choix n°1 */}
+                <div className="relative w-full sm:w-auto">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <select
+                        value={filterPole}
+                        onChange={e => { setFilterPole(e.target.value); }}
+                        className="pl-9 pr-3 py-2 min-h-[44px] border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:min-w-[200px] sm:w-auto"
+                    >
+                        <option value="all">Tous les pôles</option>
+                        <option value="Système d'information">SI</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Développement commercial">Dev. Commercial</option>
+                        <option value="Audit Qualité">Audit Qualité</option>
+                        <option value="Ressource Humaine">RH</option>
+                        <option value="Trésorerie">Trésorerie</option>
+                        <option value="Bureau - VP">Bureau - VP</option>
+                        <option value="Bureau - Président">Bureau - Président</option>
+                        <option value="Bureau - Secrétaire générale">Bureau - SG</option>
+                        <option value="_none">Sans vœu</option>
+                    </select>
+                </div>
+            </div>
+            <CardContent className="p-0">
+                {loading ? (
+                    <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary-500" /></div>
+                ) : (
+                    <div className="divide-y divide-gray-100">
+                        {candidates
+                            .filter((candidate: any) => {
+                                if (filterPole === 'all') return true;
+                                const wishes = candidate.wishes || [];
+                                const wish1 = wishes.find((w: any) => w.rank === 1);
+                                if (filterPole === '_none') return !wish1;
+                                return wish1?.pole === filterPole;
+                            })
+                            .map((candidate: any) => (
+                            <div
+                                key={candidate.id}
+                                className={`p-4 flex items-center justify-between hover:bg-gray-50 group cursor-pointer transition-colors ${selectedId === candidate.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                                onClick={() => onOpen(candidate)}
+                            >
+                                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                    <div className="relative shrink-0">
+                                        <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm">
+                                            {candidate.firstName?.[0]}{candidate.lastName?.[0]}
+                                        </div>
+                                        {candidate.email_verified === false && (
+                                            <span
+                                                className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white"
+                                                title="Email non vérifié"
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-gray-900 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            {candidate.firstName} {candidate.lastName}
+                                            {candidate.email_verified === false && (
+                                                <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold border border-red-200">
+                                                    Email non vérifié
+                                                </span>
+                                            )}
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 mt-0.5">
+                                            <span className="break-words">{candidate.email}</span>
+                                            {candidate.phone && <><span className="hidden sm:inline">·</span><span className="whitespace-nowrap">{candidate.phone}</span></>}
+                                            {/* Pole badge */}
+                                            {candidate.wishes?.[0]?.pole && (
+                                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                                                    {candidate.wishes[0].pole}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {/* Un iPhone n'a pas de survol : ces actions restent visibles
+                                        sur mobile, et ne se révèlent au survol qu'à partir de md. */}
+                                    <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100" onClick={e => e.stopPropagation()}>
+                                        <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-gray-200 rounded text-gray-500" onClick={() => onEdit(candidate)} title="Modifier" aria-label="Modifier"><Edit size={16} /></button>
+                                        <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-red-100 rounded text-red-500" onClick={() => onDelete(candidate.id)} title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
+                                    </div>
+                                    <ChevronRight size={16} className="text-gray-300 shrink-0" />
+                                </div>
+                            </div>
+                        ))}
+                        {candidates.length === 0 && <div className="p-8 text-center text-gray-500">Aucun candidat trouvé</div>}
+                    </div>
+                )}
+                <div className="p-4 border-t flex justify-between items-center gap-2">
+                    <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Précédent</Button>
+                    <span className="text-sm text-gray-500">Page {page} / {totalPages}</span>
+                    <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Suivant</Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+function CandidatesHub() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const { user } = useAuth();
+    const isAdmin = !!user?.isAdmin;
+    const { toast } = useToast();
+
+    const view: View = searchParams?.get('vue') === 'liste' ? 'liste' : 'trombinoscope';
+    const setView = (v: View) => {
+        router.replace(`${pathname}?vue=${v}`, { scroll: false });
     };
 
-    /* ---- Open detail panel ---- */
-    const openDetail = (candidate: any) => {
-        setSelectedCandidate(candidate);
-        setEditingEvalId(null);
-        fetchEvaluations(candidate.id);
-    };
+    const [selected, setSelected] = useState<Selected | null>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const refresh = () => setRefreshKey((k) => k + 1);
 
-    /* ---- Close detail panel ---- */
-    const closeDetail = () => {
-        setSelectedCandidate(null);
-        setEvaluations([]);
-        setEditingEvalId(null);
-    };
+    const [isCreating, setIsCreating] = useState(false);
+    const [newCandidate, setNewCandidate] = useState({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
+    const [editingCandidate, setEditingCandidate] = useState<any>(null);
+    const [exporting, setExporting] = useState(false);
 
-    /* ---- Start editing an evaluation ---- */
-    const startEditEval = (ev: Evaluation) => {
-        setEditingEvalId(ev.id);
-        // Notes réaffichées à la française (3.5 → « 3,5 ») : c'est ce que
-        // l'examinateur a saisi, et la virgule est acceptée au réenregistrement.
-        setEditScores(
-            Object.fromEntries(
-                Object.entries(ev.scores || {}).map(([k, v]) => [k, formatScore(v)]),
-            ),
-        );
-        setEditComment(ev.comment || '');
-    };
+    const openDetail = (candidate: any) => setSelected({ id: candidate.id, initial: candidate });
+    const closeDetail = () => setSelected(null);
 
-    /* ---- Save edited evaluation ---- */
-    const saveEditEval = async () => {
-        if (!editingEvalId) return;
-        setSavingEval(true);
-        try {
-            const res = await api.put(`/evaluations/${editingEvalId}`, {
-                scores: editScores,
-                comment: editComment,
-            });
-            setEvaluations(prev =>
-                prev.map(ev => ev.id === editingEvalId ? { ...ev, scores: res.data.scores, comment: res.data.comment } : ev)
-            );
-            setEditingEvalId(null);
-            toast("Évaluation modifiée", 'success');
-        } catch (e) {
-            console.error(e);
-            toast("Erreur lors de la modification", 'error');
-        } finally {
-            setSavingEval(false);
-        }
-    };
+    // Échap ferme le panneau.
+    useEffect(() => {
+        if (!selected) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !editingCandidate) setSelected(null);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [selected, editingCandidate]);
 
-    /* ---- Delete evaluation ---- */
-    const deleteEval = async (evalId: string) => {
-        if (!confirm("Supprimer cette évaluation ?")) return;
-        try {
-            await api.delete(`/evaluations/${evalId}`);
-            setEvaluations(prev => prev.filter(ev => ev.id !== evalId));
-            toast("Évaluation supprimée", 'success');
-        } catch (e) {
-            console.error(e);
-            toast("Erreur lors de la suppression", 'error');
-        }
-    };
-
-    /* ---- CRUD candidat ---- */
     const handleExport = async () => {
+        setExporting(true);
         try {
-            const XLSX = await import('xlsx');
-            const res = await api.get('/candidates/export');
-            const data: any[] = res.data?.data || [];
-
-            // Examinateurs crédités d'une note : l'auteur + les co-examinateurs
-            // inscrits au créneau pour une note partagée (binôme / collective),
-            // y compris celui qui ne s'est pas connecté pour la saisir.
-            const examinerNames = (e: any): string => {
-                const list: any[] = e.examiners?.length
-                    ? e.examiners
-                    : e.members
-                        ? [{ firstName: e.members.first_name, lastName: e.members.last_name, email: e.members.email }]
-                        : [];
-                const names = list
-                    .map((m) =>
-                        m.firstName
-                            ? `${m.firstName} ${m.lastName || ''}`.trim()
-                            : m.email || '',
-                    )
-                    .filter(Boolean);
-                return names.join(' & ');
-            };
-
-            const parseScores = (raw: any): Record<string, number> => {
-                try {
-                    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (!obj || typeof obj !== 'object') return {};
-                    const out: Record<string, number> = {};
-                    Object.entries(obj).forEach(([k, v]) => {
-                        const n = Number(v);
-                        if (!isNaN(n)) out[k] = n;
-                    });
-                    return out;
-                } catch { return {}; }
-            };
-
-
-            // ───────── Sheet 1: Synthèse (one row per candidate) ─────────
-            const synthRows = data.map((c: any) => {
-                const evals: any[] = c.candidate_evaluations || [];
-                const evalsByTour: Record<number, any[]> = {};
-                evals.forEach((e) => {
-                    const t = e.epreuves?.tour ?? 0;
-                    if (!evalsByTour[t]) evalsByTour[t] = [];
-                    evalsByTour[t].push(e);
-                });
-
-                // Même règle que la délibération : chaque évaluation ramenée en %
-                // de son barème, moyenne par épreuve, pondération par le barème,
-                // résultat /20. (Avant : moyenne brute des points par critère, où un
-                // critère /5 pesait autant qu'un critère /20.)
-                // Les anciennes « notes collectives » des épreuves de groupe
-                // sont exclues : le travail du groupe est désormais noté à
-                // part et n'entre pas dans la moyenne du candidat.
-                const toScored = (list: any[]) =>
-                    list
-                        .filter((e) => hasAnyScore(e.scores) && !isLegacyCollectiveNote(e))
-                        .map((e) => ({
-                            epreuveKey: e.epreuves?.id || e.epreuves?.name || 'sans-epreuve',
-                            obtained: sumScores(e.scores),
-                            maxTotal: getTotalMaxPoints(e.epreuves?.evaluation_questions),
-                        }));
-                const tourAverage = (tour: number) =>
-                    averageOn20ByEpreuve(toScored(evalsByTour[tour] || []));
-
-                const tourComments = (tour: number) =>
-                    (evalsByTour[tour] || [])
-                        .map((e) => {
-                            const who = examinerNames(e) || 'Évaluateur';
-                            const ep = e.epreuves?.name || '';
-                            return e.comment ? `[${ep} — ${who}] ${e.comment}` : '';
-                        })
-                        .filter(Boolean)
-                        .join('\n');
-
-                const globalAvg = averageOn20ByEpreuve(toScored(evals));
-
-                const delib = Array.isArray(c.deliberation) ? c.deliberation[0] : c.deliberation;
-
-                return {
-                    Prénom: c.first_name,
-                    Nom: c.last_name,
-                    Email: c.email,
-                    'Note Tour 1 (/20)': tourAverage(1),
-                    'Commentaires Tour 1': tourComments(1),
-                    'Note Tour 2 (/20)': tourAverage(2),
-                    'Commentaires Tour 2': tourComments(2),
-                    'Note Tour 3 (/20)': tourAverage(3),
-                    'Commentaires Tour 3': tourComments(3),
-                    'Note Globale (/20)': globalAvg,
-                    'Points forts (délibération)': delib?.pros_comment || '',
-                    'Points faibles (délibération)': delib?.cons_comment || '',
-                    'Commentaire général': delib?.global_comments || c.comments || '',
-                    'Statut Tour 1': delib?.tour1_status || '',
-                    'Statut Tour 2': delib?.tour2_status || '',
-                    'Statut Tour 3': delib?.tour3_status || '',
-                };
-            });
-
-            // ───────── Sheet 2: Détail évaluations (one row per evaluation) ─────────
-            const detailRows: any[] = [];
-            data.forEach((c: any) => {
-                const evals: any[] = c.candidate_evaluations || [];
-                evals.forEach((e) => {
-                    const scores = parseScores(e.scores);
-                    const scoreEntries = Object.entries(scores);
-                    const maxTotal = getTotalMaxPoints(e.epreuves?.evaluation_questions);
-                    const total = sumScores(e.scores);
-                    const noteOn20 = hasAnyScore(e.scores) && maxTotal > 0 ? toTwenty(total, maxTotal) : null;
-                    detailRows.push({
-                        Prénom: c.first_name,
-                        Nom: c.last_name,
-                        Tour: e.epreuves?.tour ?? '',
-                        Épreuve: e.epreuves?.name || '',
-                        Type: e.epreuves?.type || '',
-                        Évaluateur: examinerNames(e),
-                        'Détail des notes': scoreEntries.map(([k, v]) => `${k}: ${v}`).join(' | '),
-                        Total: maxTotal > 0 ? `${total} / ${maxTotal}` : total,
-                        'Note /20': noteOn20,
-                        Commentaire: e.comment || '',
-                        Date: e.created_at ? new Date(e.created_at).toLocaleDateString('fr-FR') : '',
-                    });
-                });
-            });
-
-            const wb = XLSX.utils.book_new();
-
-            // Les valeurs libres (prénom, nom, commentaires) sont neutralisées
-            // avant écriture : sans cela, un candidat inscrit sous
-            // `=HYPERLINK(...)` fait exécuter une formule à l'ouverture du
-            // fichier par le staff (audit sécurité du 07/09/2026).
-            const ws1 = XLSX.utils.json_to_sheet(synthRows.map(sanitizeSpreadsheetRow));
-            ws1['!cols'] = [
-                { wch: 14 }, { wch: 16 }, { wch: 28 },
-                { wch: 11 }, { wch: 40 },
-                { wch: 11 }, { wch: 40 },
-                { wch: 11 }, { wch: 40 },
-                { wch: 13 },
-                { wch: 40 }, { wch: 40 }, { wch: 40 },
-                { wch: 13 }, { wch: 13 }, { wch: 13 },
-            ];
-            XLSX.utils.book_append_sheet(wb, ws1, 'Synthèse');
-
-            const ws2 = XLSX.utils.json_to_sheet(detailRows.map(sanitizeSpreadsheetRow));
-            ws2['!cols'] = [
-                { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 22 }, { wch: 14 },
-                { wch: 22 }, { wch: 50 }, { wch: 10 }, { wch: 60 }, { wch: 12 },
-            ];
-            XLSX.utils.book_append_sheet(wb, ws2, 'Détail évaluations');
-
-            const today = new Date().toISOString().slice(0, 10);
-            XLSX.writeFile(wb, `candidats_export_${today}.xlsx`);
-
-            toast(`Export généré : ${synthRows.length} candidat(s)`, 'success');
+            const count = await exportCandidatesXlsx();
+            toast(`Export généré : ${count} candidat(s)`, 'success');
         } catch (e: any) {
             console.error(e);
             toast(e?.response?.data?.error || "Erreur lors de l'export", 'error');
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -375,7 +250,7 @@ export default function CandidatesPage() {
             await api.post('/candidates', newCandidate);
             setIsCreating(false);
             setNewCandidate({ firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '' });
-            fetchCandidates();
+            refresh();
             toast("Candidat créé", 'success');
         } catch (error: any) {
             console.error(error);
@@ -383,24 +258,25 @@ export default function CandidatesPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = useCallback(async (id: string) => {
         if (!confirm('Êtes-vous sûr de vouloir supprimer ce candidat ?')) return;
         try {
             await api.delete(`/candidates/${id}`);
-            setCandidates(candidates.filter((c: any) => c.id !== id));
-            if (selectedCandidate?.id === id) closeDetail();
+            setSelected((s) => (s?.id === id ? null : s));
+            refresh();
+            toast('Candidat supprimé', 'success');
         } catch (e) {
             console.error(e);
             toast('Erreur lors de la suppression', 'error');
         }
-    };
+    }, [toast]);
 
     const handleSaveEdit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             await api.put(`/candidates/${editingCandidate.id}`, editingCandidate);
             setEditingCandidate(null);
-            fetchCandidates();
+            refresh();
             toast("Candidat modifié", 'success');
         } catch (error) {
             console.error(error);
@@ -408,433 +284,141 @@ export default function CandidatesPage() {
         }
     };
 
-    const handleSaveComment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            await api.put(`/candidates/${commentCandidate.id}`, { comments: commentCandidate.comment });
-            setCommentCandidate(null);
-            fetchCandidates();
-            toast("Commentaire enregistré", 'success');
-        } catch (error) {
-            console.error(error);
-            toast("Erreur lors de l'enregistrement du commentaire", 'error');
-        }
-    };
+    const panel = selected && (
+        <CandidateDetailPanel
+            key={selected.id}
+            candidateId={selected.id}
+            initial={selected.initial}
+            isAdmin={isAdmin}
+            onClose={closeDetail}
+            onEdit={(c) => setEditingCandidate({ ...c })}
+            onDelete={handleDelete}
+            refreshKey={refreshKey}
+        />
+    );
 
-    /* ---- Parse questions from epreuve ---- */
-    const parseQuestions = (epreuve: any): { q: string; weight: number }[] => {
-        if (!epreuve) return [];
-        try {
-            const raw = epreuve.evaluation_questions;
-            if (!raw) return [];
-            return typeof raw === 'string' ? JSON.parse(raw) : raw;
-        } catch {
-            return [];
-        }
-    };
-
-    /* ================================================================ */
-    /*  Render                                                           */
-    /* ================================================================ */
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-full">
-            {/* ---- Left: Candidate List ---- */}
-            <div className={`space-y-6 transition-all duration-200 ${selectedCandidate ? 'w-full lg:w-[45%] lg:min-w-[400px]' : 'w-full'}`}>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Candidats</h1>
-                        <p className="text-sm text-gray-500">Gérez et évaluez vos candidats</p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant="secondary" onClick={handleExport}>Exporter</Button>
-                        <Button onClick={() => setIsCreating(true)}><Plus size={16} className="mr-2" /> Ajouter</Button>
+        <div className="space-y-6">
+            {/* En-tête commun aux deux vues */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Candidats</h1>
+                    <div className="mt-2 inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                        {([
+                            ['trombinoscope', 'Trombinoscope', LayoutGrid],
+                            ['liste', 'Liste', List],
+                        ] as const).map(([v, label, Icon]) => (
+                            <button
+                                key={v}
+                                onClick={() => setView(v)}
+                                className={cn(
+                                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                                    view === v ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50',
+                                )}
+                                aria-pressed={view === v}
+                            >
+                                <Icon size={15} /> {label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-
-                {/* Create Modal */}
-                {isCreating && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
-                            <CardHeader><CardTitle>Nouveau Candidat</CardTitle></CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleCreate} className="space-y-4">
-                                    <div><Label>Prénom</Label><Input required value={newCandidate.firstName} onChange={e => setNewCandidate({ ...newCandidate, firstName: e.target.value })} /></div>
-                                    <div><Label>Nom</Label><Input required value={newCandidate.lastName} onChange={e => setNewCandidate({ ...newCandidate, lastName: e.target.value })} /></div>
-                                    <div><Label>Email</Label><Input required type="email" value={newCandidate.email} onChange={e => setNewCandidate({ ...newCandidate, email: e.target.value })} /></div>
-                                    <div><Label>Téléphone</Label><Input value={newCandidate.phone} onChange={e => setNewCandidate({ ...newCandidate, phone: e.target.value })} /></div>
-                                    <div><Label>Date de naissance</Label><Input type="date" value={newCandidate.dateOfBirth} onChange={e => setNewCandidate({ ...newCandidate, dateOfBirth: e.target.value })} /></div>
-                                    <div className="flex justify-end gap-2">
-                                        <Button variant="ghost" type="button" onClick={() => setIsCreating(false)}>Annuler</Button>
-                                        <Button type="submit">Créer</Button>
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
+                {isAdmin && (
+                    <div className="flex gap-2 flex-wrap">
+                        <Button variant="secondary" onClick={handleExport} disabled={exporting}>
+                            {exporting ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+                            Exporter
+                        </Button>
+                        <Button onClick={() => setIsCreating(true)}><Plus size={16} className="mr-2" /> Ajouter</Button>
                     </div>
                 )}
+            </div>
 
-                {/* Edit Modal */}
-                {editingCandidate && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
-                            <CardHeader><CardTitle>Modifier Candidat</CardTitle></CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleSaveEdit} className="space-y-4">
-                                    <div><Label>Prénom</Label><Input value={editingCandidate.firstName} onChange={e => setEditingCandidate({ ...editingCandidate, firstName: e.target.value })} /></div>
-                                    <div><Label>Nom</Label><Input value={editingCandidate.lastName} onChange={e => setEditingCandidate({ ...editingCandidate, lastName: e.target.value })} /></div>
-                                    <div><Label>Email</Label><Input value={editingCandidate.email} onChange={e => setEditingCandidate({ ...editingCandidate, email: e.target.value })} /></div>
-                                    <div><Label>Téléphone</Label><Input value={editingCandidate.phone} onChange={e => setEditingCandidate({ ...editingCandidate, phone: e.target.value })} /></div>
-                                    <div><Label>Date de naissance</Label><Input type="date" value={editingCandidate.date_of_birth || ''} onChange={e => setEditingCandidate({ ...editingCandidate, date_of_birth: e.target.value })} /></div>
-                                    <div className="flex justify-end gap-2">
-                                        <Button variant="ghost" type="button" onClick={() => setEditingCandidate(null)}>Annuler</Button>
-                                        <Button type="submit">Enregistrer</Button>
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
-
-                {/* Comment Modal */}
-                {commentCandidate && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <Card className="w-full max-w-md max-h-modal overflow-y-auto">
-                            <CardHeader><CardTitle>Commentaire pour {commentCandidate.firstName}</CardTitle></CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleSaveComment} className="space-y-4">
-                                    <textarea
-                                        className="w-full p-2 border rounded"
-                                        rows={4}
-                                        placeholder="Saisissez un commentaire..."
-                                        value={commentCandidate.comment || ''}
-                                        onChange={e => setCommentCandidate({ ...commentCandidate, comment: e.target.value })}
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                        <Button variant="ghost" type="button" onClick={() => setCommentCandidate(null)}>Annuler</Button>
-                                        <Button type="submit">Enregistrer</Button>
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
-
-                {/* Candidate Table */}
-                <Card>
-                    <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                        <div className="relative flex-1 min-w-0">
-                            <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                            <Input
-                                placeholder="Rechercher un candidat..."
-                                className="pl-10"
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                            />
-                        </div>
-                        {/* Phase 3 — Filtre Pôle Choix n°1 */}
-                        <div className="relative w-full sm:w-auto">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                            <select
-                                value={filterPole}
-                                onChange={e => { setFilterPole(e.target.value); }}
-                                className="pl-9 pr-3 py-2 min-h-[44px] border border-gray-300 rounded-md text-sm bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:min-w-[200px] sm:w-auto"
-                            >
-                                <option value="all">Tous les pôles</option>
-                                <option value="Système d'information">SI</option>
-                                <option value="Marketing">Marketing</option>
-                                <option value="Développement commercial">Dev. Commercial</option>
-                                <option value="Audit Qualité">Audit Qualité</option>
-                                <option value="Ressource Humaine">RH</option>
-                                <option value="Trésorerie">Trésorerie</option>
-                                <option value="Bureau - VP">Bureau - VP</option>
-                                <option value="Bureau - Président">Bureau - Président</option>
-                                <option value="Bureau - Secrétaire générale">Bureau - SG</option>
-                                <option value="_none">Sans vœu</option>
-                            </select>
-                        </div>
-                    </div>
-                    <CardContent className="p-0">
-                        {loading ? (
-                            <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary-500" /></div>
-                        ) : (
-                            <div className="divide-y divide-gray-100">
-                                {candidates
-                                    .filter((candidate: any) => {
-                                        if (filterPole === 'all') return true;
-                                        const wishes = candidate.wishes || [];
-                                        const wish1 = wishes.find((w: any) => w.rank === 1);
-                                        if (filterPole === '_none') return !wish1;
-                                        return wish1?.pole === filterPole;
-                                    })
-                                    .map((candidate: any) => (
-                                    <div
-                                        key={candidate.id}
-                                        className={`p-4 flex items-center justify-between hover:bg-gray-50 group cursor-pointer transition-colors ${selectedCandidate?.id === candidate.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
-                                        onClick={() => openDetail(candidate)}
-                                    >
-                                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                                            <div className="relative shrink-0">
-                                                <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm">
-                                                    {candidate.firstName?.[0]}{candidate.lastName?.[0]}
-                                                </div>
-                                                {candidate.email_verified === false && (
-                                                    <span
-                                                        className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-white"
-                                                        title="Email non vérifié"
-                                                    />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-gray-900 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                    {candidate.firstName} {candidate.lastName}
-                                                    {candidate.email_verified === false && (
-                                                        <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold border border-red-200">
-                                                            Email non vérifié
-                                                        </span>
-                                                    )}
-                                                </p>
-                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 mt-0.5">
-                                                    <span className="break-words">{candidate.email}</span>
-                                                    {candidate.phone && <><span className="hidden sm:inline">·</span><span className="whitespace-nowrap">{candidate.phone}</span></>}
-                                                    {/* Pole badge */}
-                                                    {candidate.wishes?.[0]?.pole && (
-                                                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
-                                                            {candidate.wishes[0].pole}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                            {/* Un iPhone n'a pas de survol : ces actions restent visibles
-                                                sur mobile, et ne se révèlent au survol qu'à partir de md. */}
-                                            <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100" onClick={e => e.stopPropagation()}>
-                                                <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-gray-200 rounded text-gray-500" onClick={() => setEditingCandidate({ ...candidate })} title="Modifier" aria-label="Modifier"><Edit size={16} /></button>
-                                                <button className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-red-100 rounded text-red-500" onClick={() => handleDelete(candidate.id)} title="Supprimer" aria-label="Supprimer"><Trash2 size={16} /></button>
-                                            </div>
-                                            <ChevronRight size={16} className="text-gray-300 shrink-0" />
-                                        </div>
-                                    </div>
-                                ))}
-                                {candidates.length === 0 && <div className="p-8 text-center text-gray-500">Aucun candidat trouvé</div>}
+        {/* Create Modal */}
+        {isCreating && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+                <Card className="w-full max-w-md max-h-modal overflow-y-auto">
+                    <CardHeader><CardTitle>Nouveau Candidat</CardTitle></CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div><Label>Prénom</Label><Input required value={newCandidate.firstName} onChange={e => setNewCandidate({ ...newCandidate, firstName: e.target.value })} /></div>
+                            <div><Label>Nom</Label><Input required value={newCandidate.lastName} onChange={e => setNewCandidate({ ...newCandidate, lastName: e.target.value })} /></div>
+                            <div><Label>Email</Label><Input required type="email" value={newCandidate.email} onChange={e => setNewCandidate({ ...newCandidate, email: e.target.value })} /></div>
+                            <div><Label>Téléphone</Label><Input value={newCandidate.phone} onChange={e => setNewCandidate({ ...newCandidate, phone: e.target.value })} /></div>
+                            <div><Label>Date de naissance</Label><Input type="date" value={newCandidate.dateOfBirth} onChange={e => setNewCandidate({ ...newCandidate, dateOfBirth: e.target.value })} /></div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="ghost" type="button" onClick={() => setIsCreating(false)}>Annuler</Button>
+                                <Button type="submit">Créer</Button>
                             </div>
-                        )}
-                        <div className="p-4 border-t flex justify-between items-center gap-2">
-                            <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Précédent</Button>
-                            <span className="text-sm text-gray-500">Page {page} / {totalPages}</span>
-                            <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Suivant</Button>
-                        </div>
+                        </form>
                     </CardContent>
                 </Card>
             </div>
+        )}
 
-            {/* ---- Right: Detail Panel ---- */}
-            {selectedCandidate && (
-                <div className="flex-1 w-full lg:min-w-[420px] space-y-4 overflow-y-auto">
-                    {/* Candidate header */}
-                    <Card>
-                        <CardContent className="p-5">
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xl font-bold">
-                                        {selectedCandidate.firstName?.[0]}{selectedCandidate.lastName?.[0]}
-                                    </div>
-                                    <div>
-                                        <h1 className="text-xl font-semibold text-gray-900">{selectedCandidate.firstName} {selectedCandidate.lastName}</h1>
-                                        <p className="text-sm text-gray-500">{selectedCandidate.email}</p>
-                                        <div className="flex gap-4 mt-1 text-xs text-gray-400">
-                                            {selectedCandidate.phone && <span>{selectedCandidate.phone}</span>}
-                                            {selectedCandidate.date_of_birth && <span>Né(e) le {selectedCandidate.date_of_birth}</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    {/* Admin uniquement : peut évaluer depuis l'espace candidats.
-                                        Les members non-admin doivent passer par leur slot. */}
-                                    {isAdmin && (
-                                        <Button size="sm" variant="primary" onClick={() => router.push(`/dashboard/candidates/${selectedCandidate.id}/evaluate`)}>
-                                            <Plus size={14} className="mr-1" /> Évaluer
-                                        </Button>
-                                    )}
-                                    <Button size="sm" variant="outline" onClick={() => setCommentCandidate({ ...selectedCandidate, comment: selectedCandidate.comments || '' })}>
-                                        Commenter
-                                    </Button>
-                                    <button onClick={closeDetail} className="p-2 hover:bg-gray-100 rounded text-gray-400">
-                                        <X size={18} />
-                                    </button>
-                                </div>
+        {/* Edit Modal */}
+        {editingCandidate && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+                <Card className="w-full max-w-md max-h-modal overflow-y-auto">
+                    <CardHeader><CardTitle>Modifier Candidat</CardTitle></CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSaveEdit} className="space-y-4">
+                            <div><Label>Prénom</Label><Input value={editingCandidate.firstName} onChange={e => setEditingCandidate({ ...editingCandidate, firstName: e.target.value })} /></div>
+                            <div><Label>Nom</Label><Input value={editingCandidate.lastName} onChange={e => setEditingCandidate({ ...editingCandidate, lastName: e.target.value })} /></div>
+                            <div><Label>Email</Label><Input value={editingCandidate.email} onChange={e => setEditingCandidate({ ...editingCandidate, email: e.target.value })} /></div>
+                            <div><Label>Téléphone</Label><Input value={editingCandidate.phone} onChange={e => setEditingCandidate({ ...editingCandidate, phone: e.target.value })} /></div>
+                            <div><Label>Date de naissance</Label><Input type="date" value={editingCandidate.date_of_birth || ''} onChange={e => setEditingCandidate({ ...editingCandidate, date_of_birth: e.target.value })} /></div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="ghost" type="button" onClick={() => setEditingCandidate(null)}>Annuler</Button>
+                                <Button type="submit">Enregistrer</Button>
                             </div>
-                            {selectedCandidate.comments && (
-                                <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm text-gray-700 border border-yellow-100">
-                                    <span className="font-medium text-yellow-700">Note : </span>{selectedCandidate.comments}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
 
-                    {/* Créneaux : quand, où et avec quels examinateurs
-                        passe ce candidat. */}
-                    <CandidateSlots candidateId={selectedCandidate.id} />
-
-                    {/* Evaluations */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Évaluations ({evaluations.length})</CardTitle>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {loadingEvals ? (
-                                <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary-500" /></div>
-                            ) : evaluations.length === 0 ? (
-                                <div className="p-8 text-center text-gray-400">
-                                    <p className="mb-2">Aucune évaluation pour ce candidat</p>
-                                    {isAdmin ? (
-                                        <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/candidates/${selectedCandidate.id}/evaluate`)}>
-                                            Créer une évaluation
-                                        </Button>
-                                    ) : (
-                                        <p className="text-xs italic">
-                                            Les évaluations sont créées par les examinateurs
-                                            assignés depuis la fiche du créneau.
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-gray-100">
-                                    {evaluations.map((ev) => {
-                                        const questions = parseQuestions(ev.epreuves);
-                                        const isEditing = editingEvalId === ev.id;
-
-                                        return (
-                                            <div key={ev.id} className={`p-4 ${isEditing ? 'bg-blue-50/50' : ''}`}>
-                                                {/* Header row */}
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div>
-                                                        <span className="font-semibold text-gray-900">
-                                                            {ev.epreuves?.name || 'Épreuve inconnue'}
-                                                        </span>
-                                                        <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                                            Tour {ev.epreuves?.tour}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {isEditing ? (
-                                                            <>
-                                                                <Button size="sm" variant="ghost" onClick={() => setEditingEvalId(null)} disabled={savingEval}>Annuler</Button>
-                                                                <Button size="sm" onClick={saveEditEval} disabled={savingEval}>
-                                                                    {savingEval ? <Loader2 size={14} className="animate-spin mr-1" /> : <Save size={14} className="mr-1" />}
-                                                                    Enregistrer
-                                                                </Button>
-                                                            </>
-                                                        ) : ev.isSecondGrid ? null : (
-                                                            <>
-                                                                <button className="p-1.5 hover:bg-blue-100 rounded text-blue-600" onClick={() => startEditEval(ev)} title="Modifier"><Edit size={14} /></button>
-                                                                <button className="p-1.5 hover:bg-red-100 rounded text-red-500" onClick={() => deleteEval(ev.id)} title="Supprimer"><Trash2 size={14} /></button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Evaluator info */}
-                                                <div className="text-xs text-gray-500 mb-3">
-                                                    Évalué par <span className="font-medium text-gray-700">{ev.members?.email || 'Inconnu'}</span>
-                                                    <span className="mx-2">·</span>
-                                                    {new Date(ev.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </div>
-
-                                                {/* Scores */}
-                                                <div className="space-y-2">
-                                                    {questions.length > 0 ? (
-                                                        questions.map((q, idx) => {
-                                                            const scoreKey = String(idx);
-                                                            const scoreVal = isEditing
-                                                                ? (editScores[scoreKey] ?? '')
-                                                                : (formatScore(ev.scores[scoreKey]) || '-');
-                                                            return (
-                                                                <div key={idx} className="flex items-center justify-between text-sm">
-                                                                    <span className="text-gray-600">
-                                                                        {getCriterionLabel(q) || `Critère ${idx + 1}`}
-                                                                        <span className="text-xs text-gray-400 ml-1">(/ {getMaxPoints(q)})</span>
-                                                                    </span>
-                                                                    {isEditing ? (
-                                                                        <Input
-                                                                            type="text"
-                                                                            inputMode="decimal"
-                                                                            className="w-20 h-8 text-sm text-right"
-                                                                            value={editScores[scoreKey] ?? ''}
-                                                                            onChange={e => {
-                                                                                const val = e.target.value.replace(/\s/g, '');
-                                                                                if (!isScoreInput(val)) return;
-                                                                                setEditScores({ ...editScores, [scoreKey]: val });
-                                                                            }}
-                                                                        />
-                                                                    ) : (
-                                                                        <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">
-                                                                            {scoreVal}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        /* Fallback: show raw scores if no questions defined */
-                                                        Object.entries(ev.scores).length > 0 ? (
-                                                            Object.entries(isEditing ? editScores : ev.scores).map(([key, val]) => (
-                                                                <div key={key} className="flex items-center justify-between text-sm">
-                                                                    <span className="text-gray-600">Critère {parseInt(key) + 1}</span>
-                                                                    {isEditing ? (
-                                                                        <Input
-                                                                            type="text"
-                                                                            inputMode="decimal"
-                                                                            className="w-20 h-8 text-sm text-right"
-                                                                            value={editScores[key] ?? ''}
-                                                                            onChange={e => {
-                                                                                const val = e.target.value.replace(/\s/g, '');
-                                                                                if (!isScoreInput(val)) return;
-                                                                                setEditScores({ ...editScores, [key]: val });
-                                                                            }}
-                                                                        />
-                                                                    ) : (
-                                                                        <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">{formatScore(val) || String(val)}</span>
-                                                                    )}
-                                                                </div>
-                                                            ))
-                                                        ) : (
-                                                            <p className="text-xs text-gray-400 italic">Aucun score enregistré</p>
-                                                        )
-                                                    )}
-                                                </div>
-
-                                                {/* Comment */}
-                                                <div className="mt-3">
-                                                    {isEditing ? (
-                                                        <div>
-                                                            <Label className="text-xs text-gray-500">Commentaire</Label>
-                                                            <textarea
-                                                                className="w-full p-2 border rounded-md text-sm mt-1"
-                                                                rows={2}
-                                                                value={editComment}
-                                                                onChange={e => setEditComment(e.target.value)}
-                                                                placeholder="Commentaire de l'évaluation..."
-                                                            />
-                                                        </div>
-                                                    ) : ev.comment ? (
-                                                        <p className="text-sm text-gray-600 bg-gray-50 rounded p-2 mt-1">
-                                                            <span className="text-xs font-medium text-gray-400">Commentaire : </span>
-                                                            {ev.comment}
-                                                        </p>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+            {view === 'liste' ? (
+                <div className="flex flex-col lg:flex-row gap-6">
+                    <div className={`space-y-6 transition-all duration-200 ${selected ? 'w-full lg:w-[45%] lg:min-w-[400px]' : 'w-full'}`}>
+                        <CandidatesList
+                            selectedId={selected?.id ?? null}
+                            onOpen={openDetail}
+                            onEdit={(c) => setEditingCandidate({ ...c })}
+                            onDelete={handleDelete}
+                            refreshKey={refreshKey}
+                        />
+                    </div>
+                    {panel && (
+                        <div className="flex-1 w-full lg:min-w-[420px] overflow-y-auto">{panel}</div>
+                    )}
                 </div>
+            ) : (
+                <>
+                    <Trombinoscope
+                        onOpen={openDetail}
+                        selectedId={selected?.id ?? null}
+                        refreshKey={refreshKey}
+                    />
+                    {/* Panneau de détail en tiroir : la grille de photos reste
+                        visible derrière. */}
+                    {panel && (
+                        <div className="fixed inset-0 z-[80] flex justify-end">
+                            <div className="absolute inset-0 bg-black/30" onClick={closeDetail} />
+                            <div className="relative h-full w-full sm:max-w-xl bg-gray-50 shadow-2xl overflow-y-auto p-4">
+                                {panel}
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
+    );
+}
+
+export default function CandidatesPage() {
+    return (
+        <Suspense fallback={<div className="p-8 flex justify-center"><Loader2 className="animate-spin text-gray-400" /></div>}>
+            <CandidatesHub />
+        </Suspense>
     );
 }
