@@ -27,7 +27,7 @@ async function send(params: Parameters<typeof resend.emails.send>[0]) {
  * Même raison que `sendAnnouncementEmails` : un `Promise.all` de `send()`
  * individuels dépasse la limite de débit Resend et se fait jeter en 429 —
  * le 23/09/2026, 63 emails de résultat du tour 1 sur 73 sont partis en
- * erreur de cette façon. On passe par `resend.batch.send` (100 par requête).
+ * erreur de cette façon. On passe par `resend.batch.send`, par lots de 10.
  *
  * Renvoie les `key` des envois en échec pour que l'appelant puisse relancer
  * uniquement ceux-là (sans renvoyer de doublon aux autres).
