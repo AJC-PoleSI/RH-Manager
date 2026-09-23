@@ -146,6 +146,11 @@ export default function DeliberationsPage() {
   const [globalAccepted, setGlobalAccepted] = useState("");
   const [globalRefused, setGlobalRefused] = useState("");
   const [validateSending, setValidateSending] = useState(false);
+  // Candidats dont l'email de résultat a échoué au dernier envoi : tant que
+  // la liste n'est pas vide, « Valider et Envoyer » ne relance QUE ceux-là
+  // (pas de doublon pour ceux qui l'ont déjà reçu). Propre au tour affiché.
+  const [retryIds, setRetryIds] = useState<{ tour: number; ids: string[] } | null>(null);
+  const pendingRetry = retryIds && retryIds.tour === selectedTour ? retryIds.ids : null;
 
   // Tours (verrouillage / passage au tour suivant)
   const [tourStatuses, setTourStatuses] = useState<Record<number, string>>({});
@@ -573,12 +578,20 @@ export default function DeliberationsPage() {
         globalAccepted,
         globalRefused,
         messages: validateMessages,
+        ...(pendingRetry ? { candidateIds: pendingRetry } : {}),
       });
-      const { sent, failed, total } = res.data || {};
+      const { sent, failed, total, failedCandidateIds } = res.data || {};
       toast(
         `Résultats envoyés : ${sent}/${total} email(s)${failed ? ` · ${failed} échec(s)` : ""}.`,
         failed ? "error" : "success",
       );
+      if (failed) {
+        // On garde la modale ouverte et les messages saisis : un clic
+        // relance uniquement les échecs.
+        setRetryIds({ tour: selectedTour, ids: failedCandidateIds || [] });
+        return;
+      }
+      setRetryIds(null);
       setShowValidateModal(false);
       setValidateMessages({});
       setGlobalAccepted("");
@@ -1888,10 +1901,18 @@ export default function DeliberationsPage() {
                   <div className="text-sm text-gray-600 mt-1">Refuses</div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 -mt-2">
-                Tous les candidats décidés du Tour {selectedTour} recevront un email,
-                tous pôles confondus (le filtre de pôle de la page n&apos;est pas appliqué).
-              </p>
+              {pendingRetry ? (
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 -mt-2">
+                  {pendingRetry.length} email(s) n&apos;ont pas pu partir au dernier envoi.
+                  « Renvoyer » les relance uniquement pour ces candidats — les autres ne
+                  recevront pas de doublon.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 -mt-2">
+                  Tous les candidats décidés du Tour {selectedTour} recevront un email,
+                  tous pôles confondus (le filtre de pôle de la page n&apos;est pas appliqué).
+                </p>
+              )}
 
               {/* Mode de message */}
               <div className="inline-flex bg-gray-100 rounded-lg p-0.5">
@@ -1979,7 +2000,11 @@ export default function DeliberationsPage() {
                   disabled={validateSending || (sendAcceptedCount + sendRefusedCount === 0)}
                   className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {validateSending ? "Envoi…" : "Confirmer et Envoyer"}
+                  {validateSending
+                    ? "Envoi…"
+                    : pendingRetry
+                      ? `Renvoyer aux ${pendingRetry.length} en échec`
+                      : "Confirmer et Envoyer"}
                 </button>
               </div>
             </div>
