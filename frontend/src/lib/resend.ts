@@ -123,7 +123,7 @@ function buildResultEmail(
   </table>
 </body></html>`.trim();
 
-  return send({ from: FROM, to: email, subject, html });
+  return { from: FROM, to: email, subject, html };
 }
 
 export async function sendVerificationEmail(
