@@ -44,7 +44,10 @@ export async function sendResultEmails<K>(
   let sent = 0;
   const failedKeys: K[] = [];
 
-  const lots = chunk(items, EMAIL_BATCH_SIZE);
+  // Lots de 10 plutôt que 100 : un lot batch est tout-ou-rien côté Resend,
+  // un rejet ne coûte donc que 10 emails (relançables) au lieu de tout l'envoi.
+  // 600 ms entre deux lots → < 2 req/s, loin sous la limite Resend.
+  const lots = chunk(items, RESULT_EMAIL_LOT_SIZE);
   for (let i = 0; i < lots.length; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 600));
     const lot = lots[i];
