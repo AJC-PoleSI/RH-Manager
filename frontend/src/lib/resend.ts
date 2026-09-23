@@ -6,6 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@audencia-junior-conseil.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const RESULT_EMAIL_LOT_SIZE = 10;
 
 // Le SDK Resend ne throw pas sur une erreur API (clé invalide, domaine non
 // vérifié, etc.) — il renvoie `{ data: null, error }`. Sans cette vérification,
