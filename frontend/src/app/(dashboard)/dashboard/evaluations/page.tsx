@@ -101,6 +101,27 @@ function isCollectiveNote(ev: EvaluationData): boolean {
     return ev.isGroup === true && groupEpreuve;
 }
 
+/**
+ * Moyenne /20 d'un lot de notes, chacune d'abord ramenée à /20 selon le
+ * barème de son épreuve (moyenner des totaux bruts d'épreuves à barèmes
+ * différents n'a pas de sens). Un 0/20 saisi compte ; une grille vide et les
+ * anciennes notes collectives de groupe sont écartées. null sans aucune note.
+ */
+function averageOn20(evs: EvaluationData[]): number | null {
+    const totals = evs
+        .filter(ev => !isCollectiveNote(ev) && hasAnyScore(ev.scores))
+        .map(ev => getScoreOn20(ev));
+    return totals.length > 0
+        ? Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 10) / 10
+        : null;
+}
+
+/** « 14 notes · moyenne 13.6/20 » — en-tête d'un tour dans les archives. */
+function archiveDetail(evs: EvaluationData[], count: number, noun: string): string {
+    const avg = averageOn20(evs);
+    return `${count} ${noun}${count > 1 ? 's' : ''}${avg !== null ? ` · moyenne ${avg}/20` : ''}`;
+}
+
 /** Une évaluation, mise à la forme attendue par le calcul du barème. */
 function toStatsInput(ev: EvaluationData): ExaminerEvaluationInput {
     const examiners = ev.examiners?.length ? ev.examiners : ev.member ? [ev.member] : [];
@@ -231,7 +252,7 @@ function ArchiveSection({ count, children }: { count: number; children: React.Re
                 <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-semibold text-gray-700">Archives des tours clos</h2>
                     <p className="text-xs text-gray-400 mt-0.5">
-                        Notes des tours terminés, rangées ici pour alléger la page. Elles comptent toujours dans les statistiques.
+                        Notes des tours terminés et moyenne de chaque tour, rangées ici pour alléger la page.
                     </p>
                 </div>
                 <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full shrink-0">
@@ -415,26 +436,19 @@ function AdminView() {
     const candidateEvaluations = evaluations.filter(ev => !isCollectiveNote(ev));
     const collectiveCount = evaluations.length - candidateEvaluations.length;
 
-    // Note moyenne GLOBALE = vraie moyenne des notes /20 (chaque évaluation
-    // est d'abord ramenée à /20 selon le barème de son épreuve, sinon
-    // moyenner des totaux bruts d'épreuves à barèmes différents n'a pas de sens).
-    // Un 0/20 saisi est une note et compte ; une évaluation SANS aucune note
-    // (grille créée à vide) est écartée.
-    const allTotals = candidateEvaluations.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
-    const avgScore = allTotals.length > 0
-        ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
-        : 0;
     const evalCount = candidateEvaluations.length;
+
+    // Récap : les notes des tours clos partent dans les archives, avec la
+    // moyenne de chaque tour. La moyenne affichée en haut est celle des tours
+    // en cours ; les décomptes et le barème restent sur toutes les notes.
+    const recap = splitByClosedTour(evaluations, ev => ev.epreuve?.tour, closedTours);
+    const avgScore = averageOn20(recap.current);
 
     // Par membre : candidats évalués, moyenne /20 et barème (écart aux autres
     // examinateurs sur les mêmes épreuves). Une note partagée compte pour
     // CHAQUE examinateur inscrit au créneau, pas seulement pour celui qui l'a
     // saisie — l'autre a fait passer l'entretien même sans se connecter.
     const examinerStats = computeExaminerStats(evaluations.map(toStatsInput));
-
-    // Récap : les notes des tours clos partent dans les archives. Les stats
-    // ci-dessus restent calculées sur toutes les notes.
-    const recap = splitByClosedTour(evaluations, ev => ev.epreuve?.tour, closedTours);
 
     const recapTableHead = (
         <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -558,8 +572,13 @@ function AdminView() {
                     <p className="text-3xl font-bold text-blue-700 mt-1">{evaluateurCount}</p>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
-                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore ? `${avgScore}/20` : '-'}</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                        {recap.archived.length > 0 ? 'Note moyenne · tours en cours' : 'Note moyenne globale'}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore !== null ? `${avgScore}/20` : '-'}</p>
+                    {recap.archived.length > 0 && (
+                        <p className="text-[11px] text-gray-400 mt-1">Moyennes des tours clos dans les archives</p>
+                    )}
                 </div>
                 <div className="bg-white border border-green-200 rounded-xl p-5">
                     <p className="text-sm text-green-600 font-medium">Évaluations saisies</p>
@@ -838,7 +857,7 @@ function AdminView() {
                             <div className="px-4 sm:px-6 py-3 bg-gray-50/60">
                                 <ArchivedTourHeading
                                     tour={group.tour}
-                                    detail={`${group.items.length} note${group.items.length > 1 ? 's' : ''}`}
+                                    detail={archiveDetail(group.items, group.items.length, 'note')}
                                 />
                             </div>
                             <div className="scroll-x">
@@ -1113,10 +1132,9 @@ function MemberView() {
         }
     };
 
-    // Stats — moyenne globale des notes /20 (chaque évaluation ramenée à /20
-    // selon le barème de son épreuve avant d'être moyennée). Les anciennes
-    // notes collectives de business game ne notent pas un candidat : elles
-    // sont comptées à part, jamais dans le total ni dans la moyenne.
+    // Stats — les anciennes notes collectives de business game ne notent pas
+    // un candidat : elles sont comptées à part, jamais dans le total ni dans
+    // la moyenne.
     const myCandidateEvals = evaluations.filter(ev => !isCollectiveNote(ev));
     // Une seule note de groupe par épreuve, quel que soit le nombre de
     // candidats du groupe — même décompte que le tableau admin.
@@ -1126,15 +1144,13 @@ function MemberView() {
             .map(ev => ev.epreuve?.id || `${ev.epreuve?.name || ''}::${ev.epreuve?.tour ?? ''}`)
     ).size;
     const totalEvals = myCandidateEvals.length;
-    const allTotals = myCandidateEvals.filter(ev => hasAnyScore(ev.scores)).map(ev => getScoreOn20(ev));
-    const avgScore = allTotals.length > 0
-        ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
-        : 0;
 
     // Tours clos : leurs notes, leurs notations closes et les candidats restés
-    // sans note quittent la page pour les archives, en bas. Les stats
-    // ci-dessus restent calculées sur toutes les notes.
+    // sans note quittent la page pour les archives, en bas, avec la moyenne de
+    // chaque tour. La moyenne affichée en haut est celle des tours en cours ;
+    // le nombre de candidats évalués reste sur toutes les notes.
     const history = splitByClosedTour(evaluations, ev => ev.epreuve?.tour, closedTours);
+    const avgScore = averageOn20(history.current);
     const queue = splitByClosedTour(nextCandidates, (c: any) => c.epreuve?.tour, closedTours);
     const closedNotations = splitByClosedTour(doneCandidates, (c: any) => c.epreuve?.tour, closedTours);
     const openAlerts = coverageAlerts.filter((a: any) => !closedTours.has(Number(a.tour)));
@@ -1238,8 +1254,13 @@ function MemberView() {
                     )}
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-sm text-gray-500 font-medium">Note moyenne globale</p>
-                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore ? `${avgScore}/20` : '-'}</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                        {history.archived.length > 0 ? 'Note moyenne · tours en cours' : 'Note moyenne globale'}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-700 mt-1">{avgScore !== null ? `${avgScore}/20` : '-'}</p>
+                    {history.archived.length > 0 && (
+                        <p className="text-[11px] text-gray-400 mt-1">Moyennes des tours clos dans les archives</p>
+                    )}
                 </div>
             </div>
 
@@ -1386,7 +1407,7 @@ function MemberView() {
                         <div key={group.tour} className="px-4 sm:px-6 py-4 space-y-3">
                             <ArchivedTourHeading
                                 tour={group.tour}
-                                detail={`${group.evals.length} évaluation${group.evals.length > 1 ? 's' : ''}`}
+                                detail={archiveDetail(group.evals, group.evals.length, 'évaluation')}
                             />
                             {group.evals.length > 0 && (
                                 <div className="space-y-3">
