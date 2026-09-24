@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getCandidateWishedPoles } from "@/lib/admission";
+import { getEliminationTour } from "@/lib/elimination-db";
 import { normalizeQuestions, parseQuestions } from "@/lib/evaluation-criteria";
 import { getToursByNumber } from "@/lib/tour-status";
 import {
