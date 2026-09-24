@@ -140,9 +140,9 @@ export async function GET(req: NextRequest) {
     const wishedPoles = isCandidate
       ? await getCandidateWishedPoles(candidateId)
       : [];
-    // VISIBILITÉ TOURS : défense en profondeur, même si en pratique un
-    // créneau d'un tour "a_venir" n'est pas encore publié.
-    const toursByNumber = isCandidate ? await getToursByNumber() : {};
+    // VISIBILITÉ TOURS (`toursByNumber`, lu plus haut) : défense en
+    // profondeur, même si en pratique un créneau d'un tour "a_venir" n'est
+    // pas encore publié.
 
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
