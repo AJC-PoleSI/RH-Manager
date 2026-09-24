@@ -1,15 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { extractTourNumber } from "@/lib/tour-archive";
 
 // Statuts possibles d'un tour dans la table `tours` :
 //   - "a_venir"  : pas encore commencé
 //   - "en_cours" : tour actif (décisions modifiables, candidats peuvent agir)
 //   - "termine"  : tour verrouillé (décisions figées)
 export type TourStatus = "a_venir" | "en_cours" | "termine";
-
-export function extractTourNumber(name: string): number {
-  const m = name.match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : 0;
-}
 
 interface TourRow {
   id: string;

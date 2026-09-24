@@ -13,7 +13,8 @@ import {
     type ExaminerStats,
 } from '@/lib/examiner-stats';
 import { slotLinkHost } from '@/lib/slot-links';
-import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck, AlertTriangle, Lock } from 'lucide-react';
+import { closedTourNumbers, splitByClosedTour } from '@/lib/tour-archive';
+import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck, AlertTriangle, Lock, Archive, ChevronDown } from 'lucide-react';
 
 interface MemberData {
     id: string;
@@ -202,11 +203,66 @@ function slotLabel(s: { date?: string | null; startTime?: string | null; endTime
     return parts.join(' · ');
 }
 
+/** Tours clos d'après GET /api/tours ; sans réponse, rien n'est archivé. */
+async function fetchClosedTours(): Promise<Set<number>> {
+    try {
+        const res = await api.get('/tours');
+        return closedTourNumbers(Array.isArray(res.data) ? res.data : []);
+    } catch {
+        return new Set();
+    }
+}
+
+/**
+ * Archives des tours clos, repliées par défaut : les notes d'un tour terminé
+ * restent consultables sans encombrer le travail du tour en cours.
+ */
+function ArchiveSection({ count, children }: { count: number; children: React.ReactNode }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="bg-white border border-dashed border-gray-300 rounded-xl overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open}
+                className="w-full flex items-center gap-3 px-4 sm:px-6 py-4 min-h-[44px] text-left hover:bg-gray-50 transition-colors"
+            >
+                <Archive size={18} className="text-gray-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-semibold text-gray-700">Archives des tours clos</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        Notes des tours terminés, rangées ici pour alléger la page. Elles comptent toujours dans les statistiques.
+                    </p>
+                </div>
+                <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full shrink-0">
+                    {count}
+                </span>
+                <ChevronDown size={18} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && <div className="border-t divide-y">{children}</div>}
+        </div>
+    );
+}
+
+/** En-tête d'un tour dans les archives. */
+function ArchivedTourHeading({ tour, detail }: { tour: number; detail: string }) {
+    return (
+        <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-semibold">Tour {tour}</span>
+            <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                <Lock size={11} />
+                clos · {detail}
+            </span>
+        </div>
+    );
+}
+
 // ─── ADMIN VIEW ────────────────────────────────────────────────────────────────
 
 function AdminView() {
     const [members, setMembers] = useState<MemberData[]>([]);
     const [evaluations, setEvaluations] = useState<EvaluationData[]>([]);
+    const [closedTours, setClosedTours] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -227,12 +283,14 @@ function AdminView() {
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [membersRes, evalsRes] = await Promise.all([
+            const [membersRes, evalsRes, closed] = await Promise.all([
                 api.get('/members'),
                 api.get('/evaluations'),
+                fetchClosedTours(),
             ]);
             setMembers(membersRes.data);
             setEvaluations(evalsRes.data);
+            setClosedTours(closed);
         } catch (e) {
             console.error(e);
         } finally {
@@ -373,6 +431,89 @@ function AdminView() {
     // CHAQUE examinateur inscrit au créneau, pas seulement pour celui qui l'a
     // saisie — l'autre a fait passer l'entretien même sans se connecter.
     const examinerStats = computeExaminerStats(evaluations.map(toStatsInput));
+
+    // Récap : les notes des tours clos partent dans les archives. Les stats
+    // ci-dessus restent calculées sur toutes les notes.
+    const recap = splitByClosedTour(evaluations, ev => ev.epreuve?.tour, closedTours);
+
+    const recapTableHead = (
+        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+                <th className="px-3 sm:px-6 py-3">Évaluateur</th>
+                <th className="px-3 sm:px-6 py-3">Candidat</th>
+                <th className="px-3 sm:px-6 py-3">Épreuve</th>
+                <th className="px-3 sm:px-6 py-3 text-center">Tour</th>
+                <th className="px-3 sm:px-6 py-3 text-center">Note individuelle</th>
+                <th className="px-3 sm:px-6 py-3 text-center">Moyenne du candidat</th>
+                <th className="px-3 sm:px-6 py-3">Commentaire</th>
+            </tr>
+        </thead>
+    );
+
+    const renderRecapRow = (ev: EvaluationData) => {
+        // Moyenne du candidat = moyenne des notes /20 des examinateurs pour
+        // même candidat + même épreuve (par id ; à défaut nom + tour), hors
+        // lignes sans aucune note et hors anciennes notes collectives.
+        const sameEpreuve = (e: EvaluationData) =>
+            ev.epreuve?.id && e.epreuve?.id
+                ? e.epreuve.id === ev.epreuve.id
+                : e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour;
+        const sameGroup = evaluations.filter(
+            e => e.candidate?.id === ev.candidate?.id && sameEpreuve(e)
+                && hasAnyScore(e.scores) && !isCollectiveNote(e)
+        );
+        const groupTotals = sameGroup.map(e => getScoreOn20(e));
+        const collectiveScore = groupTotals.length > 0
+            ? Math.round((groupTotals.reduce((a, b) => a + b, 0) / groupTotals.length) * 10) / 10
+            : 0;
+        const groupCount = sameGroup.length;
+
+        return (
+            <tr key={ev.id} className="hover:bg-gray-50">
+                <td className="px-3 sm:px-6 py-3 font-medium text-gray-900">
+                    {examinerNames(ev).length > 0 ? (
+                        examinerNames(ev).map((name, i) => (
+                            <span key={i} className="block">
+                                {name}
+                                {i > 0 && (
+                                    <span className="ml-1 text-[10px] font-normal text-indigo-500">co-examinateur</span>
+                                )}
+                            </span>
+                        ))
+                    ) : '-'}
+                </td>
+                <td className="px-3 sm:px-6 py-3 text-gray-700">
+                    {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
+                </td>
+                <td className="px-3 sm:px-6 py-3 text-gray-600">{ev.epreuve?.name || '-'}</td>
+                <td className="px-3 sm:px-6 py-3 text-center">
+                    <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
+                        T{ev.epreuve?.tour || '?'}
+                    </span>
+                </td>
+                <td className="px-3 sm:px-6 py-3 text-center font-bold text-blue-600">
+                    {hasAnyScore(ev.scores) ? `${getScoreOn20(ev)}/20` : '—'}
+                    {isCollectiveNote(ev) ? (
+                        <span
+                            className="block text-[10px] font-normal text-amber-600"
+                            title="Ancienne note collective de business game : elle note le groupe. Elle ne compte ni pour un candidat ni pour un examinateur."
+                        >
+                            note de groupe · ne compte pas
+                        </span>
+                    ) : ev.isGroup ? (
+                        <span className="block text-[10px] font-normal text-indigo-500">note partagée</span>
+                    ) : null}
+                </td>
+                <td className="px-3 sm:px-6 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                        <span className="font-bold text-green-700">{collectiveScore}/20</span>
+                        <span className="text-xs text-gray-400">({groupCount} eval{groupCount > 1 ? 's' : ''})</span>
+                    </div>
+                </td>
+                <td className="px-3 sm:px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
+            </tr>
+        );
+    };
 
     if (loading) {
         return (
@@ -675,89 +816,43 @@ function AdminView() {
                 </div>
                 <div className="scroll-x">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                            <tr>
-                                <th className="px-3 sm:px-6 py-3">Évaluateur</th>
-                                <th className="px-3 sm:px-6 py-3">Candidat</th>
-                                <th className="px-3 sm:px-6 py-3">Épreuve</th>
-                                <th className="px-3 sm:px-6 py-3 text-center">Tour</th>
-                                <th className="px-3 sm:px-6 py-3 text-center">Note individuelle</th>
-                                <th className="px-3 sm:px-6 py-3 text-center">Moyenne du candidat</th>
-                                <th className="px-3 sm:px-6 py-3">Commentaire</th>
-                            </tr>
-                        </thead>
+                        {recapTableHead}
                         <tbody className="divide-y">
-                            {evaluations.map(ev => {
-                                // Moyenne du candidat = moyenne des notes /20 des examinateurs pour
-                                // même candidat + même épreuve (par id ; à défaut nom + tour), hors
-                                // lignes sans aucune note et hors anciennes notes collectives.
-                                const sameEpreuve = (e: EvaluationData) =>
-                                    ev.epreuve?.id && e.epreuve?.id
-                                        ? e.epreuve.id === ev.epreuve.id
-                                        : e.epreuve?.name === ev.epreuve?.name && e.epreuve?.tour === ev.epreuve?.tour;
-                                const sameGroup = evaluations.filter(
-                                    e => e.candidate?.id === ev.candidate?.id && sameEpreuve(e)
-                                        && hasAnyScore(e.scores) && !isCollectiveNote(e)
-                                );
-                                const groupTotals = sameGroup.map(e => getScoreOn20(e));
-                                const collectiveScore = groupTotals.length > 0
-                                    ? Math.round((groupTotals.reduce((a, b) => a + b, 0) / groupTotals.length) * 10) / 10
-                                    : 0;
-                                const groupCount = sameGroup.length;
-
-                                return (
-                                    <tr key={ev.id} className="hover:bg-gray-50">
-                                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900">
-                                            {examinerNames(ev).length > 0 ? (
-                                                examinerNames(ev).map((name, i) => (
-                                                    <span key={i} className="block">
-                                                        {name}
-                                                        {i > 0 && (
-                                                            <span className="ml-1 text-[10px] font-normal text-indigo-500">co-examinateur</span>
-                                                        )}
-                                                    </span>
-                                                ))
-                                            ) : '-'}
-                                        </td>
-                                        <td className="px-3 sm:px-6 py-3 text-gray-700">
-                                            {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
-                                        </td>
-                                        <td className="px-3 sm:px-6 py-3 text-gray-600">{ev.epreuve?.name || '-'}</td>
-                                        <td className="px-3 sm:px-6 py-3 text-center">
-                                            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
-                                                T{ev.epreuve?.tour || '?'}
-                                            </span>
-                                        </td>
-                                        <td className="px-3 sm:px-6 py-3 text-center font-bold text-blue-600">
-                                            {hasAnyScore(ev.scores) ? `${getScoreOn20(ev)}/20` : '—'}
-                                            {isCollectiveNote(ev) ? (
-                                                <span
-                                                    className="block text-[10px] font-normal text-amber-600"
-                                                    title="Ancienne note collective de business game : elle note le groupe. Elle ne compte ni pour un candidat ni pour un examinateur."
-                                                >
-                                                    note de groupe · ne compte pas
-                                                </span>
-                                            ) : ev.isGroup ? (
-                                                <span className="block text-[10px] font-normal text-indigo-500">note partagée</span>
-                                            ) : null}
-                                        </td>
-                                        <td className="px-3 sm:px-6 py-3 text-center">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                <span className="font-bold text-green-700">{collectiveScore}/20</span>
-                                                <span className="text-xs text-gray-400">({groupCount} eval{groupCount > 1 ? 's' : ''})</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-3 sm:px-6 py-3 text-gray-500 italic max-w-xs truncate">{ev.comment || '-'}</td>
-                                    </tr>
-                                );
-                            })}
+                            {recap.current.map(renderRecapRow)}
                         </tbody>
                     </table>
-                    {evaluations.length === 0 && (
-                        <p className="text-center text-gray-400 py-8">Aucune évaluation enregistrée.</p>
+                    {recap.current.length === 0 && (
+                        <p className="text-center text-gray-400 py-8 px-4">
+                            {evaluations.length === 0
+                                ? 'Aucune évaluation enregistrée.'
+                                : 'Aucune évaluation sur les tours en cours. Celles des tours clos sont dans les archives ci-dessous.'}
+                        </p>
                     )}
                 </div>
             </div>
+
+            {recap.archived.length > 0 && (
+                <ArchiveSection count={recap.archived.reduce((n, g) => n + g.items.length, 0)}>
+                    {recap.archived.map(group => (
+                        <div key={group.tour}>
+                            <div className="px-4 sm:px-6 py-3 bg-gray-50/60">
+                                <ArchivedTourHeading
+                                    tour={group.tour}
+                                    detail={`${group.items.length} note${group.items.length > 1 ? 's' : ''}`}
+                                />
+                            </div>
+                            <div className="scroll-x">
+                                <table className="w-full text-sm text-left">
+                                    {recapTableHead}
+                                    <tbody className="divide-y">
+                                        {group.items.map(renderRecapRow)}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ))}
+                </ArchiveSection>
+            )}
 
             {/* ─── Edit Member Modal ─── */}
             {editingMember && (
@@ -870,6 +965,87 @@ function AdminView() {
     );
 }
 
+/** Une note de l'historique d'un examinateur. */
+function HistoryItem({ ev }: { ev: EvaluationData }) {
+    return (
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            {/* Avatar */}
+            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                {getInitials(ev.candidate?.firstName, ev.candidate?.lastName)}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-[140px]">
+                <p className="font-medium text-gray-900">
+                    {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
+                </p>
+                <p className="text-sm text-gray-500">
+                    {ev.epreuve?.name || ''} &middot; Tour {ev.epreuve?.tour || '?'}
+                </p>
+                {isCollectiveNote(ev) ? (
+                    <p className="text-xs text-amber-600">
+                        Ancienne note de groupe &middot; ne compte pour aucun candidat
+                    </p>
+                ) : ev.isGroup && examinerNames(ev).length > 1 ? (
+                    <p className="text-xs text-indigo-500">
+                        Note partagée &middot; {examinerNames(ev).join(' & ')}
+                    </p>
+                ) : null}
+                {ev.comment && (
+                    <p className="text-sm text-gray-400 italic mt-1 truncate">{ev.comment}</p>
+                )}
+            </div>
+
+            {/* Score */}
+            <div className="flex flex-col items-center flex-shrink-0 px-1 sm:px-3">
+                <span className="text-2xl font-bold text-blue-600">{getScoreOn20(ev)}</span>
+                <span className="text-[10px] text-gray-400">/20</span>
+            </div>
+
+            {/* Link */}
+            <a
+                href={`/dashboard/candidates/${ev.candidate?.id}`}
+                className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right inline-flex items-center justify-end min-h-[36px]"
+            >
+                Voir fiche
+            </a>
+        </div>
+    );
+}
+
+/** Candidat de mes créneaux dont la notation est close. */
+function ClosedNotationItem({ c }: { c: any }) {
+    return (
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {getInitials(c.firstName, c.lastName)}
+            </div>
+            <div className="flex-1 min-w-[140px]">
+                <p className="font-medium text-gray-800">
+                    {c.firstName} {c.lastName}
+                </p>
+                <p className="text-xs text-gray-500">
+                    {c.epreuve?.name} · Tour {c.epreuve?.tour ?? '?'}
+                </p>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 flex-shrink-0">
+                <Lock size={12} />
+                {c.closedReason === 'mine'
+                    ? 'Évalué par vous'
+                    : c.closedReason === 'shared'
+                        ? `Note de binôme · ${c.closedBy?.name || 'binôme'}`
+                        : `Évalué par ${c.closedBy?.name || 'un examinateur'}`}
+            </span>
+            <a
+                href={`/dashboard/candidates/${c.id}`}
+                className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right"
+            >
+                Voir fiche
+            </a>
+        </div>
+    );
+}
+
 // ─── MEMBER VIEW ───────────────────────────────────────────────────────────────
 
 function MemberView() {
@@ -881,6 +1057,7 @@ function MemberView() {
     const [doneCandidates, setDoneCandidates] = useState<any[]>([]);
     // Business games terminés où un candidat n'a reçu aucune note.
     const [coverageAlerts, setCoverageAlerts] = useState<any[]>([]);
+    const [closedTours, setClosedTours] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
 
     // La route renvoie { candidates, done, alerts } ; un ancien tableau brut
@@ -901,8 +1078,12 @@ function MemberView() {
         const fetchData = async () => {
             try {
                 // Utiliser /evaluations directement — l'API scope déjà par member_id pour les non-admin
-                const evalsRes = await api.get('/evaluations');
+                const [evalsRes, closed] = await Promise.all([
+                    api.get('/evaluations'),
+                    fetchClosedTours(),
+                ]);
                 setEvaluations(Array.isArray(evalsRes.data) ? evalsRes.data : []);
+                setClosedTours(closed);
 
                 // Try to fetch next candidates to evaluate
                 try {
@@ -950,6 +1131,36 @@ function MemberView() {
         ? Math.round((allTotals.reduce((a, b) => a + b, 0) / allTotals.length) * 10) / 10
         : 0;
 
+    // Tours clos : leurs notes, leurs notations closes et les candidats restés
+    // sans note quittent la page pour les archives, en bas. Les stats
+    // ci-dessus restent calculées sur toutes les notes.
+    const history = splitByClosedTour(evaluations, ev => ev.epreuve?.tour, closedTours);
+    const queue = splitByClosedTour(nextCandidates, (c: any) => c.epreuve?.tour, closedTours);
+    const closedNotations = splitByClosedTour(doneCandidates, (c: any) => c.epreuve?.tour, closedTours);
+    const openAlerts = coverageAlerts.filter((a: any) => !closedTours.has(Number(a.tour)));
+
+    // Un groupe d'archive par tour clos. Une notation close déjà présente dans
+    // mon historique (ma note, ou la note de binôme qui me crédite) n'y est pas
+    // répétée : n'y restent que celles posées par un autre examinateur.
+    const archivedTours = Array.from(new Set([
+        ...history.archived.map(g => g.tour),
+        ...queue.archived.map(g => g.tour),
+        ...closedNotations.archived.map(g => g.tour),
+    ]))
+        .sort((a, b) => b - a)
+        .map(tour => {
+            const evals = history.archived.find(g => g.tour === tour)?.items || [];
+            const inHistory = new Set(evals.map(ev => `${ev.candidate?.id}_${ev.epreuve?.id}`));
+            return {
+                tour,
+                evals,
+                byOthers: (closedNotations.archived.find(g => g.tour === tour)?.items || [])
+                    .filter((c: any) => !inHistory.has(`${c.id}_${c.epreuve?.id}`)),
+                unrated: queue.archived.find(g => g.tour === tour)?.items || [],
+            };
+        });
+    const archivedCount = archivedTours.reduce((n, g) => n + g.evals.length + g.byOthers.length + g.unrated.length, 0);
+
     if (loading) {
         return (
             <div className="flex justify-center p-12">
@@ -968,14 +1179,14 @@ function MemberView() {
 
             {/* Alerte de couverture : business game terminé, candidats sans note.
                 Personne ne s'en aperçoit avant la délibération, sinon. */}
-            {coverageAlerts.length > 0 && (
+            {openAlerts.length > 0 && (
                 <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 sm:p-5">
                     <div className="flex items-start gap-3">
                         <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
                         <div className="flex-1 min-w-0">
                             <p className="font-semibold text-amber-900">
                                 {(() => {
-                                    const n = coverageAlerts.reduce((sum: number, a: any) => sum + (a.missing?.length || 0), 0);
+                                    const n = openAlerts.reduce((sum: number, a: any) => sum + (a.missing?.length || 0), 0);
                                     return n > 1
                                         ? `Business game : ${n} candidats n’ont pas été évalués`
                                         : 'Business game : un candidat n’a pas été évalué';
@@ -985,7 +1196,7 @@ function MemberView() {
                                 L&apos;épreuve est terminée et il manque encore des notes. Chaque candidat doit être noté une fois, par l&apos;examinateur qui l&apos;a observé.
                             </p>
                             <div className="mt-3 space-y-3">
-                                {coverageAlerts.map((a: any) => (
+                                {openAlerts.map((a: any) => (
                                     <div key={a.slotId} className="bg-white border border-amber-200 rounded-lg p-3">
                                         <p className="text-sm font-medium text-gray-900">
                                             {a.epreuveName?.trim() || 'Business game'}
@@ -1035,54 +1246,15 @@ function MemberView() {
             {/* History card */}
             <div className="bg-white border rounded-xl p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Historique</h2>
-                {evaluations.length === 0 ? (
-                    <p className="text-center text-gray-400 py-8">Vous n&apos;avez encore soumis aucune évaluation.</p>
+                {history.current.length === 0 ? (
+                    <p className="text-center text-gray-400 py-8">
+                        {evaluations.length === 0
+                            ? 'Vous n’avez encore soumis aucune évaluation.'
+                            : 'Aucune évaluation sur le tour en cours. Vos notes des tours clos sont dans les archives, en bas de page.'}
+                    </p>
                 ) : (
                     <div className="space-y-3">
-                        {evaluations.map(ev => (
-                            <div key={ev.id} className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                {/* Avatar */}
-                                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                    {getInitials(ev.candidate?.firstName, ev.candidate?.lastName)}
-                                </div>
-
-                                {/* Info */}
-                                <div className="flex-1 min-w-[140px]">
-                                    <p className="font-medium text-gray-900">
-                                        {ev.candidate?.firstName || ''} {ev.candidate?.lastName || ''}
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                        {ev.epreuve?.name || ''} &middot; Tour {ev.epreuve?.tour || '?'}
-                                    </p>
-                                    {isCollectiveNote(ev) ? (
-                                        <p className="text-xs text-amber-600">
-                                            Ancienne note de groupe &middot; ne compte pour aucun candidat
-                                        </p>
-                                    ) : ev.isGroup && examinerNames(ev).length > 1 ? (
-                                        <p className="text-xs text-indigo-500">
-                                            Note partagée &middot; {examinerNames(ev).join(' & ')}
-                                        </p>
-                                    ) : null}
-                                    {ev.comment && (
-                                        <p className="text-sm text-gray-400 italic mt-1 truncate">{ev.comment}</p>
-                                    )}
-                                </div>
-
-                                {/* Score */}
-                                <div className="flex flex-col items-center flex-shrink-0 px-1 sm:px-3">
-                                    <span className="text-2xl font-bold text-blue-600">{getScoreOn20(ev)}</span>
-                                    <span className="text-[10px] text-gray-400">/20</span>
-                                </div>
-
-                                {/* Link */}
-                                <a
-                                    href={`/dashboard/candidates/${ev.candidate?.id}`}
-                                    className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right inline-flex items-center justify-end min-h-[36px]"
-                                >
-                                    Voir fiche
-                                </a>
-                            </div>
-                        ))}
+                        {history.current.map(ev => <HistoryItem key={ev.id} ev={ev} />)}
                     </div>
                 )}
             </div>
@@ -1091,21 +1263,21 @@ function MemberView() {
             <div className="bg-white border rounded-xl p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-gray-900">Prochains candidats à évaluer</h2>
-                    {nextCandidates.length > 0 && (
+                    {queue.current.length > 0 && (
                         <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-                            {nextCandidates.length} en attente
+                            {queue.current.length} en attente
                         </span>
                     )}
                 </div>
-                {nextCandidates.length === 0 ? (
+                {queue.current.length === 0 ? (
                     <p className="text-center text-gray-400 py-8">
-                        {doneCandidates.length > 0
+                        {closedNotations.current.length > 0
                             ? 'Tout est noté : plus aucun candidat en attente.'
                             : 'Aucun candidat en attente d’évaluation.'}
                     </p>
                 ) : (
                     <div className="space-y-3">
-                        {nextCandidates.map((c: any, i: number) => {
+                        {queue.current.map((c: any, i: number) => {
                             const slotDate = c.slotDate ? new Date(c.slotDate) : null;
                             const dateLabel = slotDate
                                 ? slotDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -1189,52 +1361,82 @@ function MemberView() {
 
             {/* Notations closes : plus de bouton « Évaluer », mais on montre
                 qui a noté — sinon les candidats semblent avoir disparu. */}
-            {doneCandidates.length > 0 && (
+            {closedNotations.current.length > 0 && (
                 <div className="bg-white border rounded-xl p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-1">
                         <h2 className="text-lg font-semibold text-gray-900">Notations closes</h2>
                         <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                            {doneCandidates.length}
+                            {closedNotations.current.length}
                         </span>
                     </div>
                     <p className="text-xs text-gray-500 mb-4">
                         Candidats de vos créneaux déjà notés. Une seule note par candidat et par épreuve.
                     </p>
                     <div className="space-y-2">
-                        {doneCandidates.map((c: any, i: number) => (
-                            <div
-                                key={c.id + (c.epreuve?.id || '') + i}
-                                className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg"
-                            >
-                                <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                    {getInitials(c.firstName, c.lastName)}
-                                </div>
-                                <div className="flex-1 min-w-[140px]">
-                                    <p className="font-medium text-gray-800">
-                                        {c.firstName} {c.lastName}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        {c.epreuve?.name} · Tour {c.epreuve?.tour ?? '?'}
-                                    </p>
-                                </div>
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 flex-shrink-0">
-                                    <Lock size={12} />
-                                    {c.closedReason === 'mine'
-                                        ? 'Évalué par vous'
-                                        : c.closedReason === 'shared'
-                                            ? `Note de binôme · ${c.closedBy?.name || 'binôme'}`
-                                            : `Évalué par ${c.closedBy?.name || 'un examinateur'}`}
-                                </span>
-                                <a
-                                    href={`/dashboard/candidates/${c.id}`}
-                                    className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right"
-                                >
-                                    Voir fiche
-                                </a>
-                            </div>
+                        {closedNotations.current.map((c: any, i: number) => (
+                            <ClosedNotationItem key={c.id + (c.epreuve?.id || '') + i} c={c} />
                         ))}
                     </div>
                 </div>
+            )}
+
+            {archivedTours.length > 0 && (
+                <ArchiveSection count={archivedCount}>
+                    {archivedTours.map(group => (
+                        <div key={group.tour} className="px-4 sm:px-6 py-4 space-y-3">
+                            <ArchivedTourHeading
+                                tour={group.tour}
+                                detail={`${group.evals.length} évaluation${group.evals.length > 1 ? 's' : ''}`}
+                            />
+                            {group.evals.length > 0 && (
+                                <div className="space-y-3">
+                                    {group.evals.map(ev => <HistoryItem key={ev.id} ev={ev} />)}
+                                </div>
+                            )}
+                            {group.byOthers.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 pt-1">
+                                        Notés par un autre examinateur
+                                    </p>
+                                    {group.byOthers.map((c: any, i: number) => (
+                                        <ClosedNotationItem key={c.id + (c.epreuve?.id || '') + i} c={c} />
+                                    ))}
+                                </div>
+                            )}
+                            {group.unrated.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 pt-1">
+                                        Restés sans note
+                                    </p>
+                                    {group.unrated.map((c: any, i: number) => (
+                                        <div
+                                            key={c.id + (c.epreuve?.id || '') + i}
+                                            className="flex flex-wrap items-center gap-3 p-3 bg-amber-50/60 rounded-lg"
+                                        >
+                                            <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                                {getInitials(c.firstName, c.lastName)}
+                                            </div>
+                                            <div className="flex-1 min-w-[140px]">
+                                                <p className="font-medium text-gray-800">
+                                                    {c.firstName} {c.lastName}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {c.epreuve?.name} · Tour {c.epreuve?.tour ?? '?'}
+                                                </p>
+                                            </div>
+                                            <a
+                                                href={`/dashboard/candidates/${c.id}`}
+                                                className="text-blue-600 hover:underline text-sm font-medium flex-shrink-0 w-full sm:w-auto text-right"
+                                            >
+                                                Voir fiche
+                                            </a>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </ArchiveSection>
             )}
         </div>
     );
