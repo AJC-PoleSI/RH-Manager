@@ -65,7 +65,7 @@ export default function Footer() {
                     d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                8 Route de la Joneliere, 44312 Nantes
+                8 route de la Jonelière, 44312 Nantes
               </li>
             </ul>
           </div>
@@ -80,13 +80,13 @@ export default function Footer() {
                 href="/mentions-legales"
                 className="text-gray-400 hover:text-white transition-colors"
               >
-                Mentions legales
+                Mentions légales
               </Link>
               <Link
                 href="/politique-confidentialite"
                 className="text-gray-400 hover:text-white transition-colors"
               >
-                Politique de confidentialite
+                Politique de confidentialité
               </Link>
             </div>
           </div>

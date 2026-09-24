@@ -2,8 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
+import LegalLinks from '@/components/legal/LegalLinks';
 
 type View = 'landing' | 'login' | 'forgot-password' | 'candidate-choice' | 'candidate-login' | 'inscription' | 'email-pending';
 
@@ -249,6 +251,8 @@ function LoginForm() {
                             </span>
                         </button>
                     </div>
+
+                    <LegalLinks className="mt-10" />
                 </div>
             </div>
         );
@@ -822,6 +826,21 @@ function LoginForm() {
                         </button>
                     </div>
                 </form>
+
+                <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+                    Vos données sont traitées par Audencia Junior Conseil pour gérer votre
+                    candidature et préparer votre adhésion. Pour en savoir plus et exercer vos
+                    droits, consultez notre{' '}
+                    <Link
+                        href="/politique-confidentialite"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                    >
+                        politique de confidentialité
+                    </Link>
+                    .
+                </p>
 
                 <div className="mt-4 text-center space-y-2">
                     <p className="text-sm text-gray-500">
