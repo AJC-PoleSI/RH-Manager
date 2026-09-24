@@ -17,12 +17,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { addDays, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Loader2, Save, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Save, AlertTriangle, Pencil } from "lucide-react";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import TimeBandGrid, { type Lane } from "./TimeBandGrid";
 import LaneFilter from "./LaneFilter";
+import RoomsEditor from "./RoomsEditor";
 import CapacityCurve, { type CapacityDay } from "./CapacityCurve";
 import type { AvailabilityWindow } from "@/lib/room-capacity";
 import {
@@ -40,6 +41,7 @@ import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
 import { generateOpeningsFromCapacity } from "@/lib/auto-openings";
 import { Sparkles } from "lucide-react";
 import { localYmd, MERGE_TOLERANCE_MIN } from "@/lib/availability-bands";
+import { DEFAULT_ROOMS } from "@/lib/rooms";
 
 interface ApiOpening extends OpeningRow {
   slots_total?: number;
@@ -66,9 +68,9 @@ interface Props {
   durationMinutes?: number;
   roulementMinutes?: number;
   onSaved?: () => void;
+  /** Appelé quand la liste des salles change (ajout, retrait, renommage). */
+  onRoomsChanged?: () => void;
 }
-
-const FALLBACK_ROOMS = ["205", "217", "219", "235", "238-240", "242-244"];
 
 export default function RoomOpeningsGrid({
   epreuveId,
@@ -84,6 +86,7 @@ export default function RoomOpeningsGrid({
   durationMinutes = 30,
   roulementMinutes = 10,
   onSaved,
+  onRoomsChanged,
 }: Props) {
   const { toast } = useToast();
 
@@ -92,12 +95,13 @@ export default function RoomOpeningsGrid({
   const [saving, setSaving] = useState(false);
   const [openings, setOpenings] = useState<ApiOpening[]>([]);
   const [bands, setBands] = useState<Band[]>([]);
-  const [rooms, setRooms] = useState<string[]>(FALLBACK_ROOMS);
+  const [rooms, setRooms] = useState<string[]>(DEFAULT_ROOMS);
   const [visibleRooms, setVisibleRooms] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   /** Dispos de TOUS les examinateurs sur la semaine, pour la courbe « C ». */
   const [staffRows, setStaffRows] = useState<any[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [editingRooms, setEditingRooms] = useState(false);
 
   const thisMonday = useMemo(
     () => startOfWeek(new Date(), { weekStartsOn: 1 }),
@@ -120,9 +124,9 @@ export default function RoomOpeningsGrid({
     setLoading(true);
     try {
       const noCache = { headers: { "Cache-Control": "no-store" }, params: { t: Date.now() } };
-      const [openRes, settingsRes, staffRes] = await Promise.all([
+      const [openRes, roomsRes, staffRes] = await Promise.all([
         api.get("/openings", { ...noCache, params: { ...noCache.params, epreuveId } }),
-        api.get("/settings", noCache).catch(() => ({ data: {} })),
+        api.get("/rooms", noCache).catch(() => ({ data: {} as { rooms?: string[] } })),
         // Dispos de tous les examinateurs : alimente la courbe « C ». Un
         // échec ici ne doit pas empêcher de tracer des ouvertures.
         api
@@ -135,18 +139,15 @@ export default function RoomOpeningsGrid({
       const list: ApiOpening[] = Array.isArray(openRes.data) ? openRes.data : [];
       setOpenings(list);
 
-      // Les salles connues : celles déclarées en réglages, plus celles déjà
-      // utilisées par des ouvertures (on n'efface jamais une salle qui porte
-      // des données, même si elle n'est plus dans la liste).
-      const declared = String(settingsRes.data?.rooms || "")
-        .split(",")
-        .map((r: string) => r.trim())
-        .filter(Boolean);
+      // Les salles connues : la liste gérée par « Gérer les salles », plus
+      // celles déjà utilisées par des ouvertures (on n'efface jamais une salle
+      // qui porte des données, même si elle n'est plus dans la liste).
+      const declared: string[] = Array.isArray(roomsRes.data?.rooms) ? roomsRes.data.rooms : [];
       // Array.from plutôt que le spread : la cible TypeScript du projet
       // n'autorise pas l'itération directe d'un Set.
       const used = Array.from(new Set(list.map((o) => o.room).filter(Boolean)));
       const merged = Array.from(
-        new Set([...(declared.length ? declared : FALLBACK_ROOMS), ...used]),
+        new Set([...(declared.length ? declared : DEFAULT_ROOMS), ...used]),
       );
       setRooms(merged);
       setVisibleRooms((prev) => (prev.length ? prev.filter((r) => merged.includes(r)) : merged));
@@ -517,13 +518,46 @@ export default function RoomOpeningsGrid({
           evaluatorsPerGroupRoom={evaluatorsPerGroupRoom}
           evaluatorsPerIndividualRoom={evaluatorsPerIndividualRoom}
         />
-        <LaneFilter
-          lanes={lanes}
-          visible={visibleRooms.length ? visibleRooms : rooms}
-          onChange={setVisibleRooms}
-          counts={roomCounts}
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <LaneFilter
+            lanes={lanes}
+            visible={visibleRooms.length ? visibleRooms : rooms}
+            onChange={setVisibleRooms}
+            counts={roomCounts}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              // Renommer recharge les ouvertures depuis la base : des bandes
+              // tracées mais pas enregistrées seraient perdues.
+              if (dirty) {
+                toast("Enregistrez d'abord vos ouvertures en cours, puis gérez les salles.", "error");
+                return;
+              }
+              setEditingRooms(true);
+            }}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <Pencil className="h-3 w-3" />
+            Gérer les salles
+          </button>
+        </div>
       </div>
+
+      {editingRooms && (
+        <RoomsEditor
+          onClose={() => setEditingRooms(false)}
+          onChanged={() => {
+            // Le filtre retient des noms de salles : après un renommage, la
+            // salle renommée en sortirait et disparaîtrait de la grille.
+            setVisibleRooms([]);
+            load();
+            onRoomsChanged?.();
+            // Un renommage change la salle des créneaux existants.
+            onSaved?.();
+          }}
+        />
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-gray-500">
         <span>

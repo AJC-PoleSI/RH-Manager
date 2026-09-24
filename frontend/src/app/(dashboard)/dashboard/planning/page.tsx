@@ -283,6 +283,8 @@ export default function PlanningPage() {
   const [activeTab, setActiveTab] = useState<
     "creation" | "evaluators" | "candidates"
   >("creation");
+  // Incrémenté quand la liste des salles change (onglet Création).
+  const [roomsVersion, setRoomsVersion] = useState(0);
 
   // Éditeur de salle de la modale de détail (« ✏️ Changer »).
   const [roomEditOpen, setRoomEditOpen] = useState(false);
@@ -3072,6 +3074,9 @@ export default function PlanningPage() {
                       if (memeTour.length < 2) return null;
                       return (
                         <TourOpeningsPanel
+                          // Remonté quand les salles changent : il lit leur
+                          // liste une seule fois, au chargement.
+                          key={`${courante.tour}-${roomsVersion}`}
                           tour={courante.tour}
                           epreuves={memeTour.map((e) => ({
                             id: e.id,
@@ -3100,6 +3105,7 @@ export default function PlanningPage() {
                     <RoomOpeningsGrid
                     key={selectedEpreuveId}
                     epreuveId={selectedEpreuveId}
+                    onRoomsChanged={() => setRoomsVersion((v) => v + 1)}
                     epreuveName={
                       epreuves.find((e) => e.id === selectedEpreuveId)?.name
                     }

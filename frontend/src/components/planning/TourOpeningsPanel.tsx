@@ -30,6 +30,7 @@ import { generateTourOpenings, type TourEpreuveNeed } from "@/lib/tour-openings"
 import { hhmmToMinutes, minutesToHHMM, formatDuration, type Band } from "@/lib/time-bands";
 import { localYmd, MERGE_TOLERANCE_MIN } from "@/lib/availability-bands";
 import { mergeIntervals } from "@/lib/time-bands";
+import { DEFAULT_ROOMS } from "@/lib/rooms";
 
 interface TourEpreuveInfo {
   id: string;
@@ -50,7 +51,6 @@ interface Props {
   onSaved?: () => void;
 }
 
-const FALLBACK_ROOMS = ["205", "217", "219", "235", "238-240", "242-244"];
 
 export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
   const { toast } = useToast();
@@ -103,9 +103,9 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
       setPreview(null);
       try {
         const noCache = { headers: { "Cache-Control": "no-store" }, params: { t: Date.now() } };
-        const [capRes, settingsRes] = await Promise.all([
+        const [capRes, roomsRes] = await Promise.all([
           api.get(`/tour-settings/${tour}`, noCache),
-          api.get("/settings", noCache).catch(() => ({ data: {} })),
+          api.get("/rooms", noCache).catch(() => ({ data: {} as { rooms?: string[] } })),
         ]);
         if (cancelled) return;
         // eslint-disable-next-line react-hooks/exhaustive-deps -- epreuvesKey ci-dessous fixe la dépendance réelle
@@ -116,11 +116,8 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
         };
         setCapacity(cap);
 
-        const declaredRooms = String(settingsRes.data?.rooms || "")
-          .split(",")
-          .map((r: string) => r.trim())
-          .filter(Boolean);
-        const roomPool = declaredRooms.length ? declaredRooms : FALLBACK_ROOMS;
+        const declaredRooms: string[] = Array.isArray(roomsRes.data?.rooms) ? roomsRes.data.rooms : [];
+        const roomPool = declaredRooms.length ? declaredRooms : DEFAULT_ROOMS;
 
         const list: TourEpreuveNeed[] = [];
         for (const ep of epreuves) {
