@@ -24,20 +24,20 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     // Compte des candidats réservé aux membres/admins : ceux qui participent
-    // au tour en cours, c.-à-d. tous les inscrits moins les refusés des tours
-    // précédents (73 inscrits, 10 refusés au tour 1 → 63 au tour 2).
-    // Un tour réouvert peut être « en cours » en même temps que le suivant :
-    // chacun a alors son propre compte.
+    // (ou ont participé) à chaque tour commencé, c.-à-d. tous les inscrits
+    // moins les refusés des tours précédents (73 au tour 1, 10 refusés → 63
+    // au tour 2). Un tour « à venir » reste à 0 : ses participants dépendent
+    // de délibérations pas encore faites.
     const countByTourId = new Map<string, number>();
-    const activeTours = isPrivileged
-      ? (tours || []).filter((t: any) => t.status === "en_cours")
+    const startedTours = isPrivileged
+      ? (tours || []).filter((t: any) => t.status !== "a_venir")
       : [];
-    if (activeTours.length > 0) {
+    if (startedTours.length > 0) {
       const { count: total } = await supabaseAdmin
         .from("candidates")
         .select("id", { count: "exact", head: true });
       await Promise.all(
-        activeTours.map(async (t: any) => {
+        startedTours.map(async (t: any) => {
           const eliminated = await countRefusedBefore(
             extractTourNumber(t.name),
           );
