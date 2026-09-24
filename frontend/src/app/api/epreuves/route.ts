@@ -80,6 +80,10 @@ export async function GET(req: NextRequest) {
 
     let result = parsed;
     if (payload.role === "candidate") {
+      // CANDIDAT ÉLIMINÉ : plus d'épreuves à lui montrer.
+      if ((await getEliminationTour(payload.id)) != null) {
+        return Response.json([]);
+      }
       const wishedPoles = await getCandidateWishedPoles(payload.id);
       result = parsed
         .filter(
