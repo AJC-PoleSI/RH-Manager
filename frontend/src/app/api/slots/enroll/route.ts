@@ -40,6 +40,11 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "slotId required" }, { status: 400 });
     }
 
+    // CANDIDAT ÉLIMINÉ : refusé à un tour, il ne s'inscrit plus nulle part.
+    if ((await getEliminationTour(candidateId)) != null) {
+      return eliminatedResponse();
+    }
+
     // Fetch slot with enrollments and members
     const SLOT_SELECT = `
         *,
