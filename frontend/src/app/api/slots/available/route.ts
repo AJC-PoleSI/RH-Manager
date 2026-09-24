@@ -11,6 +11,7 @@ import {
 } from "@/lib/room-packing";
 import { getCandidateWishedPoles } from "@/lib/admission";
 import { getToursByNumber } from "@/lib/tour-status";
+import { getEliminationTour } from "@/lib/elimination-db";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
