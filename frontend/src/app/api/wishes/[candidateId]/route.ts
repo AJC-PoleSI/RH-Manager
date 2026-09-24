@@ -1,6 +1,7 @@
 import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { isCandidateAdmittedTour1 } from "@/lib/admission";
+import { getEliminationTour } from "@/lib/elimination-db";
 import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
@@ -94,7 +95,10 @@ export async function PUT(
   // TOUR 2 : un candidat ne peut classer ses vœux de pôles qu'une fois
   // admis au tour 2 (tour1_status = accepted). Membres/admin non concernés.
   if (payload.role === "candidate") {
-    const admitted = await isCandidateAdmittedTour1(candidateId);
+    // Un refusé à un tour ultérieur reste « admis au tour 1 » : on l'exclut.
+    const admitted =
+      (await isCandidateAdmittedTour1(candidateId)) &&
+      (await getEliminationTour(candidateId)) == null;
     if (!admitted) {
       return Response.json(
         {

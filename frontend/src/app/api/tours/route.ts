@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { extractTourNumber } from "@/lib/tour-archive";
+import { refusedBeforeTourFilter } from "@/lib/elimination";
 import { NextRequest } from "next/server";
 
 // GET /api/tours - Fetch all tours with candidate count
@@ -21,13 +23,27 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    // Compte des candidats réservé aux membres/admins.
-    let totalCandidates = 0;
-    if (isPrivileged) {
-      const { count } = await supabaseAdmin
+    // Compte des candidats réservé aux membres/admins : ceux qui participent
+    // au tour en cours, c.-à-d. tous les inscrits moins les refusés des tours
+    // précédents (73 inscrits, 10 refusés au tour 1 → 63 au tour 2).
+    // Un tour réouvert peut être « en cours » en même temps que le suivant :
+    // chacun a alors son propre compte.
+    const countByTourId = new Map<string, number>();
+    const activeTours = isPrivileged
+      ? (tours || []).filter((t: any) => t.status === "en_cours")
+      : [];
+    if (activeTours.length > 0) {
+      const { count: total } = await supabaseAdmin
         .from("candidates")
         .select("id", { count: "exact", head: true });
-      totalCandidates = count || 0;
+      await Promise.all(
+        activeTours.map(async (t: any) => {
+          const eliminated = await countRefusedBefore(
+            extractTourNumber(t.name),
+          );
+          countByTourId.set(t.id, Math.max(0, (total || 0) - eliminated));
+        }),
+      );
     }
 
     const visibleTours = isPrivileged
@@ -38,8 +54,7 @@ export async function GET(req: NextRequest) {
       id: t.id,
       name: t.name,
       status: t.status,
-      candidateCount:
-        isPrivileged && t.status === "en_cours" ? totalCandidates : 0,
+      candidateCount: countByTourId.get(t.id) ?? 0,
     }));
 
     return Response.json(result);
@@ -47,6 +62,19 @@ export async function GET(req: NextRequest) {
     console.error("Tours GET error:", error);
     return Response.json({ error: "Failed to fetch tours" }, { status: 500 });
   }
+}
+
+// Candidats refusés à un tour antérieur à `tour` (une délibération par
+// candidat, cf. deliberations/[candidateId]).
+async function countRefusedBefore(tour: number): Promise<number> {
+  const filter = refusedBeforeTourFilter(tour);
+  if (!filter) return 0;
+  const { count, error } = await supabaseAdmin
+    .from("deliberations")
+    .select("candidate_id", { count: "exact", head: true })
+    .or(filter);
+  if (error) throw error;
+  return count || 0;
 }
 
 // POST /api/tours - Create a new tour (admin only)

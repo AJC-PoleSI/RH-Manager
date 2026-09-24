@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { escapeHtml } from "./html";
 import { chunk, EMAIL_BATCH_SIZE } from "./announcements";
+import { DEFAULT_REFUSAL_MESSAGE } from "./elimination";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -168,7 +169,7 @@ function buildResultEmail(
         </td></tr>
         <tr><td style="padding:36px 40px 28px;">
           <p style="margin:0 0 16px;font-size:16px;color:#111827;font-weight:600;">Bonjour ${escapeHtml(firstName)},</p>
-          <div style="margin:0 0 8px;font-size:15px;color:#4b5563;line-height:1.6;">${safeMessage || (admis ? "Nous avons le plaisir de vous informer que votre candidature est retenue pour la suite du processus." : "Nous vous remercions pour votre candidature. Nous ne pourrons malheureusement pas y donner suite.")}</div>
+          <div style="margin:0 0 8px;font-size:15px;color:#4b5563;line-height:1.6;">${safeMessage || (admis ? "Nous avons le plaisir de vous informer que votre candidature est retenue pour la suite du processus." : DEFAULT_REFUSAL_MESSAGE)}</div>
         </td></tr>
         <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
           <p style="margin:0;font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Audencia Junior Conseil — Cet email a été envoyé automatiquement.</p>

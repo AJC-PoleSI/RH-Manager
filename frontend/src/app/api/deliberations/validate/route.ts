@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { sendResultEmails } from "@/lib/resend";
+import {
+  refusalMessageKey,
+  candidateRefusalMessageKey,
+} from "@/lib/elimination";
 import { NextRequest } from "next/server";
 
 // POST /api/deliberations/validate — Admin uniquement.
@@ -78,6 +82,16 @@ export async function POST(req: NextRequest) {
       }),
     );
 
+    await saveRefusalMessages(
+      tour,
+      mode,
+      globalRefused,
+      messages,
+      targets
+        .filter((t: any) => t.status === "refused")
+        .map((t: any) => t.candidate.id as string),
+    );
+
     const failed = failedKeys.length;
     if (failed > 0) {
       console.error(
@@ -98,6 +112,54 @@ export async function POST(req: NextRequest) {
     return Response.json(
       { error: "Échec de l'envoi des résultats" },
       { status: 500 },
+    );
+  }
+}
+
+// Garde le message de refus tel qu'envoyé : l'espace candidat d'un refusé le
+// réaffiche à la place des créneaux (cf. /api/candidate-status). Un message
+// individualisé prime sur le commun ; un envoi en mode commun efface donc les
+// individualisés des mêmes candidats. Les emails sont déjà partis : un échec
+// ici est journalisé, pas remonté.
+async function saveRefusalMessages(
+  tour: number,
+  mode: "individual" | "global",
+  globalRefused: string,
+  messages: Record<string, string>,
+  refusedIds: string[],
+) {
+  if (refusedIds.length === 0) return;
+  const individualKeys = refusedIds.map((id) =>
+    candidateRefusalMessageKey(tour, id),
+  );
+  try {
+    if (mode === "global") {
+      const { error } = await supabaseAdmin
+        .from("system_settings")
+        .upsert(
+          { key: refusalMessageKey(tour), value: globalRefused },
+          { onConflict: "key" },
+        );
+      if (error) throw error;
+      const { error: delError } = await supabaseAdmin
+        .from("system_settings")
+        .delete()
+        .in("key", individualKeys);
+      if (delError) throw delError;
+    } else {
+      const { error } = await supabaseAdmin.from("system_settings").upsert(
+        refusedIds.map((id, i) => ({
+          key: individualKeys[i],
+          value: messages[id] || "",
+        })),
+        { onConflict: "key" },
+      );
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error(
+      `deliberations/validate: message de refus non enregistré (tour ${tour})`,
+      error,
     );
   }
 }

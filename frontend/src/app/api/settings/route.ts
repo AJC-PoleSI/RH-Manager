@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { isRefusalMessageKey } from "@/lib/elimination";
 import { NextRequest } from "next/server";
 
 // In-memory cache: avoid hammering Supabase on every page navigation
@@ -32,6 +33,9 @@ export async function GET(req: NextRequest) {
       if (error) throw error;
       settingsCache = (settings || []).reduce(
         (acc: Record<string, string>, curr: { key: string; value: string }) => {
+          // Messages de refus envoyés aux candidats : relus uniquement par
+          // /api/candidate-status, pour leur destinataire.
+          if (isRefusalMessageKey(curr.key)) return acc;
           acc[curr.key] = curr.value;
           return acc;
         },

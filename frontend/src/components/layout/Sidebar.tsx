@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { samePole, POLE_LISTE_ENTRETIENS } from "@/lib/auth-poles";
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
+import { useCandidateStatus } from "@/context/CandidateStatusContext";
 
 interface NavItem {
   href: string;
@@ -27,6 +28,9 @@ const Sidebar = () => {
 
   const isAdmin = role === "member" && user?.isAdmin;
   const isCandidate = role === "candidate";
+  // Candidat refusé : plus de calendrier, d'épreuves ni de vœux (cf.
+  // EliminationGate), seulement son résultat, son profil et ses messages.
+  const isEliminated = useCandidateStatus()?.status?.eliminated === true;
   // La « Liste » des entretiens est ouverte aux admins et au pôle Marketing,
   // qui la diffuse (le back vérifie le pôle en base, cf. /api/entretiens).
   const peutVoirListe = samePole(user?.pole, POLE_LISTE_ENTRETIENS);
@@ -130,12 +134,17 @@ const Sidebar = () => {
   const candidateSections: NavSection[] = [
     {
       title: "Mon parcours",
-      items: [
-        { href: "/candidates/dashboard", label: "Mon calendrier", icon: "📅" },
-        { href: "/candidates/epreuves", label: "Épreuves & Tours", icon: "📋" },
-        { href: "/candidates/wishes", label: "Choix de pôle", icon: "🎯" },
-        { href: "/candidates/profile", label: "Mon profil", icon: "👤" },
-      ],
+      items: isEliminated
+        ? [
+            { href: "/candidates/dashboard", label: "Ma candidature", icon: "📨" },
+            { href: "/candidates/profile", label: "Mon profil", icon: "👤" },
+          ]
+        : [
+            { href: "/candidates/dashboard", label: "Mon calendrier", icon: "📅" },
+            { href: "/candidates/epreuves", label: "Épreuves & Tours", icon: "📋" },
+            { href: "/candidates/wishes", label: "Choix de pôle", icon: "🎯" },
+            { href: "/candidates/profile", label: "Mon profil", icon: "👤" },
+          ],
     },
     {
       title: "Communication",
