@@ -33,6 +33,24 @@ export async function GET(req: NextRequest) {
   const isCandidate = payload.role === "candidate";
 
   try {
+    // VISIBILITÉ TOURS : relu une seule fois, sert aussi au filtre plus bas.
+    const toursByNumber = isCandidate ? await getToursByNumber() : {};
+
+    // CANDIDAT ÉLIMINÉ : plus aucun créneau, pas même ceux où il était
+    // inscrit. Il garde l'accès à son compte, pas au planning.
+    if (
+      isCandidate &&
+      (await getEliminationTour(candidateId, toursByNumber)) != null
+    ) {
+      return new Response("[]", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      });
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // FIX: pre-fetch the candidate's enrolled slot IDs so we can
     // INCLUDE those slots in the result even when their status is
