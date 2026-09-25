@@ -26,6 +26,7 @@ import {
   type PendingSlotLike,
 } from "@/lib/publish-understaffing";
 import { POLL, startPolling } from "@/lib/poll";
+import { coverageWarning } from "@/lib/availability-coverage";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -1575,6 +1576,24 @@ export default function PlanningPage() {
     if (!selectedEpreuveId) {
       toast("Sélectionnez une épreuve d'abord", "error");
       return;
+    }
+
+    // Publier fige les jurys : si des examinateurs n'ont pas encore saisi
+    // leurs dispos pour ce tour, ils ne seront placés que sur les créneaux
+    // restés libres. Simple avertissement — la décision reste à l'admin, et
+    // une lecture en échec ne doit jamais empêcher de publier.
+    try {
+      const cov = await api.get(
+        `/epreuves/${selectedEpreuveId}/availability-coverage`,
+      );
+      const tour = cov.data?.tour;
+      const warning = coverageWarning(
+        cov.data,
+        tour ? `le Tour ${tour}` : "cette épreuve",
+      );
+      if (warning && !window.confirm(warning)) return;
+    } catch (e) {
+      console.warn("Vérification des dispos indisponible :", e);
     }
 
     // Publier en sous-effectif ouvre des créneaux aux candidats avec un jury

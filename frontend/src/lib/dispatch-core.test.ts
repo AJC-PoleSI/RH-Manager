@@ -16,6 +16,8 @@ import {
   ROOM_CONTINUITY_BONUS,
   availabilitiesCoverSlot,
   UPROOT_PENALTY,
+  slotLoadWeight,
+  tourKeyOf,
 } from "./dispatch-core";
 
 describe("pairKey", () => {
@@ -767,7 +769,8 @@ describe("availabilitiesCoverSlot — la dispo doit COUVRIR tout le créneau", (
     ).toBe(true);
   });
 
-  it("ne fusionne PAS deux plages séparées par un trou", () => {
+  it("fusionne un trou de 15 min au plus, comme la page Disponibilités", () => {
+    // La page affiche 09:00-11:00 d'un seul tenant : l'algo doit voir pareil.
     expect(
       availabilitiesCoverSlot(
         [
@@ -776,6 +779,39 @@ describe("availabilitiesCoverSlot — la dispo doit COUVRIR tout le créneau", (
         ],
         slot,
       ),
+    ).toBe(true);
+  });
+
+  it("ne fusionne PAS deux plages séparées par plus de 15 min", () => {
+    expect(
+      availabilitiesCoverSlot(
+        [
+          { date: "2026-09-21", start_time: "09:00", end_time: "09:55" },
+          { date: "2026-09-21", start_time: "10:15", end_time: "11:00" },
+        ],
+        slot,
+      ),
+    ).toBe(false);
+  });
+
+  it("cas réel de Mylène (25/09/2026) : cases de 20 min décalées de 5 min", () => {
+    // Anciennes cases cochées sur une grille 08:00 + 25 min ; les créneaux
+    // réels ont été redécoupés à partir de 12:30. Chaque case prise seule ne
+    // couvre aucun créneau — fusionnées, elles couvrent 12:55-13:15.
+    const rdv = {
+      date: "2026-09-29",
+      start_time: "12:55",
+      end_time: "13:15",
+      epreuve_id: "rdv",
+    };
+    const cases = [
+      { date: "2026-09-29", start_time: "12:35", end_time: "12:55", epreuve_id: "rdv" },
+      { date: "2026-09-29", start_time: "13:00", end_time: "13:20", epreuve_id: "rdv" },
+    ];
+    expect(availabilitiesCoverSlot(cases, rdv)).toBe(true);
+    // …mais pas le créneau 12:30-12:50, qui commence avant sa première case.
+    expect(
+      availabilitiesCoverSlot(cases, { ...rdv, start_time: "12:30", end_time: "12:50" }),
     ).toBe(false);
   });
 
@@ -862,5 +898,28 @@ describe("availabilitiesCoverSlot — la dispo doit COUVRIR tout le créneau", (
         { date: "2026-09-21", start_time: "17:50", end_time: "18:35", epreuve_id: "bg" },
       ),
     ).toBe(false);
+  });
+});
+
+describe("slotLoadWeight (poids d'un créneau dans le compteur d'équité)", () => {
+  it("un créneau alloué sans candidat compte 1", () => {
+    expect(slotLoadWeight(0)).toBe(1);
+  });
+  it("un créneau réservé compte double, quel que soit le nombre de candidats", () => {
+    expect(slotLoadWeight(1)).toBe(2);
+    expect(slotLoadWeight(5)).toBe(2);
+  });
+});
+
+describe("tourKeyOf (le compteur d'équité repart à zéro à chaque tour)", () => {
+  it("donne une clé distincte par tour", () => {
+    expect(tourKeyOf(1)).toBe("tour-1");
+    expect(tourKeyOf(2)).toBe("tour-2");
+    expect(tourKeyOf("2")).toBe("tour-2");
+  });
+  it("regroupe les épreuves sans tour renseigné", () => {
+    expect(tourKeyOf(null)).toBe("sans-tour");
+    expect(tourKeyOf(undefined)).toBe("sans-tour");
+    expect(tourKeyOf(0)).toBe("sans-tour");
   });
 });

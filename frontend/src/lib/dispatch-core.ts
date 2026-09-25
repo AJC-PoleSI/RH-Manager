@@ -6,6 +6,8 @@
  * dispatchService.ts (effets de bord + DB) s'appuie dessus.
  */
 
+import { MERGE_TOLERANCE_MIN } from "./availability-bands";
+
 // ─── Constantes ───────────────────────────────────────────────────────
 export const FREEZE_HOURS = 24;
 export const PAIR_PENALTY_WEIGHT = 2; // Multiplicateur pénalité binôme
@@ -59,6 +61,31 @@ export const SLOT_ANCHOR_BONUS = 0.5;
  * reste des membres disponibles. Il déplace le choix, pas la couverture.
  */
 export const UPROOT_PENALTY = 1000;
+
+/**
+ * Surcoût, dans le compteur d'équité, d'un créneau RÉSERVÉ par un candidat.
+ *
+ * Un créneau alloué sans candidat est une astreinte ; un créneau réservé est
+ * du travail réel. Constat du 25/09/2026 au Tour 2 : Victoire 13 candidats et
+ * Léo 12, contre 0 pour Romain et Raphaël, à nombre de créneaux alloués
+ * comparable. Compter double un créneau réservé fait passer en dernier, pour
+ * les créneaux encore libres, celui qui a déjà beaucoup de candidats.
+ */
+export const BOOKED_SLOT_EXTRA_WEIGHT = 1;
+
+/** Poids d'un créneau dans le compteur d'équité (cf. BOOKED_SLOT_EXTRA_WEIGHT). */
+export function slotLoadWeight(activeCandidates: number): number {
+  return 1 + (activeCandidates > 0 ? BOOKED_SLOT_EXTRA_WEIGHT : 0);
+}
+
+/**
+ * Clé du compteur d'équité : le TOUR de l'épreuve. Chaque tour s'équilibre
+ * pour lui-même — les créneaux du Tour 1 ne pèsent plus sur le Tour 2.
+ */
+export function tourKeyOf(tour: number | string | null | undefined): string {
+  const n = Number(tour);
+  return Number.isFinite(n) && n > 0 ? `tour-${n}` : "sans-tour";
+}
 
 // ─── Types ────────────────────────────────────────────────────────────
 export interface SlotTiming {
@@ -224,6 +251,15 @@ export function availabilityMatchesSlot(
  * Les plages CONTIGUËS sont fusionnées : déclarer 09h00–10h10 puis
  * 10h10–11h00 revient à être disponible de 09h00 à 11h00 (7 affectations
  * réelles ne tiennent que grâce à ça).
+ *
+ * La fusion tolère un trou de MERGE_TOLERANCE_MIN (15 min), exactement comme
+ * l'affichage de la page Disponibilités (availability-bands.ts). Sans ça,
+ * l'algo et l'examinateur ne voyaient pas la même chose : Mylène avait 48
+ * anciennes cases de 20 min séparées de 5 min, affichées comme des plages
+ * continues sur sa page, mais qui ne couvraient AUCUN créneau aux yeux du
+ * dispatch (0 horaire couvert au lieu de 28, constat du 25/09/2026). Un
+ * nouvel enregistrement de la page réécrit de toute façon ces cases en
+ * plages continues.
  */
 export function availabilitiesCoverSlot(
   avs: AvailabilityTiming[],
@@ -258,7 +294,10 @@ export function availabilitiesCoverSlot(
   let curStart: string | null = null;
   let curEnd: string | null = null;
   for (const [start, end] of usable) {
-    if (curEnd !== null && start <= curEnd) {
+    if (
+      curEnd !== null &&
+      minutesOf(start) <= minutesOf(curEnd) + MERGE_TOLERANCE_MIN
+    ) {
       if (end > curEnd) curEnd = end;
     } else {
       curStart = start;

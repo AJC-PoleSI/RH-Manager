@@ -12,6 +12,8 @@ import {
   orderPredecessorsFirst,
   blocksSlot,
   ROOM_STREAK_MAX,
+  slotLoadWeight,
+  tourKeyOf,
   type SlotContinuity,
 } from "@/lib/dispatch-core";
 import { applyAssignments, type DispatchClient } from "@/lib/dispatch-io";
@@ -234,14 +236,20 @@ function lostArbitration(
   );
 }
 
-/** Record a member commitment to a slot for overlap tracking */
+/**
+ * Record a member commitment to a slot for overlap tracking.
+ * La charge augmente du poids du créneau : double s'il est réservé
+ * (cf. slotLoadWeight).
+ */
 function commitMember(
   memberId: string,
   slot: SlotInfo,
   memberLoad: Record<string, number>,
   memberCommittedSlots: CommittedSlots,
 ): void {
-  memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
+  memberLoad[memberId] =
+    (memberLoad[memberId] || 0) +
+    slotLoadWeight(activeEnrollmentCount(slot.enrollments));
   if (!memberCommittedSlots[memberId]) memberCommittedSlots[memberId] = [];
   memberCommittedSlots[memberId].push(commitmentOf(slot));
 }
@@ -395,7 +403,7 @@ export async function runDispatch(opts?: {
       supabaseAdmin
         .from("slot_member_assignments")
         .select(
-          "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
+          "slot_id, member_id, is_manual, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes, tour), enrollments:slot_enrollments(id, status))",
         )
         .order("id")
         .range(from, to),
@@ -406,7 +414,7 @@ export async function runDispatch(opts?: {
         supabaseAdmin
           .from("slot_member_assignments")
           .select(
-            "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes))",
+            "slot_id, member_id, slot:evaluation_slots(date, start_time, end_time, epreuve_id, room, epreuve:epreuves(roulement_minutes, tour), enrollments:slot_enrollments(id, status))",
           )
           .order("id")
           .range(from, to),
@@ -689,10 +697,36 @@ export async function runDispatch(opts?: {
     });
   }
 
-  // 9. Allocation : charge GLOBALE, brassage PAR ÉPREUVE, ordre GLOBAL.
+  /**
+   * Un examinateur pré-enregistré en 8ter puis retiré en 9b-bis doit LIBÉRER
+   * son engagement sur ce créneau. Sinon cet engagement fantôme continue de
+   * bloquer ses autres créneaux, et il est retiré de TOUS au lieu d'un seul.
+   *
+   * Constat du 25/09/2026 en simulant un roulement de 10 min : Pierrick,
+   * Victoire, Léo (deux fois) et Félix, chacun sur deux créneaux de salles
+   * voisines à 5 min d'écart, étaient retirés des DEUX créneaux ; un créneau
+   * réservé restait alors sous son quota.
+   */
+  const releasePreRegistration = (
+    memberId: string,
+    slot: SlotInfo,
+    memberLoad: Record<string, number>,
+  ): void => {
+    if (!preRegistered.delete(`${slot.id}:${memberId}`)) return;
+    memberCommittedSlots[memberId] = (
+      memberCommittedSlots[memberId] || []
+    ).filter((c) => c.slotId !== slot.id);
+    memberLoad[memberId] = Math.max(
+      0,
+      (memberLoad[memberId] || 0) -
+        slotLoadWeight(activeEnrollmentCount(slot.enrollments)),
+    );
+  };
+
+  // 9. Allocation : charge PAR TOUR, brassage PAR ÉPREUVE, ordre GLOBAL.
   //
-  // La charge (équité) se compte sur le total des créneaux, toutes épreuves
-  // confondues ; le brassage des binômes reste interne à chaque épreuve.
+  // La charge (équité) se compte sur les créneaux du TOUR, toutes épreuves du
+  // tour confondues ; le brassage des binômes reste interne à chaque épreuve.
   //
   // En revanche l'ORDRE dans lequel les créneaux se servent est GLOBAL et suit
   // leur TENSION (examinateurs disponibles − quota) : le créneau qui manque le
@@ -706,47 +740,77 @@ export async function runDispatch(opts?: {
     slotsByEpreuve.get(key)!.push(slot as SlotInfo);
   }
 
-  // CHARGE (équité) : GLOBALE, toutes épreuves confondues.
+  // CHARGE (équité) : PAR TOUR, toutes épreuves du tour confondues.
   //
-  // Elle était calculée par épreuve, ce qui remettait chacun à zéro d'une
-  // épreuve à l'autre : quelqu'un déjà très sollicité sur les business games
-  // repartait « vierge » aux yeux des entretiens individuels. Constat sur les
-  // données réelles du 11/09/2026 : Emilie Munsch 1re sur Business Game (22
-  // créneaux) et avant-dernière sur Entretien individuel (7). Un examinateur
-  // qui donne une matinée la donne, quelle que soit l'épreuve — c'est bien le
-  // total qui doit être équilibré.
+  // Elle a d'abord été calculée par épreuve, ce qui remettait chacun à zéro
+  // d'une épreuve à l'autre : Emilie Munsch 1re sur Business Game (22
+  // créneaux) et avant-dernière sur Entretien individuel (7), le 11/09/2026.
+  // Elle est alors devenue GLOBALE — mais globale, elle traversait aussi les
+  // tours, et le Tour 2 servait de rattrapage du Tour 1. Constat du
+  // 25/09/2026 : Romain Messein, 68 créneaux au Tour 1, n'a reçu AUCUN
+  // rendez-vous client au Tour 2 malgré 37 h de dispo, pendant que Léo
+  // Dakouri (12 au Tour 1) en recevait 31. Décision de Felix : chaque tour
+  // s'équilibre pour lui-même.
+  //
+  // Un créneau RÉSERVÉ par un candidat compte double (cf. slotLoadWeight) :
+  // pour les créneaux encore libres, celui qui a déjà beaucoup de candidats
+  // passe après les autres.
   //
   // BRASSAGE (binômes) : reste PAR ÉPREUVE. Un jury de business game réunit 6
   // personnes, un entretien 2 : mélanger les deux fausserait la pénalité de
   // binôme, et chaque épreuve doit garder sa propre rotation.
-  const memberLoad: Record<string, number> = {};
-  for (const slot of sortedSlots) {
-    if (isFrozen(slot as SlotInfo) || isLocked(slot as SlotInfo)) {
-      const existing = currentBySlot[slot.id] || new Set<string>();
-      existing.forEach((memberId) => {
-        memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
-      });
+  const loadByTour = new Map<string, Record<string, number>>();
+  const loadOf = (slot: SlotInfo): Record<string, number> => {
+    const key = tourKeyOf(slot.epreuve?.tour);
+    let load = loadByTour.get(key);
+    if (!load) {
+      load = {};
+      loadByTour.set(key, load);
+    }
+    return load;
+  };
+  const addLoad = (memberId: string, slot: SlotInfo): void => {
+    const load = loadOf(slot);
+    load[memberId] =
+      (load[memberId] || 0) +
+      slotLoadWeight(activeEnrollmentCount(slot.enrollments));
+  };
+
+  for (const slot of sortedSlots as SlotInfo[]) {
+    if (isFrozen(slot) || isLocked(slot)) {
+      (currentBySlot[slot.id] || new Set<string>()).forEach((memberId) =>
+        addLoad(memberId, slot),
+      );
     }
   }
   // Jurys ancrés pré-enregistrés (8ter) : leur charge compte aussi dès le
   // départ — 9b-bis ne la recomptera pas (cf. preRegistered).
+  const slotLookup = new Map(
+    (sortedSlots as SlotInfo[]).map((s) => [s.id, s] as const),
+  );
   preRegistered.forEach((key) => {
-    const memberId = key.slice(key.indexOf(":") + 1);
-    memberLoad[memberId] = (memberLoad[memberId] || 0) + 1;
+    const sep = key.indexOf(":");
+    const slot = slotLookup.get(key.slice(0, sep));
+    if (slot) addLoad(key.slice(sep + 1), slot);
   });
   // Affectations HORS périmètre (run scopé à une épreuve) : engagements
-  // fixes, donc charge réelle. Sans ça, un membre à 20 créneaux sur l'autre
-  // épreuve repartait à zéro et était servi en premier (audit du 12/09/2026).
+  // fixes, donc charge réelle — dans le compteur de LEUR tour. Sans ça, un
+  // membre à 20 créneaux sur l'autre épreuve du tour repartait à zéro et
+  // était servi en premier (audit du 12/09/2026).
   externalAssigns.forEach((a: any) => {
-    if (a.member_id) memberLoad[a.member_id] = (memberLoad[a.member_id] || 0) + 1;
+    if (a.member_id && a.slot) addLoad(a.member_id, a.slot as SlotInfo);
   });
 
   const stateByEpreuve = new Map<
     string,
     { memberLoad: Record<string, number>; pairHistory: Map<string, number> }
   >();
-  for (const key of Array.from(slotsByEpreuve.keys())) {
-    stateByEpreuve.set(key, { memberLoad, pairHistory: new Map() });
+  for (const [key, epreuveSlots] of Array.from(slotsByEpreuve.entries())) {
+    // Toutes les épreuves d'un même tour partagent le MÊME compteur.
+    stateByEpreuve.set(key, {
+      memberLoad: loadOf(epreuveSlots[0]),
+      pairHistory: new Map(),
+    });
   }
 
   // ── PRÉVISION PAR ÉPREUVE : pourra-t-on faire passer tout le monde ? ──
@@ -1147,6 +1211,7 @@ export async function runDispatch(opts?: {
             slot: slotInfo,
             reason: "disponibilité retirée",
           });
+          releasePreRegistration(memberId, slotInfo, memberLoad);
           return;
         }
         if (wouldConflict(memberId, slotInfo, memberCommittedSlots)) {
@@ -1160,6 +1225,7 @@ export async function runDispatch(opts?: {
             slot: slotInfo,
             reason: "conflit horaire",
           });
+          releasePreRegistration(memberId, slotInfo, memberLoad);
           return;
         }
         kept.push(memberId);
