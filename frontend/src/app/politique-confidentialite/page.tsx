@@ -44,6 +44,30 @@ export default function PolitiqueConfidentialitePage() {
             l&apos;association.
           </p>
 
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 sm:p-5">
+            <p className="font-semibold text-gray-900 mb-1">En bref</p>
+            <p>
+              Les informations recueillies sur RH Manager sont traitées par
+              Audencia Junior Conseil pour gérer votre candidature et organiser
+              le recrutement. Elles sont conservées au maximum 2 ans après la
+              clôture du recrutement, et sont destinées au pôle RH et aux
+              membres des jurys. À votre inscription, vos nom, prénom, email et
+              date de naissance sont aussi transmis à Be Fast, l&apos;outil de
+              gestion interne de l&apos;association. Vous pouvez y accéder, les
+              corriger ou les faire supprimer en écrivant à{" "}
+              <strong>contact@ajc-mail.com</strong>. Vous pouvez aussi saisir la{" "}
+              <a
+                href="https://www.cnil.fr/fr/plaintes"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                CNIL
+              </a>
+              .
+            </p>
+          </div>
+
           <Section title="1. Responsable du traitement">
             <p>
               Audencia Junior Conseil, association loi 1901, SIRET 331 647 750
@@ -175,8 +199,8 @@ export default function PolitiqueConfidentialitePage() {
           <Section title="6. Durée de conservation">
             <List>
               <li>
-                Candidats : pendant le recrutement, puis 12 mois après sa
-                clôture. Pour les candidats retenus, les données utiles à
+                Candidats : pendant le recrutement, puis au maximum 2 ans
+                après sa clôture. Pour les candidats retenus, les données utiles à
                 l&apos;adhésion sont conservées dans Be Fast pendant la durée
                 de l&apos;adhésion.
               </li>
@@ -258,7 +282,7 @@ export default function PolitiqueConfidentialitePage() {
         </div>
 
         <p className="text-xs text-gray-400 mt-8 text-center">
-          Dernière mise à jour : 24 septembre 2026
+          Dernière mise à jour : 25 septembre 2026
         </p>
       </div>
     </div>
