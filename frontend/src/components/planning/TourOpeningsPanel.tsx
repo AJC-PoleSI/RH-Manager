@@ -250,9 +250,12 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
     });
 
     const genEpreuves: GeneratorEpreuve[] = inputs.epreuves.map((e) => {
+      // Une date de fin ANTÉRIEURE au début (saisie erronée, vu en prod sur le
+      // Business Game T3) ne doit pas vider la période : on l'ignore.
+      const dateFin = e.dateFin && e.dateDebut && e.dateFin < e.dateDebut ? null : e.dateFin;
       const inPeriod = dayKeys
         .map((k, i) => ({ k, i }))
-        .filter(({ k }) => (!e.dateDebut || k >= e.dateDebut) && (!e.dateFin || k <= e.dateFin))
+        .filter(({ k }) => (!e.dateDebut || k >= e.dateDebut) && (!dateFin || k <= dateFin))
         .map(({ i }) => i);
       return {
         epreuveId: e.id,
@@ -262,7 +265,7 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
         slotSpanMin: e.durationMinutes + e.roulementMinutes,
         targetSlots: targetOf(e, inputs.margePct),
         eligibleMembers: e.eligibleMemberIds,
-        dayIndexes: e.dateDebut || e.dateFin ? inPeriod : null,
+        dayIndexes: e.dateDebut || dateFin ? inPeriod : null,
         dayStartMin: e.heureDebutJournee ? hhmmToMinutes(e.heureDebutJournee) : null,
         dayEndMin: e.heureFinJournee ? hhmmToMinutes(e.heureFinJournee) : null,
       };

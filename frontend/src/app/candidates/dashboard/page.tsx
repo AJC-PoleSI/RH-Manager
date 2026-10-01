@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import PhotoNudge from "@/components/candidates/PhotoNudge";
+import WishesNudge from "@/components/candidates/WishesNudge";
 import AnnouncementBanner from "@/components/candidates/AnnouncementBanner";
 import {
   pendingEpreuves,
