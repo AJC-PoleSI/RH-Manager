@@ -14,6 +14,7 @@ import {
 } from '@/lib/examiner-stats';
 import { slotLinkHost } from '@/lib/slot-links';
 import { closedTourNumbers, splitByClosedTour } from '@/lib/tour-archive';
+import { computeEpreuveStats, type EpreuveStats } from '@/lib/epreuve-stats';
 import { Loader2, X, Pencil, Trash2, UserPlus, BarChart3, KeyRound, MailCheck, AlertTriangle, Lock, Archive, ChevronDown } from 'lucide-react';
 
 interface MemberData {
@@ -278,6 +279,97 @@ function ArchivedTourHeading({ tour, detail }: { tour: number; detail: string })
     );
 }
 
+/**
+ * Notes par épreuve : une carte par épreuve avec sa moyenne /20, dépliable sur
+ * la note de chaque candidat (moyenne de ses examinateurs).
+ */
+function EpreuveStatsSection({ stats, closedTours }: { stats: EpreuveStats[]; closedTours: Set<number> }) {
+    const [openKey, setOpenKey] = useState<string | null>(null);
+    return (
+        <div className="bg-white border rounded-xl overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">Notes par épreuve</h2>
+                <p className="text-xs text-gray-400 mt-1">
+                    Moyenne /20 de chaque épreuve : un poids par candidat — un candidat noté par deux examinateurs
+                    compte pour la moyenne de leurs deux notes. Grilles vides et anciennes notes collectives exclues.
+                </p>
+            </div>
+            {stats.length === 0 ? (
+                <p className="text-center text-gray-400 py-8 px-4">Aucune note saisie.</p>
+            ) : (
+                <div className="divide-y">
+                    {stats.map(ep => {
+                        const open = openKey === ep.epreuveKey;
+                        const closed = ep.tour !== null && closedTours.has(ep.tour);
+                        return (
+                            <div key={ep.epreuveKey}>
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenKey(open ? null : ep.epreuveKey)}
+                                    aria-expanded={open}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-6 py-3 min-h-[44px] text-left hover:bg-gray-50 transition-colors"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-medium text-gray-900">{ep.epreuveName}</span>
+                                            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-medium">
+                                                T{ep.tour ?? '?'}
+                                            </span>
+                                            {closed && (
+                                                <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                                                    <Lock size={11} /> clos
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {ep.candidates.length} candidat{ep.candidates.length > 1 ? 's' : ''} · {ep.evalCount} note{ep.evalCount > 1 ? 's' : ''} · de {ep.min} à {ep.max}/20 · barème /{ep.maxTotal}
+                                        </p>
+                                    </div>
+                                    <span className="text-lg font-bold text-green-700 shrink-0">{ep.average}/20</span>
+                                    <ChevronDown size={18} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                </button>
+                                {open && (
+                                    <div className="scroll-x border-t bg-gray-50/40">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                                                <tr>
+                                                    <th className="px-3 sm:px-6 py-2 w-12 text-center">#</th>
+                                                    <th className="px-3 sm:px-6 py-2">Candidat</th>
+                                                    <th className="px-3 sm:px-6 py-2 text-center">Note /20</th>
+                                                    <th className="px-3 sm:px-6 py-2 text-center">Écart à la moyenne</th>
+                                                    <th className="px-3 sm:px-6 py-2 text-center">Notes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {ep.candidates.map((c, i) => {
+                                                    const gap = Math.round((c.scoreOn20 - ep.average) * 10) / 10;
+                                                    return (
+                                                        <tr key={c.candidateId} className="hover:bg-white">
+                                                            <td className="px-3 sm:px-6 py-2 text-center text-gray-400">{i + 1}</td>
+                                                            <td className="px-3 sm:px-6 py-2 text-gray-800">{c.candidateName}</td>
+                                                            <td className="px-3 sm:px-6 py-2 text-center font-bold text-blue-600">{c.scoreOn20}/20</td>
+                                                            <td className={`px-3 sm:px-6 py-2 text-center text-xs font-medium ${gap > 0 ? 'text-green-600' : gap < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                                                                {gap > 0 ? '+' : ''}{gap}
+                                                            </td>
+                                                            <td className="px-3 sm:px-6 py-2 text-center text-xs text-gray-400">
+                                                                {c.evalCount} eval{c.evalCount > 1 ? 's' : ''}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── ADMIN VIEW ────────────────────────────────────────────────────────────────
 
 function AdminView() {
@@ -449,6 +541,21 @@ function AdminView() {
     // CHAQUE examinateur inscrit au créneau, pas seulement pour celui qui l'a
     // saisie — l'autre a fait passer l'entretien même sans se connecter.
     const examinerStats = computeExaminerStats(evaluations.map(toStatsInput));
+
+    // Notes par épreuve : tous les tours, les tours clos signalés comme tels.
+    const epreuveStats = computeEpreuveStats(
+        candidateEvaluations
+            .filter(ev => hasAnyScore(ev.scores))
+            .map(ev => ({
+                epreuveKey: ev.epreuve?.id || `${ev.epreuve?.name || ''}::${ev.epreuve?.tour ?? ''}`,
+                epreuveName: ev.epreuve?.name || 'Épreuve sans nom',
+                tour: ev.epreuve?.tour ?? null,
+                candidateId: ev.candidate?.id || '',
+                candidateName: `${ev.candidate?.firstName || ''} ${ev.candidate?.lastName || ''}`.trim() || 'Candidat',
+                obtained: getScoreTotal(ev.scores),
+                maxTotal: ev.epreuve?.maxTotal || 20,
+            })),
+    );
 
     const recapTableHead = (
         <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -849,6 +956,8 @@ function AdminView() {
                     )}
                 </div>
             </div>
+
+            <EpreuveStatsSection stats={epreuveStats} closedTours={closedTours} />
 
             {recap.archived.length > 0 && (
                 <ArchiveSection count={recap.archived.reduce((n, g) => n + g.items.length, 0)}>
