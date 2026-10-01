@@ -27,6 +27,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialEpreuveId = searchParams?.get("epreuveId") || "";
+  // ?grille=2 : on vient compléter la deuxième grille (propale…) — elle est
+  // tout en bas, sous la note de l'entretien déjà close.
+  const focusSecondGrid = searchParams?.get("grille") === "2";
   const { toast } = useToast();
 
   const [candidate, setCandidate] = useState<any>(null);
@@ -1128,6 +1131,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
           key={selectedEpreuveId}
           candidateId={id}
           epreuveId={selectedEpreuveId}
+          scrollIntoView={focusSecondGrid && selectedEpreuveId === initialEpreuveId}
         />
       )}
 

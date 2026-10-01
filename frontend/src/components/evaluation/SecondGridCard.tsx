@@ -23,9 +23,12 @@ import { mergeScores, ScoreGrid } from "@/components/evaluation/ScoreGrid";
 export default function SecondGridCard({
   candidateId,
   epreuveId,
+  scrollIntoView = false,
 }: {
   candidateId: string;
   epreuveId: string;
+  /** Faire défiler la page jusqu'à la grille dès qu'elle s'affiche. */
+  scrollIntoView?: boolean;
 }) {
   const { toast } = useToast();
   const [available, setAvailable] = useState(false);
@@ -41,6 +44,8 @@ export default function SecondGridCard({
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
   // Édition locale pas encore persistée : le rafraîchissement ne l'écrase pas.
   const dirty = useRef(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const scrolled = useRef(false);
 
   const load = useCallback(
     async (reset = false) => {
@@ -77,6 +82,12 @@ export default function SecondGridCard({
     setErrors({});
     load(true);
   }, [load]);
+
+  useEffect(() => {
+    if (!available || !scrollIntoView || scrolled.current) return;
+    scrolled.current = true;
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [available, scrollIntoView]);
 
   // Le binôme voit la saisie de l'autre examinateur arriver.
   useEffect(() => {
@@ -160,7 +171,7 @@ export default function SecondGridCard({
     : null;
 
   return (
-    <Card className="border-amber-200">
+    <Card ref={rootRef} className="border-amber-200 scroll-mt-4">
       <CardHeader className="bg-amber-50/50">
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div>

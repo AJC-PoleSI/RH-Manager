@@ -141,6 +141,9 @@ export async function GET(
         createdAt: sg.updatedAt || sg.createdAt,
         epreuve: {
           id: sg.epreuve.id,
+          // Épreuve d'origine (le rendez-vous) : c'est elle qu'on ouvre dans
+          // l'écran de notation pour compléter la deuxième grille.
+          parentId: sg.epreuve.parentId,
           name: sg.epreuve.name,
           tour: sg.epreuve.tour,
           type: sg.epreuve.type,

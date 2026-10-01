@@ -1061,7 +1061,7 @@ function ClosedNotationItem({ c }: { c: any }) {
             </span>
             {secondGrid && c.epreuve?.id && (
                 <a
-                    href={`/dashboard/candidates/${c.id}/evaluate?epreuveId=${c.epreuve.id}`}
+                    href={`/dashboard/candidates/${c.id}/evaluate?epreuveId=${c.epreuve.id}&grille=2`}
                     className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
                         secondGrid.filled
                             ? 'bg-white border-amber-200 text-amber-800 hover:bg-amber-50'

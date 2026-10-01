@@ -36,11 +36,15 @@ interface Evaluation {
    * lib/group-evaluation-criteria).
    */
   isLegacyCollective?: boolean;
+  /** Note de deuxième grille (propale…), modifiable depuis l'écran de notation. */
+  isSecondGrid?: boolean;
   closedAt?: string | null;
   comment: string;
   createdAt: string;
   epreuve: {
     id: string;
+    /** Deuxième grille : épreuve d'origine (le rendez-vous). */
+    parentId?: string;
     name: string;
     tour: number;
     type: string;
@@ -593,6 +597,14 @@ export default function CandidateDetailPage({
                             {ev.scoreTotal} / {ev.maxTotal} pts
                           </p>
                         ) : null}
+                        {ev.isSecondGrid && user?.isAdmin && (
+                          <a
+                            href={`/dashboard/candidates/${candidateId}/evaluate?epreuveId=${ev.epreuve?.parentId || String(ev.epreuve?.id || "").replace(/:second$/, "")}&grille=2`}
+                            className="inline-block text-[11px] text-blue-600 hover:underline mt-1"
+                          >
+                            Compléter / modifier
+                          </a>
+                        )}
                         {ev.closedAt && (
                           <p className="text-[11px] text-gray-500 mt-1">
                             🔒 clôturée

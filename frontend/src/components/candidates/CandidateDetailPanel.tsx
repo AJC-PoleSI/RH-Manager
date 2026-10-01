@@ -33,6 +33,8 @@ export interface Evaluation {
     created_at: string;
     /** Note de deuxième grille (propale…) : lecture seule dans ce panneau. */
     isSecondGrid?: boolean;
+    /** Deuxième grille : épreuve d'origine, à ouvrir pour la compléter. */
+    secondGridEpreuveId?: string | null;
     epreuves: {
         id: string;
         name: string;
@@ -126,6 +128,9 @@ export default function CandidateDetailPanel({
                 // Deuxième grille (propale…) : se modifie depuis l'écran de
                 // notation, pas ici (ce n'est pas une ligne candidate_evaluations).
                 isSecondGrid: !!ev.isSecondGrid,
+                secondGridEpreuveId: ev.isSecondGrid
+                    ? ev.epreuve?.parentId || String(ev.epreuve?.id || '').replace(/:second$/, '') || null
+                    : null,
             }));
             setEvaluations(evalsData);
         } catch (e) {
@@ -371,7 +376,17 @@ export default function CandidateDetailPanel({
                                                         Enregistrer
                                                     </Button>
                                                 </>
-                                            ) : ev.isSecondGrid ? null : (
+                                            ) : ev.isSecondGrid ? (
+                                                isAdmin && ev.secondGridEpreuveId ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => router.push(`/dashboard/candidates/${candidateId}/evaluate?epreuveId=${ev.secondGridEpreuveId}&grille=2`)}
+                                                    >
+                                                        <Edit size={14} className="mr-1" /> Compléter
+                                                    </Button>
+                                                ) : null
+                                            ) : (
                                                 <>
                                                     <button className="p-1.5 hover:bg-blue-100 rounded text-blue-600" onClick={() => startEditEval(ev)} title="Modifier"><Edit size={14} /></button>
                                                     <button className="p-1.5 hover:bg-red-100 rounded text-red-500" onClick={() => deleteEval(ev.id)} title="Supprimer"><Trash2 size={14} /></button>
