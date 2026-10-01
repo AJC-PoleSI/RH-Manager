@@ -42,23 +42,6 @@ interface DelibRow {
   tour3_status: string | null;
 }
 
-/** La table n'existe pas encore côté Supabase (migration 13 non appliquée). */
-function isMissingTable(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code;
-  return code === "42P01" || code === "PGRST205";
-}
-
-function migrationRequired() {
-  return Response.json(
-    {
-      error:
-        "Les tables d'annonces n'existent pas encore. Applique la section 13 " +
-        "de MIGRATIONS_A_APPLIQUER.sql dans le SQL Editor de Supabase.",
-    },
-    { status: 503 },
-  );
-}
-
 /**
  * Audience réelle de l'annonce.
  *
