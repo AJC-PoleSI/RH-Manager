@@ -1837,6 +1837,10 @@ export async function runDispatch(opts?: {
       body = `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : votre disponibilité sur ce créneau a été retirée.`;
     } else if (removal.reason === "conflit horaire") {
       body = `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : vous êtes engagé sur un autre créneau au même moment. Vous restez sur la liste d'attente de celui-ci.`;
+    } else if (removal.reason === "hors pôle") {
+      // Pas un arbitrage d'équité : l'épreuve est réservée aux membres de
+      // son pôle, le dire autrement laisserait croire à une préférence.
+      body = `Vous n'êtes plus affecté au créneau de ${startStr} le ${dateDisplay} : cette épreuve est réservée aux membres de son pôle.`;
     } else {
       body = `Vous avez été retiré du créneau de ${startStr} le ${dateDisplay} (raison : ${removal.reason}). Un autre examinateur a été prioritairement affecté pour garantir l'équité de répartition.`;
     }
