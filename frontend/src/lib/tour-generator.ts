@@ -183,11 +183,19 @@ export function generateTourSlots(input: GeneratorInput): GeneratorResult {
   const allSettled = () =>
     input.epreuves.every((e) => remaining[e.epreuveId] <= 0);
 
+  // La cause la plus ACTIONNABLE l'emporte : « pas de salle » veut dire que
+  // des membres étaient là et qu'ouvrir une salle de plus aurait suffi ;
+  // « pas assez de membres » à 8h du matin, quand personne n'est encore là,
+  // n'apprend rien. « aucun membre du pôle » est posé d'emblée et ne bouge pas.
+  const REASON_RANK: Record<ShortfallReason, number> = {
+    ok: 0,
+    no_days: 1,
+    no_members: 2,
+    no_rooms: 3,
+    no_eligible: 4,
+  };
   const noteReason = (e: GeneratorEpreuve, r: ShortfallReason) => {
-    // La première vraie cause rencontrée domine ; « période épuisée » cède
-    // la place à une cause plus parlante rencontrée ensuite.
-    const cur = reason[e.epreuveId];
-    if (cur === "ok" || cur === "no_days") reason[e.epreuveId] = r;
+    if (REASON_RANK[r] > REASON_RANK[reason[e.epreuveId]]) reason[e.epreuveId] = r;
   };
 
   for (const day of input.days) {
