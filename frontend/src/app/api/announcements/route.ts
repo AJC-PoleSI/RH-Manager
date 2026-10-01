@@ -96,35 +96,34 @@ async function resolveAudience(opts: {
     if (delibErr) throw delibErr;
 
     const byCandidate = new Map((delibs || []).map((d) => [d.candidate_id, d]));
+
+    // Le filtre « vœux non remplis » est le seul à avoir besoin des vœux :
+    // on ne lit `candidate_wishes` que pour lui, une lecture paginée de plus
+    // à chaque aperçu des autres filtres serait du gaspillage.
+    let withWishes: Set<string> | null = null;
+    if (opts.candidateFilter === "no_wishes") {
+      const { data, error } = await fetchAllRows<{ candidate_id: string }>(
+        (from, to) =>
+          supabaseAdmin
+            .from("candidate_wishes")
+            .select("candidate_id")
+            .order("id")
+            .range(from, to),
+      );
+      if (error) throw error;
+      withWishes = new Set((data || []).map((w) => w.candidate_id));
+    }
+
     candidates = (cands || []).filter((c) =>
-      candidateMatchesFilter(opts.candidateFilter, byCandidate.get(c.id)),
+      candidateMatchesFilter(
+        opts.candidateFilter,
+        byCandidate.get(c.id),
+        withWishes ? { hasWishes: withWishes.has(c.id) } : undefined,
+      ),
     );
   }
 
   return { members, candidates };
-}
-
-/**
- * Emails d'annonces déjà partis aujourd'hui (fenêtre UTC, comme Resend).
- *
- * Renvoie `null` si la table n'existe pas encore : l'aperçu doit rester
- * utilisable avant l'application de la migration (sinon l'admin n'a qu'un
- * compteur qui tourne dans le vide, sans savoir pourquoi).
- */
-async function emailsSentToday(): Promise<number | null> {
-  const { data, error } = await supabaseAdmin
-    .from("announcements")
-    .select("email_sent")
-    .gte("created_at", startOfUtcDay());
-  if (error) {
-    if (isMissingTable(error)) return null;
-    throw error;
-  }
-  return (data || []).reduce(
-    (sum: number, row: { email_sent: number | null }) =>
-      sum + (row.email_sent || 0),
-    0,
-  );
 }
 
 /** Liste des pôles renseignés côté membres, pour alimenter le filtre de l'UI. */
