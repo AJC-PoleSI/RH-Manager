@@ -361,6 +361,9 @@ export default function CandidateCalendarPage() {
       {/* Relance photo (disparaît une fois la photo déposée) */}
       <PhotoNudge />
 
+      {/* Relance vœux de pôle (disparaît dès qu'un vœu existe) */}
+      <WishesNudge />
+
       {/* ═══ Relance : épreuves encore sans créneau ═══
           Le candidat atterrit ici en premier ; c'est l'endroit où lui dire
           ce qu'il lui reste à réserver. */}
