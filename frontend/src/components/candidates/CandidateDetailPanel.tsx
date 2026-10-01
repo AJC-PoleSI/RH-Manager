@@ -4,7 +4,7 @@
 // commentaire interne, créneaux et évaluations critère par critère.
 // Partagé par les deux vues de la page Candidats (trombinoscope et liste).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,10 +16,15 @@ import CandidatePhoto from '@/components/ui/CandidatePhoto';
 import CandidateSlots from '@/components/candidates/CandidateSlots';
 import { Edit, ExternalLink, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
 import {
+    averageOn20ByEpreuve,
     formatScore,
     getCriterionLabel,
     getMaxPoints,
+    getTotalMaxPoints,
+    hasAnyScore,
     isScoreInput,
+    sumScores,
+    toTwenty,
 } from '@/lib/evaluation-criteria';
 import { isBureauEligiblePole, wishDetailLabel } from '@/lib/wishes';
 
@@ -35,6 +40,8 @@ export interface Evaluation {
     isSecondGrid?: boolean;
     /** Deuxième grille : épreuve d'origine, à ouvrir pour la compléter. */
     secondGridEpreuveId?: string | null;
+    /** Ancienne note collective de business game : affichée, hors moyenne. */
+    isLegacyCollective?: boolean;
     epreuves: {
         id: string;
         name: string;
@@ -44,6 +51,21 @@ export interface Evaluation {
     } | null;
     members: { email: string } | null;
 }
+
+/**
+ * Note globale d'une évaluation : total obtenu, barème de l'épreuve et note
+ * ramenée sur 20. Calculée depuis la grille affichée, pour suivre une
+ * modification sans attendre le serveur. null si aucune note ou barème inconnu.
+ */
+function evaluationTotal(ev: Evaluation): { obtained: number; maxTotal: number; on20: number } | null {
+    const maxTotal = getTotalMaxPoints(ev.epreuves?.evaluation_questions);
+    if (!hasAnyScore(ev.scores) || maxTotal <= 0) return null;
+    const obtained = sumScores(ev.scores);
+    return { obtained, maxTotal, on20: toTwenty(obtained, maxTotal) };
+}
+
+/** « 13,6 » — une note /20 à la française. */
+const fmt20 = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
 /** Critères d'une épreuve (chaîne JSON ou tableau). */
 const parseQuestions = (epreuve: any): { q: string; weight: number }[] => {
@@ -131,6 +153,7 @@ export default function CandidateDetailPanel({
                 secondGridEpreuveId: ev.isSecondGrid
                     ? ev.epreuve?.parentId || String(ev.epreuve?.id || '').replace(/:second$/, '') || null
                     : null,
+                isLegacyCollective: !!ev.isLegacyCollective,
             }));
             setEvaluations(evalsData);
         } catch (e) {
@@ -140,6 +163,39 @@ export default function CandidateDetailPanel({
             setLoadingEvals(false);
         }
     }, [toast]);
+
+    // Notes globales : moyenne de chaque épreuve (examinateurs moyennés entre
+    // eux) et moyenne de chaque tour, pondérée par barème — mêmes règles que
+    // la délibération (averageOn20ByEpreuve). Hors anciennes notes collectives.
+    const gradeSummary = useMemo(() => {
+        const counted = evaluations
+            .map(ev => ({ ev, total: evaluationTotal(ev) }))
+            .filter((x): x is { ev: Evaluation; total: NonNullable<ReturnType<typeof evaluationTotal>> } =>
+                x.total !== null && !x.ev.isLegacyCollective);
+        const toItem = (x: (typeof counted)[number]) => ({
+            epreuveKey: x.ev.epreuves?.id || x.ev.epreuve_id || x.ev.epreuves?.name || 'unknown',
+            obtained: x.total.obtained,
+            maxTotal: x.total.maxTotal,
+        });
+        const epreuves = new Map<string, { name: string; tour: number | null; items: typeof counted }>();
+        for (const x of counted) {
+            const key = toItem(x).epreuveKey;
+            const entry = epreuves.get(key) || { name: x.ev.epreuves?.name || 'Épreuve', tour: x.ev.epreuves?.tour ?? null, items: [] };
+            entry.items.push(x);
+            epreuves.set(key, entry);
+        }
+        const tours = Array.from(new Set(counted.map(x => x.ev.epreuves?.tour ?? 0))).sort((a, b) => a - b);
+        return {
+            byTour: tours.map(tour => {
+                const items = counted.filter(x => (x.ev.epreuves?.tour ?? 0) === tour);
+                return { tour, average: averageOn20ByEpreuve(items.map(toItem)), count: items.length };
+            }),
+            byEpreuve: Array.from(epreuves.values())
+                .map(e => ({ ...e, average: averageOn20ByEpreuve(e.items.map(toItem)) }))
+                .sort((a, b) => (a.tour ?? 0) - (b.tour ?? 0) || a.name.localeCompare(b.name, 'fr')),
+            overall: tours.length > 1 ? averageOn20ByEpreuve(counted.map(toItem)) : null,
+        };
+    }, [evaluations]);
 
     /* ---- Start editing an evaluation ---- */
     const startEditEval = (ev: Evaluation) => {
@@ -331,6 +387,55 @@ export default function CandidateDetailPanel({
                 <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">Évaluations ({evaluations.length})</CardTitle>
                 </div>
+                {!loadingEvals && gradeSummary.byTour.length > 0 && (
+                    <div className="mt-3 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                            {gradeSummary.byTour.map(t => (
+                                <div key={t.tour} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                                    <p className="text-[11px] font-medium text-blue-600">
+                                        Moyenne {t.tour ? `Tour ${t.tour}` : ''}
+                                    </p>
+                                    <p className="text-xl font-bold text-blue-800 leading-tight">
+                                        {t.average !== null ? fmt20(t.average) : '-'}
+                                        <span className="text-xs font-normal text-blue-500"> /20</span>
+                                    </p>
+                                    <p className="text-[10px] text-blue-500">{t.count} note{t.count > 1 ? 's' : ''}</p>
+                                </div>
+                            ))}
+                            {gradeSummary.overall !== null && (
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                                    <p className="text-[11px] font-medium text-gray-500">Tous tours</p>
+                                    <p className="text-xl font-bold text-gray-800 leading-tight">
+                                        {fmt20(gradeSummary.overall)}
+                                        <span className="text-xs font-normal text-gray-400"> /20</span>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="rounded-lg border border-gray-100 divide-y divide-gray-100">
+                            {gradeSummary.byEpreuve.map(e => (
+                                <div key={`${e.tour}-${e.name}`} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                                    <span className="text-gray-700 min-w-0">
+                                        {e.name}
+                                        <span className="ml-1.5 text-[11px] text-gray-400">T{e.tour ?? '?'}</span>
+                                    </span>
+                                    <span className="shrink-0 whitespace-nowrap">
+                                        <span className="font-semibold text-gray-900">
+                                            {e.average !== null ? `${fmt20(e.average)}/20` : '-'}
+                                        </span>
+                                        {e.items.length > 1 && (
+                                            <span className="ml-1 text-[11px] text-gray-400">· moyenne de {e.items.length} notes</span>
+                                        )}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-gray-400">
+                            Notes ramenées sur 20 ; plusieurs examinateurs sur une épreuve sont moyennés, et chaque épreuve
+                            pèse dans la moyenne du tour selon son barème.
+                        </p>
+                    </div>
+                )}
             </CardHeader>
             <CardContent className="p-0">
                 {loadingEvals ? (
@@ -354,6 +459,7 @@ export default function CandidateDetailPanel({
                         {evaluations.map((ev) => {
                             const questions = parseQuestions(ev.epreuves);
                             const isEditing = editingEvalId === ev.id;
+                            const total = evaluationTotal(ev);
 
                             return (
                                 <div key={ev.id} className={`p-4 ${isEditing ? 'bg-blue-50/50' : ''}`}>
@@ -366,6 +472,19 @@ export default function CandidateDetailPanel({
                                             <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                                                 Tour {ev.epreuves?.tour}
                                             </span>
+                                            {total && !isEditing && (
+                                                <span
+                                                    className={`ml-2 inline-flex items-baseline gap-1 text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                                        ev.isLegacyCollective ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-700'
+                                                    }`}
+                                                    title={ev.isLegacyCollective ? 'Ancienne note collective de business game : hors moyenne' : undefined}
+                                                >
+                                                    {fmt20(total.on20)}/20
+                                                    <span className="font-normal text-[10px] opacity-70">
+                                                        ({formatScore(total.obtained)} / {formatScore(total.maxTotal)})
+                                                    </span>
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {isEditing ? (
