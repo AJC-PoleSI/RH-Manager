@@ -49,10 +49,16 @@ const TOUR_COLUMNS = [
  *
  * `delib` peut être absent : un candidat sans ligne de délibération n'a été
  * ni admis ni refusé — il est « en lice », mais admis à aucun tour.
+ *
+ * `extra` porte les informations que les statuts seuls ne donnent pas. Seul
+ * le filtre « vœux non remplis » en a besoin (`hasWishes`) ; l'appelant ne
+ * lit `candidate_wishes` que pour ce filtre-là, d'où le paramètre optionnel
+ * plutôt qu'une lecture systématique. Absent = « pas de vœux connus ».
  */
 export function candidateMatchesFilter(
   filter: CandidateFilter,
   delib?: DeliberationStatuses | null,
+  extra?: { hasWishes?: boolean },
 ): boolean {
   const statuses = TOUR_COLUMNS.map((col) => delib?.[col] ?? null);
 
@@ -69,6 +75,14 @@ export function candidateMatchesFilter(
       return statuses[1] === "accepted";
     case "accepted_tour3":
       return statuses[2] === "accepted";
+    case "no_wishes":
+      // Même périmètre que la relance automatique (lib/wishes-reminder.ts) :
+      // admis T1 (seuls eux peuvent saisir des vœux), encore en lice, sans vœu.
+      return (
+        statuses[0] === "accepted" &&
+        !statuses.includes("refused") &&
+        !extra?.hasWishes
+      );
     default:
       return false;
   }
