@@ -793,6 +793,11 @@ export default function CreationPage() {
       {user?.isAdmin && <AnnouncementComposer />}
 
       {/* ================================================================ */}
+      {/*  0bis. Relance des vœux de pôle (admin)                           */}
+      {/* ================================================================ */}
+      {user?.isAdmin && <WishesReminderCard />}
+
+      {/* ================================================================ */}
       {/*  0. Backup complet                                                */}
       {/* ================================================================ */}
       <div className="bg-white border border-gray-200 rounded-[10px] p-[18px_20px] mb-[14px]">
