@@ -4,6 +4,10 @@
     {
       "path": "/api/health",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/wishes-reminder",
+      "schedule": "0 8 * * *"
     }
   ]
 }
