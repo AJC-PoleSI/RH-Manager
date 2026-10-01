@@ -14,7 +14,8 @@ export type CandidateFilter =
   | "accepted_tour1"
   | "accepted_tour2"
   | "accepted_tour3"
-  | "refused";
+  | "refused"
+  | "no_wishes";
 
 export const CANDIDATE_FILTERS: { value: CandidateFilter; label: string }[] = [
   { value: "all", label: "Tous les candidats" },
@@ -23,6 +24,7 @@ export const CANDIDATE_FILTERS: { value: CandidateFilter; label: string }[] = [
   { value: "accepted_tour2", label: "Admis au tour 2" },
   { value: "accepted_tour3", label: "Admis au tour 3" },
   { value: "refused", label: "Refusés" },
+  { value: "no_wishes", label: "Vœux de pôle non remplis (admis T1, en lice)" },
 ];
 
 export function isCandidateFilter(value: unknown): value is CandidateFilter {
