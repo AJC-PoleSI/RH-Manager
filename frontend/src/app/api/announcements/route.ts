@@ -11,8 +11,12 @@ import {
   EMAIL_DAILY_CAP,
   candidateMatchesFilter,
   isCandidateFilter,
-  startOfUtcDay,
 } from "@/lib/announcements";
+import {
+  emailsSentToday,
+  isMissingTable,
+  migrationRequired,
+} from "@/lib/announcements-db";
 import { sendAnnouncementEmails } from "@/lib/resend";
 import { NextRequest } from "next/server";
 
