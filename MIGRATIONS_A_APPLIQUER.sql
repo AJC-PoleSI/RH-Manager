@@ -959,3 +959,28 @@ WHERE id = 'be211ba4-4f39-4e22-a265-9261193ccd63'
 -- ─── Annulation ─────────────────────────────────────────────────────────────
 -- DROP TABLE IF EXISTS secondary_evaluations;
 -- ALTER TABLE epreuves DROP COLUMN IF EXISTS secondary_grid;
+
+
+-- ------------------------------------------------------------
+-- 02/10/2026 — épreuves de pôle T3 / relance des vœux
+--    (supabase-migration-pole-lead.sql
+--     + supabase-migration-wishes-reminder.sql)
+-- ------------------------------------------------------------
+
+-- « Respo de pôle » sur la fiche membre : information seulement (aucun effet
+-- sur le dispatch ni sur la génération des créneaux) — demandé par Felix
+-- le 02/10/2026 « au cas où ». Tant que la colonne manque, l'API relit la
+-- fiche sans elle (isPoleLead = false) : rien ne casse, la case est juste
+-- sans effet.
+ALTER TABLE members
+  ADD COLUMN IF NOT EXISTS is_pole_lead BOOLEAN NOT NULL DEFAULT false;
+
+-- Relance automatique des vœux de pôle : date du dernier mail de relance
+-- envoyé au candidat. Sans cette colonne la route cron REFUSE d'envoyer
+-- (elle relancerait tout le monde chaque jour).
+ALTER TABLE candidates
+  ADD COLUMN IF NOT EXISTS wishes_reminded_at TIMESTAMPTZ;
+
+-- ─── Annulation ─────────────────────────────────────────────────────────────
+-- ALTER TABLE members DROP COLUMN IF EXISTS is_pole_lead;
+-- ALTER TABLE candidates DROP COLUMN IF EXISTS wishes_reminded_at;
