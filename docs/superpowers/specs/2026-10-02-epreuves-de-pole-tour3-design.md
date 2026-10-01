@@ -311,7 +311,7 @@ Plus la variable d'environnement `CRON_SECRET` sur Vercel.
 | Zone | Fichiers |
 |---|---|
 | Membres | `app/api/members/route.ts`, `app/api/members/[id]/route.ts`, `app/(dashboard)/dashboard/evaluations/page.tsx` |
-| Génération | nouveau `lib/tour-generator.ts` (+ tests), `components/planning/TourOpeningsPanel.tsx`, `app/(dashboard)/dashboard/planning/page.tsx`, nouveau `GET /api/tours/[tour]/generation-inputs` (attendus par épreuve, membres éligibles, réservations existantes) |
+| Génération | nouveau `lib/tour-generator.ts` (+ tests), `components/planning/TourOpeningsPanel.tsx`, `app/(dashboard)/dashboard/planning/page.tsx`, nouveau `GET /api/tour-settings/[tour]/generation-inputs` (attendus par épreuve, membres éligibles, réservations existantes) |
 | Dispatch | `lib/dispatchService.ts`, `lib/dispatch-core.ts` (+ tests) |
 | Relance | nouveaux `lib/wishes-reminder.ts` (+ tests), `app/api/cron/wishes-reminder/route.ts`, `app/api/admin/wishes-reminder/route.ts`, `app/api/wishes/status/route.ts` ; `lib/resend.ts`, `lib/announcements.ts` (+ tests), `app/api/announcements/route.ts`, page Annonces, `app/candidates/dashboard/page.tsx`, `frontend/vercel.json` |
 | Migrations | `MIGRATIONS_A_APPLIQUER.sql`, `supabase-migration-pole-lead.sql`, `supabase-migration-wishes-reminder.sql` |

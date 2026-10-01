@@ -445,10 +445,10 @@ export function generateTourSlots(input: GeneratorInput): GeneratorResult {
 
 ---
 
-## Task 3 : API `GET /api/tours/[tour]/generation-inputs`
+## Task 3 : API `GET /api/tour-settings/[tour]/generation-inputs`
 
 **Files:**
-- Create: `frontend/src/app/api/tours/[tour]/generation-inputs/route.ts`
+- Create: `frontend/src/app/api/tour-settings/[tour]/generation-inputs/route.ts`
 - Create: `frontend/src/lib/generation-inputs.ts` (pur) + `generation-inputs.test.ts`
 
 - [ ] **Step 1 : fonction pure `expectedCandidatesFor`** dans `lib/generation-inputs.ts` + tests :

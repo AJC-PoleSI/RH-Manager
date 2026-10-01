@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { runWishesReminder } from "@/lib/wishes-reminder-db";
+
+/** Comparaison en temps constant : un `!==` fuit la longueur du secret. */
+function bearerMatches(header: string | null, secret: string): boolean {
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const got = Buffer.from(header ?? "");
+  return got.length === expected.length && timingSafeEqual(got, expected);
+}
 
 // ════════════════════════════════════════════════════════════════════
 // CRON — relance des vœux de pôle (cf. frontend/vercel.json → crons, 8 h)
@@ -26,7 +34,7 @@ export async function GET(req: NextRequest) {
       { status: 503, headers: noStore },
     );
   }
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerMatches(req.headers.get("authorization"), secret)) {
     return NextResponse.json(
       { error: "Non autorise" },
       { status: 401, headers: noStore },

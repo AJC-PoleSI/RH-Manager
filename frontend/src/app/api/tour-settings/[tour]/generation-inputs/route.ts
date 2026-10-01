@@ -17,7 +17,12 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/tours/[tour]/generation-inputs?start=AAAA-MM-JJ&end=AAAA-MM-JJ
+// GET /api/tour-settings/[tour]/generation-inputs?start=AAAA-MM-JJ&end=AAAA-MM-JJ
+//
+// Sous /api/tour-settings/[tour] (NUMÉRO de tour) et non /api/tours/[id]
+// (UUID de la table `tours`) : Next refuse deux noms de segment dynamique
+// différents sous le même chemin (`[id]` ≠ `[tour]`), le build Vercel
+// échouait.
 //
 // Tout ce dont le bouton « Générer le Tour N » (TourOpeningsPanel +
 // lib/tour-generator.ts) a besoin, calculé CÔTÉ SERVEUR en une seule fois :
@@ -262,7 +267,7 @@ export async function GET(
       roomsTaken,
     });
   } catch (error) {
-    console.error("GET tours/[tour]/generation-inputs error:", error);
+    console.error("GET tour-settings/[tour]/generation-inputs error:", error);
     return Response.json(
       { error: "Échec du chargement des entrées de génération", details: (error as any)?.message || String(error) },
       { status: 500 },

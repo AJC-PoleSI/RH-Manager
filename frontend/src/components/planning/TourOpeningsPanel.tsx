@@ -15,7 +15,7 @@
  *   - priorité à l'épreuve la plus chargée par personne, recalculée.
  *
  * Les entrées (attendus, viviers, réservations existantes) viennent de
- * GET /api/tours/[tour]/generation-inputs ; les dispos de /api/availability/all.
+ * GET /api/tour-settings/[tour]/generation-inputs ; les dispos de /api/availability/all.
  *
  * Flux volontairement séparé de RoomOpeningsGrid : « générer pour tout le
  * tour » écrit dans des épreuves qu'on n'a pas sous les yeux. Une relecture
@@ -170,7 +170,7 @@ export default function TourOpeningsPanel({ tour, epreuves, onSaved }: Props) {
       try {
         const noCache = { headers: { "Cache-Control": "no-store" }, params: { t: Date.now() } };
         const [inputsRes, staffRes] = await Promise.all([
-          api.get(`/tours/${tour}/generation-inputs`, {
+          api.get(`/tour-settings/${tour}/generation-inputs`, {
             ...noCache,
             params: { ...noCache.params, start: period.start, end: period.end },
           }),
