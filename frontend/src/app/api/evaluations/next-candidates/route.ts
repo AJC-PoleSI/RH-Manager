@@ -9,6 +9,10 @@ import {
   slotHasEnded,
   type ClosureReason,
 } from "@/lib/evaluation-closure";
+import {
+  buildSecondGridStatus,
+  isSecondGridMigrationMissing,
+} from "@/lib/second-grid";
 import { fetchSlotLinks } from "@/lib/slot-links-db";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
@@ -24,7 +28,10 @@ export const dynamic = "force-dynamic";
 //   • done       — candidats de mes créneaux déjà notés, en lecture seule :
 //                  ils disparaissent de la file d'attente mais restent
 //                  visibles, sinon un examinateur qui a tout fait ne voit
-//                  plus rien et croit à un bug ;
+//                  plus rien et croit à un bug. `epreuve.secondGrid` dit si
+//                  l'épreuve a une deuxième grille (propale) et si elle est
+//                  remplie : elle se note après la clôture, c'est le seul
+//                  chemin pour y revenir ;
 //   • alerts     — business games TERMINÉS où des candidats n'ont reçu
 //                  aucune note (cf. lib/evaluation-closure).
 //
@@ -218,6 +225,59 @@ export async function GET(req: NextRequest) {
             ? null
             : { id: verdict.byMemberId, name: memberName(by) },
       });
+    }
+
+    // 4 bis. Deuxième grille (ex. proposition commerciale) des notations
+    //    closes. Lecture facultative : en cas d'échec, la page s'affiche sans
+    //    le bouton plutôt que de perdre toute la file d'attente.
+    const doneEpreuveIds = Array.from(
+      new Set(
+        done
+          .filter((c) => c.epreuve.isGroupEpreuve !== true)
+          .map((c) => c.epreuve.id),
+      ),
+    );
+    if (doneEpreuveIds.length > 0) {
+      const { data: gridEpreuves, error: gridError } = await supabaseAdmin
+        .from("epreuves")
+        .select("id, secondary_grid")
+        .in("id", doneEpreuveIds)
+        .not("secondary_grid", "is", null);
+      const withGrid = (gridEpreuves || []).map((e: any) => e.id);
+      let secondRows: any[] = [];
+      let secondError: unknown = null;
+      if (!gridError && withGrid.length > 0) {
+        const doneCandidateIds = Array.from(
+          new Set(
+            done
+              .filter((c) => withGrid.includes(c.epreuve.id))
+              .map((c) => c.id),
+          ),
+        );
+        const res = await fetchAllRows<any>((from, to) =>
+          supabaseAdmin
+            .from("secondary_evaluations")
+            .select("id, candidate_id, epreuve_id, scores")
+            .in("epreuve_id", withGrid)
+            .in("candidate_id", doneCandidateIds)
+            .order("id")
+            .range(from, to),
+        );
+        secondRows = res.data || [];
+        secondError = res.error;
+      }
+      const readError = gridError || secondError;
+      if (readError) {
+        if (!isSecondGridMigrationMissing(readError)) {
+          console.error("[next-candidates] deuxième grille illisible:", readError);
+        }
+      } else {
+        const statusOf = buildSecondGridStatus(gridEpreuves || [], secondRows);
+        for (const c of done) {
+          const status = statusOf(c.id, c.epreuve.id);
+          if (status) c.epreuve = { ...c.epreuve, secondGrid: status };
+        }
+      }
     }
 
     // 5. « Qui examine qui » (business games), pour la file d'attente.

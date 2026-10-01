@@ -75,6 +75,46 @@ export function secondGridKey(epreuveId: string): string {
   return `${epreuveId}:second`;
 }
 
+/** Deuxième grille d'un couple (candidat, épreuve), vue de l'examinateur. */
+export interface SecondGridStatus {
+  title: string;
+  /** Au moins un critère noté. */
+  filled: boolean;
+}
+
+/**
+ * Index « ce couple (candidat, épreuve) a-t-il une deuxième grille, et
+ * est-elle remplie ? ». Sert à « Mes évaluations » : la propale se note APRÈS
+ * la clôture de l'entretien, il faut donc un chemin vers elle depuis les
+ * notations closes. null = l'épreuve n'a pas de deuxième grille.
+ */
+export function buildSecondGridStatus(
+  epreuves: { id: string; secondary_grid: unknown }[],
+  rows: { candidate_id: string; epreuve_id: string; scores: unknown }[],
+): (candidateId: string, epreuveId: string) => SecondGridStatus | null {
+  const grids = new Map<string, SecondGrid>();
+  for (const e of epreuves) {
+    const grid = parseSecondGrid(e.secondary_grid);
+    if (grid) grids.set(e.id, grid);
+  }
+  const filled = new Set<string>();
+  for (const row of rows) {
+    const grid = grids.get(row.epreuve_id);
+    if (!grid) continue;
+    if (Object.keys(normalizeScores(row.scores, grid.questions)).length > 0) {
+      filled.add(`${row.candidate_id}_${row.epreuve_id}`);
+    }
+  }
+  return (candidateId, epreuveId) => {
+    const grid = grids.get(epreuveId);
+    if (!grid) return null;
+    return {
+      title: grid.title,
+      filled: filled.has(`${candidateId}_${epreuveId}`),
+    };
+  };
+}
+
 /** Table ou colonne absente : migration second-grid pas encore appliquée. */
 export function isSecondGridMigrationMissing(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
