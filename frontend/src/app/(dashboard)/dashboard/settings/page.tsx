@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import AnnouncementComposer from "@/components/announcements/AnnouncementComposer";
+import WishesReminderCard from "@/components/announcements/WishesReminderCard";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
