@@ -504,6 +504,16 @@ export interface SlotDemand {
    */
   isAnchored?: boolean;
   /**
+   * Épreuve de PÔLE : seuls les membres du pôle peuvent la tenir.
+   *
+   * Servie juste après les créneaux ancrés, AVANT le critère de groupe et le
+   * déficit : son vivier est restreint, alors qu'un Business Game peut être
+   * tenu par n'importe qui. Un membre disponible à la fois pour son pôle et
+   * pour une autre épreuve au même horaire est donc placé sur son pôle, et
+   * reste remplaçant sur l'autre (décision de Felix, 02/10/2026).
+   */
+  isPoleTest?: boolean;
+  /**
    * Ce créneau prolonge-t-il une salle DÉJÀ occupée au créneau précédent ?
    *
    * Pur départage, tout en bas de l'ordre : il ne tranche qu'entre créneaux
@@ -580,6 +590,10 @@ export function compareByTension(a: SlotDemand, b: SlotDemand): number {
   const ea = a.isAnchored ? 1 : 0;
   const eb = b.isAnchored ? 1 : 0;
   if (ea !== eb) return eb - ea; // créneaux ancrés (réservés/verrouillés) d'abord
+
+  const pa = a.isPoleTest ? 1 : 0;
+  const pb = b.isPoleTest ? 1 : 0;
+  if (pa !== pb) return pb - pa; // épreuve de pôle d'abord : vivier restreint
 
   const ga = a.isGroupEpreuve ? 1 : 0;
   const gb = b.isGroupEpreuve ? 1 : 0;

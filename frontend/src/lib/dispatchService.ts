@@ -34,6 +34,7 @@ import { isEliminated } from "@/lib/favorites";
 import { getToursByNumber } from "@/lib/tour-status";
 import { isSlotLocked, isMissingColumnError } from "@/lib/slot-lock";
 import { planReclaims } from "@/lib/dispatch-reclaim";
+import { samePole } from "@/lib/auth-poles";
 
 /**
  * Dispatch Service — Algorithme de répartition intelligente des examinateurs.
@@ -372,6 +373,29 @@ export async function runDispatch(opts?: {
     }
   }
 
+  // 2bis. Pôle de chaque membre — règle d'ÉLIGIBILITÉ des épreuves de pôle
+  // (Tour 3) : seuls les membres du pôle peuvent y être placés par le
+  // dispatch. Ce n'est pas une préférence : un membre Marketing disponible au
+  // même horaire ne doit jamais se retrouver sur un créneau Audit. Le
+  // placement À LA MAIN par un admin (toggle-member, `is_manual`) reste
+  // possible et ancre le créneau (9b). Comparaison sans accents ni casse :
+  // `members.pole` et `epreuves.pole` sont saisis à la main.
+  const poleOfMember = new Map<string, string | null>();
+  {
+    const { data: memberRows, error: memberErr } = await fetchAllRows<any>(
+      (from, to) =>
+        supabaseAdmin.from("members").select("id, pole").order("id").range(from, to),
+    );
+    if (memberErr) throw memberErr;
+    (memberRows || []).forEach((m: any) => poleOfMember.set(m.id, m.pole ?? null));
+  }
+  const poleOfSlot = (slot: SlotInfo): string | null =>
+    slot.epreuve?.is_pole_test && slot.epreuve?.pole ? slot.epreuve.pole : null;
+  const memberInPole = (memberId: string, slot: SlotInfo): boolean => {
+    const pole = poleOfSlot(slot);
+    return !pole || samePole(poleOfMember.get(memberId), pole);
+  };
+
   // 3. Fetch current assignments
   //
   // BUG (rapporté par Felix le 10/09/2026, plusieurs cas observés le lundi) :
@@ -451,8 +475,14 @@ export async function runDispatch(opts?: {
   // compléter s'il est en sous-effectif. Retirer l'affectation manuelle
   // (toggle-member) le rend à nouveau rebrassable.
   const manualSlotIds = new Set<string>();
+  // (créneau, membre) posés à la main : un membre HORS pôle placé par l'admin
+  // sur une épreuve de pôle est une décision métier, jamais retirée ici.
+  const manualPairs = new Set<string>();
   (currentAssigns || []).forEach((a: any) => {
-    if (a?.is_manual) manualSlotIds.add(a.slot_id);
+    if (a?.is_manual) {
+      manualSlotIds.add(a.slot_id);
+      manualPairs.add(`${a.slot_id}:${a.member_id}`);
+    }
   });
   const isLocked = (slot: SlotInfo | { id: string; status?: string }): boolean =>
     isCommitted(slot as SlotInfo) || manualSlotIds.has((slot as any).id);
@@ -492,6 +522,8 @@ export async function runDispatch(opts?: {
     for (const [memberId, avs] of Array.from(
       availabilitiesByMember.entries(),
     )) {
+      // Épreuve de pôle : hors pôle = inéligible, quelle que soit la dispo.
+      if (!memberInPole(memberId, slot)) continue;
       if (availabilitiesCoverSlot(avs, slot)) matches.push(memberId);
     }
     eligibleBySlot.set(slot.id, matches);
@@ -692,6 +724,8 @@ export async function runDispatch(opts?: {
     const eligible = new Set(matchSlotToMembers(slot));
     (currentBySlot[slot.id] || new Set<string>()).forEach((memberId) => {
       if (!eligible.has(memberId) && !stillOverlappingOn(memberId, slot)) return;
+      // Hors pôle et non manuel : 9b-bis le retirera, inutile de l'engager.
+      if (!memberInPole(memberId, slot) && !manualPairs.has(`${slot.id}:${memberId}`)) return;
       registerConflict(memberId, slot);
       preRegistered.add(`${slot.id}:${memberId}`);
     });
@@ -1009,6 +1043,7 @@ export async function runDispatch(opts?: {
       epreuveDeficit: shortfall?.deficit,
       epreuveCoverage: shortfall?.coverage,
       isGroupEpreuve: slot.epreuve?.is_group_epreuve ?? false,
+      isPoleTest: !!poleOfSlot(slot),
       // Ancré = jury non rebrassable : candidat déjà inscrit, OU créneau
       // verrouillé (publié aux candidats / figé par l'admin). Ces créneaux se
       // servent en premier — sinon un créneau libre traité avant pourrait
@@ -1205,6 +1240,22 @@ export async function runDispatch(opts?: {
 
       const kept: string[] = [];
       existing.forEach((memberId) => {
+        // Épreuve de pôle : un membre HORS pôle posé par un ancien run (ou
+        // par un changement de pôle de l'épreuve) n'a rien à y faire. Seul
+        // un placement manuel de l'admin le garde — mais un tel créneau est
+        // traité en 9b, pas ici.
+        if (
+          !memberInPole(memberId, slotInfo) &&
+          !manualPairs.has(`${slot.id}:${memberId}`)
+        ) {
+          removedMembers.push({
+            member_id: memberId,
+            slot: slotInfo,
+            reason: "hors pôle",
+          });
+          releasePreRegistration(memberId, slotInfo, memberLoad);
+          return;
+        }
         if (!stillAvailable.has(memberId) && !stillOverlapping(memberId)) {
           removedMembers.push({
             member_id: memberId,
@@ -1345,9 +1396,11 @@ export async function runDispatch(opts?: {
         removedMembers.push({
           member_id: memberId,
           slot: slotInfo,
-          reason: stillHasAvailability
-            ? "répartition d'équité"
-            : "disponibilité retirée",
+          reason: !memberInPole(memberId, slotInfo)
+            ? "hors pôle"
+            : stillHasAvailability
+              ? "répartition d'équité"
+              : "disponibilité retirée",
         });
       }
     });

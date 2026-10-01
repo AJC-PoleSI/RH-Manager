@@ -238,6 +238,18 @@ describe("compareByTension (arbitrage entre créneaux simultanés)", () => {
     expect(compareByTension(tendu, confortable)).toBeLessThan(0);
   });
 
+  it("une épreuve de pôle passe avant un groupe en déficit (vivier restreint)", () => {
+    const pole = { ...base, id: "pole", eligible: 4, quota: 2, isPoleTest: true };
+    const bg = { ...base, id: "bg", eligible: 4, quota: 4, isGroupEpreuve: true, epreuveDeficit: 20 };
+    expect(compareByTension(pole, bg)).toBeLessThan(0);
+  });
+
+  it("un créneau ancré passe quand même avant une épreuve de pôle", () => {
+    const ancre = { ...base, id: "ancre", eligible: 4, quota: 2, isAnchored: true };
+    const pole = { ...base, id: "pole", eligible: 4, quota: 2, isPoleTest: true };
+    expect(compareByTension(ancre, pole)).toBeLessThan(0);
+  });
+
   it("à tension égale, départage sur le nombre d'examinateurs disponibles", () => {
     const a = { ...base, id: "a", eligible: 3, quota: 2 };
     const b = { ...base, id: "b", eligible: 4, quota: 3 };
