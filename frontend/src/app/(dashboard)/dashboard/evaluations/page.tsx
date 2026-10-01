@@ -23,6 +23,8 @@ interface MemberData {
     email: string;
     password?: string;
     pole?: string;
+    /** « Respo de pôle » : information seulement, aucun effet sur le dispatch. */
+    isPoleLead?: boolean;
     isAdmin: boolean;
     isSuperAdmin?: boolean;
 }
@@ -290,7 +292,7 @@ function AdminView() {
 
     // Edit modal state
     const [editingMember, setEditingMember] = useState<MemberData | null>(null);
-    const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', password: '', pole: POLES[0], isAdmin: false });
+    const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', password: '', pole: POLES[0], isAdmin: false, isPoleLead: false });
     const [editSaving, setEditSaving] = useState(false);
 
     const [form, setForm] = useState({
@@ -299,6 +301,7 @@ function AdminView() {
         email: '',
         password: '',
         pole: POLES[0],
+        isPoleLead: false,
     });
 
     const fetchAll = async () => {
@@ -328,7 +331,7 @@ function AdminView() {
         setCreating(true);
         try {
             await api.post('/members', form);
-            setForm({ firstName: '', lastName: '', email: '', password: '', pole: POLES[0] });
+            setForm({ firstName: '', lastName: '', email: '', password: '', pole: POLES[0], isPoleLead: false });
             setShowCreateForm(false);
             fetchAll();
         } catch (err: any) {
@@ -357,6 +360,7 @@ function AdminView() {
             password: '',
             pole: m.pole || POLES[0],
             isAdmin: m.isAdmin,
+            isPoleLead: !!m.isPoleLead,
         });
     };
 
@@ -369,6 +373,7 @@ function AdminView() {
                 lastName: editForm.lastName,
                 email: editForm.email,
                 pole: editForm.pole,
+                isPoleLead: editForm.isPoleLead,
                 // Le super-admin reste toujours admin ; les admins classiques
                 // peuvent être rétrogradés.
                 isAdmin: editingMember.isSuperAdmin ? true : editForm.isAdmin,
@@ -664,6 +669,18 @@ function AdminView() {
                                 ))}
                             </select>
                         </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                id="isPoleLead"
+                                checked={form.isPoleLead}
+                                onChange={e => setForm({ ...form, isPoleLead: e.target.checked })}
+                                className="rounded border-gray-300"
+                            />
+                            <label htmlFor="isPoleLead" className="text-sm text-gray-700">
+                                Respo de pôle
+                            </label>
+                        </div>
                         <button
                             type="submit"
                             disabled={creating}
@@ -747,11 +764,21 @@ function AdminView() {
                                             </div>
                                         </td>
                                         <td className="px-3 sm:px-6 py-3">
-                                            {m.pole ? (
-                                                <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{m.pole}</span>
-                                            ) : (
-                                                <span className="text-gray-400">-</span>
-                                            )}
+                                            <div className="flex items-center gap-1.5">
+                                                {m.pole ? (
+                                                    <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{m.pole}</span>
+                                                ) : (
+                                                    <span className="text-gray-400">-</span>
+                                                )}
+                                                {m.isPoleLead && (
+                                                    <span
+                                                        className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded"
+                                                        title="Responsable de pôle"
+                                                    >
+                                                        Respo
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-gray-600 text-xs">{m.email}</td>
                                         <td className="px-3 sm:px-6 py-3 text-center">
@@ -928,6 +955,18 @@ function AdminView() {
                                         <option key={p} value={p}>{p}</option>
                                     ))}
                                 </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="editIsPoleLead"
+                                    checked={editForm.isPoleLead}
+                                    onChange={e => setEditForm({ ...editForm, isPoleLead: e.target.checked })}
+                                    className="rounded border-gray-300"
+                                />
+                                <label htmlFor="editIsPoleLead" className="text-sm text-gray-700">
+                                    Respo de pôle
+                                </label>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-sm font-medium text-gray-700">

@@ -38,6 +38,33 @@ describe("candidateMatchesFilter", () => {
     expect(candidateMatchesFilter("refused", refuseT2)).toBe(true);
     expect(candidateMatchesFilter("refused", enLice)).toBe(false);
   });
+
+  describe("« vœux non remplis »", () => {
+    it("cible un admis T1 en lice qui n'a aucun vœu", () => {
+      expect(candidateMatchesFilter("no_wishes", enLice, { hasWishes: false })).toBe(true);
+      // Sans le 3e paramètre, on considère qu'il n'a pas de vœux (rétro-compat).
+      expect(candidateMatchesFilter("no_wishes", enLice)).toBe(true);
+    });
+
+    it("exclut celui qui a déjà rempli ses vœux", () => {
+      expect(candidateMatchesFilter("no_wishes", enLice, { hasWishes: true })).toBe(false);
+    });
+
+    it("exclut un refusé, même s'il a été admis au T1", () => {
+      expect(candidateMatchesFilter("no_wishes", refuseT2, { hasWishes: false })).toBe(false);
+    });
+
+    it("exclut un candidat non admis au T1 (pending ou sans délibération)", () => {
+      const pending = { tour1_status: "pending", tour2_status: null, tour3_status: null };
+      expect(candidateMatchesFilter("no_wishes", pending, { hasWishes: false })).toBe(false);
+      expect(candidateMatchesFilter("no_wishes", null, { hasWishes: false })).toBe(false);
+    });
+
+    it("le 3e paramètre n'altère pas les autres filtres", () => {
+      expect(candidateMatchesFilter("en_lice", enLice, { hasWishes: true })).toBe(true);
+      expect(candidateMatchesFilter("accepted_tour1", enLice, { hasWishes: true })).toBe(true);
+    });
+  });
 });
 
 describe("isCandidateFilter", () => {
