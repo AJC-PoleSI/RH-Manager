@@ -129,10 +129,9 @@ export async function GET(
           .range(from, to),
       ),
       // Affectations existantes sur la période : le membre est pris.
-      fetchAllRows<{
-        member_id: string;
-        slot: { date: string; start_time: string; end_time: string; status: string | null } | null;
-      }>((from, to) =>
+      // Typé `any` : le client Supabase infère la jointure comme un tableau
+      // alors qu'une affectation n'a qu'un créneau — on normalise plus bas.
+      fetchAllRows<any>((from, to) =>
         supabaseAdmin
           .from("slot_member_assignments")
           .select("member_id, slot:evaluation_slots!inner(date, start_time, end_time, status)")
@@ -229,12 +228,13 @@ export async function GET(
     const ymd = (v: string) => String(v).split("T")[0];
 
     const busy = (assignsRes.data || [])
-      .filter((a) => a.slot && !isCancelled(a.slot.status))
-      .map((a) => ({
-        memberId: a.member_id,
-        date: ymd(a.slot!.date),
-        startTime: hhmm(a.slot!.start_time),
-        endTime: hhmm(a.slot!.end_time),
+      .map((a: any) => ({ member_id: a.member_id, slot: Array.isArray(a.slot) ? a.slot[0] : a.slot }))
+      .filter((a: any) => a.slot && !isCancelled(a.slot.status))
+      .map((a: any) => ({
+        memberId: String(a.member_id),
+        date: ymd(a.slot.date),
+        startTime: hhmm(a.slot.start_time),
+        endTime: hhmm(a.slot.end_time),
       }));
 
     const roomsTaken = (slotsRes.data || [])

@@ -49,6 +49,8 @@ interface Epreuve {
   roulement_minutes?: number;
   isGroupEpreuve?: boolean;
   groupSize?: number;
+  isPoleTest?: boolean;
+  pole?: string | null;
 }
 
 interface SlotAvailability {
@@ -3090,7 +3092,12 @@ export default function PlanningPage() {
                       const memeTour = epreuves.filter(
                         (e) => e.tour === courante.tour && !e.isCommune,
                       );
-                      if (memeTour.length < 2) return null;
+                      // Rien à arbitrer pour une épreuve seule — SAUF une
+                      // épreuve de pôle, dont le vivier est restreint à son
+                      // pôle : le générateur sait alors qui peut la tenir.
+                      if (memeTour.length < 2 && !memeTour.some((e) => e.isPoleTest)) {
+                        return null;
+                      }
                       return (
                         <TourOpeningsPanel
                           // Remonté quand les salles changent : il lit leur
@@ -3100,18 +3107,8 @@ export default function PlanningPage() {
                           epreuves={memeTour.map((e) => ({
                             id: e.id,
                             name: e.name,
-                            isGroupEpreuve: !!e.isGroupEpreuve,
-                            durationMinutes:
-                              e.durationMinutes ?? e.duration_minutes ?? 30,
-                            roulementMinutes:
-                              e.roulementMinutes ?? e.roulement_minutes ?? 10,
-                            minEvaluatorsPerSalle:
-                              (e as any).minEvaluatorsPerSalle ??
-                              (e as any).min_evaluators_per_salle ??
-                              (e.isGroupEpreuve ? 4 : 2),
-                            groupSize: (e as any).groupSize ?? null,
-                            minCandidates: (e as any).minCandidates ?? null,
                             dateDebut: e.dateDebut ?? null,
+                            dateFin: e.dateFin ?? null,
                           }))}
                           onSaved={() => {
                             fetchSlotData();
