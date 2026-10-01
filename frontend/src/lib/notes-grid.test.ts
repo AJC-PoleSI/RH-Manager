@@ -90,8 +90,9 @@ describe("sortRows", () => {
     expect(ids(sortRows(rows, "average", "asc", name))).toEqual(["b", "a", "c"]);
   });
 
-  it("trie par épreuve", () => {
-    expect(ids(sortRows(rows, "bg", "desc", name))).toEqual(["a", "b", "c"].filter((x) => x === "a").concat(["b", "c"].sort((x, y) => name(x).localeCompare(name(y)))));
+  it("trie par épreuve, les non-notés ensuite par ordre alphabétique", () => {
+    // Seul a a une note de BG ; b (Adam) et c (Marc) suivent par nom.
+    expect(ids(sortRows(rows, "bg", "asc", name))).toEqual(["a", "b", "c"]);
   });
 
   it("trie par nom", () => {
