@@ -7,8 +7,9 @@ import CriteriaScores from "@/components/evaluation/CriteriaScores";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 import { ActionButtons } from "./ActionButtons";
+import NotesDetailPanel from "./NotesDetailPanel";
 import CandidatePhoto from "@/components/ui/CandidatePhoto";
-import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart, Maximize2, Minimize2 } from "lucide-react";
+import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart, Maximize2, Minimize2, ListOrdered } from "lucide-react";
 import {
   averageOn20ByEpreuve,
   getEpreuveCoefficient,
@@ -164,6 +165,9 @@ export default function DeliberationsPage() {
   // Plein écran : n'affiche que le système match/pas match (vue Tinder), sans
   // le reste du chrome de la page (onglets, filtres, stats, accordions).
   const [focusMode, setFocusMode] = useState(false);
+  // « Détail des notes » : tableau candidats × épreuves à la place de la vue
+  // de décision, pour comparer les notes (par épreuve, par pôle, triées).
+  const [showNotesDetail, setShowNotesDetail] = useState(false);
 
   // Filters
   const [filterPole, setFilterPole] = useState<string>("Tous");
@@ -777,7 +781,27 @@ export default function DeliberationsPage() {
               <p className="text-sm text-gray-500 mt-1">Délibération de fin de tour</p>
             </div>
             <div className="flex items-center gap-2">
+              {/* Détail des notes */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showNotesDetail}
+                onClick={() => setShowNotesDetail((v) => !v)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  showNotesDetail
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+                title="Comparer les notes par épreuve, par pôle, et trier les candidats"
+              >
+                <ListOrdered size={16} />
+                <span className="hidden sm:inline">Détail des notes</span>
+                <span className={`relative inline-flex h-4 w-7 rounded-full transition-colors ${showNotesDetail ? "bg-white/40" : "bg-gray-300"}`}>
+                  <span className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${showNotesDetail ? "translate-x-3" : ""}`} />
+                </span>
+              </button>
               {/* View toggle */}
+              {!showNotesDetail && (
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode("tinder")}
@@ -801,8 +825,9 @@ export default function DeliberationsPage() {
                   <LayoutGrid size={18} />
                 </button>
               </div>
+              )}
               {/* Plein écran : uniquement pertinent pour le système match / pas match */}
-              {viewMode === "tinder" && (
+              {viewMode === "tinder" && !showNotesDetail && (
                 <button
                   onClick={() => setFocusMode(true)}
                   className="p-2 rounded-lg bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition-colors"
@@ -1163,7 +1188,22 @@ export default function DeliberationsPage() {
       {/* ═══════════════════════════════════════════════ */}
       {/* VUE TABLEAU PAR POLE */}
       {/* ═══════════════════════════════════════════════ */}
-      {viewMode === "table" && (
+      {/* ═══════════════════════════════════════════════ */}
+      {/* DÉTAIL DES NOTES */}
+      {/* ═══════════════════════════════════════════════ */}
+      {showNotesDetail && !focusMode && (
+        <NotesDetailPanel
+          candidates={filteredCandidates}
+          tour={selectedTour}
+          isAdmin={isAdmin}
+          questionsByEpreuve={questionsByEpreuve}
+          getFirstPole={getFirstPole}
+          poleColor={poleColor}
+          renderDecision={(c) => <ActionButtons c={c} size="sm" />}
+        />
+      )}
+
+      {!showNotesDetail && viewMode === "table" && (
         <div className="space-y-4">
           {candidatesByPole.length === 0 ? (
             <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
@@ -1257,7 +1297,7 @@ export default function DeliberationsPage() {
       {/* ═══════════════════════════════════════════════ */}
       {/* VUE CARTES PAR POLE */}
       {/* ═══════════════════════════════════════════════ */}
-      {viewMode === "cards" && (
+      {!showNotesDetail && viewMode === "cards" && (
         <div className="space-y-6">
           {candidatesByPole.length === 0 ? (
             <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
@@ -1383,7 +1423,7 @@ export default function DeliberationsPage() {
       {/* ═══════════════════════════════════════════════ */}
       {/* VUE TINDER (existante) */}
       {/* ═══════════════════════════════════════════════ */}
-      {viewMode === "tinder" && (
+      {(!showNotesDetail || focusMode) && viewMode === "tinder" && (
         <>
           {filteredCandidates.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">

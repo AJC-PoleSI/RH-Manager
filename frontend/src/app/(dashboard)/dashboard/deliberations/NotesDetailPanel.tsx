@@ -49,6 +49,9 @@ function examinerLabel(ev: Evaluation): string {
   return names.length > 0 ? names.join(" & ") : "Évaluateur";
 }
 
+/** Libellé du pôle de 1er vœu (la page range les candidats sans vœu sous « Non renseigne »). */
+const poleLabel = (pole: string) => (pole === "Non renseigne" ? "Vœux non renseignés" : pole);
+
 function formatCoef(coef: number): string {
   return Number.isInteger(coef) ? String(coef) : coef.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
@@ -73,7 +76,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
           className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : ""}`}
         />
       </button>
-      <span onClick={() => onChange(!checked)}>{label}</span>
+      <span>{label}</span>
     </label>
   );
 }
@@ -273,15 +276,15 @@ export default function NotesDetailPanel({
           <Toggle checked={prefs.groupByPole} onChange={(v) => updatePrefs({ groupByPole: v })} label="Regrouper par pôle (1er vœu)" />
           <Toggle checked={prefs.showCriteria} onChange={(v) => updatePrefs({ showCriteria: v })} label="Barèmes et critères" />
           <Toggle checked={prefs.showComments} onChange={(v) => updatePrefs({ showComments: v })} label="Appréciations" />
-          <label className="flex items-center gap-2 text-sm text-gray-600 ml-auto">
-            Trier par
+          <label className="flex items-center gap-2 text-sm text-gray-600 w-full sm:w-auto sm:ml-auto min-w-0">
+            <span className="whitespace-nowrap">Trier par</span>
             <select
               value={`${sortBy}|${sort.dir}`}
               onChange={(e) => {
                 const i = e.target.value.lastIndexOf("|");
                 setSort({ by: e.target.value.slice(0, i), dir: e.target.value.slice(i + 1) as "asc" | "desc" });
               }}
-              className="px-2 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-w-0 flex-1 sm:flex-none max-w-full px-2 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="average|desc">Moyenne · meilleures d&apos;abord</option>
               <option value="average|asc">Moyenne · moins bonnes d&apos;abord</option>
@@ -369,7 +372,7 @@ export default function NotesDetailPanel({
                       <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10">
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: poleColor(pole) }} />
-                          <span className="font-semibold text-gray-900">{pole}</span>
+                          <span className="font-semibold text-gray-900">{poleLabel(pole)}</span>
                           <span className="text-xs text-gray-400">{groupRows.length}</span>
                         </div>
                       </td>
@@ -387,7 +390,10 @@ export default function NotesDetailPanel({
                   {groupRows.map((r, i) => {
                     const c = byId.get(r.candidateId);
                     if (!c) return null;
-                    const evals = (evalsByCandidate.get(c.id) || []).filter((ev) => keySet.has(epreuveKeyOf(ev)));
+                    // Fiches de détail dans l'ordre des colonnes.
+                    const evals = (evalsByCandidate.get(c.id) || [])
+                      .filter((ev) => keySet.has(epreuveKeyOf(ev)))
+                      .sort((a, b) => keys.indexOf(epreuveKeyOf(a)) - keys.indexOf(epreuveKeyOf(b)));
                     return (
                       <Fragment key={c.id}>
                         <tr className="hover:bg-gray-50">
@@ -397,7 +403,7 @@ export default function NotesDetailPanel({
                               {c.firstName} {c.lastName}
                             </a>
                             {!prefs.groupByPole && (
-                              <span className="block text-[11px] text-gray-400">{getFirstPole(c)}</span>
+                              <span className="block text-[11px] text-gray-400">{poleLabel(getFirstPole(c))}</span>
                             )}
                           </td>
                           {columns.map((col) => {
