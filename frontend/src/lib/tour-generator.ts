@@ -3,7 +3,7 @@
  * épreuves ouvertes à tous, comme le Business Game) à partir des dispos
  * saisies UNE SEULE FOIS par les membres.
  *
- * Succède à tour-openings.ts (priorité groupe > individuel, pool global) :
+ * Succède à l'ancien tour-openings.ts (priorité groupe > individuel, pool global, retiré le 02/10/2026) :
  * ici chaque épreuve a SON vivier de membres éligibles (épreuve de pôle =
  * les membres du pôle, sinon tout le monde) et les membres sont réservés
  * NOMMÉMENT tranche par tranche. C'est ce qui empêche de compter Tom (Dev
