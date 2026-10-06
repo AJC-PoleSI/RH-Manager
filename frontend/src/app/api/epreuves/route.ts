@@ -13,8 +13,9 @@ import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 // GET /api/epreuves
 // SECURITY: requiert une session (la config des épreuves n'est pas publique).
-// TOUR 3 : un candidat ne voit pas les épreuves de pôle des pôles qu'il n'a
-// pas demandés dans ses vœux.
+// TOUR 3 : un candidat voit toutes les épreuves de pôle, vœux ou pas
+// (06/10/2026). Épreuve en distanciel : `isRegistered` dit au candidat s'il
+// s'y est inscrit (pas de créneau, cf. lib/distanciel.ts).
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -48,6 +49,9 @@ export async function GET(req: NextRequest) {
       candidatsAttendus: e.candidats_attendus ?? null,
       margePct: e.marge_pct ?? 25,
       isCommune: e.type === "commune",
+      // Épreuve sans créneau : le candidat s'inscrit, c'est tout. Faux tant
+      // que la colonne n'est pas migrée.
+      isDistanciel: e.is_distanciel === true,
       description: e.description || null,
       dateDebut: e.date_debut ? e.date_debut.split("T")[0] : null,
       dateFin: e.date_fin ? e.date_fin.split("T")[0] : null,
@@ -86,7 +90,17 @@ export async function GET(req: NextRequest) {
       }
       // TOUR 3 : toutes les épreuves de pôle sont proposées, pas seulement
       // celles des pôles demandés dans les vœux (décision de Felix, 06/10/2026).
-      result = parsed.map((e: any) => ({ ...e, secondaryGrid: null }));
+      // Inscriptions aux épreuves en distanciel : table absente = aucune.
+      const { data: regs } = await supabaseAdmin
+        .from("epreuve_registrations")
+        .select("epreuve_id")
+        .eq("candidate_id", payload.id);
+      const registered = new Set((regs || []).map((r: any) => r.epreuve_id));
+      result = parsed.map((e: any) => ({
+        ...e,
+        secondaryGrid: null,
+        isRegistered: registered.has(e.id),
+      }));
       // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour
       // pas encore commencé (statut "a_venir") — ni leur existence, ni
       // combien il en reste. Filtré côté serveur, pas seulement à l'affichage.
@@ -138,6 +152,10 @@ export async function POST(req: NextRequest) {
       ),
       is_pole_test: Boolean(body.isPoleTest),
       pole: body.pole || null,
+      // Épreuve en distanciel (pas de créneau) — colonne migrée le 06/10/2026.
+      ...(body.isDistanciel !== undefined
+        ? { is_distanciel: Boolean(body.isDistanciel) }
+        : {}),
       // Épreuves de groupe : le flag + la capacité max de candidats par
       // créneau (repris par bulk-create/generate comme max_candidates).
       is_group_epreuve:

@@ -29,6 +29,11 @@ interface Epreuve {
   dateDebut?: string | null;
   dateFin?: string | null;
   registrationOpen?: boolean;
+  /** Épreuve en distanciel : pas de créneau, le candidat s'inscrit seulement. */
+  isDistanciel?: boolean;
+  /** Inscrit à cette épreuve en distanciel. */
+  isRegistered?: boolean;
+  inscriptionDeadline?: string | null;
 }
 
 interface AvailableSlot {
@@ -123,6 +128,8 @@ export default function CandidateEpreuvesPage() {
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
+  // Épreuve en distanciel en cours d'inscription / de désinscription.
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [enrolledEpreuves, setEnrolledEpreuves] = useState<Set<string>>(new Set());
   const [enrolledSlotIds, setEnrolledSlotIds] = useState<Set<string>>(new Set());
@@ -393,6 +400,44 @@ export default function CandidateEpreuvesPage() {
     return { dates, timeRows, slotMap, minTime, maxTime };
   }, [visibleSlots]);
 
+  // ═══ Épreuves en distanciel : inscription sans créneau ═══
+  const isDeadlinePassed = (ep: Epreuve) =>
+    !!ep.inscriptionDeadline &&
+    new Date(ep.inscriptionDeadline).getTime() < Date.now();
+
+  const handleDistancielRegistration = async (ep: Epreuve, register: boolean) => {
+    setRegisteringId(ep.id);
+    setErrorMsg(null);
+    try {
+      if (register) await api.post(`/epreuves/${ep.id}/registration`);
+      else await api.delete(`/epreuves/${ep.id}/registration`);
+      setEpreuves((prev) =>
+        prev.map((e) => (e.id === ep.id ? { ...e, isRegistered: register } : e)),
+      );
+    } catch (err: any) {
+      setErrorMsg(
+        err?.response?.data?.error ||
+          (register
+            ? "Erreur lors de l'inscription"
+            : "Erreur lors de la désinscription"),
+      );
+    } finally {
+      setRegisteringId(null);
+    }
+  };
+
+  // Épreuves à distance du tour en cours auxquelles le candidat ne s'est pas
+  // encore inscrit : elles n'apparaissent pas dans le calendrier (aucun
+  // créneau), d'où un bandeau pour ne pas les rater.
+  const pendingDistanciel = epreuves.filter(
+    (e) =>
+      e.isDistanciel &&
+      !e.isRegistered &&
+      e.tour === activeTour &&
+      !isTourLocked(e.tour) &&
+      !isDeadlinePassed(e),
+  );
+
   // ═══ Enrollment handler ═══
   const handleEnrollInSlot = async (
     slot: AvailableSlot,
@@ -612,6 +657,38 @@ export default function CandidateEpreuvesPage() {
           <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-600">
             <X size={16} />
           </button>
+        </div>
+      )}
+
+      {/* Bandeau : épreuve(s) à distance pas encore choisies */}
+      {pendingDistanciel.length > 0 && (
+        <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+          <BookOpen size={18} className="flex-shrink-0 mt-0.5 text-blue-500" />
+          <div className="flex-1">
+            <p>
+              {pendingDistanciel.length === 1 ? (
+                <>
+                  L&apos;épreuve <strong>«&nbsp;{pendingDistanciel[0].name}&nbsp;»</strong>{" "}
+                  se passe à distance : pas de créneau à choisir, il suffit de
+                  vous y inscrire.
+                </>
+              ) : (
+                <>
+                  <strong>{pendingDistanciel.length} épreuves</strong> se passent
+                  à distance ({pendingDistanciel.map((e) => e.name).join(", ")}) :
+                  pas de créneau à choisir, il suffit de vous y inscrire.
+                </>
+              )}
+            </p>
+            {viewMode !== "epreuves" && (
+              <button
+                onClick={() => setViewMode("epreuves")}
+                className="mt-2 text-sm font-semibold text-blue-700 hover:underline"
+              >
+                Voir les épreuves pour m&apos;inscrire
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1018,6 +1095,24 @@ export default function CandidateEpreuvesPage() {
                                   </div>
 
                                   <div className="space-y-2 text-sm text-gray-600">
+                                    {ep.isDistanciel && (
+                                      <div className="px-2 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold">
+                                        💻 À distance — pas de créneau : les documents vous seront envoyés directement
+                                      </div>
+                                    )}
+                                    {ep.isDistanciel && ep.inscriptionDeadline && (
+                                      <div className="flex items-center gap-2">
+                                        <Clock size={14} className="text-gray-400 flex-shrink-0" />
+                                        <span className="text-xs text-gray-600">
+                                          Inscription jusqu&apos;au{" "}
+                                          {new Date(ep.inscriptionDeadline).toLocaleString("fr-FR", {
+                                            timeZone: "Europe/Paris",
+                                            dateStyle: "long",
+                                            timeStyle: "short",
+                                          })}
+                                        </span>
+                                      </div>
+                                    )}
                                     {enrolledSlot && (
                                       <div className="px-2 py-1 rounded-md bg-green-50 border border-green-200 text-green-700 text-xs font-semibold flex items-center gap-1.5">
                                         <Check size={12} /> Votre créneau d&apos;inscription
@@ -1108,8 +1203,54 @@ export default function CandidateEpreuvesPage() {
                                   </div>
                                 )}
 
+                                {/* Épreuve à distance : inscription sans créneau */}
+                                {ep.isDistanciel && isActive && (
+                                  <div className="px-4 pb-4 pt-1">
+                                    {ep.isRegistered ? (
+                                      <div className="space-y-2">
+                                        <div className="w-full py-2.5 text-sm font-semibold text-center text-green-700 bg-green-50 border border-green-200 rounded-lg">
+                                          Inscrit(e) &#10003;
+                                        </div>
+                                        {isDeadlinePassed(ep) ? (
+                                          <p className="text-xs text-gray-400 text-center italic px-2">
+                                            La désinscription n&apos;est plus possible (date limite passée).
+                                          </p>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleDistancielRegistration(ep, false)}
+                                            disabled={registeringId === ep.id}
+                                            className="w-full py-2 text-sm font-medium text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                          >
+                                            {registeringId === ep.id ? (
+                                              <><Loader2 className="animate-spin" size={14} /> Désinscription...</>
+                                            ) : (
+                                              "Se désinscrire"
+                                            )}
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : isDeadlinePassed(ep) ? (
+                                      <p className="text-xs text-gray-400 text-center italic px-2">
+                                        Les inscriptions à cette épreuve sont closes.
+                                      </p>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleDistancielRegistration(ep, true)}
+                                        disabled={registeringId === ep.id}
+                                        className="w-full py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                      >
+                                        {registeringId === ep.id ? (
+                                          <><Loader2 className="animate-spin" size={14} /> Inscription...</>
+                                        ) : (
+                                          <><Check size={15} /> S&apos;inscrire à l&apos;épreuve</>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+
                                 {/* Registration status */}
-                                {ep.type !== "commune" && isActive && (
+                                {ep.type !== "commune" && !ep.isDistanciel && isActive && (
                                   <div className="px-4 pb-4 pt-1">
                                     {isEnrolled && enrolledSlot ? (
                                       <div className="space-y-2">

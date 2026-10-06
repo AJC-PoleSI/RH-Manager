@@ -90,9 +90,13 @@ export async function PUT(
       updateData.date_fin = body.dateFin
         ? new Date(body.dateFin).toISOString()
         : null;
-    // Only set inscription_deadline if a non-empty value is provided (column may not exist yet)
-    if (body.inscriptionDeadline) {
-      updateData.inscription_deadline = new Date(body.inscriptionDeadline).toISOString();
+    // Date limite d'inscription : `null` (bouton « Supprimer la date
+    // limite ») l'efface. Avant le 06/10/2026 une valeur vide était ignorée et
+    // la date limite ne pouvait plus être retirée.
+    if (body.inscriptionDeadline !== undefined) {
+      updateData.inscription_deadline = body.inscriptionDeadline
+        ? new Date(body.inscriptionDeadline).toISOString()
+        : null;
     }
     if (body.candidatsAttendus !== undefined)
       updateData.candidats_attendus = body.candidatsAttendus
@@ -103,6 +107,8 @@ export async function PUT(
     if (body.isPoleTest !== undefined)
       updateData.is_pole_test = body.isPoleTest;
     if (body.pole !== undefined) updateData.pole = body.pole;
+    if (body.isDistanciel !== undefined)
+      updateData.is_distanciel = Boolean(body.isDistanciel);
     if (body.isGroupEpreuve !== undefined)
       updateData.is_group_epreuve = Boolean(body.isGroupEpreuve);
     else if (body.type !== undefined)

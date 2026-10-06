@@ -38,7 +38,7 @@ function formatParis(d: Date): string {
  */
 export function registrationBlockReason(ctx: RegistrationContext): string | null {
   if (!ctx.isDistanciel) {
-    return "Cette épreuve se passe sur un créneau : inscris-toi depuis le calendrier.";
+    return "Cette épreuve se passe sur un créneau : inscrivez-vous depuis le calendrier.";
   }
   if (ctx.tourStatus === "a_venir") {
     return "Ce tour n'a pas encore commencé.";

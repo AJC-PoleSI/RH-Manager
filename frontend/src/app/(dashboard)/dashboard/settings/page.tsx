@@ -81,6 +81,8 @@ interface NewEpreuveForm {
   candidatsAttendus: string;
   margePct: string;
   inscriptionDeadline: string;
+  /** Épreuve en distanciel : pas de créneau, le candidat s'inscrit seulement. */
+  isDistanciel: boolean;
   /* shared */
   description: string;
   color: string;
@@ -123,6 +125,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   candidatsAttendus: "",
   margePct: "25",
   inscriptionDeadline: "",
+  isDistanciel: false,
   description: "",
   color: "#3B82F6",
   documents: null,
@@ -528,6 +531,7 @@ export default function CreationPage() {
       inscriptionDeadline: ep.inscriptionDeadline
         ? isoToDatetimeLocal(ep.inscriptionDeadline)
         : "",
+      isDistanciel: !!ep.isDistanciel,
       description: ep.description || "",
       color: ep.color || "#3B82F6",
       documents: null,
@@ -575,6 +579,7 @@ export default function CreationPage() {
           : {}),
         pole: form.pole || null,
         isPoleTest: !!form.pole,
+        isDistanciel: !isCommune && form.isDistanciel,
         isGroupEpreuve: form.type === "groupe",
         groupSize:
           form.type === "groupe" ? parseInt(form.groupSize) || 1 : 1,
@@ -1443,6 +1448,29 @@ export default function CreationPage() {
                       )}
                     </p>
                   )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.isDistanciel}
+                      onChange={(e) =>
+                        handleFormChange("isDistanciel", e.target.checked)
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      <span className="font-medium">Épreuve en distanciel</span>
+                      <span className="block text-xs text-gray-500">
+                        Pas de créneau ni de salle : le candidat s&apos;inscrit
+                        simplement sur l&apos;application (jusqu&apos;à la date
+                        limite si vous en fixez une), et vous voyez la liste
+                        des inscrits dans le Planning. Les documents sont
+                        envoyés hors application. Les membres du pôle notent
+                        les inscrits.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
             )}

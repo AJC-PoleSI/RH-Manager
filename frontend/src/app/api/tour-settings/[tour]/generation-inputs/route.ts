@@ -78,6 +78,8 @@ export async function GET(
         )
         .eq("tour", tourNum)
         .neq("type", "commune")
+        // Épreuve en distanciel : aucun créneau à générer.
+        .eq("is_distanciel", false)
         .order("name"),
       supabaseAdmin
         .from("tour_settings")
