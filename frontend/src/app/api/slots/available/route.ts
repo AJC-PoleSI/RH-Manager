@@ -135,11 +135,6 @@ export async function GET(req: NextRequest) {
       ),
     }));
 
-    // TOUR 3 : pôles demandés par le candidat — les épreuves de pôle des
-    // autres pôles ne lui sont pas proposées.
-    const wishedPoles = isCandidate
-      ? await getCandidateWishedPoles(candidateId)
-      : [];
     // VISIBILITÉ TOURS (`toursByNumber`, lu plus haut) : défense en
     // profondeur, même si en pratique un créneau d'un tour "a_venir" n'est
     // pas encore publié.
