@@ -200,11 +200,13 @@ export default function PlanningPage() {
   ) : null;
 
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
+  const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
   // Épreuve sélectionnée en distanciel : la page montre ses inscrits au lieu
-  // des ouvertures de salles et des créneaux.
+  // des ouvertures de salles et des créneaux. Déclarée APRÈS
+  // `selectedEpreuveId` : la lire avant son `useState` lève une ReferenceError
+  // à chaque rendu (page Planning blanche en prod le 07/10/2026).
   const selectedDistanciel =
     epreuves.find((e) => e.id === selectedEpreuveId && e.isDistanciel) || null;
-  const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
   /**
    * Effectif du TOUR de l'épreuve sélectionnée — candidats attendus / marge
    * vivent au niveau du tour (partagés entre ses épreuves), pas de l'épreuve.
