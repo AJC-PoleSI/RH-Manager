@@ -30,8 +30,9 @@ export interface MemberPoleRow {
 /**
  * Candidats attendus sur une épreuve :
  *   - admis au tour précédent (au tour 1, tout le monde) et jamais refusés ;
- *   - épreuve de pôle : ayant un vœu pour ce pôle (tout tour confondu — même
- *     règle que getCandidateWishedPoles, qui gère ce qu'un candidat voit).
+ *   - épreuve de pôle : ayant un vœu pour ce pôle (tout tour confondu). C'est
+ *     une ESTIMATION : depuis le 06/10/2026, tout candidat peut s'inscrire à
+ *     n'importe quelle épreuve de pôle, vœux ou pas.
  * La comparaison de pôle ignore accents et casse (valeurs saisies à la main).
  */
 export function expectedCandidatesFor(o: {
