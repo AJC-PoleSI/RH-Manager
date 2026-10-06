@@ -64,6 +64,9 @@ export async function isMemberAssignedToSlot(
  * (convocation globale) et ne sont donc jamais retournées ici : seul un
  * admin peut les noter (`canEvaluate` court-circuite pour lui).
  *
+ * Les épreuves EN DISTANCIEL n'ont pas de créneau non plus, mais une
+ * inscription : un membre du pôle de l'épreuve note les candidats inscrits.
+ *
  * C'est la règle unique qui gouverne l'accès aux évaluations (individuelles,
  * collectives, commentaires, cochage).
  *
