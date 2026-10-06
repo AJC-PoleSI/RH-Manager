@@ -249,6 +249,7 @@ export default function TimeBandGrid({
     (clientY: number, laneEl: HTMLElement) => {
       const el = hoverRef.current;
       if (!el || dragRef.current) return;
+      // eslint-disable-next-line no-use-before-define -- lu au survol (événement), après le rendu
       const box = boxOfRef.current(laneEl);
       const r = laneEl.getBoundingClientRect();
       const min = clampToGrid(

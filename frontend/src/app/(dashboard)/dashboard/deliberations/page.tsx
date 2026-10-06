@@ -53,9 +53,11 @@ export interface Candidate {
   email: string;
   phone?: string;
   formation?: string;
+  // eslint-disable-next-line no-use-before-define -- type TypeScript, effacé à la compilation
   evaluations?: Evaluation[];
   /** Notes du groupe des créneaux de business game du candidat. */
   groupEvaluations?: GroupEvaluation[];
+  // eslint-disable-next-line no-use-before-define -- type TypeScript, effacé à la compilation
   deliberation?: Deliberation;
   wishes?: Wish[];
   /** Trombinoscope : les octets de la photo sont servis par une route dédiée. */
@@ -386,6 +388,7 @@ export default function DeliberationsPage() {
         setTimeout(() => {
           setSwipeDirection(null);
           setExpanded(false);
+          // eslint-disable-next-line no-use-before-define -- lu dans un minuteur déclenché par un clic, après le rendu
           if (currentIndex < filteredCandidates.length - 1) {
             setCurrentIndex((prev) => prev + 1);
           }

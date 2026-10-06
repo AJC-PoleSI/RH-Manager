@@ -67,6 +67,8 @@ const ROOM_PALETTE = [
 const FALLBACK_MIN_TIME = "08:00:00";
 const FALLBACK_MAX_TIME = "19:00:00";
 
+type Density = "compact" | "confort";
+
 /** Hauteur (px) d'une ligne de 30 min selon la densité choisie.
  *  Compact : la journée entière tient à l'écran sans scroller. */
 const ROW_HEIGHT: Record<Density, number> = {
@@ -74,7 +76,6 @@ const ROW_HEIGHT: Record<Density, number> = {
   confort: 34,
 };
 
-type Density = "compact" | "confort";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 /** Get Monday of the week containing `date` */
