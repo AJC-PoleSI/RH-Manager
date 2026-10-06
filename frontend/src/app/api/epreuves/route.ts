@@ -85,12 +85,9 @@ export async function GET(req: NextRequest) {
       if ((await getEliminationTour(payload.id)) != null) {
         return Response.json([]);
       }
-      const wishedPoles = await getCandidateWishedPoles(payload.id);
-      result = parsed
-        .filter(
-          (e: any) => !e.isPoleTest || !e.pole || wishedPoles.includes(e.pole),
-        )
-        .map((e: any) => ({ ...e, secondaryGrid: null }));
+      // TOUR 3 : toutes les épreuves de pôle sont proposées, pas seulement
+      // celles des pôles demandés dans les vœux (décision de Felix, 06/10/2026).
+      result = parsed.map((e: any) => ({ ...e, secondaryGrid: null }));
       // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour
       // pas encore commencé (statut "a_venir") — ni leur existence, ni
       // combien il en reste. Filtré côté serveur, pas seulement à l'affichage.
