@@ -151,6 +151,8 @@ export default function NotesDetailPanel({
           tour: ev.epreuve?.tour ?? null,
           obtained: sumScores(ev.scores),
           maxTotal: Number(ev.epreuve?.maxTotal),
+          // Coefficient choisi par l'admin (07/10/2026) ; null = automatique.
+          coef: ev.epreuve?.coefficient ?? null,
         })),
       })),
     [candidates, evalsByCandidate],

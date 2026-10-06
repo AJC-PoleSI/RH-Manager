@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import {
   formatScore,
+  getCriterionInput,
   getMaxPoints,
   parseScoreInput,
   type EvaluationCriterion,
@@ -16,10 +17,14 @@ import {
 import { POLL, startPolling } from "@/lib/poll";
 import { mergeScores, ScoreGrid } from "@/components/evaluation/ScoreGrid";
 import SecondGridCard from "@/components/evaluation/SecondGridCard";
+import ProblemBankField, {
+  type ProblemBankState,
+} from "@/components/evaluation/ProblemBankField";
 import {
-  GROUP_EVALUATION_MAX,
-  GROUP_EVALUATION_QUESTIONS,
+  DEFAULT_GROUP_GRID,
+  type GroupGrid,
 } from "@/lib/group-evaluation-criteria";
+import { problemScore, type ProblemBank } from "@/lib/problem-bank";
 
 type Question = EvaluationCriterion;
 
@@ -79,6 +84,19 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [noteUnavailable, setNoteUnavailable] = useState<string | null>(null);
   const noteSaveTimer = useRef<NodeJS.Timeout | null>(null);
   const noteDirty = useRef(false);
+
+  // ── Banque de questions (Tour 3, échange groupé) ──
+  // Question choisie pour le CRÉNEAU (partagée par ses examinateurs) et
+  // pistes cochées pour CE candidat. La note du critère en découle.
+  const [slotQuestion, setSlotQuestion] = useState<ProblemBankState>({
+    questionKey: null,
+    locked: false,
+    loading: false,
+    error: null,
+  });
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [problemChecked, setProblemChecked] = useState<number[]>([]);
+  const [problemExtra, setProblemExtra] = useState(0);
 
   // ── Shared collaboration state (peer evals + group comment feed) ──
   const [peerEvals, setPeerEvals] = useState<any[]>([]);
@@ -168,6 +186,17 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const maxTotal = questions.reduce((sum, q) => sum + getMaxPoints(q), 0);
   const otherEvals = peerEvals.filter((e) => !e.isMine);
 
+  // Banque de questions : renvoyée par allowed-epreuves seulement si elle vise
+  // bien un critère « problem_bank » de la grille (sinon null).
+  const problemBank: ProblemBank | null = selectedEpreuve?.problemBank ?? null;
+  const problemBankIndex = problemBank ? problemBank.criterionIndex : -1;
+  // Grille d'évaluation du groupe propre à l'épreuve ; sans réglage, la
+  // grille de 43 points d'avant. Désactivée → pas de carte « groupe ».
+  const groupGrid: GroupGrid = selectedEpreuve?.groupGrid ?? DEFAULT_GROUP_GRID;
+  const groupNoteEnabled = isGroupEpreuve && !groupGrid.disabled;
+  const groupQuestions = groupGrid.disabled ? [] : groupGrid.questions;
+  const groupMaxTotal = groupGrid.disabled ? 0 : groupGrid.maxTotal;
+
   // ── Load group/binôme evaluation when épreuve selected ──
   const loadGroupEval = useCallback(async () => {
     if (!selectedEpreuveId || !showSharedPanel) return;
@@ -236,7 +265,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   // ── Load the group grid (épreuve de groupe) ──
   const loadGroupNote = useCallback(async () => {
-    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    if (!selectedEpreuveId || !groupNoteEnabled) return;
     // Ne pas écraser une saisie locale non sauvegardée
     if (noteDirty.current || noteSaveTimer.current) return;
     setNoteLoading(true);
@@ -273,14 +302,116 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     } finally {
       setNoteLoading(false);
     }
-  }, [id, selectedEpreuveId, isGroupEpreuve]);
+  }, [id, selectedEpreuveId, groupNoteEnabled]);
+
+  // ── Question du créneau (banque de questions) ──
+  // Question connue à l'écran, pour repérer un changement fait par un autre
+  // examinateur du créneau entre deux rafraîchissements.
+  const slotQuestionKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    slotQuestionKeyRef.current = slotQuestion.questionKey;
+  }, [slotQuestion.questionKey]);
+
+  const loadSlotQuestion = useCallback(async () => {
+    if (!selectedEpreuveId || !problemBank) return;
+    // Pas d'indicateur de chargement pendant les rafraîchissements : le
+    // sélecteur clignoterait toutes les 20 s.
+    setSlotQuestion((s) => (s.questionKey ? s : { ...s, loading: true }));
+    try {
+      const res = await api.get(
+        `/evaluations/slot-question?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
+      );
+      const nextKey: string | null = res.data?.questionKey ?? null;
+      const previousKey = slotQuestionKeyRef.current;
+      if (previousKey && nextKey && previousKey !== nextKey) {
+        toast(
+          "Un autre examinateur a changé la question du créneau : recochez les pistes.",
+          "info",
+        );
+      }
+      setSlotQuestion({
+        questionKey: nextKey,
+        locked: !!res.data?.locked,
+        loading: false,
+        error: null,
+      });
+    } catch (e: any) {
+      // Une panne passagère pendant un rafraîchissement ne doit pas effacer
+      // la question déjà affichée — ni, par ricochet, les pistes cochées.
+      setSlotQuestion((s) =>
+        s.questionKey
+          ? { ...s, loading: false }
+          : {
+              questionKey: null,
+              locked: false,
+              loading: false,
+              error:
+                e?.response?.data?.error ||
+                "Question du créneau indisponible pour le moment.",
+            },
+      );
+    }
+    // `problemBank` change d'identité à chaque rendu : on dépend de l'épreuve.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, selectedEpreuveId, !!problemBank, toast]);
+
+  // Changement d'épreuve : on repart d'un état vierge pour la banque.
+  useEffect(() => {
+    setSlotQuestion({ questionKey: null, locked: false, loading: false, error: null });
+    setProblemChecked([]);
+    setProblemExtra(0);
+  }, [selectedEpreuveId]);
+
+  // Question changée (par moi ou un autre examinateur du créneau) : les
+  // pistes cochées portaient sur l'ancienne question, on les remet à zéro.
+  useEffect(() => {
+    setProblemChecked([]);
+    setProblemExtra(0);
+  }, [slotQuestion.questionKey]);
+
+  // La note du critère « Réponse à la problématique » suit les pistes.
+  useEffect(() => {
+    if (problemBankIndex < 0 || !problemBank) return;
+    const score = slotQuestion.questionKey
+      ? problemScore(problemChecked.length, problemExtra, problemBank.maxPoints)
+      : 0;
+    setIndivScores((p) => ({ ...p, [problemBankIndex]: String(score) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [problemBankIndex, problemChecked, problemExtra, slotQuestion.questionKey]);
+
+  const handleSelectQuestion = async (questionKey: string) => {
+    if (!selectedEpreuveId) return;
+    setSavingQuestion(true);
+    try {
+      const res = await api.put("/evaluations/slot-question", {
+        candidateId: id,
+        epreuveId: selectedEpreuveId,
+        questionKey,
+      });
+      setSlotQuestion({
+        questionKey: res.data?.questionKey ?? questionKey,
+        locked: !!res.data?.locked,
+        loading: false,
+        error: null,
+      });
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Impossible d'enregistrer la question.",
+        "error",
+      );
+      await loadSlotQuestion();
+    } finally {
+      setSavingQuestion(false);
+    }
+  };
 
   useEffect(() => {
     loadGroupEval();
     loadGroupNote();
     loadPeers();
     loadGroupComments();
-  }, [loadGroupEval, loadGroupNote, loadPeers, loadGroupComments]);
+    loadSlotQuestion();
+  }, [loadGroupEval, loadGroupNote, loadPeers, loadGroupComments, loadSlotQuestion]);
 
   // Poll all shared data every 20s (visible tab only) so every examiner sees
   // the others' notes, the group grid and the comment feed evolve. Each tick
@@ -294,6 +425,8 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       loadGroupNote();
       loadPeers();
       loadGroupComments();
+      // La question peut être choisie par un autre examinateur du créneau.
+      loadSlotQuestion();
     }, POLL.chat);
   }, [
     showSharedPanel,
@@ -303,6 +436,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     loadGroupNote,
     loadPeers,
     loadGroupComments,
+    loadSlotQuestion,
   ]);
 
   const validateScore = (
@@ -594,15 +728,25 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       toast("Corrigez les notes avant de soumettre", "error");
       return;
     }
+    // Banque de questions : impossible de compter les pistes sans savoir
+    // quelle question a été posée au groupe.
+    if (problemBank && !slotQuestion.questionKey) {
+      toast(
+        "Choisissez d'abord la question posée au groupe (critère « Réponse à la problématique »).",
+        "error",
+      );
+      return;
+    }
     // Critères laissés vides : comptés comme 0 plutôt que de bloquer
     // l'enregistrement (25 critères sur certaines épreuves, un oubli ne
-    // doit pas empêcher de sauvegarder). On prévient une seule fois.
+    // doit pas empêcher de sauvegarder). On prévient une seule fois. Une
+    // case à cocher laissée vide vaut 0 normalement : pas d'alerte pour elle.
     const finalScores: Record<number, string> = { ...indivScores };
     let missingCount = 0;
-    questions.forEach((_, idx) => {
+    questions.forEach((q, idx) => {
       if (finalScores[idx] === undefined || finalScores[idx] === "") {
         finalScores[idx] = "0";
-        missingCount += 1;
+        if (getCriterionInput(q) !== "checkbox") missingCount += 1;
       }
     });
     if (missingCount > 0) {
@@ -621,12 +765,29 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         scores: finalScores,
         comment: indivComment,
         isGroup: false,
+        // Pistes cochées : le serveur en recalcule la note du critère.
+        ...(problemBank && slotQuestion.questionKey
+          ? {
+              problemChecks: {
+                questionKey: slotQuestion.questionKey,
+                checked: problemChecked,
+                extra: problemExtra,
+              },
+            }
+          : {}),
       });
       toast("Évaluation individuelle enregistrée !", "success");
       router.push("/dashboard/candidates");
     } catch (error: any) {
       console.error(error);
       const code = error?.response?.data?.code;
+      // Question du créneau changée par un autre examinateur pendant la
+      // saisie : on la recharge, les pistes sont à recocher.
+      if (code === "SLOT_QUESTION_CHANGED") {
+        toast(error?.response?.data?.error, "error");
+        await loadSlotQuestion();
+        return;
+      }
       // Un pair a noté ce candidat entre-temps (business game) : on recharge
       // pour afficher le panneau « Notation close » plutôt qu'un formulaire
       // qui ne passera plus.
@@ -738,9 +899,26 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* ───────── Consignes de l'épreuve (description) : toujours visibles
+          des examinateurs ; les candidats ne la voient qu'à l'ouverture du
+          planning (cf. lib/epreuve-candidate-view). ───────── */}
+      {selectedEpreuve?.description && (
+        <Card className="border-blue-100">
+          <CardHeader>
+            <CardTitle className="text-base">Consignes de l&apos;épreuve</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              {selectedEpreuve.description}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ───────── Évaluation DU GROUPE (business game) : une seule grille
-          par créneau, remplie par un seul examinateur ───────── */}
-      {selectedEpreuve && isGroupEpreuve && (
+          par créneau, remplie par un seul examinateur. Absente si l'épreuve
+          l'a désactivée (epreuves.group_grid). ───────── */}
+      {selectedEpreuve && groupNoteEnabled && (
         <Card className="border-emerald-200">
           <CardHeader className="bg-emerald-50/50">
             <div className="flex items-start justify-between flex-wrap gap-2">
@@ -758,7 +936,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 <p className="text-lg font-bold text-emerald-700">
                   {totalOf(noteScores)}
                   <span className="text-xs font-medium text-emerald-400">
-                    {" "}/ {GROUP_EVALUATION_MAX}
+                    {" "}/ {groupMaxTotal}
                   </span>
                 </p>
                 <p className="text-[10px] text-emerald-500 -mt-0.5">
@@ -815,7 +993,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 </div>
 
                 <ScoreGrid
-                  questions={GROUP_EVALUATION_QUESTIONS}
+                  questions={groupQuestions}
                   scores={noteScores}
                   scoreErrors={noteErrors}
                   onChange={handleNoteScore}
@@ -1101,6 +1279,23 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 scores={indivScores}
                 scoreErrors={indivErrors}
                 onChange={handleIndivScore}
+                renderCustom={(q, idx) =>
+                  problemBank && idx === problemBankIndex ? (
+                    <ProblemBankField
+                      bank={problemBank}
+                      criterion={q}
+                      state={slotQuestion}
+                      saving={savingQuestion}
+                      onSelectQuestion={handleSelectQuestion}
+                      checked={problemChecked}
+                      extra={problemExtra}
+                      onChecksChange={(checked, extra) => {
+                        setProblemChecked(checked);
+                        setProblemExtra(extra);
+                      }}
+                    />
+                  ) : null
+                }
               />
               <div className="space-y-2 border-t border-gray-100 pt-4">
                 <Label>Commentaire global</Label>

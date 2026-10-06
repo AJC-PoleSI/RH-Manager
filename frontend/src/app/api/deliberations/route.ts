@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { latestTourWishes } from "@/lib/wishes";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { getTotalMaxPoints } from "@/lib/evaluation-criteria";
+import { fetchEpreuveCoefficients } from "@/lib/epreuve-coefficient";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
 import { getSecondGridEvaluationsByCandidate } from "@/lib/second-grid";
@@ -140,6 +141,12 @@ export async function GET(req: NextRequest) {
       (candidates || []).map((c: any) => c.id),
     );
 
+    // Coefficient choisi de chaque épreuve (Réglages → Coefficients,
+    // 07/10/2026). Lu à part plutôt que dans la jointure `epreuves(…)` : tant
+    // que la migration manque, la nommer ferait échouer toute la délibération
+    // (table vide ⇒ tout en automatique, barème ÷ 20, comme avant).
+    const coefficients = await fetchEpreuveCoefficients();
+
     const result = (candidates || []).map((c) => {
       let evaluations: any[] = c.candidate_evaluations || [];
 
@@ -198,6 +205,9 @@ export async function GET(req: NextRequest) {
                 // Sans lui, une épreuve notée /5 et une notée /20 pèsent
                 // identiquement dans la moyenne affichée en délibération.
                 maxTotal: getTotalMaxPoints(ev.epreuves.evaluation_questions),
+                // Poids choisi par l'admin dans la moyenne ; null =
+                // automatique (barème ÷ 20, cf. effectiveCoefficient).
+                coefficient: coefficients.get(ev.epreuves.id) ?? null,
               }
             : null,
         };

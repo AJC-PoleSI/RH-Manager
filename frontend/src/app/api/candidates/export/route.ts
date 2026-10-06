@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import { fetchEpreuveCoefficients } from "@/lib/epreuve-coefficient";
 import {
   getExaminersByEvaluation,
   mergeExaminers,
@@ -67,11 +68,24 @@ export async function GET(req: NextRequest) {
       (data || []).map((c: any) => c.id),
     );
 
+    // Coefficient choisi de chaque épreuve (Réglages → Coefficients,
+    // 07/10/2026), injecté dans `epreuves.coefficient` pour que l'export
+    // calcule les mêmes moyennes que la délibération. Lu à part : nommer la
+    // colonne dans la jointure ferait échouer l'export tant que la migration
+    // manque (table vide ⇒ tout en automatique, barème ÷ 20).
+    const coefficients = await fetchEpreuveCoefficients();
+
     const withExaminers = (data || []).map((c: any) => ({
       ...c,
       candidate_evaluations: [
         ...(c.candidate_evaluations || []).map((ev: any) => ({
         ...ev,
+        epreuves: ev.epreuves
+          ? {
+              ...ev.epreuves,
+              coefficient: coefficients.get(ev.epreuves.id) ?? null,
+            }
+          : ev.epreuves,
         examiners: mergeExaminers(
           ev.members
             ? {

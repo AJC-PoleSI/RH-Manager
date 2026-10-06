@@ -7,8 +7,9 @@ import {
   validateScores,
 } from "@/lib/evaluation-criteria";
 import {
-  GROUP_EVALUATION_MAX,
-  GROUP_EVALUATION_QUESTIONS,
+  resolveGroupGrid,
+  type ActiveGroupGrid,
+  type GroupGrid,
 } from "@/lib/group-evaluation-criteria";
 import { NextRequest } from "next/server";
 
@@ -25,9 +26,17 @@ import { NextRequest } from "next/server";
 
 interface Resolved {
   slotId: string;
+  /** Grille de groupe de l'épreuve (epreuves.group_grid, défaut = 43 pts). */
+  grid?: GroupGrid;
   /** Réponse d'erreur déjà prête, quand la résolution échoue. */
   error?: Response;
 }
+
+/** Réponse quand l'épreuve n'a pas d'évaluation du groupe (group_grid désactivé). */
+const GROUP_NOTE_DISABLED = {
+  error: "Cette épreuve n'a pas d'évaluation du groupe.",
+  code: "GROUP_NOTE_DISABLED",
+};
 
 /** Table absente : la migration group_evaluations n'est pas encore appliquée. */
 function isMissingTableError(err: unknown): boolean {
@@ -87,9 +96,10 @@ async function resolveGroupSlot(
     };
   }
 
+  // select("*") : `group_grid` peut ne pas encore exister en base.
   const { data: epreuve } = await supabaseAdmin
     .from("epreuves")
-    .select("is_group_epreuve")
+    .select("*")
     .eq("id", epreuveId)
     .single();
 
@@ -118,7 +128,7 @@ async function resolveGroupSlot(
     };
   }
 
-  return { slotId: slot.slotId };
+  return { slotId: slot.slotId, grid: resolveGroupGrid(epreuve?.group_grid) };
 }
 
 /** Met en forme une ligne group_evaluations pour le client. */
@@ -162,6 +172,10 @@ export async function GET(req: NextRequest) {
 
   const resolved = await resolveGroupSlot(req, candidateId, epreuveId);
   if (resolved.error) return resolved.error;
+  if (!resolved.grid || resolved.grid.disabled) {
+    return Response.json({ disabled: true, exists: false, canEdit: false });
+  }
+  const grid: ActiveGroupGrid = resolved.grid;
 
   const { data, error } = await supabaseAdmin
     .from("group_evaluations")
@@ -177,8 +191,9 @@ export async function GET(req: NextRequest) {
   }
 
   const base = {
-    questions: GROUP_EVALUATION_QUESTIONS,
-    maxTotal: GROUP_EVALUATION_MAX,
+    title: grid.title,
+    questions: grid.questions,
+    maxTotal: grid.maxTotal,
     slotId: resolved.slotId,
   };
 
@@ -205,17 +220,21 @@ export async function POST(req: NextRequest) {
   const { candidateId, epreuveId, scores, comment } = body || {};
   const resolved = await resolveGroupSlot(req, candidateId, epreuveId);
   if (resolved.error) return resolved.error;
+  if (!resolved.grid || resolved.grid.disabled) {
+    return Response.json(GROUP_NOTE_DISABLED, { status: 409 });
+  }
+  const grid: ActiveGroupGrid = resolved.grid;
 
   // Barème : chaque note doit tenir dans [0, points max du critère] — même
   // règle que les évaluations individuelles (lib/evaluation-criteria).
-  const invalid = validateScores(GROUP_EVALUATION_QUESTIONS, scores);
+  const invalid = validateScores(grid.questions, scores);
   if (invalid) {
     return Response.json(
       { error: scoreValidationMessage(invalid) },
       { status: 400 },
     );
   }
-  const normalized = normalizeScores(scores, GROUP_EVALUATION_QUESTIONS);
+  const normalized = normalizeScores(scores, grid.questions);
   const cleanComment = typeof comment === "string" ? comment : "";
 
   const { data: existing, error: readError } = await supabaseAdmin

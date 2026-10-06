@@ -9,6 +9,9 @@ import {
   buildClosureIndex,
   evaluationClosure,
 } from "@/lib/evaluation-closure";
+import { parseQuestions } from "@/lib/evaluation-criteria";
+import { resolveGroupGrid } from "@/lib/group-evaluation-criteria";
+import { bankMatchesGrid, parseProblemBank } from "@/lib/problem-bank";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/allowed-epreuves?candidateId=X
@@ -33,11 +36,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    let query = supabaseAdmin
-      .from("epreuves")
-      .select(
-        "id, name, type, tour, is_group_epreuve, evaluation_questions, date_debut",
-      );
+    // select("*") : `problem_bank` et `group_grid` (Tour 3) peuvent ne pas
+    // encore exister en base — les nommer ferait échouer toute la page.
+    let query = supabaseAdmin.from("epreuves").select("*");
 
     if (!user.isAdmin) {
       const allowedIds = await listEvaluableEpreuveIds(user.id, candidateId);
@@ -136,6 +137,18 @@ export async function GET(req: NextRequest) {
               }
             })()
           : (e.evaluation_questions ?? []),
+      // Consignes de l'épreuve, affichées en tête de la page de notation.
+      description: e.description || null,
+      // Banque de questions de l'échange groupé (Tour 3) — seulement si
+      // elle vise bien un critère « problem_bank » de la grille.
+      problemBank: (() => {
+        const bank = parseProblemBank(e.problem_bank);
+        return bank && bankMatchesGrid(bank, parseQuestions(e.evaluation_questions))
+          ? bank
+          : null;
+      })(),
+      // Grille d'évaluation du groupe (null en base = grille de 43 points).
+      groupGrid: resolveGroupGrid(e.group_grid),
     }));
 
     // Tri stable : par tour puis par nom.

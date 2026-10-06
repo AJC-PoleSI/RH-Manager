@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import AnnouncementComposer from "@/components/announcements/AnnouncementComposer";
 import WishesReminderCard from "@/components/announcements/WishesReminderCard";
+import CoefficientsPanel from "@/components/settings/CoefficientsPanel";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { estimateSlotsNeeded, formatSlotEstimate } from "@/lib/slot-estimator";
@@ -54,7 +55,25 @@ interface Critere {
   maxPoints: number;
   /** Précision affichée derrière le « i » de la grille de notation. */
   hint?: string;
+  /** Mode de saisie (lib/evaluation-criteria : vide = saisie chiffrée). */
+  input?: string;
+  /** Titre de bloc pour regrouper les critères (facultatif). */
+  section?: string;
+  /**
+   * Champs stockés que le formulaire ne sait pas éditer : recopiés tels
+   * quels à l'enregistrement. Sans ça, réenregistrer une épreuve effaçait
+   * tout champ inconnu de sa grille (07/10/2026).
+   */
+  extra?: Record<string, unknown>;
 }
+
+/** Modes de saisie proposés dans l'éditeur de critères. */
+const CRITERION_INPUTS: { value: string; label: string }[] = [
+  { value: "", label: "Note chiffrée" },
+  { value: "checkbox", label: "Case à cocher (1 pt)" },
+  { value: "scale", label: "Échelle 0 → max" },
+  { value: "problem_bank", label: "Pistes (banque de questions)" },
+];
 
 // Barème par défaut d'un critère : /20. C'est aussi le repli utilisé par
 // l'API et par la grille de notation (`q.weight || q.maxScore || 20`).
@@ -136,22 +155,45 @@ const EMPTY_FORM: NewEpreuveForm = {
   hadSecondGrid: false,
 };
 
-/** Critère du formulaire → critère stocké ({ q, weight, hint? }). */
+/** Critère du formulaire → critère stocké ({ q, weight, hint?, input?, section? }). */
 function toStoredCriterion(c: Critere) {
   return {
+    ...(c.extra || {}),
     q: c.name,
-    // `weight` est lu par l'API comme le nombre de points max du critère.
-    weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
+    // `weight` est lu par l'API comme le nombre de points max du critère ;
+    // une case à cocher vaut toujours 1 point.
+    weight:
+      c.input === "checkbox"
+        ? 1
+        : Number(c.maxPoints) > 0
+          ? Number(c.maxPoints)
+          : DEFAULT_MAX_POINTS,
     ...(c.hint?.trim() ? { hint: c.hint.trim() } : {}),
+    ...(c.input ? { input: c.input } : {}),
+    ...(c.section?.trim() ? { section: c.section.trim() } : {}),
   };
 }
 
 /** Critère stocké → critère du formulaire. */
 function fromStoredCriterion(q: any): Critere {
+  const {
+    q: _q,
+    name: _name,
+    weight: _weight,
+    maxScore: _maxScore,
+    coefficient: _coefficient,
+    hint,
+    input,
+    section,
+    ...extra
+  } = q || {};
   return {
-    name: q.q || q.name || "",
-    maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
-    hint: q.hint || "",
+    name: q?.q || q?.name || "",
+    maxPoints: q?.weight || q?.maxScore || q?.coefficient || DEFAULT_MAX_POINTS,
+    hint: hint || "",
+    input: typeof input === "string" ? input : "",
+    section: typeof section === "string" ? section : "",
+    extra,
   };
 }
 
@@ -187,15 +229,20 @@ function CriteriaEditor({
               <div className="flex items-center gap-1">
                 <input
                   type="number"
-                  value={c.maxPoints}
+                  value={c.input === "checkbox" ? 1 : c.maxPoints}
+                  disabled={c.input === "checkbox"}
                   onChange={(e) =>
                     update(idx, "maxPoints", parseFloat(e.target.value) || 0)
                   }
-                  className="w-20 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-20 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                   placeholder="Points"
                   min={1}
                   step={1}
-                  title="Nombre de points maximum pour ce critère"
+                  title={
+                    c.input === "checkbox"
+                      ? "Une case à cocher vaut toujours 1 point"
+                      : "Nombre de points maximum pour ce critère"
+                  }
                 />
                 <span className="text-sm text-gray-500 whitespace-nowrap">
                   pts max
@@ -219,6 +266,27 @@ function CriteriaEditor({
               className="w-full border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Précision pour l'examinateur (facultatif, affichée via le « i »)"
             />
+            <div className="flex items-center gap-2">
+              <select
+                value={c.input || ""}
+                onChange={(e) => update(idx, "input", e.target.value)}
+                className="border border-gray-200 rounded-md px-2 py-1.5 text-xs text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title="Comment l'examinateur saisit ce critère"
+              >
+                {CRITERION_INPUTS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={c.section || ""}
+                onChange={(e) => update(idx, "section", e.target.value)}
+                className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Bloc (facultatif, ex. « Le mail ») — regroupe les critères à l'écran"
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -1091,6 +1159,11 @@ export default function CreationPage() {
           </div>
         </div>
       </div>
+
+      {/* ================================================================ */}
+      {/*  3bis. Coefficients des épreuves (admin, 07/10/2026)              */}
+      {/* ================================================================ */}
+      {user?.isAdmin && <CoefficientsPanel />}
 
       {/* ================================================================ */}
       {/*  Modal – Nouvelle épreuve                                        */}

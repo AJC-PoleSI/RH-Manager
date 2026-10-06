@@ -76,6 +76,9 @@ export async function exportCandidatesXlsx(): Promise<number> {
                     epreuveKey: e.epreuves?.id || e.epreuves?.name || 'sans-epreuve',
                     obtained: sumScores(e.scores),
                     maxTotal: getTotalMaxPoints(e.epreuves?.evaluation_questions),
+                    // Coefficient choisi par l'admin (07/10/2026), renvoyé
+                    // par /api/candidates/export ; null = barème ÷ 20.
+                    coef: e.epreuves?.coefficient ?? null,
                 }));
         const tourAverage = (tour: number) =>
             averageOn20ByEpreuve(toScored(evalsByTour[tour] || []));

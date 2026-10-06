@@ -13,6 +13,18 @@
 /** Barème par défaut quand le critère n'en déclare pas de valide. */
 export const DEFAULT_MAX_POINTS = 20;
 
+/**
+ * Mode de saisie d'un critère (07/10/2026, notation du Tour 3) :
+ *   - "number"       → saisie chiffrée, demi-points acceptés (historique) ;
+ *   - "checkbox"     → une case à cocher : cochée = 1, décochée = 0 ;
+ *   - "scale"        → boutons de 0 au barème du critère (entiers) ;
+ *   - "problem_bank" → nombre de pistes cochées pour la question tirée de la
+ *                      banque de l'épreuve (cf. lib/problem-bank.ts).
+ * Un critère sans `input` reste une saisie chiffrée : rien ne change pour les
+ * grilles existantes.
+ */
+export type CriterionInput = "number" | "checkbox" | "scale" | "problem_bank";
+
 export interface EvaluationCriterion {
   q?: string;
   question?: string;
@@ -22,6 +34,30 @@ export interface EvaluationCriterion {
   coefficient?: number | string;
   /** Précision affichée derrière le « i » de la grille de notation. */
   hint?: string;
+  /** Mode de saisie ; absent = saisie chiffrée. */
+  input?: CriterionInput | string;
+  /** Titre de bloc, pour regrouper les critères à l'écran (facultatif). */
+  section?: string;
+}
+
+/** Mode de saisie d'un critère ; toute valeur inconnue vaut "number". */
+export function getCriterionInput(
+  question: EvaluationCriterion | null | undefined,
+): CriterionInput {
+  const v = question?.input;
+  return v === "checkbox" || v === "scale" || v === "problem_bank" ? v : "number";
+}
+
+/** Titre de bloc d'un critère (vide s'il n'en a pas). */
+export function getCriterionSection(
+  question: EvaluationCriterion | null | undefined,
+): string {
+  return typeof question?.section === "string" ? question.section.trim() : "";
+}
+
+/** Une saisie à cocher n'accepte que des entiers (pas de demi-point). */
+function requiresInteger(question: EvaluationCriterion | null | undefined): boolean {
+  return getCriterionInput(question) !== "number";
 }
 
 /**
@@ -31,6 +67,8 @@ export interface EvaluationCriterion {
  */
 export function getMaxPoints(question: EvaluationCriterion | null | undefined): number {
   if (!question) return DEFAULT_MAX_POINTS;
+  // Une case à cocher vaut toujours 1 point, quel que soit le `weight` stocké.
+  if (getCriterionInput(question) === "checkbox") return 1;
   const declared = Number(
     question.weight ?? question.maxScore ?? question.coefficient,
   );
@@ -66,7 +104,9 @@ export function parseQuestions(raw: unknown): EvaluationCriterion[] {
 
 /**
  * Normalise une liste de critères avant écriture en base : chaque critère
- * ressort avec un `weight` numérique strictement positif.
+ * ressort avec un `weight` numérique strictement positif (1 pour une case à
+ * cocher, cf. getMaxPoints). Les autres champs (`input`, `section`, `hint`…)
+ * sont conservés tels quels.
  */
 export function normalizeQuestions(raw: unknown): EvaluationCriterion[] {
   return parseQuestions(raw).map((q) => {
@@ -87,6 +127,33 @@ export function getTotalMaxPoints(raw: unknown): number {
  */
 export function getEpreuveCoefficient(maxTotal: number): number {
   return Number.isFinite(maxTotal) && maxTotal > 0 ? maxTotal / 20 : 1;
+}
+
+/**
+ * Coefficient choisi par l'admin (onglet Réglages → Coefficients, colonne
+ * `epreuves.coefficient`) s'il est exploitable : nombre fini et > 0. Sinon
+ * null — « automatique ». Accepte aussi une chaîne : une colonne NUMERIC peut
+ * arriver sérialisée en texte selon le client.
+ */
+export function parseEpreuveCoefficient(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw !== "number" && typeof raw !== "string") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Poids EFFECTIF d'une épreuve dans une moyenne (07/10/2026) : le coefficient
+ * choisi par l'admin s'il est valide, sinon le calcul historique dérivé du
+ * barème (getEpreuveCoefficient). Coefficient absent, null, 0, négatif ou NaN
+ * ⇒ exactement le comportement d'avant l'onglet Coefficients — c'est ce qui
+ * garantit que les moyennes des tours 1 et 2 ne bougent pas.
+ */
+export function effectiveCoefficient(
+  coef: number | null | undefined,
+  maxTotal: number,
+): number {
+  return parseEpreuveCoefficient(coef) ?? getEpreuveCoefficient(maxTotal);
 }
 
 /** Convertit un total obtenu sur le barème d'une épreuve en note sur 20. */
@@ -196,7 +263,7 @@ export interface ScoreValidationError {
   index: number;
   label: string;
   maxPoints: number;
-  reason: "negative" | "above_max";
+  reason: "negative" | "above_max" | "not_integer";
 }
 
 /**
@@ -220,6 +287,8 @@ export function validateScores(
     if (value < 0) return { index, label, maxPoints, reason: "negative" };
     if (value > maxPoints)
       return { index, label, maxPoints, reason: "above_max" };
+    if (requiresInteger(question) && !Number.isInteger(value))
+      return { index, label, maxPoints, reason: "not_integer" };
   }
   return null;
 }
@@ -227,6 +296,8 @@ export function validateScores(
 /** Message d'erreur utilisateur (français) pour une note hors barème. */
 export function scoreValidationMessage(err: ScoreValidationError): string {
   const label = err.label || `critère n°${err.index + 1}`;
+  if (err.reason === "not_integer")
+    return `La note pour le critère "${label}" doit être un nombre entier.`;
   return err.reason === "negative"
     ? `La note pour le critère "${label}" ne peut pas être négative.`
     : `La note pour le critère "${label}" ne peut pas dépasser ${err.maxPoints} points.`;
@@ -240,7 +311,9 @@ export function scoreValidationMessage(err: ScoreValidationError): string {
 //   2. les évaluations d'une MÊME épreuve sont moyennées entre elles (deux
 //      examinateurs ne comptent pas double) ;
 //   3. chaque épreuve pèse ensuite au prorata de son barème
-//      (getEpreuveCoefficient : /40 → coef 2, /5 → coef 0,25) ;
+//      (getEpreuveCoefficient : /40 → coef 2, /5 → coef 0,25) — sauf si
+//      l'admin a choisi un coefficient pour l'épreuve (07/10/2026, champ
+//      `coef`, cf. effectiveCoefficient) ;
 //   4. résultat sur 20, arrondi au dixième — `null` quand aucune note n'est
 //      exploitable (à distinguer d'une vraie moyenne de 0).
 
@@ -261,28 +334,44 @@ export interface ScoredEvaluation {
   obtained: number;
   /** Total de points de l'épreuve (somme des barèmes de ses critères). */
   maxTotal: number;
+  /**
+   * Coefficient choisi par l'admin (`epreuves.coefficient`, 07/10/2026) ;
+   * absent ou null = barème ÷ 20 (calcul historique).
+   */
+  coef?: number | null;
 }
 
 export function averageOn20ByEpreuve(
   items: ScoredEvaluation[],
 ): number | null {
-  const byEpreuve = new Map<string, { ratios: number[]; maxTotal: number }>();
+  const byEpreuve = new Map<
+    string,
+    { ratios: number[]; maxTotal: number; coef: number | null }
+  >();
   for (const it of items) {
     const maxTotal = Number(it.maxTotal);
     const obtained = Number(it.obtained);
     if (!Number.isFinite(maxTotal) || maxTotal <= 0) continue;
     if (!Number.isFinite(obtained)) continue;
-    const entry = byEpreuve.get(it.epreuveKey) || { ratios: [], maxTotal };
+    const entry = byEpreuve.get(it.epreuveKey) || {
+      ratios: [],
+      maxTotal,
+      coef: null,
+    };
     entry.ratios.push(Math.min(1, Math.max(0, obtained / maxTotal)));
+    // Coefficient de l'épreuve : le premier valide rencontré parmi ses notes
+    // (toutes portent normalement le même, celui de la ligne `epreuves`).
+    if (entry.coef === null) entry.coef = parseEpreuveCoefficient(it.coef);
     byEpreuve.set(it.epreuveKey, entry);
   }
   if (byEpreuve.size === 0) return null;
 
   let weightedSum = 0;
   let totalCoef = 0;
-  byEpreuve.forEach(({ ratios, maxTotal }) => {
+  byEpreuve.forEach(({ ratios, maxTotal, coef: chosen }) => {
     const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-    const coef = getEpreuveCoefficient(maxTotal);
+    // Sans coefficient choisi : getEpreuveCoefficient(maxTotal), comme avant.
+    const coef = effectiveCoefficient(chosen, maxTotal);
     weightedSum += avgRatio * coef;
     totalCoef += coef;
   });

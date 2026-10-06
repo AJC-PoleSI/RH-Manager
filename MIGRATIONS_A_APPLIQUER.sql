@@ -1020,3 +1020,51 @@ ALTER TABLE epreuve_registrations ENABLE ROW LEVEL SECURITY;
 -- ─── Annulation ─────────────────────────────────────────────────────────────
 -- DROP TABLE IF EXISTS epreuve_registrations;
 -- ALTER TABLE epreuves DROP COLUMN IF EXISTS is_distanciel;
+
+
+-- ------------------------------------------------------------
+-- 07/10/2026 — coefficient choisi d'une épreuve (onglet « Coefficients »)
+-- ------------------------------------------------------------
+-- Poids d'une épreuve dans la moyenne d'un candidat, fixé à la main depuis
+-- Réglages → Coefficients. NULL = automatique (total de la grille ÷ 20),
+-- c'est-à-dire le calcul d'aujourd'hui : aucune moyenne ne bouge à
+-- l'application. Les épreuves des tours terminés ne sont pas modifiables.
+-- Tant que la colonne manque, tout reste en automatique : rien ne casse.
+-- (Fichier dédié : supabase-migration-coefficient-epreuve.sql.)
+
+ALTER TABLE epreuves
+  ADD COLUMN IF NOT EXISTS coefficient NUMERIC;
+
+-- ─── Annulation ─────────────────────────────────────────────────────────────
+-- ALTER TABLE epreuves DROP COLUMN IF EXISTS coefficient;
+
+
+-- ------------------------------------------------------------
+-- 07/10/2026 — notation du Tour 3 : banque de questions et grille de groupe
+--    (supabase-migration-tour3-notation.sql)
+-- ------------------------------------------------------------
+-- Additive uniquement : null = comportement d'avant (Tours 1 et 2 intacts).
+
+ALTER TABLE epreuves
+  ADD COLUMN IF NOT EXISTS problem_bank JSONB;
+
+ALTER TABLE epreuves
+  ADD COLUMN IF NOT EXISTS group_grid JSONB;
+
+ALTER TABLE candidate_evaluations
+  ADD COLUMN IF NOT EXISTS problem_checks JSONB;
+
+CREATE TABLE IF NOT EXISTS slot_questions (
+  slot_id UUID PRIMARY KEY REFERENCES evaluation_slots(id) ON DELETE CASCADE,
+  question_key TEXT NOT NULL,
+  updated_by UUID REFERENCES members(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE slot_questions ENABLE ROW LEVEL SECURITY;
+
+-- ─── Annulation ─────────────────────────────────────────────────────────────
+-- DROP TABLE IF EXISTS slot_questions;
+-- ALTER TABLE candidate_evaluations DROP COLUMN IF EXISTS problem_checks;
+-- ALTER TABLE epreuves DROP COLUMN IF EXISTS group_grid;
+-- ALTER TABLE epreuves DROP COLUMN IF EXISTS problem_bank;

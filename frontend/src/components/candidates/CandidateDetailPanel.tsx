@@ -48,6 +48,12 @@ export interface Evaluation {
         tour: number;
         type: string;
         evaluation_questions: string;
+        /**
+         * Coefficient choisi par l'admin (Réglages → Coefficients,
+         * 07/10/2026), renvoyé par /api/evaluations/candidate ; absent ou
+         * null = automatique (barème ÷ 20).
+         */
+        coefficient?: number | null;
     } | null;
     members: { email: string } | null;
 }
@@ -176,6 +182,8 @@ export default function CandidateDetailPanel({
             epreuveKey: x.ev.epreuves?.id || x.ev.epreuve_id || x.ev.epreuves?.name || 'unknown',
             obtained: x.total.obtained,
             maxTotal: x.total.maxTotal,
+            // Poids choisi par l'admin ; null = barème ÷ 20 (07/10/2026).
+            coef: x.ev.epreuves?.coefficient ?? null,
         });
         const epreuves = new Map<string, { name: string; tour: number | null; items: typeof counted }>();
         for (const x of counted) {

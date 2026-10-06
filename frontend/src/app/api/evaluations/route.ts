@@ -19,6 +19,14 @@ import {
 } from "@/lib/evaluation-examiners";
 import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
+import {
+  bankMatchesGrid,
+  normalizeProblemChecks,
+  parseProblemBank,
+  scoreFromChecks,
+  type ProblemChecks,
+} from "@/lib/problem-bank";
+import { readSlotQuestion } from "@/lib/slot-questions-db";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -174,7 +182,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     ({ candidateId, epreuveId } = body);
-    const { scores, comment } = body;
+    const { comment } = body;
+    // `let` : sur une épreuve à banque de questions, la note du critère
+    // « Réponse à la problématique » est recalculée ici depuis les pistes.
+    let scores = body.scores;
 
     if (!candidateId || !epreuveId) {
       return Response.json(
@@ -204,9 +215,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // select("*") : `problem_bank` peut ne pas encore exister en base.
     const { data: epreuveRow } = await supabaseAdmin
       .from("epreuves")
-      .select("evaluation_questions, is_group_epreuve")
+      .select("*")
       .eq("id", epreuveId)
       .single();
 
@@ -321,6 +333,46 @@ export async function POST(req: NextRequest) {
     // Même règle que PUT /api/evaluations/[id] (lib/evaluation-criteria).
     // ══════════════════════════════════════════════════════════════════
     const questions = parseQuestions(epreuveRow?.evaluation_questions);
+
+    // ══════════════════════════════════════════════════════════════════
+    // BANQUE DE QUESTIONS (Tour 3, échange groupé) : la note du critère
+    // « Réponse à la problématique » n'est pas saisie, elle découle des
+    // pistes cochées — recalculée ICI, jamais reprise du client. Les pistes
+    // doivent porter sur la question choisie pour le créneau.
+    // ══════════════════════════════════════════════════════════════════
+    let problemChecks: ProblemChecks | null = null;
+    const bank = parseProblemBank(epreuveRow?.problem_bank);
+    if (bank && bankMatchesGrid(bank, questions) && body.problemChecks != null) {
+      const checks = normalizeProblemChecks(bank, body.problemChecks);
+      if (!checks) {
+        return Response.json(
+          { error: "Question inconnue pour cette épreuve." },
+          { status: 400 },
+        );
+      }
+      const slot = await resolveCandidateSlot(candidateId, epreuveId);
+      if (slot) {
+        const { question } = await readSlotQuestion(slot.slotId);
+        if (question && question.questionKey !== checks.questionKey) {
+          return Response.json(
+            {
+              error:
+                "La question du créneau a changé entre-temps : rechargez la page et recochez les pistes.",
+              code: "SLOT_QUESTION_CHANGED",
+            },
+            { status: 409 },
+          );
+        }
+      }
+      const parsedScores =
+        typeof scores === "string" ? JSON.parse(scores || "{}") : scores || {};
+      scores = {
+        ...parsedScores,
+        [String(bank.criterionIndex)]: scoreFromChecks(bank, checks),
+      };
+      problemChecks = checks;
+    }
+
     const invalid = validateScores(questions, scores);
     if (invalid) {
       return Response.json(
@@ -357,11 +409,24 @@ export async function POST(req: NextRequest) {
       ? {}
       : { closed_at: new Date().toISOString(), closed_by: memberId };
 
+    // Détail des pistes cochées (traçabilité) : colonne facultative.
+    const checksField = problemChecks ? { problem_checks: problemChecks } : {};
+
     let { data: evaluation, error: evalError } = await supabaseAdmin
       .from("candidate_evaluations")
-      .insert({ ...baseInsert, ...closeFields })
+      .insert({ ...baseInsert, ...checksField, ...closeFields })
       .select()
       .single();
+
+    // Repli : colonne problem_checks pas encore migrée — la note (qui porte
+    // déjà le décompte des pistes) passe sans le détail.
+    if (evalError && problemChecks && isMissingColumnError(evalError)) {
+      ({ data: evaluation, error: evalError } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .insert({ ...baseInsert, ...closeFields })
+        .select()
+        .single());
+    }
 
     // Repli : colonnes closed_at/closed_by pas encore migrées en prod (cf.
     // MIGRATIONS_A_APPLIQUER.sql) — on enregistre quand même la note, sans

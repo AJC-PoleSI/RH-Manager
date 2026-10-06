@@ -9,9 +9,25 @@ import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 // GET /api/slots/my-slots — member's assigned slots
+//
+// CONSIGNES (07/10/2026) : l'épreuve jointe porte sa `description` pour que
+// l'examinateur relise les consignes depuis la modale du créneau
+// (MemberDashboardCalendar). Route réservée aux membres : un candidat reçoit
+// une liste vide — c'était déjà le cas de fait (aucune affectation à son id),
+// c'est désormais explicite, la description ne pouvant pas lui parvenir par
+// ici avant l'ouverture du planning (cf. lib/epreuve-candidate-view.ts).
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+  if (payload.role === "candidate") {
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
+  }
 
   const memberId = payload.id;
 
@@ -23,7 +39,7 @@ export async function GET(req: NextRequest) {
         *,
         slot:evaluation_slots(
           *,
-          epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size),
+          epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size, description),
           enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
           members:slot_member_assignments(*, member:members(id, email, first_name, last_name))
         )

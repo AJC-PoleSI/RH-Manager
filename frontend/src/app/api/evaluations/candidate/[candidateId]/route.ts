@@ -12,6 +12,7 @@ import {
   getExaminersByEvaluation,
   mergeExaminers,
 } from "@/lib/evaluation-examiners";
+import { fetchEpreuveCoefficients } from "@/lib/epreuve-coefficient";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
 import { getGroupEvaluationsByCandidate } from "@/lib/group-evaluations";
 import { getSecondGridEvaluationsByCandidate } from "@/lib/second-grid";
@@ -55,6 +56,12 @@ export async function GET(
       (evaluations || []).map((e: any) => e.id),
     );
 
+    // Coefficient choisi de chaque épreuve (Réglages → Coefficients,
+    // 07/10/2026). Lu à part : la jointure ci-dessus ne nomme pas la colonne,
+    // pour ne pas tomber en 500 tant que la migration n'est pas appliquée
+    // (table vide ⇒ tout en automatique, comme avant).
+    const coefficients = await fetchEpreuveCoefficients();
+
     // Parse scores and format each evaluation
     const parsed = (evaluations || []).map((e: any) => {
       const scores = normalizeScores(e.scores);
@@ -95,6 +102,8 @@ export async function GET(
               tour: e.epreuves.tour,
               type: e.epreuves.type,
               evaluationQuestions: e.epreuves.evaluation_questions,
+              // Poids choisi par l'admin ; null = barème ÷ 20 (automatique).
+              coefficient: coefficients.get(e.epreuves.id) ?? null,
             }
           : null,
         member: e.members
@@ -193,11 +202,14 @@ export async function GET(
           epreuveKey: group.epreuve?.id || "unknown",
           obtained: e.scoreTotal,
           maxTotal: e.maxTotal,
+          coef: e.epreuve?.coefficient,
         })),
       );
     });
 
-    // Moyenne globale du candidat, même règle que la délibération.
+    // Moyenne globale du candidat, même règle que la délibération — chaque
+    // épreuve pesée par son coefficient choisi, sinon par barème ÷ 20.
+    // (Deuxième grille : pas de coefficient choisi, toujours automatique.)
     const globalAverage = averageOn20ByEpreuve(
       parsed
         .filter((e) => e.hasScores && !e.isLegacyCollective)
@@ -205,6 +217,7 @@ export async function GET(
           epreuveKey: e.epreuve?.id || "unknown",
           obtained: e.scoreTotal,
           maxTotal: e.maxTotal,
+          coef: e.epreuve?.coefficient,
         })),
     );
 

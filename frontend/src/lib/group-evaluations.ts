@@ -2,8 +2,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { isActiveEnrollment } from "@/lib/enrollment";
 import {
-  GROUP_EVALUATION_MAX,
-  GROUP_EVALUATION_QUESTIONS,
+  DEFAULT_GROUP_GRID,
+  resolveGroupGrid,
 } from "@/lib/group-evaluation-criteria";
 import {
   getCriterionLabel,
@@ -44,7 +44,12 @@ function isMissingTable(err: unknown): boolean {
 }
 
 function view(row: any): GroupEvaluationView {
-  const scores = normalizeScores(row.scores, GROUP_EVALUATION_QUESTIONS);
+  // Grille de l'épreuve (epreuves.group_grid) ; sans réglage, ou désactivée
+  // après coup, on relit la note avec la grille par défaut de 43 points —
+  // celle avec laquelle les notes du Tour 1 ont été saisies.
+  const resolved = resolveGroupGrid(row.epreuve?.group_grid);
+  const grid = resolved.disabled ? DEFAULT_GROUP_GRID : resolved;
+  const scores = normalizeScores(row.scores, grid.questions);
   const total = sumScores(row.scores);
   const author = row.author;
   return {
@@ -57,14 +62,14 @@ function view(row: any): GroupEvaluationView {
           tour: row.epreuve.tour ?? null,
         }
       : null,
-    criteria: GROUP_EVALUATION_QUESTIONS.map((q, idx) => ({
+    criteria: grid.questions.map((q, idx) => ({
       label: getCriterionLabel(q),
       score: scores[String(idx)] ?? null,
       maxPoints: getMaxPoints(q),
     })),
     scoreTotal: total,
-    maxTotal: GROUP_EVALUATION_MAX,
-    scoreOn20: toTwenty(total, GROUP_EVALUATION_MAX),
+    maxTotal: grid.maxTotal,
+    scoreOn20: toTwenty(total, grid.maxTotal),
     comment: row.comment || "",
     author: author
       ? {
@@ -92,7 +97,8 @@ export async function getGroupEvaluationsByCandidate(
     supabaseAdmin
       .from("group_evaluations")
       .select(
-        "id, slot_id, comment, scores, updated_at, created_at, author:members!member_id(first_name, last_name, email), epreuve:epreuves(id, name, tour)",
+        // epreuves(*) : `group_grid` peut ne pas encore exister en base.
+        "id, slot_id, comment, scores, updated_at, created_at, author:members!member_id(first_name, last_name, email), epreuve:epreuves(*)",
       )
       .order("created_at")
       .range(from, to),

@@ -63,6 +63,37 @@ describe("buildRows", () => {
     expect(a.cells.entretien).toBeUndefined();
     expect(a.average).toBe(16);
   });
+
+  // Coefficient choisi (Réglages → Coefficients, 07/10/2026).
+  it("utilise le coefficient choisi par l'admin, colonne et moyenne", () => {
+    const withCoef: GridCandidateInput[] = [
+      {
+        candidateId: "a",
+        notes: [
+          n("entretien", 16, 20, { coef: null }),
+          n("entretien", 12, 20, { coef: null }),
+          n("bg", 4, 5, { coef: 1 }),
+        ],
+      },
+    ];
+    const cols = listColumns(withCoef);
+    expect(cols.find((c) => c.key === "bg")?.coef).toBe(1);
+    expect(cols.find((c) => c.key === "entretien")?.coef).toBe(1);
+    // (0,7 × 1 + 0,8 × 1) / 2 = 0,75 → 15 (au lieu de 14,4 en automatique).
+    const [a] = buildRows(withCoef, new Set(["entretien", "bg"]));
+    expect(a.average).toBe(15);
+  });
+
+  it("sans coefficient (ou coefficient invalide) : résultat d'avant", () => {
+    const invalid: GridCandidateInput[] = inputs.map((c) => ({
+      ...c,
+      notes: c.notes.map((x) => ({ ...x, coef: 0 })),
+    }));
+    expect(listColumns(invalid)).toEqual(listColumns(inputs));
+    expect(buildRows(invalid, new Set(["entretien", "bg"]))).toEqual(
+      buildRows(inputs, new Set(["entretien", "bg"])),
+    );
+  });
 });
 
 describe("columnStats / averageStats", () => {

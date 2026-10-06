@@ -12,7 +12,7 @@ import CandidatePhoto from "@/components/ui/CandidatePhoto";
 import { Loader2, LayoutGrid, Table, Layers, ChevronLeft, ChevronRight, X, RotateCcw, Lock, Unlock, Heart, Maximize2, Minimize2, ListOrdered } from "lucide-react";
 import {
   averageOn20ByEpreuve,
-  getEpreuveCoefficient,
+  effectiveCoefficient,
   hasAnyScore,
   sumScores,
   toTwenty,
@@ -99,6 +99,11 @@ interface Evaluation {
     type?: string;
     /** Total de points de l'épreuve, calculé côté serveur depuis ses critères. */
     maxTotal?: number;
+    /**
+     * Coefficient choisi par l'admin (Réglages → Coefficients, 07/10/2026) ;
+     * absent ou null = automatique (barème ÷ 20).
+     */
+    coefficient?: number | null;
   };
   member?: { email: string; firstName?: string; lastName?: string };
   /**
@@ -460,7 +465,9 @@ export default function DeliberationsPage() {
   // Pondération : chaque épreuve pèse ensuite dans la moyenne finale au
   // prorata de son barème (coefficient = barème / 20 — cf. getEpreuveCoefficient).
   // Une épreuve notée sur 40 compte donc 2x plus qu'une épreuve notée sur 20,
-  // et une épreuve notée sur 5 compte 4x moins.
+  // et une épreuve notée sur 5 compte 4x moins. Depuis le 07/10/2026, l'admin
+  // peut fixer ce poids à la main (Réglages → Coefficients) : le coefficient
+  // choisi remplace alors le barème ÷ 20 (cf. effectiveCoefficient).
   //
   // Périmètre : les évaluations DU TOUR DÉLIBÉRÉ. Avant, la moyenne mêlait
   // tous les tours (un 18/20 au tour 1 masquait un 8/20 au tour 2). Les
@@ -478,6 +485,7 @@ export default function DeliberationsPage() {
           epreuveKey: ev.epreuve?.id || ev.epreuve?.name || "sans-epreuve",
           obtained: sumScores(ev.scores),
           maxTotal: Number(ev.epreuve?.maxTotal),
+          coef: ev.epreuve?.coefficient,
         })),
     );
 
@@ -492,13 +500,15 @@ export default function DeliberationsPage() {
 
   // Note d'une évaluation individuelle ramenée sur 20 + son coefficient dans
   // la moyenne pondérée du candidat (cf. getAvgScore). `note` est `null` si
-  // le barème de l'épreuve est inconnu (impossible à normaliser).
+  // le barème de l'épreuve est inconnu (impossible à normaliser). Le
+  // coefficient affiché est le coefficient EFFECTIF : celui choisi par
+  // l'admin s'il existe, sinon barème ÷ 20 (07/10/2026).
   const getNoteSur20 = (ev: Evaluation): { note: number | null; coef: number } => {
     const maxTotal = Number(ev.epreuve?.maxTotal);
     if (!Number.isFinite(maxTotal) || maxTotal <= 0) return { note: null, coef: 1 };
     return {
       note: toTwenty(getScoreTotal(ev.scores), maxTotal),
-      coef: getEpreuveCoefficient(maxTotal),
+      coef: effectiveCoefficient(ev.epreuve?.coefficient, maxTotal),
     };
   };
 

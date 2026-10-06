@@ -5,13 +5,15 @@
 //   - une note est ramenée à /20 selon le barème de son épreuve ;
 //   - les notes de plusieurs examinateurs sur un MÊME candidat et une MÊME
 //     épreuve sont moyennées entre elles (un binôme ne compte pas double) ;
-//   - la moyenne d'un candidat pèse chaque épreuve au prorata de son barème ;
+//   - la moyenne d'un candidat pèse chaque épreuve au prorata de son barème,
+//     ou par le coefficient choisi par l'admin s'il y en a un (Réglages →
+//     Coefficients, 07/10/2026 — cf. effectiveCoefficient) ;
 //   - la moyenne d'une épreuve donne un poids égal à chaque candidat noté.
 // Grilles vides et anciennes notes collectives : écartées par l'appelant.
 //
 // Module sans dépendance serveur : il est importé par la page client.
 
-import { averageOn20ByEpreuve, getEpreuveCoefficient } from "./evaluation-criteria";
+import { averageOn20ByEpreuve, effectiveCoefficient } from "./evaluation-criteria";
 
 export interface GridNote {
   /** Identifiant de l'épreuve (deuxième grille : `${id}:second`). */
@@ -22,6 +24,8 @@ export interface GridNote {
   obtained: number;
   /** Total de points de l'épreuve (somme des barèmes de ses critères). */
   maxTotal: number;
+  /** Coefficient choisi par l'admin ; absent ou null = barème ÷ 20. */
+  coef?: number | null;
 }
 
 export interface GridCandidateInput {
@@ -34,7 +38,7 @@ export interface GridColumn {
   name: string;
   tour: number | null;
   maxTotal: number;
-  /** Poids dans la moyenne du candidat (barème / 20). */
+  /** Poids EFFECTIF dans la moyenne du candidat : coefficient choisi, sinon barème / 20. */
   coef: number;
 }
 
@@ -82,7 +86,7 @@ export function listColumns(inputs: GridCandidateInput[]): GridColumn[] {
         name: n.epreuveName,
         tour: n.tour,
         maxTotal,
-        coef: getEpreuveCoefficient(maxTotal),
+        coef: effectiveCoefficient(n.coef, maxTotal),
       });
     }
   }
@@ -115,6 +119,7 @@ export function buildRows(inputs: GridCandidateInput[], keys: Set<string>): Grid
           epreuveKey: n.epreuveKey,
           obtained: Number(n.obtained),
           maxTotal: Number(n.maxTotal),
+          coef: n.coef,
         })),
       ),
     };

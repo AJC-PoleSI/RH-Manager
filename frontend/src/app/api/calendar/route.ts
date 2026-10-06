@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { planningVisibleToCandidates } from "@/lib/slot-release";
+import { epreuveForCandidate } from "@/lib/epreuve-candidate-view";
 import { NextRequest } from "next/server";
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -156,8 +158,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // GRILLES (07/10/2026) : la jointure `epreuve:epreuves(*)` des
+    // événements emportait la grille de notation complète jusqu'au
+    // candidat. Pour lui, l'épreuve jointe passe par le même filtre que
+    // GET /api/epreuves (aucun champ de notation, consignes seulement une
+    // fois le planning ouvert). Membres et admins : inchangé.
+    let events = [...filtered, ...slotEvents];
+    if (isCandidate) {
+      const planningVisible = await planningVisibleToCandidates();
+      events = events.map((event: any) =>
+        event.epreuve
+          ? { ...event, epreuve: epreuveForCandidate(event.epreuve, planningVisible) }
+          : event,
+      );
+    }
+
     // FIX C4: explicit no-store
-    return new Response(JSON.stringify([...filtered, ...slotEvents]), {
+    return new Response(JSON.stringify(events), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
