@@ -37,7 +37,7 @@ export function statusAfterRelease(input: {
 }
 
 /** Le planning est-il visible des candidats ? (réglage global) */
-async function planningVisibleToCandidates(): Promise<boolean> {
+export async function planningVisibleToCandidates(): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("system_settings")
     .select("value")
