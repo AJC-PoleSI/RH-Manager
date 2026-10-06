@@ -92,7 +92,50 @@ export async function listEvaluableEpreuveIds(
     }
   }
 
+  // ÉPREUVES EN DISTANCIEL : pas de créneau à partager. Le membre du pôle de
+  // l'épreuve note les candidats qui s'y sont inscrits (lib/distanciel.ts).
+  for (const id of await listDistancielGradableEpreuveIds(memberId, candidateId)) {
+    ids.add(id);
+  }
+
   return Array.from(ids);
+}
+
+/**
+ * Épreuves en distanciel où le candidat est inscrit ET que ce membre peut
+ * noter (membre du pôle de l'épreuve). Tolère l'absence de la table ou de la
+ * colonne (migration pas encore posée) : renvoie alors une liste vide, ce
+ * qui laisse la règle du créneau partagé intacte.
+ */
+async function listDistancielGradableEpreuveIds(
+  memberId: string,
+  candidateId: string,
+): Promise<string[]> {
+  const { data: regs, error } = await supabaseAdmin
+    .from("epreuve_registrations")
+    .select("epreuve:epreuves!inner(id, is_distanciel, is_pole_test, pole)")
+    .eq("candidate_id", candidateId);
+  if (error || !regs || regs.length === 0) return [];
+
+  const { data: me } = await supabaseAdmin
+    .from("members")
+    .select("pole")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  return (regs as any[])
+    .map((r) => r.epreuve)
+    .filter((e) =>
+      e &&
+      canGradeDistanciel({
+        isDistanciel: e.is_distanciel === true,
+        isPoleTest: e.is_pole_test === true,
+        pole: e.pole,
+        memberPole: me?.pole ?? null,
+        registered: true,
+      }),
+    )
+    .map((e) => e.id as string);
 }
 
 /**
