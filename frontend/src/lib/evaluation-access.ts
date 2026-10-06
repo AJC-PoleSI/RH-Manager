@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { isActiveEnrollment } from "@/lib/enrollment";
+import { canGradeDistanciel } from "@/lib/distanciel";
 
 // Helpers d'autorisation partagés entre les routes d'évaluation collaborative
 // (commentaires de groupe, évaluations des pairs, cochage "qui examine qui").
