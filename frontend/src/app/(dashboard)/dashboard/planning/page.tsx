@@ -10,6 +10,7 @@ import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
 import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
 import EpreuveSlotsSummary from "@/components/planning/EpreuveSlotsSummary";
+import DistancielRegistrationsPanel from "@/components/planning/DistancielRegistrationsPanel";
 import UnderstaffedBanner from "@/components/planning/UnderstaffedBanner";
 import QuotaEditor from "@/components/planning/QuotaEditor";
 import { CalendarColumn } from "@/components/calendar/CalendarColumn";
@@ -51,6 +52,8 @@ interface Epreuve {
   groupSize?: number;
   isPoleTest?: boolean;
   pole?: string | null;
+  /** Épreuve en distanciel : pas de créneau, liste des inscrits à la place. */
+  isDistanciel?: boolean;
 }
 
 interface SlotAvailability {
@@ -197,6 +200,10 @@ export default function PlanningPage() {
   ) : null;
 
   const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
+  // Épreuve sélectionnée en distanciel : la page montre ses inscrits au lieu
+  // des ouvertures de salles et des créneaux.
+  const selectedDistanciel =
+    epreuves.find((e) => e.id === selectedEpreuveId && e.isDistanciel) || null;
   const [selectedEpreuveId, setSelectedEpreuveId] = useState<string>("");
   /**
    * Effectif du TOUR de l'épreuve sélectionnée — candidats attendus / marge
@@ -3022,13 +3029,20 @@ export default function PlanningPage() {
             <option value="">-- Sélectionner une épreuve --</option>
             {epreuves.map((ep) => (
               <option key={ep.id} value={ep.id}>
-                {ep.name} — {ep.type} (Tour {ep.tour})
+                {ep.name} — {ep.isDistanciel ? "à distance" : ep.type} (Tour {ep.tour})
               </option>
             ))}
           </select>
         </div>
 
-        {selectedEpreuveId ? (
+        {selectedDistanciel ? (
+          // Épreuve en distanciel : ni salle ni créneau, on montre les inscrits.
+          <DistancielRegistrationsPanel
+            key={selectedDistanciel.id}
+            epreuveId={selectedDistanciel.id}
+            epreuveName={selectedDistanciel.name}
+          />
+        ) : selectedEpreuveId ? (
           <>
             {/* TABS DE VUES */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 mb-2 rounded-lg w-fit">
