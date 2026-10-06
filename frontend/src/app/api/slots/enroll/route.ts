@@ -164,20 +164,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TOUR 3 : une épreuve de pôle n'est ouverte qu'aux candidats ayant
-    // demandé ce pôle dans leurs vœux (défense en profondeur — le slot
-    // est aussi masqué dans /slots/available).
-    if (slot.epreuve?.is_pole_test && slot.epreuve?.pole) {
-      const wishedPoles = await getCandidateWishedPoles(candidateId);
-      if (!wishedPoles.includes(slot.epreuve.pole)) {
-        return Response.json(
-          {
-            error: `Cette épreuve est réservée aux candidats ayant demandé le pôle ${slot.epreuve.pole}.`,
-          },
-          { status: 403 },
-        );
-      }
-    }
+    // TOUR 3 : toute épreuve de pôle est ouverte à tout candidat admis,
+    // vœux ou pas (décision de Felix, 06/10/2026).
 
     // Check per-epreuve inscription deadline
     if (slot.epreuve?.inscription_deadline) {
