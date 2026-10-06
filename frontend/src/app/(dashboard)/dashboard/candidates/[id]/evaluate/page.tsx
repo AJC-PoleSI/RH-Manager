@@ -311,9 +311,16 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   useEffect(() => {
     slotQuestionKeyRef.current = slotQuestion.questionKey;
   }, [slotQuestion.questionKey]);
+  // Course rafraîchissement / choix : une lecture partie AVANT (ou pendant)
+  // un enregistrement de question renverrait l'ancienne question et ferait
+  // croire à un changement par un autre examinateur. On l'ignore.
+  const questionWriteSeq = useRef(0);
+  const questionSaving = useRef(false);
 
   const loadSlotQuestion = useCallback(async () => {
     if (!selectedEpreuveId || !problemBank) return;
+    if (questionSaving.current) return;
+    const seq = questionWriteSeq.current;
     // Pas d'indicateur de chargement pendant les rafraîchissements : le
     // sélecteur clignoterait toutes les 20 s.
     setSlotQuestion((s) => (s.questionKey ? s : { ...s, loading: true }));
@@ -321,6 +328,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       const res = await api.get(
         `/evaluations/slot-question?candidateId=${id}&epreuveId=${selectedEpreuveId}`,
       );
+      if (questionSaving.current || seq !== questionWriteSeq.current) return;
       const nextKey: string | null = res.data?.questionKey ?? null;
       const previousKey = slotQuestionKeyRef.current;
       if (previousKey && nextKey && previousKey !== nextKey) {
@@ -336,6 +344,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         error: null,
       });
     } catch (e: any) {
+      if (questionSaving.current || seq !== questionWriteSeq.current) return;
       // Une panne passagère pendant un rafraîchissement ne doit pas effacer
       // la question déjà affichée — ni, par ricochet, les pistes cochées.
       setSlotQuestion((s) =>
@@ -355,11 +364,16 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, selectedEpreuveId, !!problemBank, toast]);
 
-  // Changement d'épreuve : on repart d'un état vierge pour la banque.
+  // Changement d'épreuve : on repart d'un état vierge — banque de questions
+  // ET saisie individuelle. Sans ça, un « 1 » tapé sur une autre épreuve
+  // réapparaissait comme une case cochée (07/10/2026).
   useEffect(() => {
     setSlotQuestion({ questionKey: null, locked: false, loading: false, error: null });
     setProblemChecked([]);
     setProblemExtra(0);
+    setIndivScores({});
+    setIndivErrors({});
+    setIndivComment("");
   }, [selectedEpreuveId]);
 
   // Question changée (par moi ou un autre examinateur du créneau) : les
@@ -382,6 +396,8 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const handleSelectQuestion = async (questionKey: string) => {
     if (!selectedEpreuveId) return;
     setSavingQuestion(true);
+    questionSaving.current = true;
+    questionWriteSeq.current += 1;
     try {
       const res = await api.put("/evaluations/slot-question", {
         candidateId: id,
@@ -399,8 +415,10 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         e?.response?.data?.error || "Impossible d'enregistrer la question.",
         "error",
       );
+      questionSaving.current = false;
       await loadSlotQuestion();
     } finally {
+      questionSaving.current = false;
       setSavingQuestion(false);
     }
   };

@@ -178,6 +178,21 @@ export async function PUT(req: NextRequest) {
     if (written.missingTable) {
       return Response.json(MIGRATION_PENDING, { status: 503 });
     }
+    // Vérification puis écriture ne sont pas atomiques : si une note a été
+    // validée entre les deux, on remet la question d'avant (celle sur
+    // laquelle la note a été comptée) et on refuse.
+    if (current.question && (await isSlotQuestionLocked(r.slotId, epreuveId))) {
+      await writeSlotQuestion(r.slotId, current.question.questionKey, r.memberId);
+      return Response.json(
+        {
+          error:
+            "Une note vient d'être validée sur ce créneau : la question ne peut plus changer.",
+          code: "SLOT_QUESTION_LOCKED",
+          questionKey: current.question.questionKey,
+        },
+        { status: 409 },
+      );
+    }
     return Response.json({
       slotId: r.slotId,
       questionKey: question.key,

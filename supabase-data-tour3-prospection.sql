@@ -17,7 +17,19 @@
 DO $$
 DECLARE
   nb_notes integer;
+  ep record;
 BEGIN
+  SELECT tour, is_group_epreuve INTO ep FROM epreuves WHERE id = '368ab3c5-95c7-4da5-bc47-f0decf4e4063';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Épreuve Business Game T3 introuvable.';
+  END IF;
+  -- Épreuve DE GROUPE obligatoire : sinon un créneau à 3 jurys passerait en
+  -- « binôme » (une seule note partagée) et chaque jury ne noterait plus SON
+  -- candidat.
+  IF ep.tour <> 3 OR ep.is_group_epreuve IS NOT TRUE THEN
+    RAISE EXCEPTION 'Épreuve inattendue (tour %, de groupe : %) : grille NON modifiée.', ep.tour, ep.is_group_epreuve;
+  END IF;
+
   SELECT count(*) INTO nb_notes
   FROM candidate_evaluations
   WHERE epreuve_id = '368ab3c5-95c7-4da5-bc47-f0decf4e4063';

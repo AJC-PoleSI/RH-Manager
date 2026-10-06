@@ -342,7 +342,17 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════
     let problemChecks: ProblemChecks | null = null;
     const bank = parseProblemBank(epreuveRow?.problem_bank);
-    if (bank && bankMatchesGrid(bank, questions) && body.problemChecks != null) {
+    if (bank && bankMatchesGrid(bank, questions)) {
+      if (body.problemChecks == null) {
+        return Response.json(
+          {
+            error:
+              "Les pistes de la « Réponse à la problématique » manquent : choisissez la question du créneau et cochez les pistes.",
+            code: "PROBLEM_CHECKS_REQUIRED",
+          },
+          { status: 400 },
+        );
+      }
       const checks = normalizeProblemChecks(bank, body.problemChecks);
       if (!checks) {
         return Response.json(
