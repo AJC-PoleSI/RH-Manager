@@ -159,14 +159,8 @@ export async function GET(req: NextRequest) {
       // Candidat inscrit: TOUJOURS visible (pour pouvoir se désinscrire),
       // quel que soit le statut du slot (open/closed/draft inclus).
       if (isEnrolled) return true;
-      // TOUR 3 : épreuve de pôle d'un pôle non demandé → invisible.
-      if (
-        slot.epreuve?.is_pole_test &&
-        slot.epreuve?.pole &&
-        !wishedPoles.includes(slot.epreuve.pole)
-      ) {
-        return false;
-      }
+      // TOUR 3 : toutes les épreuves de pôle sont visibles, vœux ou pas
+      // (décision de Felix, 06/10/2026).
       // Sinon: ne montrer que les statuts PUBLIÉS dont le jury est AU COMPLET.
       //
       // Le seuil est le minimum de l'épreuve (`min_members`), pas « au moins
