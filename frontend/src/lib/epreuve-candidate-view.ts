@@ -90,7 +90,7 @@ const HIDDEN = new Set<string>(CANDIDATE_HIDDEN_EPREUVE_FIELDS);
 /**
  * Copie d'une épreuve (objet mis en forme OU ligne brute) telle qu'un
  * candidat peut la recevoir : sans aucun champ de notation, et sans
- * description tant que le planning n'est pas ouvert aux candidats.
+ * description quand `showDescription` est faux (cf. candidateSeesDescription).
  *
  * Les autres champs (coefficient, isDistanciel, isRegistered, couleur,
  * salle…) passent tels quels. `null` / `undefined` sont renvoyés inchangés
@@ -98,19 +98,19 @@ const HIDDEN = new Set<string>(CANDIDATE_HIDDEN_EPREUVE_FIELDS);
  */
 export function epreuveForCandidate<T extends Record<string, any>>(
   epreuve: T,
-  planningVisible: boolean,
+  showDescription: boolean,
 ): Record<string, any>;
 export function epreuveForCandidate(
   epreuve: null | undefined,
-  planningVisible: boolean,
+  showDescription: boolean,
 ): null | undefined;
 export function epreuveForCandidate(
   epreuve: Record<string, any> | null | undefined,
-  planningVisible: boolean,
+  showDescription: boolean,
 ): Record<string, any> | null | undefined;
 export function epreuveForCandidate(
   epreuve: Record<string, any> | null | undefined,
-  planningVisible: boolean,
+  showDescription: boolean,
 ): Record<string, any> | null | undefined {
   if (epreuve == null || typeof epreuve !== "object") return epreuve;
 
@@ -119,9 +119,9 @@ export function epreuveForCandidate(
     if (HIDDEN.has(key)) continue;
     copy[key] = value;
   }
-  // Consignes : seulement une fois le planning ouvert. On ne crée pas la clé
-  // si l'objet ne la portait pas (jointure restreinte à quelques colonnes).
-  if (!planningVisible && "description" in copy) {
+  // Consignes : seulement au candidat inscrit. On ne crée pas la clé si
+  // l'objet ne la portait pas (jointure restreinte à quelques colonnes).
+  if (!showDescription && "description" in copy) {
     copy.description = null;
   }
   return copy;
