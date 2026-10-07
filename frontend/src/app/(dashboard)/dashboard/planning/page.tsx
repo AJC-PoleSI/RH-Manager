@@ -28,6 +28,7 @@ import {
 } from "@/lib/publish-understaffing";
 import { POLL, startPolling } from "@/lib/poll";
 import { coverageWarning } from "@/lib/availability-coverage";
+import { isNoRoom, NO_ROOM_EXAMINER_NOTICE } from "@/lib/rooms";
 
 // Chargement lazy de CalendarAdminBuilder (FullCalendar ~300kB) pour
 // ne pas alourdir le bundle initial de la page planning.
@@ -2328,6 +2329,9 @@ export default function PlanningPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-gray-800">{s.room || "—"}</span>
+                            {isNoRoom(s.room) && (
+                              <span className="text-xs font-medium text-amber-700">⚠️ {NO_ROOM_EXAMINER_NOTICE}</span>
+                            )}
                             {isAdmin && (
                               <button
                                 onClick={() => {
@@ -3883,6 +3887,9 @@ export default function PlanningPage() {
                   <p className="text-base font-semibold text-gray-900">
                     {selectedSlot.room || "Non definie"}
                   </p>
+                  {isNoRoom(selectedSlot.room) && (
+                    <p className="mt-1 text-sm font-medium text-amber-700">⚠️ {NO_ROOM_EXAMINER_NOTICE}</p>
+                  )}
                 </div>
               </div>
 

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
 import { underfilledEnrollments } from "@/lib/candidate-signup-status";
 import { POLL, startPolling } from "@/lib/poll";
+import { NO_ROOM_CANDIDATE_LABEL } from "@/lib/rooms";
 import {
   Loader2, Calendar, MapPin, FileText, Clock,
   ChevronDown, ChevronUp, Users, BookOpen, X, Check,
@@ -1143,7 +1144,10 @@ export default function CandidateEpreuvesPage() {
                                     {enrolledRoom && (
                                       <div className="flex items-center gap-2">
                                         <MapPin size={14} className="text-green-600 flex-shrink-0" />
-                                        <span className="font-semibold text-gray-800">Salle {enrolledRoom}</span>
+                                        <span className="font-semibold text-gray-800">
+                                          {/* Créneau sans salle réservée : le libellé se suffit à lui-même. */}
+                                          {enrolledRoom === NO_ROOM_CANDIDATE_LABEL ? enrolledRoom : `Salle ${enrolledRoom}`}
+                                        </span>
                                       </div>
                                     )}
                                     {!enrolledRoom && ep.salle && (

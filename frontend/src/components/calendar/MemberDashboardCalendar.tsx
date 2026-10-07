@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { generateICS, downloadICS } from '@/lib/icsGenerator';
+import { isNoRoom, NO_ROOM_EXAMINER_NOTICE } from '@/lib/rooms';
 
 interface MemberDashboardCalendarProps {
     mySlots: any[];
@@ -635,6 +636,12 @@ export default function MemberDashboardCalendar({
                                             <p className="text-xs text-blue-500 font-medium">Salle</p>
                                             <p className="text-sm font-bold text-blue-800">{selectedMemberSlot.room}</p>
                                         </div>
+                                    </div>
+                                )}
+                                {/* Créneau sans salle réservée (RH / SI au Tour 3) */}
+                                {isNoRoom(selectedMemberSlot.room) && (
+                                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-sm font-medium text-amber-800">
+                                        ⚠️ {NO_ROOM_EXAMINER_NOTICE}
                                     </div>
                                 )}
 
