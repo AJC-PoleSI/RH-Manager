@@ -16,6 +16,7 @@ import {
   Loader2, Calendar, Clock, MapPin, ChevronLeft, ChevronRight,
   X as XIcon, AlertTriangle, Bell, BookOpen, DoorOpen, Users,
 } from "lucide-react";
+import { canCancelEnrollment, noticeHoursForTour } from "@/lib/enrollment-window";
 
 /* ═══════════════════════════════════════════════════════
    TYPES
@@ -35,7 +36,7 @@ interface CalendarEvent {
   slotId?: string;
   enrolledAt?: string;
   tour?: number;
-  canCancel?: boolean; // true if > 24h before start
+  canCancel?: boolean; // true if the notice (24 h, 2 h in Tour 3) is not reached
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -56,19 +57,15 @@ function getFirstDayOfMonth(year: number, month: number) {
   return day === 0 ? 6 : day - 1;
 }
 
-function canCancelSlot(dateStr: string, startTime?: string): boolean {
+// Préavis d'annulation : 24 h, ou 2 h au Tour 3 — même règle que le serveur
+// (lib/enrollment-window.ts), en heure de Paris.
+function canCancelSlot(dateStr: string, startTime?: string, tour?: number | null): boolean {
   if (!dateStr) return false;
-  try {
-    const d = new Date(dateStr);
-    const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const time = startTime ? startTime.slice(0, 5) : "00:00";
-    const slotStart = new Date(`${dStr}T${time}:00`);
-    const now = new Date();
-    const hoursUntil = (slotStart.getTime() - now.getTime()) / (1000 * 60 * 60);
-    return hoursUntil >= 24;
-  } catch {
-    return false;
-  }
+  return canCancelEnrollment({
+    date: dateStr,
+    startTime: startTime || "00:00",
+    noticeHours: noticeHoursForTour(tour),
+  });
 }
 
 function formatTimeRemaining(dateStr: string, startTime?: string): string {
@@ -193,7 +190,7 @@ export default function CandidateCalendarPage() {
           enrolledAt: e.enrolledAt,
           tour: e.epreuve?.tour,
           color: e.epreuve?.color || null,
-          canCancel: canCancelSlot(dateRaw, startTime),
+          canCancel: canCancelSlot(dateRaw, startTime, e.epreuve?.tour),
         };
       });
 
@@ -229,7 +226,7 @@ export default function CandidateCalendarPage() {
       setEvents((prev) =>
         prev.map((ev) =>
           ev.slotId
-            ? { ...ev, canCancel: canCancelSlot(ev.date, ev.startTime || undefined) }
+            ? { ...ev, canCancel: canCancelSlot(ev.date, ev.startTime || undefined, ev.tour) }
             : ev
         )
       );
@@ -851,14 +848,14 @@ export default function CandidateCalendarPage() {
                     <div className="w-full py-3 text-sm font-medium text-center text-gray-500 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center gap-2">
                       <AlertTriangle size={16} className="text-amber-500" />
                       <span>
-                        Annulation impossible — moins de 24h avant le début
+                        Annulation impossible — moins de {noticeHoursForTour(selectedEvent.tour)}h avant le début
                       </span>
                     </div>
                   )}
 
                   <p className="text-xs text-gray-400 text-center mt-2">
                     Début dans {formatTimeRemaining(selectedEvent.date, selectedEvent.startTime || undefined)}
-                    {" • "}Annulation possible jusqu&apos;à 24h avant
+                    {" • "}Annulation possible jusqu&apos;à {noticeHoursForTour(selectedEvent.tour)}h avant
                   </p>
                 </div>
               )}

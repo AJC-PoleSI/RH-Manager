@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import { underfilledEnrollments } from "@/lib/candidate-signup-status";
 import { POLL, startPolling } from "@/lib/poll";
 import { NO_ROOM_CANDIDATE_LABEL } from "@/lib/rooms";
+import { canCancelEnrollment, noticeHoursForTour } from "@/lib/enrollment-window";
 import {
   Loader2, Calendar, MapPin, FileText, Clock,
   ChevronDown, ChevronUp, Users, BookOpen, X, Check,
@@ -578,18 +579,15 @@ export default function CandidateEpreuvesPage() {
     }
   };
 
-  // Helper: peut-on encore se désinscrire (>= 24h avant) ?
+  // Helper: peut-on encore se désinscrire ? Préavis de 24 h, ou 2 h au
+  // Tour 3 — même règle que le serveur (lib/enrollment-window.ts).
   const canCancel = (slot: AvailableSlot): boolean => {
     if (!slot.date || !slot.startTime) return false;
-    try {
-      const dateOnly = slot.date.split("T")[0];
-      const [h, m] = (slot.startTime || "00:00").split(":");
-      const startDt = new Date(`${dateOnly}T${(h || "00").padStart(2, "0")}:${(m || "00").padStart(2, "0")}:00`);
-      const hoursLeft = (startDt.getTime() - Date.now()) / (1000 * 60 * 60);
-      return hoursLeft >= 24;
-    } catch {
-      return false;
-    }
+    return canCancelEnrollment({
+      date: slot.date,
+      startTime: slot.startTime,
+      noticeHours: noticeHoursForTour(slot.epreuve?.tour),
+    });
   };
 
   const toggleExpand = (id: string) => {
@@ -1265,16 +1263,17 @@ export default function CandidateEpreuvesPage() {
                                           Inscrit(e) &#10003;
                                         </div>
                                         {(() => {
-                                          const dateOnly = enrolledSlot.date;
-                                          const [h, m] = (enrolledSlot.startTime || "00:00").split(":");
-                                          const startDt = new Date(`${dateOnly}T${(h || "00").padStart(2, "0")}:${(m || "00").padStart(2, "0")}:00`);
-                                          const hoursLeft = (startDt.getTime() - Date.now()) / (1000 * 60 * 60);
-                                          const canUnenroll = hoursLeft >= 24;
+                                          const notice = noticeHoursForTour(ep.tour);
+                                          const canUnenroll = canCancelEnrollment({
+                                            date: enrolledSlot.date,
+                                            startTime: enrolledSlot.startTime,
+                                            noticeHours: notice,
+                                          });
 
                                           if (!canUnenroll) {
                                             return (
                                               <p className="text-xs text-gray-400 text-center italic px-2">
-                                                La désinscription n&apos;est plus possible (moins de 24h avant le créneau).
+                                                La désinscription n&apos;est plus possible (moins de {notice}h avant le créneau).
                                               </p>
                                             );
                                           }
@@ -1538,7 +1537,7 @@ export default function CandidateEpreuvesPage() {
                             </button>
                           ) : (
                             <p className="text-xs text-gray-400 text-center italic px-2">
-                              La désinscription n&apos;est plus possible (moins de 24h avant le créneau).
+                              La désinscription n&apos;est plus possible (moins de {noticeHoursForTour(selectedSlot.epreuve?.tour)}h avant le créneau).
                             </p>
                           )}
                         </div>

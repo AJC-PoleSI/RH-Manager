@@ -221,7 +221,8 @@ export default function MemberDashboardCalendar({
     };
 
     const typeStylesMember: Record<string, { bg: string; text: string; dot: string; label: string; border?: string }> = {
-        slot_filled: { bg: "bg-green-50", text: "text-green-700", dot: "bg-green-500", label: "Créneau validé", border: "border-green-200" },
+        // Rose = des candidats sont inscrits (07/10/2026, demande de Felix).
+        slot_filled: { bg: "bg-pink-50", text: "text-pink-700", dot: "bg-pink-500", label: "Candidat(s) inscrit(s)", border: "border-pink-200" },
         slot_empty: { bg: "bg-gray-100", text: "text-gray-700", dot: "bg-gray-400", label: "Créneau assigné", border: "border-gray-200" },
         availability: { bg: "bg-gray-50/80", text: "text-gray-500", dot: "bg-gray-300", label: "Disponibilité", border: "border-dashed border-gray-300" },
         global: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Événement global", border: "border-blue-100" },
@@ -388,7 +389,7 @@ export default function MemberDashboardCalendar({
             {/* Legend */}
             <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
                     Créneau avec candidat(s)
                 </span>
                 <span className="flex items-center gap-1.5">
@@ -570,7 +571,7 @@ export default function MemberDashboardCalendar({
                     >
                         {/* Color accent */}
                         {(() => {
-                            const dotColor = selectedMemberSlot.type === "slot_filled" ? "#10B981" : selectedMemberSlot.type === "slot_empty" ? "#9CA3AF" : selectedMemberSlot.type === "availability" ? "#D1D5DB" : selectedMemberSlot.type === "global" ? "#3B82F6" : selectedMemberSlot.type === "deadline" ? "#EF4444" : "#10B981";
+                            const dotColor = selectedMemberSlot.type === "slot_filled" ? "#EC4899" : selectedMemberSlot.type === "slot_empty" ? "#9CA3AF" : selectedMemberSlot.type === "availability" ? "#D1D5DB" : selectedMemberSlot.type === "global" ? "#3B82F6" : selectedMemberSlot.type === "deadline" ? "#EF4444" : "#10B981";
                             return <div className="h-2" style={{ backgroundColor: dotColor }} />;
                         })()}
 

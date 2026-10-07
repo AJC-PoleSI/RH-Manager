@@ -8,7 +8,8 @@ import {
 import {
   checkEnrollmentWindow,
   readLastMinuteWaiveUntil,
-  ENROLLMENT_WINDOW_MESSAGES,
+  enrollmentWindowMessage,
+  noticeHoursForTour,
 } from "@/lib/enrollment-window";
 import { getEliminationTour, eliminatedResponse } from "@/lib/elimination-db";
 import { roomForCandidate } from "@/lib/rooms";
@@ -19,6 +20,7 @@ import { isMissingColumnError } from "@/lib/slot-lock";
 import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { pickPackedRoom } from "@/lib/room-packing";
 import { NextRequest } from "next/server";
+import { notifyMembers } from "@/lib/notifications";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
 export async function POST(req: NextRequest) {
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
     const SLOT_SELECT = `
         *,
         enrollments:slot_enrollments(*),
-        members:slot_member_assignments(id),
+        members:slot_member_assignments(id, member_id),
         epreuve:epreuves(*)
       `;
     const { data: requestedSlot, error: slotError } = await supabaseAdmin
@@ -184,12 +186,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // DÉLAI D'INSCRIPTION : 24h de préavis, sauf pour les créneaux couverts
-    // par l'exception datée `inscription_sans_delai_jusqu_au` (réglage admin,
-    // cf. lib/enrollment-window.ts). Réglage absent ou base muette → 24h.
+    // DÉLAI D'INSCRIPTION : 24h de préavis (2 h au Tour 3, décision de Felix
+    // du 07/10/2026), sauf pour les créneaux couverts par l'exception datée
+    // `inscription_sans_delai_jusqu_au` (réglage admin, cf.
+    // lib/enrollment-window.ts). Réglage absent ou base muette → préavis.
+    const noticeHours = noticeHoursForTour(epreuveTour);
     const windowVerdict = checkEnrollmentWindow({
       date: slot.date,
       startTime: slot.start_time,
+      noticeHours,
       waiveUntil: await readLastMinuteWaiveUntil((key) =>
         supabaseAdmin
           .from("system_settings")
@@ -200,7 +205,7 @@ export async function POST(req: NextRequest) {
     });
     if (!windowVerdict.allowed) {
       return Response.json(
-        { error: ENROLLMENT_WINDOW_MESSAGES[windowVerdict.reason] },
+        { error: enrollmentWindowMessage(windowVerdict.reason, noticeHours) },
         { status: 403 },
       );
     }
@@ -645,6 +650,35 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.error("Verrouillage du créneau à l'inscription échoué:", e);
+    }
+
+    // ── PRÉVENIR LE JURY (07/10/2026, demande de Felix) ──
+    // Chaque examinateur du créneau reçoit une notification in-app (cloche,
+    // jamais de mail). Best-effort : n'interrompt jamais l'inscription.
+    try {
+      const { data: cand } = await supabaseAdmin
+        .from("candidates")
+        .select("first_name, last_name")
+        .eq("id", candidateId)
+        .maybeSingle();
+      const who = cand ? `${cand.first_name || ""} ${cand.last_name || ""}`.trim() : "Un candidat";
+      const dayLabel = new Date(slot.date).toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        timeZone: "Europe/Paris",
+      });
+      await notifyMembers(
+        (slot.members || []).map((m: any) => m.member_id),
+        {
+          type: "slot_enrollment",
+          title: "Nouveau candidat inscrit",
+          body: `${who} s'est inscrit(e) à « ${slot.epreuve?.name || "l'épreuve"} » le ${dayLabel} à ${String(slot.start_time || "").slice(0, 5)}${slot.room ? ` (${slot.room})` : ""}.`,
+          link: "/dashboard",
+        },
+      );
+    } catch (e) {
+      console.error("Notification du jury à l'inscription échouée:", e);
     }
 
     return Response.json(enrollment, { status: 201 });

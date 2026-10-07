@@ -21,20 +21,17 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { generateICS, downloadICS } from "@/lib/icsGenerator";
 import { POLL, startPolling } from "@/lib/poll";
+import { canCancelEnrollment, noticeHoursForTour } from "@/lib/enrollment-window";
 
-function canCancelSlot(dateStr: string, startTime?: string): boolean {
+// Préavis d'annulation : 24 h, ou 2 h au Tour 3 — même règle que le serveur
+// (lib/enrollment-window.ts), en heure de Paris.
+function canCancelSlot(dateStr: string, startTime?: string, tour?: number | null): boolean {
   if (!dateStr) return false;
-  try {
-    const d = new Date(dateStr);
-    const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const time = startTime ? startTime.slice(0, 5) : "00:00";
-    const slotStart = new Date(`${dStr}T${time}:00`);
-    const now = new Date();
-    const hoursUntil = (slotStart.getTime() - now.getTime()) / (1000 * 60 * 60);
-    return hoursUntil >= 24;
-  } catch {
-    return false;
-  }
+  return canCancelEnrollment({
+    date: dateStr,
+    startTime: startTime || "00:00",
+    noticeHours: noticeHoursForTour(tour),
+  });
 }
 
 function formatTimeRemaining(dateStr: string, startTime?: string): string {
@@ -111,10 +108,10 @@ export default function CandidateSlotsPage() {
 
   const handleCancel = async (enrollment: any) => {
     const slotId = enrollment.slotId;
-    // Client-side 24h check
-    if (!canCancelSlot(enrollment.date, enrollment.startTime)) {
+    // Contrôle côté client (24 h, ou 2 h au Tour 3)
+    if (!canCancelSlot(enrollment.date, enrollment.startTime, enrollment.epreuve?.tour)) {
       toast(
-        "Annulation impossible : le créneau commence dans moins de 24 heures.",
+        `Annulation impossible : le créneau commence dans moins de ${noticeHoursForTour(enrollment.epreuve?.tour)} heures.`,
         "error",
       );
       return;
@@ -242,7 +239,7 @@ export default function CandidateSlotsPage() {
           <CardContent>
             <div className="grid gap-3">
               {enrollments.map((e: any) => {
-                const canCancel = canCancelSlot(e.date, e.startTime);
+                const canCancel = canCancelSlot(e.date, e.startTime, e.epreuve?.tour);
                 const remaining = formatTimeRemaining(e.date, e.startTime);
                 return (
                   <div
@@ -281,7 +278,7 @@ export default function CandidateSlotsPage() {
                       </span>
                     </div>
 
-                    {/* ═══ RÈGLE 1 : Bouton annulation conditionnel 24h ═══ */}
+                    {/* ═══ RÈGLE 1 : Bouton annulation conditionnel (24 h, 2 h au Tour 3) ═══ */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">
                         dans {remaining}
@@ -304,7 +301,7 @@ export default function CandidateSlotsPage() {
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
                           <AlertTriangle size={12} />
-                          &lt; 24h
+                          &lt; {noticeHoursForTour(e.epreuve?.tour)}h
                         </span>
                       )}
                     </div>

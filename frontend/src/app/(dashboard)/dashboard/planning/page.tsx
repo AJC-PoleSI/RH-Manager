@@ -1925,7 +1925,11 @@ export default function PlanningPage() {
             if (memberCount === 0 && candCount > 0) { bg = "#FECACA"; dot = "#B91C1C"; txt = "#7F1D1D"; icon = "⚠️"; }
             else if (memberCount < minMembers && candCount > 0) { bg = "#FDE68A"; dot = "#B45309"; txt = "#78350F"; icon = "🟠"; }
             else if (memberCount === 0) { bg = "#EDE9FE"; dot = "#7C3AED"; txt = "#3B0764"; icon = "🟣"; }
-            else if (candCount < maxCands) { bg = "#FEE2E2"; dot = "#DC2626"; txt = "#7F1D1D"; icon = "🔴"; }
+            // Des candidats sont inscrits (07/10/2026, Felix : « une couleur
+            // rose pour me dire qu'il y a des gens ») : rose, distinct d'un
+            // créneau encore vide (gris) et d'un créneau complet (vert).
+            else if (candCount > 0 && candCount < maxCands) { bg = "#FBCFE8"; dot = "#DB2777"; txt = "#831843"; icon = "🩷"; }
+            else if (candCount === 0) { bg = "#F3F4F6"; dot = "#9CA3AF"; txt = "#374151"; icon = "⚪"; }
             else if (memberCount < minMembers) { bg = "#FEF3C7"; dot = "#D97706"; txt = "#78350F"; icon = "🟠"; }
             // Cadenas : ce créneau est figé, ni le dispatch ni une édition
             // manuelle ne le feront bouger (cf. slot-lock.ts).
@@ -1936,7 +1940,7 @@ export default function PlanningPage() {
             allAdminEvents.push({
               id: `slot-${s.id}`,
               date: toDateStr(s.date),
-              title: `${lockMark}${linkMark}${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}`,
+              title: `${lockMark}${linkMark}${s.epreuve?.name || "Épreuve"} · ${s.room || "Salle ?"}${candCount > 0 ? ` · 👥 ${candCount}/${maxCands}` : ""}`,
               startTime: (s.start_time || "").substring(0, 5),
               bg, textColor: txt, dotColor: dot, kind: "slot", raw: s,
             });
@@ -2028,9 +2032,10 @@ export default function PlanningPage() {
               {/* Légende */}
               <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" />Aucun examinateur</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Manque candidat(s)</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />Aucun inscrit</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pink-500" />Candidats inscrits</span>
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Examinateurs &lt; min</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Tout OK</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Complet</span>
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Événement global</span>
               </div>
 
@@ -2294,7 +2299,8 @@ export default function PlanningPage() {
                 if (memberCount === 0 && candCount > 0) { headerColor = "bg-red-100 text-red-900"; icon = "⚠️"; label = `CRITIQUE — ${candCount} candidat(s) inscrit(s), aucun examinateur`; }
                 else if (memberCount < minMembers && candCount > 0) { headerColor = "bg-amber-50 text-amber-900"; icon = "🟠"; label = `Sous-effectif — ${memberCount}/${minMembers} examinateur(s) pour ${candCount} candidat(s) inscrit(s)`; }
                 else if (memberCount === 0) { headerColor = "bg-purple-100 text-purple-900"; icon = "🟣"; label = "Aucun examinateur"; }
-                else if (candCount < maxCands) { headerColor = "bg-red-50 text-red-900"; icon = "🔴"; label = "Manque candidat(s)"; }
+                else if (candCount > 0 && candCount < maxCands) { headerColor = "bg-pink-100 text-pink-900"; icon = "🩷"; label = `${candCount} candidat(s) inscrit(s) sur ${maxCands}`; }
+                else if (candCount === 0) { headerColor = "bg-gray-100 text-gray-800"; icon = "⚪"; label = "Aucun candidat inscrit"; }
                 else if (memberCount < minMembers) { headerColor = "bg-orange-50 text-orange-900"; icon = "🟠"; label = "Examinateurs insuffisants"; }
                 return (
                   <>

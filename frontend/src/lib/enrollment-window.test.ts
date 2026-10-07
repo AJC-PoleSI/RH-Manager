@@ -5,6 +5,9 @@ import {
   readLastMinuteWaiveUntil,
   LAST_MINUTE_SETTING_KEY,
   type SettingReader,
+  canCancelEnrollment,
+  enrollmentWindowMessage,
+  noticeHoursForTour,
 } from "./enrollment-window";
 
 /**
@@ -287,5 +290,34 @@ describe("checkEnrollmentWindow — horaires ancrés sur l'heure de Paris", () =
         now: new Date("2027-01-15T08:00:00Z"),
       }),
     ).toEqual({ allowed: false, reason: "started" });
+  });
+});
+
+describe("Tour 3 : préavis de 2 h (inscription et désinscription)", () => {
+  // 13/10/2026 à 18h00 heure de Paris = 16h00 UTC.
+  const slot = { date: "2026-10-13", startTime: "18:00" };
+  const at = (iso: string) => new Date(iso);
+
+  it("2 h au Tour 3, 24 h ailleurs", () => {
+    expect(noticeHoursForTour(3)).toBe(2);
+    expect(noticeHoursForTour("3")).toBe(2);
+    expect(noticeHoursForTour(1)).toBe(24);
+    expect(noticeHoursForTour(null)).toBe(24);
+  });
+
+  it("inscription ouverte à 3 h du début, fermée à 1 h (Tour 3)", () => {
+    expect(checkEnrollmentWindow({ ...slot, noticeHours: 2, now: at("2026-10-13T13:00:00Z") }).allowed).toBe(true);
+    expect(checkEnrollmentWindow({ ...slot, noticeHours: 2, now: at("2026-10-13T15:00:00Z") })).toEqual({ allowed: false, reason: "notice" });
+  });
+
+  it("désinscription : même seuil, en heure de Paris", () => {
+    expect(canCancelEnrollment({ ...slot, noticeHours: 2, now: at("2026-10-13T13:59:00Z") })).toBe(true);
+    expect(canCancelEnrollment({ ...slot, noticeHours: 2, now: at("2026-10-13T14:01:00Z") })).toBe(false);
+    expect(canCancelEnrollment({ ...slot, noticeHours: 24, now: at("2026-10-13T13:00:00Z") })).toBe(false);
+  });
+
+  it("message avec le bon préavis", () => {
+    expect(enrollmentWindowMessage("notice", 2)).toContain("moins de 2h");
+    expect(enrollmentWindowMessage("notice")).toContain("moins de 24h");
   });
 });

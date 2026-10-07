@@ -38,6 +38,17 @@ export const LAST_MINUTE_SETTING_KEY = "inscription_sans_delai_jusqu_au";
 /** Préavis exigé par défaut, en heures. */
 export const MIN_NOTICE_HOURS = 24;
 
+/**
+ * Tour 3 (07/10/2026, décision de Felix) : inscription ET désinscription
+ * jusqu'à 2 h avant l'épreuve. Les autres tours gardent les 24 h.
+ */
+export const T3_NOTICE_HOURS = 2;
+
+/** Préavis applicable aux créneaux d'un tour donné. */
+export function noticeHoursForTour(tour: unknown): number {
+  return Number(tour) === 3 ? T3_NOTICE_HOURS : MIN_NOTICE_HOURS;
+}
+
 /** Fuseau de l'application : tous les horaires saisis sont parisiens. */
 const PARIS_TZ = "Europe/Paris";
 
@@ -112,12 +123,21 @@ export type EnrollmentWindowVerdict =
   | { allowed: true }
   | { allowed: false; reason: EnrollmentRefusal };
 
-/** Messages candidats, un par motif de refus. */
+/** Messages candidats, un par motif de refus (préavis par défaut : 24 h). */
 export const ENROLLMENT_WINDOW_MESSAGES: Record<EnrollmentRefusal, string> = {
   started: "Ce créneau a déjà commencé : les inscriptions sont closes.",
   notice:
     "Les inscriptions sont fermées pour ce créneau (moins de 24h avant l'épreuve).",
 };
+
+/** Message candidat pour un refus, avec le préavis réellement appliqué. */
+export function enrollmentWindowMessage(
+  reason: EnrollmentRefusal,
+  noticeHours: number = MIN_NOTICE_HOURS,
+): string {
+  if (reason === "started") return ENROLLMENT_WINDOW_MESSAGES.started;
+  return `Les inscriptions sont fermées pour ce créneau (moins de ${noticeHours}h avant l'épreuve).`;
+}
 
 export interface EnrollmentWindowInput {
   /** `evaluation_slots.date` ("2026-09-14" ou ISO). */
@@ -126,6 +146,8 @@ export interface EnrollmentWindowInput {
   startTime: string | null | undefined;
   /** Valeur du réglage `inscription_sans_delai_jusqu_au`, ou null. */
   waiveUntil?: string | null;
+  /** Préavis en heures (cf. noticeHoursForTour) ; 24 h par défaut. */
+  noticeHours?: number;
   now?: Date;
 }
 
@@ -142,6 +164,7 @@ export function checkEnrollmentWindow({
   date,
   startTime,
   waiveUntil = null,
+  noticeHours = MIN_NOTICE_HOURS,
   now = new Date(),
 }: EnrollmentWindowInput): EnrollmentWindowVerdict {
   if (!date || !startTime) return { allowed: true };
@@ -159,9 +182,32 @@ export function checkEnrollmentWindow({
       : { allowed: false, reason: "started" };
   }
 
-  return hoursUntil >= MIN_NOTICE_HOURS
+  return hoursUntil >= noticeHours
     ? { allowed: true }
     : { allowed: false, reason: "notice" };
+}
+
+/**
+ * Le candidat peut-il encore se désinscrire ? Même préavis que l'inscription
+ * (24 h, ou 2 h au Tour 3), calculé en heure de Paris — l'ancien calcul de la
+ * route de désinscription lisait l'horaire dans le fuseau du serveur (UTC sur
+ * Vercel) et se trompait de deux heures. Date ou horaire illisible → oui.
+ */
+export function canCancelEnrollment({
+  date,
+  startTime,
+  noticeHours = MIN_NOTICE_HOURS,
+  now = new Date(),
+}: {
+  date: string | null | undefined;
+  startTime: string | null | undefined;
+  noticeHours?: number;
+  now?: Date;
+}): boolean {
+  if (!date || !startTime) return true;
+  const startMs = parisInstantMs(String(date).split("T")[0], String(startTime).slice(0, 5));
+  if (Number.isNaN(startMs)) return true;
+  return (startMs - now.getTime()) / (1000 * 60 * 60) >= noticeHours;
 }
 
 /**
