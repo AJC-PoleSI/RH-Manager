@@ -19,6 +19,8 @@
 // inscriptions, ce module applique la règle. Membres et admins ne passent
 // jamais par ici.
 
+import { filterActiveEnrollments } from "./enrollment";
+
 /**
  * La description (consignes) d'une épreuve est-elle visible d'un candidat ?
  * Décision de Felix (07/10/2026, après-midi) : « réserve l'énoncé aux
