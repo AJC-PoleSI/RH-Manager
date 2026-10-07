@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
 import { planningVisibleToCandidates } from "@/lib/slot-release";
 import {
@@ -8,6 +8,7 @@ import {
   isOnTableEpreuve,
 } from "@/lib/epreuve-candidate-view";
 import { candidateEnrolledEpreuves } from "@/lib/candidate-epreuves";
+import { CALENDAR_DENIED, resolveNewEventLinks } from "@/lib/calendar-access";
 import { NextRequest } from "next/server";
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -207,10 +208,19 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/calendar — create a calendar event (admin only for global events)
+// POST /api/calendar — create a calendar event
+// SECURITY (audit du 07/10/2026) : candidat → 403 ; membre non-admin → un
+// événement non global, rattaché à lui-même uniquement (id pris du jeton) ;
+// admin → inchangé. Règles dans lib/calendar-access.ts.
 export async function POST(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
+
+  // Un candidat n'écrit jamais dans le calendrier : refus avant même de
+  // lire le corps.
+  if (payload.role !== "member") {
+    return Response.json({ error: CALENDAR_DENIED.candidate }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -223,19 +233,16 @@ export async function POST(req: NextRequest) {
       end_time,
       startTime,
       endTime,
-      related_epreuve_id,
-      related_member_id,
-      related_candidate_id,
-      is_global,
       visible_to_candidates,
       color,
-      type,
     } = body;
 
-    // Only admins can create global events
-    const isGlobal = is_global === true || type === "global";
-    if (isGlobal && !payload.isAdmin) {
-      return forbidden();
+    // Rattachements (global, membre, candidat, épreuve) : décidés selon le
+    // rôle porté par le jeton, jamais repris tels quels du corps pour un
+    // non-admin (un membre ne vise que lui-même).
+    const verdict = resolveNewEventLinks(payload, body);
+    if (!verdict.ok) {
+      return Response.json({ error: verdict.error }, { status: 403 });
     }
 
     const insertData: Record<string, any> = {
@@ -245,10 +252,7 @@ export async function POST(req: NextRequest) {
       day_end: day_end ? new Date(day_end).toISOString() : null,
       start_time: start_time || startTime || "09:00",
       end_time: end_time || endTime || "10:00",
-      related_epreuve_id: isGlobal ? null : related_epreuve_id || null,
-      related_member_id: isGlobal ? null : related_member_id || null,
-      related_candidate_id: isGlobal ? null : related_candidate_id || null,
-      is_global: isGlobal,
+      ...verdict.links,
       visible_to_candidates: visible_to_candidates !== false,
       color: color || "#3B82F6",
     };

@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
+import { getTokenFromRequest, unauthorized } from "@/lib/auth";
+import {
+  CALENDAR_DENIED,
+  canEditCalendarEvent,
+  reassignmentFields,
+  type CalendarCaller,
+} from "@/lib/calendar-access";
 import { NextRequest } from "next/server";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8,7 +14,7 @@ import { NextRequest } from "next/server";
 // N'importe quel compte authentifié, CANDIDAT COMPRIS, pouvait modifier ou
 // supprimer n'importe quel événement du calendrier via son id.
 //
-// Modèle appliqué, aligné sur POST /api/calendar :
+// Modèle appliqué, partagé avec POST /api/calendar (lib/calendar-access.ts) :
 //   • candidat            → lecture seule (403)
 //   • admin               → tout
 //   • membre non-admin    → uniquement SES événements (related_member_id),
@@ -16,9 +22,12 @@ import { NextRequest } from "next/server";
 //                           réattribuer l'événement à quelqu'un d'autre.
 // ════════════════════════════════════════════════════════════════════════════
 
+function denied(error: string) {
+  return Response.json({ error }, { status: 403 });
+}
+
 interface Guarded {
-  isAdmin: boolean;
-  userId: string;
+  caller: CalendarCaller;
 }
 
 /**
@@ -33,10 +42,10 @@ async function authorizeWrite(
   if (!payload) return unauthorized();
 
   // Les candidats ne créent jamais d'événement : ils n'en modifient aucun.
-  if (payload.role !== "member") return forbidden();
+  // Refus avant toute lecture en base.
+  if (payload.role !== "member") return denied(CALENDAR_DENIED.candidate);
 
-  const isAdmin = !!payload.isAdmin;
-  if (isAdmin) return { isAdmin, userId: payload.id };
+  if (payload.isAdmin) return { caller: payload };
 
   const { data: existing, error } = await supabaseAdmin
     .from("calendar_events")
@@ -54,11 +63,10 @@ async function authorizeWrite(
   if (!existing) {
     return Response.json({ error: "Événement introuvable" }, { status: 404 });
   }
-  // Un événement global n'appartient à personne : réservé aux admins.
-  if (existing.is_global) return forbidden();
-  if (existing.related_member_id !== payload.id) return forbidden();
+  const verdict = canEditCalendarEvent(payload, existing);
+  if (!verdict.ok) return denied(verdict.error);
 
-  return { isAdmin, userId: payload.id };
+  return { caller: payload };
 }
 
 // PUT /api/calendar/[id] — update a calendar event
@@ -72,6 +80,7 @@ export async function PUT(
   if (auth instanceof Response) return auth;
 
   try {
+    const body = await req.json();
     const {
       title,
       description,
@@ -84,9 +93,7 @@ export async function PUT(
       visible_to_candidates,
       color,
       related_epreuve_id,
-      related_member_id,
-      related_candidate_id,
-    } = await req.json();
+    } = body;
 
     const data: Record<string, any> = {};
     if (title !== undefined) data.title = title;
@@ -100,14 +107,8 @@ export async function PUT(
     if (related_epreuve_id !== undefined)
       data.related_epreuve_id = related_epreuve_id;
     // SECURITY : seul un admin peut réattribuer un événement à un autre
-    // membre/candidat — sinon un membre s'en débarrasserait ou le collerait
-    // à quelqu'un d'autre.
-    if (auth.isAdmin) {
-      if (related_member_id !== undefined)
-        data.related_member_id = related_member_id;
-      if (related_candidate_id !== undefined)
-        data.related_candidate_id = related_candidate_id;
-    }
+    // membre/candidat (ignoré pour un membre non-admin).
+    Object.assign(data, reassignmentFields(auth.caller, body));
 
     const { data: event, error } = await supabaseAdmin
       .from("calendar_events")
