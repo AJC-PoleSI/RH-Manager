@@ -108,3 +108,30 @@ BEGIN
       description = $txt$Carte blanche : proposez un projet pour le système d'information d'AJC, sur le sujet de votre choix (un outil, une automatisation, l'amélioration d'un outil existant…). Préparez-le pour pouvoir le défendre en détail : le besoin, la solution, les moyens et le coût, les outils, les données, le contenu de la première version et ses limites. Le jour de l'épreuve (30 minutes), vous présentez d'abord votre projet seul, en 10 minutes, sans lire vos supports ; le jury vous pose ensuite ses questions. L'entretien sert aussi à faire connaissance, à échanger et à voir ce que vous pourriez faire au pôle. L'IA est autorisée pour préparer, mais ne vous contentez pas de lui demander un projet : nous voulons voir comment vous, vous structurez un projet sur une année. Apportez vos notes de travail.$txt$
   WHERE id = '171ed4bb-42ea-45a7-b1c0-4274dd2b29c5';
 END $$;
+
+-- ============ BLOC 4 : Entretien de pôle – Marketing (07/10, distanciel) ============
+-- Source : capture de la grille collée par Felix le 07/10 au soir (2 parties).
+--   Affiche pour les entreprises : 12 critères (titre de partie coupé sur la
+--   capture, déduit des critères) ; Post Instagram : 11 critères.
+--   Pas de barème sur la capture → boutons 0 à 3 comme les autres épreuves
+--   de pôle : 23 × 3 = 69 pts. Le bonus compte comme un critère (même choix
+--   qu'Audit Qualité). Ligne vide de la capture ignorée ; orthographe corrigée,
+--   parenthèses de la grille passées dans le « i ».
+-- Garde-fous : tour 3, pôle Marketing, individuelle, distanciel, 0 note.
+DO $$
+DECLARE
+  ep record;
+  n integer;
+BEGIN
+  SELECT name, tour, pole, is_group_epreuve, is_distanciel INTO ep FROM epreuves WHERE id = '6461978c-ed79-4790-9d66-924c59ec40f9';
+  IF NOT FOUND OR ep.tour <> 3 OR ep.pole IS DISTINCT FROM 'Marketing' OR ep.is_group_epreuve IS DISTINCT FROM false OR ep.is_distanciel IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Épreuve 6461978c-ed79-4790-9d66-924c59ec40f9 inattendue (%, tour %, pôle %) : rien n''est modifié.', ep.name, ep.tour, ep.pole;
+  END IF;
+  SELECT count(*) INTO n FROM candidate_evaluations WHERE epreuve_id = '6461978c-ed79-4790-9d66-924c59ec40f9';
+  IF n > 0 THEN
+    RAISE EXCEPTION '« % » a déjà % note(s) : rien n''est modifié.', ep.name, n;
+  END IF;
+  UPDATE epreuves
+  SET evaluation_questions = $json$[{"section": "Affiche pour les entreprises", "q": "Message professionnel qui cible les entreprises", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Créativité, originalité", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Contenu engageant", "weight": 3, "input": "scale", "hint": "Est-ce que j'ai envie de regarder, de contacter ?"}, {"section": "Affiche pour les entreprises", "q": "Respect de la charte graphique", "weight": 3, "input": "scale", "hint": "Logo, bonnes couleurs"}, {"section": "Affiche pour les entreprises", "q": "Orthographe, syntaxe", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Clarté de l'affiche", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Pertinence du choix", "weight": 3, "input": "scale", "hint": "Dans le paragraphe, l'explication du post est-elle claire ?"}, {"section": "Affiche pour les entreprises", "q": "Ergonomie et lisibilité", "weight": 3, "input": "scale", "hint": "Facile à comprendre"}, {"section": "Affiche pour les entreprises", "q": "Cohérence du canal retenu", "weight": 3, "input": "scale", "hint": "Comment il fait ses pubs"}, {"section": "Affiche pour les entreprises", "q": "Esthétisme et qualité du rendu", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Respect du temps imparti", "weight": 3, "input": "scale"}, {"section": "Affiche pour les entreprises", "q": "Bonus : estimation du coût de l'action publicitaire", "weight": 3, "input": "scale"}, {"section": "Post Instagram", "q": "Ton engageant et adapté à la cible", "weight": 3, "input": "scale", "hint": "Fun si c'est pour des étudiants"}, {"section": "Post Instagram", "q": "Éléments essentiels repris dans le post", "weight": 3, "input": "scale", "hint": "Pas de superflu, pas de hors-sujet"}, {"section": "Post Instagram", "q": "Lisibilité", "weight": 3, "input": "scale", "hint": "Par exemple : on arrête de scroller pour regarder le post"}, {"section": "Post Instagram", "q": "Créativité, originalité", "weight": 3, "input": "scale"}, {"section": "Post Instagram", "q": "Esthétisme et qualité du rendu", "weight": 3, "input": "scale"}, {"section": "Post Instagram", "q": "Orthographe, syntaxe", "weight": 3, "input": "scale"}, {"section": "Post Instagram", "q": "Respect de la charte graphique", "weight": 3, "input": "scale", "hint": "Logo, bonnes couleurs"}, {"section": "Post Instagram", "q": "Codes de la plateforme", "weight": 3, "input": "scale", "hint": "Carrousel, donne envie de swiper, tags"}, {"section": "Post Instagram", "q": "Dynamisme", "weight": 3, "input": "scale", "hint": "Est-ce que le contenu donne envie ?"}, {"section": "Post Instagram", "q": "Cohérence avec le feed Instagram de base", "weight": 3, "input": "scale"}, {"section": "Post Instagram", "q": "Respect du temps imparti", "weight": 3, "input": "scale"}]$json$
+  WHERE id = '6461978c-ed79-4790-9d66-924c59ec40f9';
+END $$;
