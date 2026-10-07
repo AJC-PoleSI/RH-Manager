@@ -61,3 +61,33 @@ export function renameInList(rooms: string[], from: string, to: string): string[
     ? rooms.map((r) => (r === from ? to : r))
     : [...rooms, to];
 }
+
+// ── Créneaux « sans salle » (Tour 3, 07/10/2026) ──────────────────────────
+// Décision de Felix : les entretiens RH et SI se tiennent sans salle
+// réservée — les examinateurs en trouvent une et préviennent le candidat.
+// Ces créneaux portent une salle fictive « Sans salle (RH) », « Sans salle
+// (SI) » : une ouverture exige un nom de salle, et un nom par épreuve évite
+// que deux épreuves sans salle se bloquent mutuellement au même horaire.
+
+export const NO_ROOM_PREFIX = "Sans salle";
+
+/** Bandeau des examinateurs sur un créneau sans salle. */
+export const NO_ROOM_EXAMINER_NOTICE =
+  "Pas de salle réservée : trouvez une salle et prévenez le candidat.";
+
+/** Ce qu'un candidat lit à la place de la salle fictive. */
+export const NO_ROOM_CANDIDATE_LABEL = "Salle communiquée par le jury";
+
+/** Salle fictive d'un créneau sans salle réservée ? */
+export function isNoRoom(room: string | null | undefined): boolean {
+  return String(room ?? "")
+    .trim()
+    .toLowerCase()
+    .startsWith(NO_ROOM_PREFIX.toLowerCase());
+}
+
+/** Salle telle qu'un candidat la voit (null / vide inchangés). */
+export function roomForCandidate(room: string | null | undefined): string | null {
+  if (!room) return room ?? null;
+  return isNoRoom(room) ? NO_ROOM_CANDIDATE_LABEL : room;
+}

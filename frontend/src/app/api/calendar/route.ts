@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { roomForCandidate } from "@/lib/rooms";
 import { planningVisibleToCandidates } from "@/lib/slot-release";
 import {
   candidateSeesDescription,
@@ -155,7 +156,8 @@ export async function GET(req: NextRequest) {
         is_global: false,
         visible_to_candidates: true,
         color: "#8B5CF6",
-        room: slot.room || null,
+        // Candidat : salle fictive « Sans salle (…) » → « Salle communiquée par le jury ».
+        room: isCandidate ? roomForCandidate(slot.room || null) : slot.room || null,
         isSlot: true,
         slotStatus: slot.status,
         enrolledCount: activeEnrolls.length,

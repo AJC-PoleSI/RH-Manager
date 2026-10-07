@@ -11,6 +11,7 @@ import {
 } from "@/lib/room-packing";
 import { getToursByNumber } from "@/lib/tour-status";
 import { getEliminationTour } from "@/lib/elimination-db";
+import { roomForCandidate } from "@/lib/rooms";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -272,9 +273,11 @@ export async function GET(req: NextRequest) {
 
       // Salle masquée tant que le candidat n'est pas inscrit ; une fois
       // inscrit, il voit la sienne.
+      // Créneau sans salle réservée (RH / SI au Tour 3) : le candidat lit
+      // « Salle communiquée par le jury », pas la salle fictive.
       const visibleRoom = isCandidate
         ? mine
-          ? mine.room || null
+          ? roomForCandidate(mine.room || null)
           : null
         : slot.room || null;
 
