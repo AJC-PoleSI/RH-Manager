@@ -10,12 +10,19 @@ import { useToast } from "@/components/ui/toast";
 import {
   formatScore,
   getCriterionInput,
+  getCriterionSection,
+  getCriterionSections,
   getMaxPoints,
   parseScoreInput,
+  supportsDraftEvaluation,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
 import { POLL, startPolling } from "@/lib/poll";
-import { mergeScores, ScoreGrid } from "@/components/evaluation/ScoreGrid";
+import {
+  mergeScores,
+  ScoreGrid,
+  sectionTotals,
+} from "@/components/evaluation/ScoreGrid";
 import SecondGridCard from "@/components/evaluation/SecondGridCard";
 import ProblemBankField, {
   type ProblemBankState,
@@ -27,6 +34,14 @@ import {
 import { problemScore, type ProblemBank } from "@/lib/problem-bank";
 
 type Question = EvaluationCriterion;
+
+/** Couleurs des cartes de partie (mail, appel, échanges…), en rotation. */
+const SECTION_STYLES = [
+  { border: "border-blue-200", head: "bg-blue-50/60", title: "text-blue-900", score: "text-blue-700" },
+  { border: "border-amber-200", head: "bg-amber-50/60", title: "text-amber-900", score: "text-amber-700" },
+  { border: "border-emerald-200", head: "bg-emerald-50/60", title: "text-emerald-900", score: "text-emerald-700" },
+  { border: "border-violet-200", head: "bg-violet-50/60", title: "text-violet-900", score: "text-violet-700" },
+];
 
 function EvaluateCandidateForm({ id }: { id: string }) {
   const router = useRouter();
@@ -97,6 +112,22 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [problemChecked, setProblemChecked] = useState<number[]>([]);
   const [problemExtra, setProblemExtra] = useState(0);
+
+  // ── Notation PARTIE PAR PARTIE (grille découpée en blocs, 07/10/2026) ──
+  // La note est un brouillon (non close) enregistré au fil des parties —
+  // « on évalue le mail, puis on revient pour l'appel » — et ne se clôt
+  // qu'à la validation finale.
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+  // Pistes d'un brouillon rechargé, appliquées quand la question du créneau
+  // (chargée à part) est connue et identique.
+  const pendingDraftChecks = useRef<{
+    questionKey: string;
+    checked: number[];
+    extra: number;
+  } | null>(null);
 
   // ── Shared collaboration state (peer evals + group comment feed) ──
   const [peerEvals, setPeerEvals] = useState<any[]>([]);
@@ -196,6 +227,11 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const groupNoteEnabled = isGroupEpreuve && !groupGrid.disabled;
   const groupQuestions = groupGrid.disabled ? [] : groupGrid.questions;
   const groupMaxTotal = groupGrid.disabled ? 0 : groupGrid.maxTotal;
+  // Grille découpée en parties (mail, appel…) : une carte par partie et un
+  // brouillon enregistrable. Jamais pour la note partagée d'un binôme.
+  const draftMode = !isBinome && supportsDraftEvaluation(questions);
+  const sections = getCriterionSections(questions);
+  const hasUnsectioned = questions.some((q) => !getCriterionSection(q));
 
   // ── Load group/binôme evaluation when épreuve selected ──
   const loadGroupEval = useCallback(async () => {
@@ -374,14 +410,71 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     setIndivScores({});
     setIndivErrors({});
     setIndivComment("");
+    setDraftId(null);
+    setDraftSavedAt(null);
+    setDraftDirty(false);
+    pendingDraftChecks.current = null;
   }, [selectedEpreuveId]);
 
-  // Question changée (par moi ou un autre examinateur du créneau) : les
-  // pistes cochées portaient sur l'ancienne question, on les remet à zéro.
+  // Brouillon déjà enregistré pour ce candidat (je reviens compléter) : on
+  // remet à l'écran les notes, le commentaire et les pistes cochées.
   useEffect(() => {
+    const d = selectedEpreuve?.draft;
+    if (!d) return;
+    setDraftId(d.id);
+    setDraftSavedAt(d.updatedAt ?? null);
+    const loaded: Record<number, string> = {};
+    for (const [k, v] of Object.entries(d.scores || {})) {
+      const n = parseScoreInput(v);
+      if (n !== null) loaded[Number(k)] = formatScore(n);
+    }
+    setIndivScores(loaded);
+    setIndivComment(d.comment || "");
+    const checks = d.problemChecks;
+    if (checks?.questionKey) {
+      const restored = {
+        questionKey: checks.questionKey as string,
+        checked: Array.isArray(checks.checked) ? checks.checked : [],
+        extra: Number(checks.extra) || 0,
+      };
+      if (restored.questionKey === slotQuestionKeyRef.current) {
+        setProblemChecked(restored.checked);
+        setProblemExtra(restored.extra);
+      } else {
+        pendingDraftChecks.current = restored;
+      }
+    }
+    // On ne recharge QUE quand le brouillon change (pas à chaque liste
+    // d'épreuves reçue), pour ne pas écraser une saisie en cours.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEpreuveId, selectedEpreuve?.draft?.id]);
+
+  // Question changée (par moi ou un autre examinateur du créneau) : les
+  // pistes cochées portaient sur l'ancienne question, on les remet à zéro —
+  // sauf celles d'un brouillon rechargé, qui portent sur cette question.
+  useEffect(() => {
+    const pending = pendingDraftChecks.current;
+    if (pending && pending.questionKey === slotQuestion.questionKey) {
+      setProblemChecked(pending.checked);
+      setProblemExtra(pending.extra);
+      pendingDraftChecks.current = null;
+      return;
+    }
     setProblemChecked([]);
     setProblemExtra(0);
   }, [slotQuestion.questionKey]);
+
+  // Brouillon modifié et pas encore enregistré : on prévient avant de
+  // quitter la page.
+  useEffect(() => {
+    if (!draftDirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draftDirty]);
 
   // La note du critère « Réponse à la problématique » suit les pistes.
   useEffect(() => {
@@ -481,6 +574,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   const handleIndivScore = (idx: number, val: string, maxPoints: number) => {
     setIndivScores((p) => ({ ...p, [idx]: val }));
+    if (draftMode) setDraftDirty(true);
     validateScore(idx, val, maxPoints, setIndivErrors);
   };
 
@@ -744,6 +838,90 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     }
   };
 
+  // Pistes cochées à joindre à l'enregistrement (le serveur en recalcule la
+  // note du critère). Rien tant que la question du créneau n'est pas choisie.
+  const problemChecksPayload = () =>
+    problemBank && slotQuestion.questionKey
+      ? {
+          problemChecks: {
+            questionKey: slotQuestion.questionKey,
+            checked: problemChecked,
+            extra: problemExtra,
+          },
+        }
+      : {};
+
+  const reloadAllowedEpreuves = async () => {
+    try {
+      const epRes = await api.get(
+        `/evaluations/allowed-epreuves?candidateId=${id}`,
+      );
+      setEpreuves(epRes.data?.epreuves || []);
+    } catch {
+      /* la page reste utilisable */
+    }
+  };
+
+  // ── Brouillon : enregistre ce qui est noté jusqu'ici, sans clôturer ──
+  const saveDraft = async (): Promise<boolean> => {
+    if (Object.keys(indivErrors).length > 0) {
+      toast("Corrigez les notes en rouge avant d'enregistrer.", "error");
+      return false;
+    }
+    // Une case vide n'est pas envoyée : elle reste « pas encore notée ».
+    const scores = Object.fromEntries(
+      Object.entries(indivScores).filter(([, v]) => v !== undefined && v !== ""),
+    );
+    const payload = { scores, comment: indivComment, ...problemChecksPayload() };
+    setSavingDraft(true);
+    try {
+      let currentId = draftId;
+      if (!currentId) {
+        try {
+          const res = await api.post("/evaluations", {
+            candidateId: id,
+            epreuveId: selectedEpreuveId,
+            isGroup: false,
+            draft: true,
+            ...payload,
+          });
+          currentId = res.data?.id ?? null;
+          setDraftId(currentId);
+        } catch (err: any) {
+          // Brouillon déjà créé (autre onglet, page rechargée…) : on le reprend.
+          const existingId = err?.response?.data?.id;
+          if (err?.response?.data?.code === "INDIVIDUAL_EVAL_EXISTS" && existingId) {
+            currentId = existingId;
+            setDraftId(existingId);
+            await api.put(`/evaluations/${existingId}`, payload);
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        await api.put(`/evaluations/${currentId}`, payload);
+      }
+      setDraftSavedAt(new Date().toISOString());
+      setDraftDirty(false);
+      toast("Enregistré — vous pourrez revenir compléter les autres parties.", "success");
+      return true;
+    } catch (err: any) {
+      const data = err?.response?.data || {};
+      if (data.code === "SLOT_QUESTION_CHANGED") {
+        toast(data.error, "error");
+        await loadSlotQuestion();
+      } else if (data.code === "CANDIDATE_ALREADY_EVALUATED") {
+        toast(data.error || "Ce candidat vient d'être évalué par un autre examinateur.", "info");
+        await reloadAllowedEpreuves();
+      } else {
+        toast(data.error || "Erreur lors de l'enregistrement du brouillon", "error");
+      }
+      return false;
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const handleIndivSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (Object.keys(indivErrors).length > 0) {
@@ -757,6 +935,14 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         "Choisissez d'abord la question posée au groupe (critère « Réponse à la problématique »).",
         "error",
       );
+      return;
+    }
+    if (
+      draftMode &&
+      !window.confirm(
+        "Valider et clôturer la notation ? Elle ne sera plus modifiable, sauf par un administrateur.",
+      )
+    ) {
       return;
     }
     // Critères laissés vides : comptés comme 0 plutôt que de bloquer
@@ -781,23 +967,24 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       // Épreuve de groupe : plus aucune note collective à créer ici. Le
       // travail du groupe est noté une seule fois par créneau, sur sa propre
       // grille auto-sauvegardée (/api/evaluations/group-note).
-      await api.post("/evaluations", {
-        candidateId: id,
-        epreuveId: selectedEpreuveId,
+      const finalPayload = {
         scores: finalScores,
         comment: indivComment,
-        isGroup: false,
         // Pistes cochées : le serveur en recalcule la note du critère.
-        ...(problemBank && slotQuestion.questionKey
-          ? {
-              problemChecks: {
-                questionKey: slotQuestion.questionKey,
-                checked: problemChecked,
-                extra: problemExtra,
-              },
-            }
-          : {}),
-      });
+        ...problemChecksPayload(),
+      };
+      if (draftMode && draftId) {
+        // Brouillon existant : dernière écriture + clôture, en une fois.
+        await api.put(`/evaluations/${draftId}`, { ...finalPayload, finalize: true });
+      } else {
+        await api.post("/evaluations", {
+          candidateId: id,
+          epreuveId: selectedEpreuveId,
+          isGroup: false,
+          ...finalPayload,
+        });
+      }
+      setDraftDirty(false);
       toast("Évaluation individuelle enregistrée !", "success");
       router.push("/dashboard/candidates");
     } catch (error: any) {
@@ -855,6 +1042,25 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       toast(serverMsg || "Erreur lors de l'enregistrement", "error");
     }
   };
+
+  // Critère « Réponse à la problématique » : question du créneau + pistes.
+  const renderProblemBank = (q: Question, idx: number) =>
+    problemBank && idx === problemBankIndex ? (
+      <ProblemBankField
+        bank={problemBank}
+        criterion={q}
+        state={slotQuestion}
+        saving={savingQuestion}
+        onSelectQuestion={handleSelectQuestion}
+        checked={problemChecked}
+        extra={problemExtra}
+        onChecksChange={(checked, extra) => {
+          setProblemChecked(checked);
+          setProblemExtra(extra);
+          if (draftMode) setDraftDirty(true);
+        }}
+      />
+    ) : null;
 
   if (loading) return <div className="p-8">Chargement...</div>;
   if (!candidate) return <div className="p-8">Candidat introuvable</div>;
@@ -1280,9 +1486,124 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         </Card>
       )}
 
+      {/* ───────── Notation PARTIE PAR PARTIE (grille découpée en blocs :
+          mail, appel, échanges…) : une carte par partie, un brouillon
+          enregistrable à tout moment, la validation finale tout en bas.
+          Demande de Felix, 07/10/2026. ───────── */}
+      {selectedEpreuve && !isBinome && !indivClosed && draftMode && (
+        <form onSubmit={handleIndivSubmit} className="space-y-6">
+          <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
+            <p className="text-sm text-blue-900">
+              <strong>Notation par parties.</strong> Évaluez chaque partie au fil
+              de l&apos;épreuve et enregistrez-la : vous pourrez revenir sur
+              cette page compléter les suivantes. La note ne devient définitive
+              qu&apos;avec « Valider et clôturer la notation », tout en bas.
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              {draftSavedAt
+                ? `Dernier enregistrement à ${new Date(draftSavedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`
+                : "Aucune partie enregistrée pour l'instant."}
+              {draftDirty && " Des modifications ne sont pas encore enregistrées."}
+            </p>
+          </div>
+
+          {[...sections, ...(hasUnsectioned ? [""] : [])].map((section, i) => {
+            const style = SECTION_STYLES[i % SECTION_STYLES.length];
+            const totals = sectionTotals(questions, indivScores, section);
+            return (
+              <Card key={section || "autres-criteres"} className={style.border}>
+                <CardHeader className={style.head}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <CardTitle className={`text-base ${style.title}`}>
+                      {i + 1}. {section || "Autres critères"}
+                    </CardTitle>
+                    <p className={`text-lg font-bold ${style.score}`}>
+                      {formatScore(totals.obtained) || "0"}
+                      <span className="text-xs font-medium opacity-70">
+                        {" "}/ {totals.max}
+                      </span>
+                    </p>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4">
+                  <ScoreGrid
+                    questions={questions}
+                    onlySection={section}
+                    scores={indivScores}
+                    scoreErrors={indivErrors}
+                    onChange={handleIndivScore}
+                    renderCustom={renderProblemBank}
+                  />
+                  <div className="flex justify-end border-t border-gray-100 pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={savingDraft}
+                      onClick={() => saveDraft()}
+                    >
+                      {savingDraft ? "Enregistrement…" : "Enregistrer cette partie"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle>Synthèse et validation</CardTitle>
+                <p className="text-lg font-bold text-gray-800">
+                  {totalOf(indivScores) || "0"}
+                  <span className="text-xs font-medium text-gray-400">
+                    {" "}/ {maxTotal}
+                  </span>
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Commentaire global</Label>
+                <textarea
+                  className="w-full p-2 border rounded-md"
+                  rows={4}
+                  value={indivComment}
+                  onChange={(e) => {
+                    setIndivComment(e.target.value);
+                    setDraftDirty(true);
+                  }}
+                  placeholder="Notez vos observations…"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="sm:flex-1"
+                  disabled={savingDraft}
+                  onClick={() => saveDraft()}
+                >
+                  Enregistrer le brouillon
+                </Button>
+                <Button
+                  type="submit"
+                  className="sm:flex-1"
+                  disabled={Object.keys(indivErrors).length > 0 || savingDraft}
+                >
+                  ✓ Valider et clôturer la notation
+                </Button>
+              </div>
+              <p className="text-[11px] text-gray-500 text-center">
+                Après validation, seul un administrateur peut modifier la note.
+              </p>
+            </CardContent>
+          </Card>
+        </form>
+      )}
+
       {/* ───────── Individual evaluation section (masquée en binôme : une
           seule note partagée existe déjà ci-dessus) ───────── */}
-      {selectedEpreuve && !isBinome && !indivClosed && (
+      {selectedEpreuve && !isBinome && !indivClosed && !draftMode && (
         <Card>
           <CardHeader>
             <CardTitle>
@@ -1301,23 +1622,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 scores={indivScores}
                 scoreErrors={indivErrors}
                 onChange={handleIndivScore}
-                renderCustom={(q, idx) =>
-                  problemBank && idx === problemBankIndex ? (
-                    <ProblemBankField
-                      bank={problemBank}
-                      criterion={q}
-                      state={slotQuestion}
-                      saving={savingQuestion}
-                      onSelectQuestion={handleSelectQuestion}
-                      checked={problemChecked}
-                      extra={problemExtra}
-                      onChecksChange={(checked, extra) => {
-                        setProblemChecked(checked);
-                        setProblemExtra(extra);
-                      }}
-                    />
-                  ) : null
-                }
+                renderCustom={renderProblemBank}
               />
               <div className="space-y-2 border-t border-gray-100 pt-4">
                 <Label>Commentaire global</Label>

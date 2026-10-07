@@ -94,7 +94,7 @@ function CriterionLabel({
 }
 
 /** Sous-total et barème d'un bloc (`section`) de la grille. */
-function sectionTotals(
+export function sectionTotals(
   questions: Question[],
   scores: Record<number, string>,
   section: string,
@@ -116,12 +116,19 @@ export function ScoreGrid({
   onChange,
   disabled,
   renderCustom,
+  onlySection,
 }: {
   questions: Question[];
   scores: Record<number, string>;
   scoreErrors: Record<number, string>;
   onChange: (idx: number, val: string, maxPoints: number) => void;
   disabled?: boolean;
+  /**
+   * N'afficher qu'une partie de la grille (une carte par partie, notation
+   * partie par partie). "" = les critères sans bloc. Les positions des
+   * critères restent celles de la grille complète.
+   */
+  onlySection?: string;
   /**
    * Rendu d'un critère spécial (`input: "problem_bank"`) par l'appelant.
    * Renvoyer null retombe sur la saisie chiffrée.
@@ -138,7 +145,10 @@ export function ScoreGrid({
       </p>
     );
   }
+  const inScope = (q: Question) =>
+    onlySection === undefined || getCriterionSection(q) === onlySection;
   const hasNumberInput = questions.some((q) => {
+    if (!inScope(q)) return false;
     const input = getCriterionInput(q);
     return (
       input === "number" ||
@@ -153,10 +163,13 @@ export function ScoreGrid({
         </p>
       )}
       {questions.map((q, idx) => {
+        if (!inScope(q)) return null;
         const maxPoints = getMaxPoints(q);
         const input = getCriterionInput(q);
         const section = getCriterionSection(q);
+        // Une partie affichée seule a déjà son titre (celui de sa carte).
         const startsSection =
+          onlySection === undefined &&
           !!section &&
           (idx === 0 || getCriterionSection(questions[idx - 1]) !== section);
         const totals = startsSection

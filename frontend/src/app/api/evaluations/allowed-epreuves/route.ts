@@ -9,7 +9,10 @@ import {
   buildClosureIndex,
   evaluationClosure,
 } from "@/lib/evaluation-closure";
-import { parseQuestions } from "@/lib/evaluation-criteria";
+import {
+  parseQuestions,
+  supportsDraftEvaluation,
+} from "@/lib/evaluation-criteria";
 import { resolveGroupGrid } from "@/lib/group-evaluation-criteria";
 import { bankMatchesGrid, parseProblemBank } from "@/lib/problem-bank";
 import { NextRequest } from "next/server";
@@ -78,10 +81,12 @@ export async function GET(req: NextRequest) {
         .filter((e: any) => e.is_group_epreuve === true)
         .map((e: any) => e.id),
     );
+    // `*` : closed_at et problem_checks servent à reprendre un brouillon, et
+    // problem_checks peut ne pas encore exister en base.
     const { data: existingEvals } = await supabaseAdmin
       .from("candidate_evaluations")
       .select(
-        "candidate_id, epreuve_id, member_id, is_group, scores, comment, member:members!member_id(id, first_name, last_name, email)",
+        "*, member:members!member_id(id, first_name, last_name, email)",
       )
       .eq("candidate_id", candidateId)
       .in(
@@ -97,6 +102,35 @@ export async function GET(req: NextRequest) {
       if (row.member?.id) authorById.set(row.member.id, row.member);
     }
 
+    // BROUILLON (07/10/2026) : sur une grille notée partie par partie, MA
+    // note encore ouverte (closed_at vide) se reprend — elle ne ferme pas le
+    // formulaire pour moi. Elle reste close pour les autres examinateurs.
+    const myDraftFor = (epreuveId: string, rawQuestions: unknown) => {
+      if (!supportsDraftEvaluation(parseQuestions(rawQuestions))) return null;
+      const row = ((existingEvals as any[]) || []).find(
+        (r) =>
+          r.epreuve_id === epreuveId &&
+          r.member_id === user.id &&
+          r.is_group !== true &&
+          !r.closed_at,
+      );
+      if (!row) return null;
+      let scores: Record<string, unknown> = {};
+      try {
+        scores =
+          typeof row.scores === "string" ? JSON.parse(row.scores || "{}") : row.scores || {};
+      } catch {
+        scores = {};
+      }
+      return {
+        id: row.id as string,
+        scores,
+        comment: row.comment || "",
+        problemChecks: row.problem_checks ?? null,
+        updatedAt: row.updated_at || row.created_at || null,
+      };
+    };
+
     const epreuves = (data || []).map((e: any) => ({
       id: e.id,
       name: e.name,
@@ -104,7 +138,11 @@ export async function GET(req: NextRequest) {
       tour: e.tour,
       isGroupEpreuve: e.is_group_epreuve ?? false,
       examinerCount: examinerCounts[e.id] ?? null,
+      draft: myDraftFor(e.id, e.evaluation_questions),
       closure: (() => {
+        if (myDraftFor(e.id, e.evaluation_questions)) {
+          return { closed: false, reason: null, by: null };
+        }
         const verdict = evaluationClosure(closureIndex, {
           candidateId,
           epreuveId: e.id,

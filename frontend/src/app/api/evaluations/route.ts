@@ -11,6 +11,7 @@ import {
   normalizeScores,
   parseQuestions,
   scoreValidationMessage,
+  supportsDraftEvaluation,
   validateScores,
 } from "@/lib/evaluation-criteria";
 import {
@@ -19,14 +20,8 @@ import {
 } from "@/lib/evaluation-examiners";
 import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { isLegacyCollectiveNote } from "@/lib/group-evaluation-criteria";
-import {
-  bankMatchesGrid,
-  normalizeProblemChecks,
-  parseProblemBank,
-  scoreFromChecks,
-  type ProblemChecks,
-} from "@/lib/problem-bank";
-import { readSlotQuestion } from "@/lib/slot-questions-db";
+import type { ProblemChecks } from "@/lib/problem-bank";
+import { applyProblemChecks } from "@/lib/problem-checks-server";
 import { fetchAllRows } from "@/lib/supabase-paging";
 import { NextRequest } from "next/server";
 
@@ -340,48 +335,27 @@ export async function POST(req: NextRequest) {
     // pistes cochées — recalculée ICI, jamais reprise du client. Les pistes
     // doivent porter sur la question choisie pour le créneau.
     // ══════════════════════════════════════════════════════════════════
-    let problemChecks: ProblemChecks | null = null;
-    const bank = parseProblemBank(epreuveRow?.problem_bank);
-    if (bank && bankMatchesGrid(bank, questions)) {
-      if (body.problemChecks == null) {
-        return Response.json(
-          {
-            error:
-              "Les pistes de la « Réponse à la problématique » manquent : choisissez la question du créneau et cochez les pistes.",
-            code: "PROBLEM_CHECKS_REQUIRED",
-          },
-          { status: 400 },
-        );
-      }
-      const checks = normalizeProblemChecks(bank, body.problemChecks);
-      if (!checks) {
-        return Response.json(
-          { error: "Question inconnue pour cette épreuve." },
-          { status: 400 },
-        );
-      }
-      const slot = await resolveCandidateSlot(candidateId, epreuveId);
-      if (slot) {
-        const { question } = await readSlotQuestion(slot.slotId);
-        if (question && question.questionKey !== checks.questionKey) {
-          return Response.json(
-            {
-              error:
-                "La question du créneau a changé entre-temps : rechargez la page et recochez les pistes.",
-              code: "SLOT_QUESTION_CHANGED",
-            },
-            { status: 409 },
-          );
-        }
-      }
-      const parsedScores =
-        typeof scores === "string" ? JSON.parse(scores || "{}") : scores || {};
-      scores = {
-        ...parsedScores,
-        [String(bank.criterionIndex)]: scoreFromChecks(bank, checks),
-      };
-      problemChecks = checks;
-    }
+    // BROUILLON (07/10/2026) : une grille découpée en parties (mail, appel…)
+    // se note partie par partie ; la note reste ouverte jusqu'à la
+    // validation finale (PUT .../[id] avec finalize). Réservé à l'avis
+    // individuel : la note partagée d'un binôme a déjà son propre circuit.
+    const isDraft =
+      body.draft === true &&
+      !effectiveIsGroup &&
+      supportsDraftEvaluation(questions);
+
+    const outcome = await applyProblemChecks({
+      epreuveRow,
+      questions,
+      scores,
+      rawChecks: body.problemChecks,
+      candidateId,
+      epreuveId,
+      required: !isDraft,
+    });
+    if (!outcome.ok) return outcome.response;
+    scores = outcome.scores;
+    const problemChecks: ProblemChecks | null = outcome.checks;
 
     const invalid = validateScores(questions, scores);
     if (invalid) {
@@ -415,9 +389,11 @@ export async function POST(req: NextRequest) {
       is_group: effectiveIsGroup,
       last_edited_by: memberId,
     };
-    const closeFields = effectiveIsGroup
-      ? {}
-      : { closed_at: new Date().toISOString(), closed_by: memberId };
+    // Brouillon : pas de clôture, elle viendra à la validation finale.
+    const closeFields =
+      effectiveIsGroup || isDraft
+        ? {}
+        : { closed_at: new Date().toISOString(), closed_by: memberId };
 
     // Détail des pistes cochées (traçabilité) : colonne facultative.
     const checksField = problemChecks ? { problem_checks: problemChecks } : {};

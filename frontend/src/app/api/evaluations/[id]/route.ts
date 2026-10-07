@@ -7,6 +7,8 @@ import {
   scoreValidationMessage,
   validateScores,
 } from "@/lib/evaluation-criteria";
+import type { ProblemChecks } from "@/lib/problem-bank";
+import { applyProblemChecks } from "@/lib/problem-checks-server";
 import { NextRequest } from "next/server";
 
 // PUT /api/evaluations/[id] - Update an evaluation
@@ -27,10 +29,11 @@ export async function PUT(
     // le PUT (cf. isMissingColumnError).
     let existing: any = null;
     {
+      // epreuves(*) : `problem_bank` (Tour 3) peut ne pas exister en base.
       const { data, error } = await supabaseAdmin
         .from("candidate_evaluations")
         .select(
-          "member_id, candidate_id, epreuve_id, is_group, closed_at, epreuves(is_group_epreuve, evaluation_questions)",
+          "member_id, candidate_id, epreuve_id, is_group, closed_at, scores, epreuves(*)",
         )
         .eq("id", id)
         .single();
@@ -38,7 +41,7 @@ export async function PUT(
         const fallback = await supabaseAdmin
           .from("candidate_evaluations")
           .select(
-            "member_id, candidate_id, epreuve_id, is_group, epreuves(is_group_epreuve, evaluation_questions)",
+            "member_id, candidate_id, epreuve_id, is_group, scores, epreuves(*)",
           )
           .eq("id", id)
           .single();
@@ -92,16 +95,46 @@ export async function PUT(
       return forbidden();
     }
 
-    const { scores, comment } = await req.json();
+    const body = await req.json();
+    const { comment, problemChecks: rawChecks } = body;
+    let scores = body.scores;
+    // VALIDATION FINALE d'une note en brouillon (grille notée partie par
+    // partie, 07/10/2026) : uniquement l'avis individuel, par son auteur
+    // (ou un admin). La clôture est posée dans la même écriture.
+    const finalize = body.finalize === true;
+    if (
+      finalize &&
+      (existing.is_group === true ||
+        (!user.isAdmin && existing.member_id !== user.id))
+    ) {
+      return forbidden();
+    }
 
     const updateData: Record<string, unknown> = {
       last_edited_by: user.id,
       updated_at: new Date().toISOString(),
     };
+    let problemChecks: ProblemChecks | null = null;
     if (scores !== undefined) {
+      const questions = parseQuestions(existing.epreuves?.evaluation_questions);
+      // Banque de questions : note de la problématique recalculée depuis les
+      // pistes ; sans pistes, celle déjà enregistrée est conservée.
+      const outcome = await applyProblemChecks({
+        epreuveRow: existing.epreuves,
+        questions,
+        scores,
+        rawChecks,
+        candidateId: existing.candidate_id,
+        epreuveId: existing.epreuve_id,
+        required: finalize,
+        storedScores: existing.scores,
+      });
+      if (!outcome.ok) return outcome.response;
+      scores = outcome.scores;
+      problemChecks = outcome.checks;
+
       // Même garde que le POST : chaque note dans [0, points max du critère].
       // Le PUT réécrivait auparavant n'importe quelle valeur (999/3 possible).
-      const questions = parseQuestions(existing.epreuves?.evaluation_questions);
       const invalid = validateScores(questions, scores);
       if (invalid) {
         return Response.json(
@@ -116,13 +149,27 @@ export async function PUT(
     if (comment !== undefined)
       updateData.comment =
         typeof comment === "string" ? comment.substring(0, 5000) : comment;
+    if (finalize) {
+      updateData.closed_at = new Date().toISOString();
+      updateData.closed_by = user.id;
+    }
 
-    const { data, error } = await supabaseAdmin
-      .from("candidate_evaluations")
-      .update(updateData)
-      .eq("id", id)
-      .select("*, epreuves(*), members!member_id(email)")
-      .single();
+    const runUpdate = (data: Record<string, unknown>) =>
+      supabaseAdmin
+        .from("candidate_evaluations")
+        .update(data)
+        .eq("id", id)
+        .select("*, epreuves(*), members!member_id(email)")
+        .single();
+
+    let { data, error } = await runUpdate(
+      problemChecks ? { ...updateData, problem_checks: problemChecks } : updateData,
+    );
+    // Colonne problem_checks pas encore migrée : la note (qui porte déjà le
+    // décompte des pistes) passe sans le détail.
+    if (error && problemChecks && isMissingColumnError(error)) {
+      ({ data, error } = await runUpdate(updateData));
+    }
 
     if (error) throw error;
 

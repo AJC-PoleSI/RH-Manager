@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   getCriterionInput,
   getCriterionSection,
+  getCriterionSections,
+  supportsDraftEvaluation,
   getMaxPoints,
   getTotalMaxPoints,
   normalizeQuestions,
@@ -37,6 +39,38 @@ describe("getCriterionSection", () => {
   it("renvoie le titre de bloc nettoyé, ou une chaîne vide", () => {
     expect(getCriterionSection({ q: "a", section: "  Le mail " })).toBe("Le mail");
     expect(getCriterionSection({ q: "a" })).toBe("");
+  });
+});
+
+describe("parties d'une grille et notation en brouillon", () => {
+  const sectioned: EvaluationCriterion[] = [
+    { q: "a", section: "Le mail", input: "checkbox" },
+    { q: "b", section: "Le mail", input: "checkbox" },
+    { q: "c", section: "L'appel", input: "checkbox" },
+    { q: "d", section: "L'échange groupé", input: "problem_bank", weight: 8 },
+  ];
+
+  it("liste les parties dans l'ordre, sans doublon", () => {
+    expect(getCriterionSections(sectioned)).toEqual([
+      "Le mail",
+      "L'appel",
+      "L'échange groupé",
+    ]);
+  });
+
+  it("brouillon possible dès deux parties", () => {
+    expect(supportsDraftEvaluation(sectioned)).toBe(true);
+  });
+
+  it("grille historique (sans partie, ou une seule) : pas de brouillon", () => {
+    expect(supportsDraftEvaluation([{ q: "Motivation", weight: 20 }])).toBe(false);
+    expect(
+      supportsDraftEvaluation([
+        { q: "a", section: "Seule", weight: 5 },
+        { q: "b", weight: 5 },
+      ]),
+    ).toBe(false);
+    expect(supportsDraftEvaluation(null)).toBe(false);
   });
 });
 

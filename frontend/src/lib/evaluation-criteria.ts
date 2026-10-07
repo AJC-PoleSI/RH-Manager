@@ -55,6 +55,34 @@ export function getCriterionSection(
   return typeof question?.section === "string" ? question.section.trim() : "";
 }
 
+/**
+ * Parties (blocs `section`) d'une grille, dans l'ordre d'apparition. Les
+ * critères sans bloc ne forment pas de partie.
+ */
+export function getCriterionSections(
+  questions: EvaluationCriterion[] | null | undefined,
+): string[] {
+  const out: string[] = [];
+  for (const q of questions ?? []) {
+    const s = getCriterionSection(q);
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Grille notée PARTIE PAR PARTIE (07/10/2026, demande de Felix pour
+ * l'épreuve de prospection : « on évalue le mail, puis on revient pour
+ * l'appel ») : au moins deux blocs. La note est alors enregistrée en
+ * brouillon (non close) et ne se clôt qu'à la validation finale. Toute autre
+ * grille garde le comportement historique : clôture à l'enregistrement.
+ */
+export function supportsDraftEvaluation(
+  questions: EvaluationCriterion[] | null | undefined,
+): boolean {
+  return getCriterionSections(questions).length >= 2;
+}
+
 /** Une saisie à cocher n'accepte que des entiers (pas de demi-point). */
 function requiresInteger(question: EvaluationCriterion | null | undefined): boolean {
   return getCriterionInput(question) !== "number";
