@@ -507,6 +507,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     const nextErrors = { ...groupErrors };
     if (isInvalidScore(val, maxPoints)) nextErrors[idx] = "invalid";
     else delete nextErrors[idx];
+    // eslint-disable-next-line no-use-before-define -- appelé à la saisie (événement), jamais au rendu
     scheduleGroupSave(
       withoutInvalid({ ...groupScores, [idx]: val }, nextErrors),
       groupComment,
@@ -516,6 +517,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
   const handleGroupComment = (val: string) => {
     if (!groupCanEdit || groupClosedAt) return;
     setGroupComment(val);
+    // eslint-disable-next-line no-use-before-define -- appelé à la saisie (événement), jamais au rendu
     scheduleGroupSave(withoutInvalid(groupScores, groupErrors), val);
   };
 
@@ -574,6 +576,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     if (groupSaveTimer.current) clearTimeout(groupSaveTimer.current);
     groupSaveTimer.current = setTimeout(() => {
       groupSaveTimer.current = null;
+      // eslint-disable-next-line no-use-before-define -- appelé dans un minuteur, après le rendu
       saveGroupEval(scores, comment);
     }, 1000);
   };
@@ -651,6 +654,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
     noteSaveTimer.current = setTimeout(() => {
       noteSaveTimer.current = null;
+      // eslint-disable-next-line no-use-before-define -- appelé dans un minuteur, après le rendu
       saveGroupNote(scores, comment);
     }, 1000);
   };

@@ -406,9 +406,13 @@ export default function CreationPage() {
   /* ================================================================ */
 
   useEffect(() => {
+    // eslint-disable-next-line no-use-before-define -- useEffect s'exécute après le rendu
     fetchSettings();
+    // eslint-disable-next-line no-use-before-define -- useEffect s'exécute après le rendu
     fetchTours();
+    // eslint-disable-next-line no-use-before-define -- useEffect s'exécute après le rendu
     fetchEpreuves();
+    // eslint-disable-next-line no-use-before-define -- useEffect s'exécute après le rendu
     fetchTour3Estimates();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

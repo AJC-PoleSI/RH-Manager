@@ -3,6 +3,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+const TabsContext = React.createContext<{
+  activeTab?: string;
+  setActiveTab: (v: string) => void;
+}>({ setActiveTab: () => {} });
+
 const Tabs = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { defaultValue?: string }
@@ -20,11 +25,6 @@ const Tabs = React.forwardRef<
   );
 });
 Tabs.displayName = "Tabs";
-
-const TabsContext = React.createContext<{
-  activeTab?: string;
-  setActiveTab: (v: string) => void;
-}>({ setActiveTab: () => {} });
 
 const TabsList = React.forwardRef<
   HTMLDivElement,
