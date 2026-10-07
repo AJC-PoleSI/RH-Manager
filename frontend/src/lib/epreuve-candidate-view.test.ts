@@ -2,49 +2,78 @@ import { describe, it, expect } from "vitest";
 import {
   CANDIDATE_HIDDEN_EPREUVE_FIELDS,
   candidateSeesDescription,
+  enrolledEpreuveIds,
   epreuveForCandidate,
-  isSlotlessEpreuve,
+  isOnTableEpreuve,
 } from "./epreuve-candidate-view";
 
-// Consignes « uniquement quand les créneaux sont dispo » (Felix, 07/10/2026).
+// Énoncé réservé aux inscrits (Felix, 07/10/2026 : « réserve l'énoncé aux
+// inscrits »).
 describe("candidateSeesDescription", () => {
-  it("planning fermé → jamais", () => {
+  it("planning fermé → jamais, même inscrit", () => {
     expect(
-      candidateSeesDescription({ planningVisible: false, slotless: true, hasPublishedSlot: true }),
+      candidateSeesDescription({ planningVisible: false, onTable: false, enrolled: true }),
+    ).toBe(false);
+    expect(
+      candidateSeesDescription({ planningVisible: false, onTable: true, enrolled: false }),
     ).toBe(false);
   });
 
-  it("épreuve à créneaux sans créneau publié → masquée, même planning ouvert", () => {
+  it("pas inscrit → masqué, même si des créneaux sont publiés", () => {
     expect(
-      candidateSeesDescription({ planningVisible: true, slotless: false, hasPublishedSlot: false }),
+      candidateSeesDescription({ planningVisible: true, onTable: false, enrolled: false }),
     ).toBe(false);
   });
 
-  it("épreuve à créneaux avec un créneau publié → visible", () => {
+  it("inscrit (créneau ou distanciel) → visible", () => {
     expect(
-      candidateSeesDescription({ planningVisible: true, slotless: false, hasPublishedSlot: true }),
+      candidateSeesDescription({ planningVisible: true, onTable: false, enrolled: true }),
     ).toBe(true);
   });
 
-  it("épreuve sans créneau (distanciel, sur table) → visible à l'ouverture du planning", () => {
+  it("épreuve sur table (aucune inscription possible) → visible à l'ouverture du planning", () => {
     expect(
-      candidateSeesDescription({ planningVisible: true, slotless: true, hasPublishedSlot: false }),
+      candidateSeesDescription({ planningVisible: true, onTable: true, enrolled: false }),
     ).toBe(true);
   });
 });
 
-describe("isSlotlessEpreuve", () => {
-  it("distanciel ou sur table, en camelCase comme en snake_case", () => {
-    expect(isSlotlessEpreuve({ isDistanciel: true })).toBe(true);
-    expect(isSlotlessEpreuve({ is_distanciel: true })).toBe(true);
-    expect(isSlotlessEpreuve({ isCommune: true })).toBe(true);
-    expect(isSlotlessEpreuve({ type: "commune" })).toBe(true);
+describe("isOnTableEpreuve", () => {
+  it("type commune, en camelCase comme en snake_case", () => {
+    expect(isOnTableEpreuve({ isCommune: true })).toBe(true);
+    expect(isOnTableEpreuve({ type: "commune" })).toBe(true);
   });
 
-  it("épreuve à créneaux (individuelle, groupe) ou absente → non", () => {
-    expect(isSlotlessEpreuve({ type: "groupe", is_distanciel: false })).toBe(false);
-    expect(isSlotlessEpreuve({ type: "individuelle" })).toBe(false);
-    expect(isSlotlessEpreuve(null)).toBe(false);
+  it("distanciel, individuelle, groupe ou absente → non", () => {
+    expect(isOnTableEpreuve({ isDistanciel: true })).toBe(false);
+    expect(isOnTableEpreuve({ is_distanciel: true, type: "pole" })).toBe(false);
+    expect(isOnTableEpreuve({ type: "groupe" })).toBe(false);
+    expect(isOnTableEpreuve(null)).toBe(false);
+  });
+});
+
+describe("enrolledEpreuveIds", () => {
+  it("créneaux à inscription active + inscriptions en distanciel", () => {
+    const ids = enrolledEpreuveIds(
+      [
+        { status: "active", epreuveId: "si" },
+        { status: "enrolled", epreuveId: "bg" },
+        { status: null, epreuveId: "aq" }, // ligne ancienne sans statut = active
+      ],
+      [{ epreuveId: "marketing" }],
+    );
+    expect(Array.from(ids).sort()).toEqual(["aq", "bg", "marketing", "si"]);
+  });
+
+  it("inscription annulée ou créneau sans épreuve → ignorés", () => {
+    const ids = enrolledEpreuveIds(
+      [
+        { status: "cancelled", epreuveId: "si" },
+        { status: "active", epreuveId: null },
+      ],
+      [{ epreuveId: null }],
+    );
+    expect(ids.size).toBe(0);
   });
 });
 

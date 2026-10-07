@@ -12,9 +12,9 @@ import { planningVisibleToCandidates } from "@/lib/slot-release";
 import {
   candidateSeesDescription,
   epreuveForCandidate,
-  isSlotlessEpreuve,
+  isOnTableEpreuve,
 } from "@/lib/epreuve-candidate-view";
-import { epreuvesWithPublishedSlots } from "@/lib/published-slots";
+import { candidateEnrolledEpreuves } from "@/lib/candidate-epreuves";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,8 @@ export const dynamic = "force-dynamic";
 // s'y est inscrit (pas de créneau, cf. lib/distanciel.ts).
 // CANDIDAT (07/10/2026) : aucun champ de notation ne lui parvient — grille,
 // 2e grille, banque de questions, grille de groupe — et la description
-// (consignes) n'est envoyée qu'une fois le planning ouvert aux candidats.
+// (l'énoncé) n'est envoyée qu'au candidat inscrit à l'épreuve (Felix,
+// 07/10/2026 : « réserve l'énoncé aux inscrits »).
 // Règle centralisée dans lib/epreuve-candidate-view.ts. Membres et admins
 // reçoivent toujours la description et les grilles.
 export async function GET(req: NextRequest) {
@@ -106,26 +107,26 @@ export async function GET(req: NextRequest) {
       // celles des pôles demandés dans les vœux (décision de Felix, 06/10/2026).
       // Inscriptions aux épreuves en distanciel : table absente = aucune.
       // Réglage « planning visible » lu une seule fois pour toute la liste.
-      const [{ data: regs }, planningVisible, published] = await Promise.all([
+      const [{ data: regs }, planningVisible, enrolled] = await Promise.all([
         supabaseAdmin
           .from("epreuve_registrations")
           .select("epreuve_id")
           .eq("candidate_id", payload.id),
         planningVisibleToCandidates(),
-        epreuvesWithPublishedSlots(),
+        candidateEnrolledEpreuves(payload.id),
       ]);
       const registered = new Set((regs || []).map((r: any) => r.epreuve_id));
       // GRILLES (07/10/2026) : la grille complète partait jusqu'ici au
       // candidat (seule la 2e grille était masquée). Le helper retire TOUS
-      // les champs de notation. CONSIGNES : visibles seulement quand les
-      // créneaux de l'épreuve sont disponibles (décision de Felix).
+      // les champs de notation. ÉNONCÉ : visible seulement une fois inscrit
+      // à l'épreuve (décision de Felix, 07/10/2026).
       result = parsed.map((e: any) =>
         epreuveForCandidate(
           { ...e, isRegistered: registered.has(e.id) },
           candidateSeesDescription({
             planningVisible,
-            slotless: isSlotlessEpreuve(e),
-            hasPublishedSlot: published.has(e.id),
+            onTable: isOnTableEpreuve(e),
+            enrolled: enrolled.has(e.id),
           }),
         ),
       );
