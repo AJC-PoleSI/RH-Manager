@@ -62,7 +62,7 @@ describe("enrolledEpreuveIds", () => {
       ],
       [{ epreuveId: "marketing" }],
     );
-    expect([...ids].sort()).toEqual(["aq", "bg", "marketing", "si"]);
+    expect(Array.from(ids).sort()).toEqual(["aq", "bg", "marketing", "si"]);
   });
 
   it("inscription annulée ou créneau sans épreuve → ignorés", () => {
