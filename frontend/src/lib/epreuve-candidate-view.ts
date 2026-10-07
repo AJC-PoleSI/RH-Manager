@@ -59,8 +59,7 @@ export function enrolledEpreuveIds(
 ): Set<string> {
   const ids = new Set<string>();
   for (const e of enrollments) {
-    const active = e.status == null || e.status === "active" || e.status === "enrolled";
-    if (active && e.epreuveId) ids.add(e.epreuveId);
+    if (filterActiveEnrollments(e) && e.epreuveId) ids.add(e.epreuveId);
   }
   for (const r of registrations) {
     if (r.epreuveId) ids.add(r.epreuveId);
