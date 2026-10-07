@@ -18,8 +18,8 @@
 -- Garde-fous : tour 3, pôle et type attendus, 0 note sur l'épreuve (les
 -- notes sont indexées par la position des critères).
 --
--- BLOC 1 = grilles. BLOC 2 = consignes visibles des candidats (à appliquer
--- seulement après relecture de Felix).
+-- BLOC 1 = grilles. BLOC 2 = consignes visibles des candidats (une phrase :
+-- pôle, format, durée — choix de Felix). Les deux appliqués en prod le 07/10.
 
 -- ===================== BLOC 1 : grilles =====================
 DO $$
@@ -66,16 +66,16 @@ BEGIN
 
 END $$;
 
--- ============ BLOC 2 : consignes (après relecture de Felix) ============
+-- ============ BLOC 2 : consignes (version courte validée par Felix, appliquée le 07/10) ============
 DO $$
 BEGIN
-  UPDATE epreuves SET description = 'Épreuve du pôle Audit Qualité, individuelle, 25 minutes, face à un ou deux membres du pôle. Mise en situation : vous êtes le relecteur de Christine, cheffe de projet sur une étude. Elle vous envoie à relire un récapitulatif de mission (RDM) ou un procès-verbal de recette finale (PVRF) qui contient plusieurs erreurs ; vous avez aussi la convention d''étude (CE) déjà signée par le client. Pendant 15 minutes, vous lisez les documents sur un ordinateur prêté par le pôle (ils sont confidentiels) et notez sur papier le maximum de points à corriger. Pendant les 10 minutes suivantes, vous expliquez au jury ce que vous corrigeriez et surtout pourquoi. On n''attend pas que vous trouviez toutes les erreurs : c''est votre raisonnement qui est évalué. Le temps est très court, soyez précis et concis.'
+  UPDATE epreuves SET description = 'Épreuve du pôle Audit Qualité, individuelle, 25 minutes.'
   WHERE id = '4c49d404-1acf-4d72-824c-4b413ee49215' AND tour = 3;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Épreuve 4c49d404-1acf-4d72-824c-4b413ee49215 introuvable.'; END IF;
-  UPDATE epreuves SET description = 'Entretien individuel avec des membres du pôle Trésorerie, 20 minutes. Il porte sur votre motivation pour le pôle, ce que vous en savez et le poste qui vous intéresserait, puis sur quelques questions de cadre légal et de courtes mises en situation. Le jury fera aussi le point sur les pièces qui manqueraient à votre dossier de cotisant.'
+  IF NOT FOUND THEN RAISE EXCEPTION 'Épreuve Audit Qualité introuvable.'; END IF;
+  UPDATE epreuves SET description = 'Entretien individuel avec des membres du pôle Trésorerie, 20 minutes.'
   WHERE id = '41fc3b7f-e84e-4440-991b-149ae0f2bbfe' AND tour = 3;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Épreuve 41fc3b7f-e84e-4440-991b-149ae0f2bbfe introuvable.'; END IF;
-  UPDATE epreuves SET description = 'Business game du pôle Trésorerie, en groupe de 4, 30 minutes. Vous travaillez ensemble sur un cas pratique de budget et rendez votre travail dans le temps imparti.'
+  IF NOT FOUND THEN RAISE EXCEPTION 'Entretien Trésorerie introuvable.'; END IF;
+  UPDATE epreuves SET description = 'Business game du pôle Trésorerie, en groupe de 4, 30 minutes.'
   WHERE id = '2408f486-747a-4dfe-ab49-65638565d2fe' AND tour = 3;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Épreuve 2408f486-747a-4dfe-ab49-65638565d2fe introuvable.'; END IF;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Business Game Trésorerie introuvable.'; END IF;
 END $$;
