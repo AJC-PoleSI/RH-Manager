@@ -1,7 +1,7 @@
 import { supabaseAdmin, isMissingTableError } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { broadcastReplacementRequest } from "@/lib/replacement-requests";
-import { filterActiveEnrollments } from "@/lib/enrollment";
+import { effectiveMaxCandidates, filterActiveEnrollments } from "@/lib/enrollment";
 import { activeEnrollmentCount } from "@/lib/dispatch-understaffing";
 import { blocksSlot } from "@/lib/dispatch-core";
 import { fetchAllRows } from "@/lib/supabase-paging";
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         const { data: slotPreCheck } = await supabaseAdmin
           .from("evaluation_slots")
           .select(
-            "id, date, start_time, end_time, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id), epreuve:epreuves(is_group_epreuve, group_size)",
+            "id, date, start_time, end_time, min_members, status, enrollments:slot_enrollments(id, status), members:slot_member_assignments(member_id), waitlist:slot_availability_requests(member_id), epreuve:epreuves(is_group_epreuve, group_size, is_pole_test)",
           )
           .eq("id", slotId)
           .single();
@@ -84,14 +84,11 @@ export async function POST(req: NextRequest) {
           // ──────────────────────────────────────────────────────────
           const epreuveForSlot = (slotPreCheck as any).epreuve;
           if (epreuveForSlot?.is_group_epreuve) {
-            const groupSize = Math.max(
-              1,
-              Number(epreuveForSlot.group_size) || 1,
-            );
-            const newEffectiveMax = Math.max(
-              0,
-              Math.min(groupSize, memberCountAfter),
-            );
+            // Même règle que partout ailleurs (BG de pôle : taille du groupe).
+            const newEffectiveMax = effectiveMaxCandidates({
+              epreuve: epreuveForSlot,
+              members: Array.from({ length: Math.max(0, memberCountAfter) }, () => ({})),
+            });
             if (activeEnrolls.length > newEffectiveMax) {
               return Response.json(
                 {
@@ -573,11 +570,10 @@ export async function POST(req: NextRequest) {
           .select("id", { count: "exact", head: true })
           .eq("slot_id", slotId)
           .or("status.is.null,status.eq.active,status.eq.enrolled");
-        const groupSize = Math.max(
-          1,
-          Number((targetEpreuve as any).group_size) || 1,
-        );
-        const newEffectiveMax = Math.min(groupSize, memberCount);
+        const newEffectiveMax = effectiveMaxCandidates({
+          epreuve: targetEpreuve as any,
+          members: Array.from({ length: memberCount }, () => ({})),
+        });
         if ((activeCount || 0) < newEffectiveMax) {
           await supabaseAdmin
             .from("evaluation_slots")

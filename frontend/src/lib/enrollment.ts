@@ -65,6 +65,7 @@ export function effectiveMaxCandidates(slot: {
   epreuve?: {
     is_group_epreuve?: boolean | null;
     group_size?: number | null;
+    is_pole_test?: boolean | null;
   } | null;
   members?: { id?: unknown }[] | null;
 }): number {
@@ -72,6 +73,16 @@ export function effectiveMaxCandidates(slot: {
   if (!slot.epreuve?.is_group_epreuve) return base;
 
   const groupSize = Math.max(1, Number(slot.epreuve.group_size) || 1);
+
+  // BUSINESS GAME D'UN PÔLE (07/10/2026, Felix : « les BG tréso c'est 4
+  // candidats ») : le jury vient d'un pôle de quelques personnes, deux
+  // examinateurs encadrent le groupe entier. La capacité est la taille du
+  // groupe dès qu'un examinateur est là — pas un candidat par examinateur.
+  // Le business game commun (Tour 1, BG T3) garde la règle ci-dessous.
+  if (slot.epreuve.is_pole_test === true) {
+    return slot.members && slot.members.length === 0 ? 0 : groupSize;
+  }
+
   if (slot.members) {
     return Math.max(0, Math.min(groupSize, slot.members.length));
   }

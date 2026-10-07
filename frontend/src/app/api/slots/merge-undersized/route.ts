@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const { data: epreuve, error: epErr } = await supabaseAdmin
       .from("epreuves")
-      .select("id, name, is_group_epreuve, min_candidates, group_size")
+      .select("id, name, is_group_epreuve, min_candidates, group_size, is_pole_test")
       .eq("id", epreuveId)
       .single();
     if (epErr || !epreuve) {

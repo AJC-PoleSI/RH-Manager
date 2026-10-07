@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         *,
         slot:evaluation_slots(
           *,
-          epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size, description),
+          epreuve:epreuves(id, name, tour, type, is_group_epreuve, group_size, is_pole_test, description),
           enrollments:slot_enrollments(*, candidate:candidates(id, first_name, last_name)),
           members:slot_member_assignments(*, member:members(id, email, first_name, last_name))
         )

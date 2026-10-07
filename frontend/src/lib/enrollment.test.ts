@@ -62,3 +62,32 @@ describe("effectiveMaxCandidates — épreuve de groupe, avec examinateurs affec
     expect(r).toBe(0);
   });
 });
+
+describe("effectiveMaxCandidates — business game d'un pôle (BG Trésorerie)", () => {
+  it("2 examinateurs suffisent pour un groupe complet de 4", () => {
+    const r = effectiveMaxCandidates({
+      max_candidates: 4,
+      epreuve: { is_group_epreuve: true, group_size: 4, is_pole_test: true },
+      members: [{ id: "arthur" }, { id: "maeva" }],
+    });
+    expect(r).toBe(4);
+  });
+
+  it("aucun examinateur → aucun candidat", () => {
+    const r = effectiveMaxCandidates({
+      max_candidates: 4,
+      epreuve: { is_group_epreuve: true, group_size: 4, is_pole_test: true },
+      members: [],
+    });
+    expect(r).toBe(0);
+  });
+
+  it("le business game commun garde un candidat par examinateur", () => {
+    const r = effectiveMaxCandidates({
+      max_candidates: 3,
+      epreuve: { is_group_epreuve: true, group_size: 3, is_pole_test: false },
+      members: [{ id: "m1" }, { id: "m2" }],
+    });
+    expect(r).toBe(2);
+  });
+});

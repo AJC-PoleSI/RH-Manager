@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         id, date, start_time, end_time, room, status, min_members, max_candidates, epreuve_id,
         enrollments:slot_enrollments(id, candidate_id, status),
         members:slot_member_assignments(id),
-        epreuve:epreuves(name, is_group_epreuve, group_size)
+        epreuve:epreuves(name, is_group_epreuve, group_size, is_pole_test)
       `;
     // `is_locked` peut ne pas exister (migration slot-lock pas encore
     // appliquée) : repli sur l'ancienne lecture, sans verrou à faire respecter.

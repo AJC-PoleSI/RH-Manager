@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       .select(
         `
         id, date, start_time, end_time, room, epreuve_id, status,
-        epreuve:epreuves(id, name, is_group_epreuve, group_size),
+        epreuve:epreuves(id, name, is_group_epreuve, group_size, is_pole_test),
         enrollments:slot_enrollments(id, candidate_id, status),
         members:slot_member_assignments(id)
         `,
