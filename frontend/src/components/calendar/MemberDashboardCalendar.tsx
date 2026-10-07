@@ -125,6 +125,9 @@ export default function MemberDashboardCalendar({
                 tour: slot.epreuve?.tour,
                 epreuveId: slot.epreuve?.id || slot.epreuve_id || null,
                 isGroupEpreuve: slot.epreuve?.is_group_epreuve || slot.epreuve?.isGroupEpreuve || false,
+                // Consignes de l'épreuve (07/10/2026) : servies par
+                // /api/slots/my-slots, route réservée aux membres.
+                epreuveDescription: slot.epreuve?.description || null,
                 candidates,
                 examiners,
                 status: slot.status,
@@ -717,6 +720,17 @@ export default function MemberDashboardCalendar({
                                                 ))}
                                             </div>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Consignes de l'épreuve : l'examinateur les relit avant de
+                                    recevoir le candidat. Retours à la ligne conservés. */}
+                                {selectedMemberSlot.epreuveDescription && (
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <p className="text-xs text-gray-400 font-medium mb-1">Consignes de l&apos;épreuve</p>
+                                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto">
+                                            {selectedMemberSlot.epreuveDescription}
+                                        </p>
                                     </div>
                                 )}
 

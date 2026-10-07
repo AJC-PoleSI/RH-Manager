@@ -8,6 +8,13 @@ import {
   normalizeSecondGrid,
   parseSecondGrid,
 } from "@/lib/second-grid";
+import { planningVisibleToCandidates } from "@/lib/slot-release";
+import {
+  candidateSeesDescription,
+  epreuveForCandidate,
+  isSlotlessEpreuve,
+} from "@/lib/epreuve-candidate-view";
+import { epreuvesWithPublishedSlots } from "@/lib/published-slots";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +23,11 @@ export const dynamic = "force-dynamic";
 // TOUR 3 : un candidat voit toutes les épreuves de pôle, vœux ou pas
 // (06/10/2026). Épreuve en distanciel : `isRegistered` dit au candidat s'il
 // s'y est inscrit (pas de créneau, cf. lib/distanciel.ts).
+// CANDIDAT (07/10/2026) : aucun champ de notation ne lui parvient — grille,
+// 2e grille, banque de questions, grille de groupe — et la description
+// (consignes) n'est envoyée qu'une fois le planning ouvert aux candidats.
+// Règle centralisée dans lib/epreuve-candidate-view.ts. Membres et admins
+// reçoivent toujours la description et les grilles.
 export async function GET(req: NextRequest) {
   const payload = getTokenFromRequest(req);
   if (!payload) return unauthorized();
@@ -39,6 +51,7 @@ export async function GET(req: NextRequest) {
       // Deuxième grille (ex. proposition commerciale) — null si aucune ou si
       // la colonne n'est pas encore migrée. Masquée aux candidats plus bas.
       secondaryGrid: parseSecondGrid(e.secondary_grid),
+      coefficient: e.coefficient ?? null, // Réglages → Coefficients (07/10/2026) ; null = automatique ou colonne pas encore migrée
       roulementMinutes: e.roulement_minutes ?? 10,
       minEvaluatorsPerSalle: e.min_evaluators_per_salle ?? 2,
       isPoleTest: e.is_pole_test ?? false,
@@ -82,7 +95,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let result = parsed;
+    // Vue candidat = projection (champs retirés) : typée comme objet libre.
+    let result: Record<string, any>[] = parsed;
     if (payload.role === "candidate") {
       // CANDIDAT ÉLIMINÉ : plus d'épreuves à lui montrer.
       if ((await getEliminationTour(payload.id)) != null) {
@@ -91,16 +105,30 @@ export async function GET(req: NextRequest) {
       // TOUR 3 : toutes les épreuves de pôle sont proposées, pas seulement
       // celles des pôles demandés dans les vœux (décision de Felix, 06/10/2026).
       // Inscriptions aux épreuves en distanciel : table absente = aucune.
-      const { data: regs } = await supabaseAdmin
-        .from("epreuve_registrations")
-        .select("epreuve_id")
-        .eq("candidate_id", payload.id);
+      // Réglage « planning visible » lu une seule fois pour toute la liste.
+      const [{ data: regs }, planningVisible, published] = await Promise.all([
+        supabaseAdmin
+          .from("epreuve_registrations")
+          .select("epreuve_id")
+          .eq("candidate_id", payload.id),
+        planningVisibleToCandidates(),
+        epreuvesWithPublishedSlots(),
+      ]);
       const registered = new Set((regs || []).map((r: any) => r.epreuve_id));
-      result = parsed.map((e: any) => ({
-        ...e,
-        secondaryGrid: null,
-        isRegistered: registered.has(e.id),
-      }));
+      // GRILLES (07/10/2026) : la grille complète partait jusqu'ici au
+      // candidat (seule la 2e grille était masquée). Le helper retire TOUS
+      // les champs de notation. CONSIGNES : visibles seulement quand les
+      // créneaux de l'épreuve sont disponibles (décision de Felix).
+      result = parsed.map((e: any) =>
+        epreuveForCandidate(
+          { ...e, isRegistered: registered.has(e.id) },
+          candidateSeesDescription({
+            planningVisible,
+            slotless: isSlotlessEpreuve(e),
+            hasPublishedSlot: published.has(e.id),
+          }),
+        ),
+      );
       // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour
       // pas encore commencé (statut "a_venir") — ni leur existence, ni
       // combien il en reste. Filtré côté serveur, pas seulement à l'affichage.
