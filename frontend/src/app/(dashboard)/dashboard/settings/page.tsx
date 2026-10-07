@@ -54,6 +54,13 @@ interface Critere {
   maxPoints: number;
   /** Précision affichée derrière le « i » de la grille de notation. */
   hint?: string;
+  /**
+   * Champs stockés que le formulaire ne sait pas éditer (mode de saisie,
+   * partie…) : recopiés tels quels à l'enregistrement. Sans ça, renommer
+   * l'épreuve de prospection dans Réglages a effacé les cases à cocher et
+   * les parties de ses 54 critères (07/10/2026).
+   */
+  extra?: Record<string, unknown>;
 }
 
 // Barème par défaut d'un critère : /20. C'est aussi le repli utilisé par
@@ -136,9 +143,10 @@ const EMPTY_FORM: NewEpreuveForm = {
   hadSecondGrid: false,
 };
 
-/** Critère du formulaire → critère stocké ({ q, weight, hint? }). */
+/** Critère du formulaire → critère stocké ({ q, weight, hint? } + champs non édités). */
 function toStoredCriterion(c: Critere) {
   return {
+    ...(c.extra || {}),
     q: c.name,
     // `weight` est lu par l'API comme le nombre de points max du critère.
     weight: Number(c.maxPoints) > 0 ? Number(c.maxPoints) : DEFAULT_MAX_POINTS,
@@ -148,10 +156,20 @@ function toStoredCriterion(c: Critere) {
 
 /** Critère stocké → critère du formulaire. */
 function fromStoredCriterion(q: any): Critere {
+  const {
+    q: _q,
+    name: _name,
+    weight: _weight,
+    maxScore: _maxScore,
+    coefficient: _coefficient,
+    hint: _hint,
+    ...extra
+  } = q || {};
   return {
-    name: q.q || q.name || "",
-    maxPoints: q.weight || q.maxScore || q.coefficient || DEFAULT_MAX_POINTS,
-    hint: q.hint || "",
+    name: q?.q || q?.name || "",
+    maxPoints: q?.weight || q?.maxScore || q?.coefficient || DEFAULT_MAX_POINTS,
+    hint: q?.hint || "",
+    extra,
   };
 }
 
