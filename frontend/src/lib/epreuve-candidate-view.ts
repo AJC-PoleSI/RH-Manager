@@ -11,41 +11,61 @@
 //   • aucun champ de notation ne sort, quel que soit son nom (camelCase pour
 //     les objets déjà mis en forme par la route, snake_case pour les lignes
 //     brutes jointes par `epreuves(*)`) ;
-//   • la description (consignes de l'épreuve) n'est montrée qu'une fois le
-//     planning ouvert aux candidats (`system_settings.planning_visible_candidats`).
+//   • la description (consignes de l'épreuve) n'est montrée qu'au candidat
+//     INSCRIT à l'épreuve, planning ouvert aux candidats
+//     (`system_settings.planning_visible_candidats`).
 //
-// Module pur (aucun import de supabase) : la route lit le réglage, ce module
-// applique la règle. Membres et admins ne passent jamais par ici.
+// Module pur (aucun import de supabase) : la route lit le réglage et les
+// inscriptions, ce module applique la règle. Membres et admins ne passent
+// jamais par ici.
 
 /**
  * La description (consignes) d'une épreuve est-elle visible d'un candidat ?
- * Décision de Felix (07/10/2026) : « uniquement quand les créneaux sont
- * dispo ». Le réglage global du planning ne suffit pas (il reste ouvert d'un
- * tour à l'autre) :
- *   - épreuve à créneaux : planning ouvert ET au moins un créneau publié
- *     (statut `published` ou `full`) pour CETTE épreuve ;
- *   - épreuve sans créneau (en distanciel, ou « sur table ») : planning ouvert.
+ * Décision de Felix (07/10/2026, après-midi) : « réserve l'énoncé aux
+ * inscrits » — le candidat découvre l'énoncé en s'inscrivant (ex. carte
+ * blanche de l'entretien SI). Remplace la règle du matin (« dès qu'un
+ * créneau de l'épreuve est publié »), qui le montrait à tous.
+ *   - épreuve à créneaux : planning ouvert ET inscription active sur un
+ *     créneau de CETTE épreuve ;
+ *   - épreuve en distanciel : planning ouvert ET inscrit (sans créneau) ;
+ *   - épreuve « sur table » (type commune, passée par tous sans
+ *     inscription) : planning ouvert.
  */
 export function candidateSeesDescription(o: {
   planningVisible: boolean;
-  /** Épreuve sans créneau : distanciel ou type « commune » (sur table). */
-  slotless: boolean;
-  /** Au moins un créneau publié pour cette épreuve. */
-  hasPublishedSlot: boolean;
+  /** Épreuve « sur table » (type commune) : aucune inscription possible. */
+  onTable: boolean;
+  /** Inscription active à cette épreuve (créneau, ou distanciel). */
+  enrolled: boolean;
 }): boolean {
   if (!o.planningVisible) return false;
-  return o.slotless || o.hasPublishedSlot;
+  return o.onTable || o.enrolled;
 }
 
-/** Épreuve sans créneau ? (objet mis en forme OU ligne brute) */
-export function isSlotlessEpreuve(e: Record<string, any> | null | undefined): boolean {
+/** Épreuve « sur table » (type commune) ? (objet mis en forme OU ligne brute) */
+export function isOnTableEpreuve(e: Record<string, any> | null | undefined): boolean {
   if (!e) return false;
-  return (
-    e.isDistanciel === true ||
-    e.is_distanciel === true ||
-    e.isCommune === true ||
-    e.type === "commune"
-  );
+  return e.isCommune === true || e.type === "commune";
+}
+
+/**
+ * Épreuves auxquelles un candidat est inscrit : créneaux à inscription active
+ * (cf. isActiveEnrollment — statut absent, `active` ou `enrolled`) et
+ * inscriptions en distanciel. Une inscription annulée ne compte pas.
+ */
+export function enrolledEpreuveIds(
+  enrollments: { status?: string | null; epreuveId?: string | null }[],
+  registrations: { epreuveId?: string | null }[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const e of enrollments) {
+    const active = e.status == null || e.status === "active" || e.status === "enrolled";
+    if (active && e.epreuveId) ids.add(e.epreuveId);
+  }
+  for (const r of registrations) {
+    if (r.epreuveId) ids.add(r.epreuveId);
+  }
+  return ids;
 }
 
 /** Champs de notation qu'un candidat ne doit JAMAIS recevoir. */
