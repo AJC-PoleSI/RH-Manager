@@ -5,9 +5,9 @@ import { planningVisibleToCandidates } from "@/lib/slot-release";
 import {
   candidateSeesDescription,
   epreuveForCandidate,
-  isSlotlessEpreuve,
+  isOnTableEpreuve,
 } from "@/lib/epreuve-candidate-view";
-import { epreuvesWithPublishedSlots } from "@/lib/published-slots";
+import { candidateEnrolledEpreuves } from "@/lib/candidate-epreuves";
 import { NextRequest } from "next/server";
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -166,16 +166,16 @@ export async function GET(req: NextRequest) {
     // GRILLES (07/10/2026) : la jointure `epreuve:epreuves(*)` des
     // événements emportait la grille de notation complète jusqu'au
     // candidat. Pour lui, l'épreuve jointe passe par le même filtre que
-    // GET /api/epreuves (aucun champ de notation, consignes seulement une
-    // fois le planning ouvert). Membres et admins : inchangé.
+    // GET /api/epreuves (aucun champ de notation, énoncé seulement au
+    // candidat inscrit à l'épreuve). Membres et admins : inchangé.
     let events = [...filtered, ...slotEvents];
     if (isCandidate) {
-      const [planningVisible, published] = await Promise.all([
+      const [planningVisible, enrolled] = await Promise.all([
         planningVisibleToCandidates(),
-        epreuvesWithPublishedSlots(),
+        candidateEnrolledEpreuves(userId),
       ]);
-      // Consignes : seulement quand les créneaux de l'épreuve sont
-      // disponibles (même règle que GET /api/epreuves).
+      // Énoncé : seulement une fois inscrit à l'épreuve (même règle que
+      // GET /api/epreuves).
       events = events.map((event: any) =>
         event.epreuve
           ? {
@@ -184,8 +184,8 @@ export async function GET(req: NextRequest) {
                 event.epreuve,
                 candidateSeesDescription({
                   planningVisible,
-                  slotless: isSlotlessEpreuve(event.epreuve),
-                  hasPublishedSlot: published.has(event.epreuve.id),
+                  onTable: isOnTableEpreuve(event.epreuve),
+                  enrolled: enrolled.has(event.epreuve.id),
                 }),
               ),
             }

@@ -414,6 +414,9 @@ export default function CandidateEpreuvesPage() {
       setEpreuves((prev) =>
         prev.map((e) => (e.id === ep.id ? { ...e, isRegistered: register } : e)),
       );
+      // L'énoncé n'est envoyé qu'aux inscrits : on recharge pour l'afficher
+      // (ou le retirer) tout de suite.
+      await fetchData();
     } catch (err: any) {
       setErrorMsg(
         err?.response?.data?.error ||
