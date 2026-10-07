@@ -1,8 +1,52 @@
 import { describe, it, expect } from "vitest";
 import {
   CANDIDATE_HIDDEN_EPREUVE_FIELDS,
+  candidateSeesDescription,
   epreuveForCandidate,
+  isSlotlessEpreuve,
 } from "./epreuve-candidate-view";
+
+// Consignes « uniquement quand les créneaux sont dispo » (Felix, 07/10/2026).
+describe("candidateSeesDescription", () => {
+  it("planning fermé → jamais", () => {
+    expect(
+      candidateSeesDescription({ planningVisible: false, slotless: true, hasPublishedSlot: true }),
+    ).toBe(false);
+  });
+
+  it("épreuve à créneaux sans créneau publié → masquée, même planning ouvert", () => {
+    expect(
+      candidateSeesDescription({ planningVisible: true, slotless: false, hasPublishedSlot: false }),
+    ).toBe(false);
+  });
+
+  it("épreuve à créneaux avec un créneau publié → visible", () => {
+    expect(
+      candidateSeesDescription({ planningVisible: true, slotless: false, hasPublishedSlot: true }),
+    ).toBe(true);
+  });
+
+  it("épreuve sans créneau (distanciel, sur table) → visible à l'ouverture du planning", () => {
+    expect(
+      candidateSeesDescription({ planningVisible: true, slotless: true, hasPublishedSlot: false }),
+    ).toBe(true);
+  });
+});
+
+describe("isSlotlessEpreuve", () => {
+  it("distanciel ou sur table, en camelCase comme en snake_case", () => {
+    expect(isSlotlessEpreuve({ isDistanciel: true })).toBe(true);
+    expect(isSlotlessEpreuve({ is_distanciel: true })).toBe(true);
+    expect(isSlotlessEpreuve({ isCommune: true })).toBe(true);
+    expect(isSlotlessEpreuve({ type: "commune" })).toBe(true);
+  });
+
+  it("épreuve à créneaux (individuelle, groupe) ou absente → non", () => {
+    expect(isSlotlessEpreuve({ type: "groupe", is_distanciel: false })).toBe(false);
+    expect(isSlotlessEpreuve({ type: "individuelle" })).toBe(false);
+    expect(isSlotlessEpreuve(null)).toBe(false);
+  });
+});
 
 // Épreuve telle que la met en forme GET /api/epreuves (camelCase).
 const camel = {

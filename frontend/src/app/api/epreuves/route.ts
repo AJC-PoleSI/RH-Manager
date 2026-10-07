@@ -9,7 +9,12 @@ import {
   parseSecondGrid,
 } from "@/lib/second-grid";
 import { planningVisibleToCandidates } from "@/lib/slot-release";
-import { epreuveForCandidate } from "@/lib/epreuve-candidate-view";
+import {
+  candidateSeesDescription,
+  epreuveForCandidate,
+  isSlotlessEpreuve,
+} from "@/lib/epreuve-candidate-view";
+import { epreuvesWithPublishedSlots } from "@/lib/published-slots";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -101,22 +106,27 @@ export async function GET(req: NextRequest) {
       // celles des pôles demandés dans les vœux (décision de Felix, 06/10/2026).
       // Inscriptions aux épreuves en distanciel : table absente = aucune.
       // Réglage « planning visible » lu une seule fois pour toute la liste.
-      const [{ data: regs }, planningVisible] = await Promise.all([
+      const [{ data: regs }, planningVisible, published] = await Promise.all([
         supabaseAdmin
           .from("epreuve_registrations")
           .select("epreuve_id")
           .eq("candidate_id", payload.id),
         planningVisibleToCandidates(),
+        epreuvesWithPublishedSlots(),
       ]);
       const registered = new Set((regs || []).map((r: any) => r.epreuve_id));
       // GRILLES (07/10/2026) : la grille complète partait jusqu'ici au
       // candidat (seule la 2e grille était masquée). Le helper retire TOUS
-      // les champs de notation et coupe la description tant que le planning
-      // est fermé.
+      // les champs de notation. CONSIGNES : visibles seulement quand les
+      // créneaux de l'épreuve sont disponibles (décision de Felix).
       result = parsed.map((e: any) =>
         epreuveForCandidate(
           { ...e, isRegistered: registered.has(e.id) },
-          planningVisible,
+          candidateSeesDescription({
+            planningVisible,
+            slotless: isSlotlessEpreuve(e),
+            hasPublishedSlot: published.has(e.id),
+          }),
         ),
       );
       // VISIBILITÉ TOURS : un candidat ne voit pas les épreuves d'un tour

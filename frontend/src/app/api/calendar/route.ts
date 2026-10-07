@@ -2,7 +2,12 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized, forbidden } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
 import { planningVisibleToCandidates } from "@/lib/slot-release";
-import { epreuveForCandidate } from "@/lib/epreuve-candidate-view";
+import {
+  candidateSeesDescription,
+  epreuveForCandidate,
+  isSlotlessEpreuve,
+} from "@/lib/epreuve-candidate-view";
+import { epreuvesWithPublishedSlots } from "@/lib/published-slots";
 import { NextRequest } from "next/server";
 
 // GET /api/calendar — get events with optional ?start=&end= date filters
@@ -165,10 +170,25 @@ export async function GET(req: NextRequest) {
     // fois le planning ouvert). Membres et admins : inchangé.
     let events = [...filtered, ...slotEvents];
     if (isCandidate) {
-      const planningVisible = await planningVisibleToCandidates();
+      const [planningVisible, published] = await Promise.all([
+        planningVisibleToCandidates(),
+        epreuvesWithPublishedSlots(),
+      ]);
+      // Consignes : seulement quand les créneaux de l'épreuve sont
+      // disponibles (même règle que GET /api/epreuves).
       events = events.map((event: any) =>
         event.epreuve
-          ? { ...event, epreuve: epreuveForCandidate(event.epreuve, planningVisible) }
+          ? {
+              ...event,
+              epreuve: epreuveForCandidate(
+                event.epreuve,
+                candidateSeesDescription({
+                  planningVisible,
+                  slotless: isSlotlessEpreuve(event.epreuve),
+                  hasPublishedSlot: published.has(event.epreuve.id),
+                }),
+              ),
+            }
           : event,
       );
     }

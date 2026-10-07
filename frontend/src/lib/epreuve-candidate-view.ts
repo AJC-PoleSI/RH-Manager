@@ -17,6 +17,37 @@
 // Module pur (aucun import de supabase) : la route lit le réglage, ce module
 // applique la règle. Membres et admins ne passent jamais par ici.
 
+/**
+ * La description (consignes) d'une épreuve est-elle visible d'un candidat ?
+ * Décision de Felix (07/10/2026) : « uniquement quand les créneaux sont
+ * dispo ». Le réglage global du planning ne suffit pas (il reste ouvert d'un
+ * tour à l'autre) :
+ *   - épreuve à créneaux : planning ouvert ET au moins un créneau publié
+ *     (statut `published` ou `full`) pour CETTE épreuve ;
+ *   - épreuve sans créneau (en distanciel, ou « sur table ») : planning ouvert.
+ */
+export function candidateSeesDescription(o: {
+  planningVisible: boolean;
+  /** Épreuve sans créneau : distanciel ou type « commune » (sur table). */
+  slotless: boolean;
+  /** Au moins un créneau publié pour cette épreuve. */
+  hasPublishedSlot: boolean;
+}): boolean {
+  if (!o.planningVisible) return false;
+  return o.slotless || o.hasPublishedSlot;
+}
+
+/** Épreuve sans créneau ? (objet mis en forme OU ligne brute) */
+export function isSlotlessEpreuve(e: Record<string, any> | null | undefined): boolean {
+  if (!e) return false;
+  return (
+    e.isDistanciel === true ||
+    e.is_distanciel === true ||
+    e.isCommune === true ||
+    e.type === "commune"
+  );
+}
+
 /** Champs de notation qu'un candidat ne doit JAMAIS recevoir. */
 export const CANDIDATE_HIDDEN_EPREUVE_FIELDS = [
   // Grille de notation (critères, barèmes, précisions).
