@@ -11,6 +11,7 @@ import {
   ENROLLMENT_WINDOW_MESSAGES,
 } from "@/lib/enrollment-window";
 import { getEliminationTour, eliminatedResponse } from "@/lib/elimination-db";
+import { roomForCandidate } from "@/lib/rooms";
 import { isTourLocked, isTourUpcoming } from "@/lib/tour-status";
 import { timeOverlaps } from "@/lib/dispatch-core";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
@@ -332,7 +333,9 @@ export async function POST(req: NextRequest) {
         const timeLabel = s.start_time
           ? `${String(s.start_time).substring(0, 5)}${s.end_time ? "-" + String(s.end_time).substring(0, 5) : ""}`
           : "";
-        const roomLabel = s.room ? ` (salle ${s.room})` : "";
+        // Salle fictive « Sans salle (…) » : « (Salle communiquée par le jury) ».
+        const shownRoom = roomForCandidate(s.room);
+        const roomLabel = !s.room ? "" : shownRoom === s.room ? ` (salle ${s.room})` : ` (${shownRoom})`;
 
         // FIX: if the caller asked for `force: true`, auto-cancel
         // the conflicting enrollment(s) before proceeding. This is

@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_ROOMS,
+  isNoRoom,
+  NO_ROOM_CANDIDATE_LABEL,
   normalizeRoomList,
   parseRoomList,
   renameInList,
+  roomForCandidate,
   serializeRoomList,
   validateRoomName,
 } from "./rooms";
@@ -60,5 +63,22 @@ describe("renameInList", () => {
 
   it("ajoute le nouveau nom si l'ancien n'était pas déclaré", () => {
     expect(renameInList(["205"], "999", "310")).toEqual(["205", "310"]);
+  });
+});
+
+describe("créneaux sans salle (Tour 3)", () => {
+  it("reconnaît les salles fictives, quelle que soit la casse", () => {
+    expect(isNoRoom("Sans salle (RH)")).toBe(true);
+    expect(isNoRoom(" sans salle (SI) ")).toBe(true);
+    expect(isNoRoom("250")).toBe(false);
+    expect(isNoRoom("L'annexe")).toBe(false);
+    expect(isNoRoom(null)).toBe(false);
+  });
+
+  it("le candidat lit « Salle communiquée par le jury », les vraies salles passent telles quelles", () => {
+    expect(roomForCandidate("Sans salle (RH)")).toBe(NO_ROOM_CANDIDATE_LABEL);
+    expect(roomForCandidate("231-233")).toBe("231-233");
+    expect(roomForCandidate(null)).toBeNull();
+    expect(roomForCandidate("")).toBe("");
   });
 });

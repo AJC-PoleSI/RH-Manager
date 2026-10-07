@@ -36,7 +36,9 @@ export interface EncryptedData {
 export function encryptData(plaintext: string): EncryptedData {
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
 
   let encrypted = cipher.update(plaintext, "utf-8", "hex");
   encrypted += cipher.final("hex");
@@ -53,6 +55,10 @@ export function encryptData(plaintext: string): EncryptedData {
 /**
  * Decrypts AES-256-GCM encrypted data
  * Verifies authentication tag to ensure data integrity
+ *
+ * La longueur du tag est imposée : sans elle, GCM accepte un tag tronqué
+ * (jusqu'à 4 octets), ce qui rend la falsification d'un chiffré bien plus facile.
+ * encryptData a toujours produit des tags de 16 octets (défaut de Node).
  */
 export function decryptData(encrypted: EncryptedData): string {
   const key = getEncryptionKey();
@@ -61,7 +67,15 @@ export function decryptData(encrypted: EncryptedData): string {
   const ciphertext = Buffer.from(encrypted.encrypted_data, "base64");
   const authTag = Buffer.from(encrypted.auth_tag, "base64");
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  if (authTag.length !== AUTH_TAG_LENGTH) {
+    throw new Error(
+      `Tag d'authentification invalide : ${authTag.length} octets reçus, ${AUTH_TAG_LENGTH} attendus`
+    );
+  }
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
   decipher.setAuthTag(authTag);
 
   const decrypted = Buffer.concat([

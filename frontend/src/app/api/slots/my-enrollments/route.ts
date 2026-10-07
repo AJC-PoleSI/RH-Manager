@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import { roomForCandidate } from "@/lib/rooms";
 import { getToursByNumber } from "@/lib/tour-status";
 import { NextRequest } from "next/server";
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
         date: e.slot?.date,
         startTime: e.slot?.start_time,
         endTime: e.slot?.end_time,
-        room: e.slot?.room,
+        room: roomForCandidate(e.slot?.room), // salle fictive « Sans salle (…) » → libellé candidat
         label: e.slot?.label,
         epreuve: e.slot?.epreuve
           ? {

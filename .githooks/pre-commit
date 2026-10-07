@@ -23,7 +23,13 @@ fi
 
 echo "Semgrep (Docker) : analyse de ${#STAGED_FILES[@]} fichier(s) stagé(s)..."
 
-if ! "$REPO_ROOT/scripts/semgrep-scan.sh" "${STAGED_FILES[@]}"; then
+# Dans un worktree, git exporte GIT_DIR (sans GIT_WORK_TREE) aux hooks : un
+# `git rev-parse --show-toplevel` lancé depuis scripts/ renvoie alors scripts/,
+# que semgrep-scan.sh montait dans Docker (« Invalid scanning root »). Le scan
+# n'a pas besoin de l'environnement git du commit : on le lui retire. Comme
+# core.hooksPath est absolu (ce fichier, dans le checkout principal), cela
+# couvre aussi les worktrees dont la branche a une ancienne version du script.
+if ! (unset GIT_DIR GIT_WORK_TREE; "$REPO_ROOT/scripts/semgrep-scan.sh" "${STAGED_FILES[@]}"); then
   echo ""
   echo "Semgrep a trouvé des problèmes bloquants. Corrige-les avant de commit."
   echo "Pour forcer le commit malgré tout : SKIP_SEMGREP=1 git commit ..."
