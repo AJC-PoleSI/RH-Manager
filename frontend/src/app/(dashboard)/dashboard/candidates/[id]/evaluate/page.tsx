@@ -747,8 +747,9 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       </Card>
 
       {/* ───────── Évaluation DU GROUPE (business game) : une seule grille
-          par créneau, remplie par un seul examinateur ───────── */}
-      {selectedEpreuve && isGroupEpreuve && (
+          par créneau, remplie par un seul examinateur — sauf si l'épreuve
+          l'a désactivée (epreuves.group_grid). ───────── */}
+      {selectedEpreuve && groupNoteEnabled && (
         <Card className="border-emerald-200">
           <CardHeader className="bg-emerald-50/50">
             <div className="flex items-start justify-between flex-wrap gap-2">
