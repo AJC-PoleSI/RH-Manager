@@ -120,6 +120,10 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   const selectedEpreuve = epreuves.find((e) => e.id === selectedEpreuveId);
   const isGroupEpreuve = !!selectedEpreuve?.isGroupEpreuve;
+  // Évaluation du groupe désactivée sur l'épreuve (epreuves.group_grid) :
+  // pas de carte « groupe », seulement les évaluations individuelles.
+  const groupNoteEnabled =
+    isGroupEpreuve && selectedEpreuve?.groupGrid?.disabled !== true;
   // Épreuve individuelle (pas "de groupe") dont le créneau du candidat a 2
   // examinateurs assignés ou plus : un seul note, la note est partagée et
   // attribuée aux deux. Le serveur retranche déjà `examinerCount` sur
