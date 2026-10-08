@@ -277,7 +277,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     } finally {
       setNoteLoading(false);
     }
-  }, [id, selectedEpreuveId, isGroupEpreuve]);
+  }, [id, selectedEpreuveId, groupNoteEnabled]);
 
   useEffect(() => {
     loadGroupEval();
