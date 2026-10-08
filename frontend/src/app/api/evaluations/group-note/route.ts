@@ -9,6 +9,7 @@ import {
 import {
   GROUP_EVALUATION_MAX,
   GROUP_EVALUATION_QUESTIONS,
+  resolveGroupGrid,
 } from "@/lib/group-evaluation-criteria";
 import { NextRequest } from "next/server";
 
@@ -25,9 +26,17 @@ import { NextRequest } from "next/server";
 
 interface Resolved {
   slotId: string;
+  /** L'épreuve n'a pas d'évaluation du groupe (epreuves.group_grid). */
+  disabled?: boolean;
   /** Réponse d'erreur déjà prête, quand la résolution échoue. */
   error?: Response;
 }
+
+/** Réponse quand l'épreuve n'a pas d'évaluation du groupe (group_grid désactivé). */
+const GROUP_NOTE_DISABLED = {
+  error: "Cette épreuve n'a pas d'évaluation du groupe.",
+  code: "GROUP_NOTE_DISABLED",
+};
 
 /** Table absente : la migration group_evaluations n'est pas encore appliquée. */
 function isMissingTableError(err: unknown): boolean {
@@ -89,7 +98,7 @@ async function resolveGroupSlot(
 
   const { data: epreuve } = await supabaseAdmin
     .from("epreuves")
-    .select("is_group_epreuve")
+    .select("is_group_epreuve, group_grid")
     .eq("id", epreuveId)
     .single();
 
@@ -118,7 +127,10 @@ async function resolveGroupSlot(
     };
   }
 
-  return { slotId: slot.slotId };
+  return {
+    slotId: slot.slotId,
+    disabled: resolveGroupGrid(epreuve?.group_grid).disabled,
+  };
 }
 
 /** Met en forme une ligne group_evaluations pour le client. */
@@ -162,6 +174,9 @@ export async function GET(req: NextRequest) {
 
   const resolved = await resolveGroupSlot(req, candidateId, epreuveId);
   if (resolved.error) return resolved.error;
+  if (resolved.disabled) {
+    return Response.json({ disabled: true, exists: false, canEdit: false });
+  }
 
   const { data, error } = await supabaseAdmin
     .from("group_evaluations")
@@ -205,6 +220,9 @@ export async function POST(req: NextRequest) {
   const { candidateId, epreuveId, scores, comment } = body || {};
   const resolved = await resolveGroupSlot(req, candidateId, epreuveId);
   if (resolved.error) return resolved.error;
+  if (resolved.disabled) {
+    return Response.json(GROUP_NOTE_DISABLED, { status: 409 });
+  }
 
   // Barème : chaque note doit tenir dans [0, points max du critère] — même
   // règle que les évaluations individuelles (lib/evaluation-criteria).
