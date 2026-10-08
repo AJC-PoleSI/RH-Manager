@@ -9,6 +9,7 @@ import {
   buildClosureIndex,
   evaluationClosure,
 } from "@/lib/evaluation-closure";
+import { resolveGroupGrid } from "@/lib/group-evaluation-criteria";
 import { NextRequest } from "next/server";
 
 // GET /api/evaluations/allowed-epreuves?candidateId=X
