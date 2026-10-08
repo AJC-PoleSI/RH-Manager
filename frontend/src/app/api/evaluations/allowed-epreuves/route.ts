@@ -136,6 +136,8 @@ export async function GET(req: NextRequest) {
               }
             })()
           : (e.evaluation_questions ?? []),
+      // Grille d'évaluation du groupe (null en base = grille de 43 points).
+      groupGrid: resolveGroupGrid(e.group_grid),
     }));
 
     // Tri stable : par tour puis par nom.
