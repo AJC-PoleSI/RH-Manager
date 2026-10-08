@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from("epreuves")
       .select(
-        "id, name, type, tour, is_group_epreuve, evaluation_questions, date_debut",
+        "id, name, type, tour, is_group_epreuve, evaluation_questions, date_debut, group_grid",
       );
 
     if (!user.isAdmin) {
