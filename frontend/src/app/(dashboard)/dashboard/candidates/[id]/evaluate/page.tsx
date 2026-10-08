@@ -240,7 +240,7 @@ function EvaluateCandidateForm({ id }: { id: string }) {
 
   // ── Load the group grid (épreuve de groupe) ──
   const loadGroupNote = useCallback(async () => {
-    if (!selectedEpreuveId || !isGroupEpreuve) return;
+    if (!selectedEpreuveId || !groupNoteEnabled) return;
     // Ne pas écraser une saisie locale non sauvegardée
     if (noteDirty.current || noteSaveTimer.current) return;
     setNoteLoading(true);
