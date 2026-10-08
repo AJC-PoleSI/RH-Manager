@@ -14,6 +14,7 @@
 
 import {
   getTotalMaxPoints,
+  normalizeQuestions,
   type EvaluationCriterion,
 } from "@/lib/evaluation-criteria";
 
