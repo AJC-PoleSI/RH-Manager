@@ -40,6 +40,63 @@ export const GROUP_EVALUATION_MAX = getTotalMaxPoints(
   GROUP_EVALUATION_QUESTIONS,
 );
 
+// ── Grille de groupe PAR ÉPREUVE (07/10/2026, brief notation T3 — F4) ──────
+//
+// `epreuves.group_grid` (JSONB, facultatif) :
+//   - null / absent / illisible → la grille ci-dessus (43 points), exactement
+//     comme avant : c'est le cas du Business Game du Tour 1, dont les notes
+//     de groupe sont indexées par la position de ces 9 critères ;
+//   - { "disabled": true }      → pas d'évaluation du groupe sur l'épreuve
+//     (choix de Felix pour l'épreuve de prospection générale du Tour 3) ;
+//   - { "title", "questions" }  → grille propre à l'épreuve.
+
+export type GroupGrid =
+  | { disabled: true }
+  | {
+      disabled: false;
+      title: string;
+      questions: EvaluationCriterion[];
+      maxTotal: number;
+    };
+
+/** Grille de groupe active (non désactivée). */
+export type ActiveGroupGrid = Extract<GroupGrid, { disabled: false }>;
+
+export const DEFAULT_GROUP_GRID: ActiveGroupGrid = {
+  disabled: false,
+  title: "Évaluation du groupe",
+  questions: GROUP_EVALUATION_QUESTIONS,
+  maxTotal: GROUP_EVALUATION_MAX,
+};
+
+/** Grille de groupe effective d'une épreuve (cf. commentaire ci-dessus). */
+export function resolveGroupGrid(raw: unknown): GroupGrid {
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return DEFAULT_GROUP_GRID;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return DEFAULT_GROUP_GRID;
+  }
+  const v = value as Record<string, unknown>;
+  if (v.disabled === true) return { disabled: true };
+  const questions = normalizeQuestions(v.questions);
+  if (questions.length === 0) return DEFAULT_GROUP_GRID;
+  return {
+    disabled: false,
+    title:
+      typeof v.title === "string" && v.title.trim()
+        ? v.title.trim()
+        : DEFAULT_GROUP_GRID.title,
+    questions,
+    maxTotal: getTotalMaxPoints(questions),
+  };
+}
+
 /**
  * Vrai pour une ANCIENNE note collective : une ligne partagée
  * (`candidate_evaluations.is_group = true`) posée sur une épreuve « de
