@@ -35,6 +35,7 @@ import {
   rowsToBands,
   bandsToRows,
   localYmd,
+  WEEKDAY_KEYS,
   type AvailabilityRow,
 } from "@/lib/availability-bands";
 import {
@@ -108,7 +109,7 @@ export default function AvailabilityPage() {
 
   const days = useMemo(() => {
     const monday = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), weekOffset * 7);
-    return Array.from({ length: 5 }, (_, i) => addDays(monday, i));
+    return Array.from({ length: WEEKDAY_KEYS.length }, (_, i) => addDays(monday, i));
   }, [weekOffset]);
 
   const load = useCallback(async () => {
@@ -120,7 +121,7 @@ export default function AvailabilityPage() {
       };
 
       const startStr = localYmd(days[0]);
-      const endStr = localYmd(days[4]);
+      const endStr = localYmd(days[days.length - 1]);
 
       const [settingsRes, availRes, slotsRes] = await Promise.all([
         api.get("/settings", noCache),
@@ -212,10 +213,10 @@ export default function AvailabilityPage() {
       await api.put("/availability", {
         availabilities: bandsToRows(bands, days),
         // On ne remplace QUE les jours affichés : une dispo saisie ailleurs
-        // (week-end, autre semaine) ne doit pas disparaître parce qu'on a
+        // (autre semaine) ne doit pas disparaître parce qu'on a
         // enregistré cette grille.
         startDate: localYmd(days[0]),
-        endDate: localYmd(days[4]),
+        endDate: localYmd(days[days.length - 1]),
       });
       toast("Disponibilités enregistrées", "success");
       await load();
@@ -289,7 +290,7 @@ export default function AvailabilityPage() {
             </button>
             <span className="px-2 text-sm font-medium text-gray-700 whitespace-nowrap">
               {format(days[0], "d MMM", { locale: fr })} –{" "}
-              {format(days[4], "d MMM yyyy", { locale: fr })}
+              {format(days[days.length - 1], "d MMM yyyy", { locale: fr })}
             </span>
             <button
               onClick={() => setWeekOffset((w) => w + 1)}

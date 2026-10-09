@@ -28,8 +28,13 @@ import { hhmmToMinutes, mergeIntervals, type Band } from "./time-bands";
  */
 export const MERGE_TOLERANCE_MIN = 15;
 
-/** Jours ouvrés affichés, dans l'ordre des colonnes de la grille. */
-export const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri"] as const;
+/**
+ * Jours affichés, dans l'ordre des colonnes de la grille : la semaine entière.
+ * Le samedi et le dimanche y sont depuis le 09/10/2026 (épreuves du Tour 3
+ * tenues le week-end) — sans eux, un membre ne pouvait ni voir ni modifier
+ * une dispo de week-end.
+ */
+export const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 export interface AvailabilityRow {
   id?: string;

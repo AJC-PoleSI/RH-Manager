@@ -144,6 +144,18 @@ describe("bandsToRows", () => {
     expect(back.map((b) => b.dayIndex)).toEqual(bands.map((b) => b.dayIndex));
   });
 
+  it("couvre le week-end : samedi et dimanche ont leur propre jour", () => {
+    const week = [14, 15, 16, 17, 18, 19, 20].map((d) => new Date(2026, 8, d, 12));
+    const rows = bandsToRows([band(5, "10:00", "12:00"), band(6, "10:00", "19:00")], week);
+    expect(rows.map((r) => r.weekday)).toEqual(["sat", "sun"]);
+    expect(rows.map((r) => localYmd(new Date(r.date)))).toEqual(["2026-09-19", "2026-09-20"]);
+    const back = rowsToBands(
+      rows.map((r) => ({ date: r.date, start_time: r.startTime, end_time: r.endTime })),
+      week,
+    );
+    expect(back.map((b) => b.dayIndex)).toEqual([5, 6]);
+  });
+
   it("écarte une bande dont le jour n'existe pas", () => {
     expect(bandsToRows([band(9, "09:00", "10:00")], days)).toEqual([]);
   });
