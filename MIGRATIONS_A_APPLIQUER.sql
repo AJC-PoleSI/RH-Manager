@@ -1020,3 +1020,32 @@ ALTER TABLE epreuve_registrations ENABLE ROW LEVEL SECURITY;
 -- ─── Annulation ─────────────────────────────────────────────────────────────
 -- DROP TABLE IF EXISTS epreuve_registrations;
 -- ALTER TABLE epreuves DROP COLUMN IF EXISTS is_distanciel;
+
+
+-- ============================================================================
+-- Épreuve sur table bloquante (10/10/2026) — pour l'an prochain
+-- Fichier : supabase-migration-epreuve-sur-table-bloquante.sql
+-- ============================================================================
+-- Option par épreuve sur table (Réglages → épreuve → « Autres entretiens ») :
+-- NULL = les autres entretiens continuent (défaut) ; 'pendant' = bloqués de
+-- l'heure de convocation à la fin de l'épreuve ; 'journee' = toute la journée.
+-- Tant que la colonne manque, rien n'est bloqué et rien ne casse.
+
+ALTER TABLE epreuves ADD COLUMN IF NOT EXISTS blocage_autres_epreuves TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'epreuves_blocage_autres_epreuves_check'
+  ) THEN
+    ALTER TABLE epreuves
+      ADD CONSTRAINT epreuves_blocage_autres_epreuves_check
+      CHECK (blocage_autres_epreuves IS NULL OR blocage_autres_epreuves IN ('pendant', 'journee'));
+  END IF;
+END $$;
+
+NOTIFY pgrst, 'reload schema';
+
+-- ─── Annulation ─────────────────────────────────────────────────────────────
+-- ALTER TABLE epreuves DROP CONSTRAINT IF EXISTS epreuves_blocage_autres_epreuves_check;
+-- ALTER TABLE epreuves DROP COLUMN IF EXISTS blocage_autres_epreuves;

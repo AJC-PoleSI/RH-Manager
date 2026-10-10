@@ -8,6 +8,8 @@ import {
   minutesToTime,
   type RoomInterval,
 } from "@/lib/slot-conflicts";
+import { blockingMessage, findBlockingWindow } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/publish — publish generated slots to DB (admin)
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
     const skippedConflicts: string[] = [];
     // Cache des intervalles par jour (anti-chevauchement par salle)
     const intervalsByDay = new Map<string, Map<string, RoomInterval[]>>();
+    const blockingWindows = await fetchBlockingWindows();
 
     for (const slot of slots) {
       for (const room of slot.rooms) {
@@ -54,6 +57,19 @@ export async function POST(req: NextRequest) {
         const dayIntervals = intervalsByDay.get(slot.date)!;
         const sMin = timeToMinutes(slot.startTime);
         const eMin = timeToMinutes(slot.endTime);
+        const blocking = findBlockingWindow(
+          blockingWindows,
+          slot.date,
+          sMin,
+          eMin,
+          epreuveId,
+        );
+        if (blocking) {
+          skippedConflicts.push(
+            `${slot.date} ${slot.startTime}–${slot.endTime} (${roomLabel}) : ${blockingMessage(blocking)}`,
+          );
+          continue;
+        }
         const overlap = findConflict(dayIntervals, roomLabel, sMin, eMin);
         if (overlap) {
           skippedConflicts.push(

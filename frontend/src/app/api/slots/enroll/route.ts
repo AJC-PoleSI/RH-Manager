@@ -21,6 +21,8 @@ import { isFinalizedEvaluation } from "@/lib/evaluation-finalized";
 import { pickPackedRoom } from "@/lib/room-packing";
 import { NextRequest } from "next/server";
 import { notifyMembers } from "@/lib/notifications";
+import { blockingMessage, slotBlockedBy } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 
 // POST /api/slots/enroll — candidate enrolls in a slot
 export async function POST(req: NextRequest) {
@@ -143,6 +145,18 @@ export async function POST(req: NextRequest) {
     if (slot.status !== "published") {
       return Response.json(
         { error: "Ce créneau n'est plus disponible" },
+        { status: 400 },
+      );
+    }
+
+    // ÉPREUVE SUR TABLE BLOQUANTE : tous les candidats y sont convoqués,
+    // aucun autre entretien ne se tient pendant ce temps (cf.
+    // lib/epreuve-bloquante.ts). Couvre aussi les créneaux posés avant que
+    // l'option soit activée.
+    const blocking = slotBlockedBy(await fetchBlockingWindows(), slot);
+    if (blocking) {
+      return Response.json(
+        { error: blockingMessage(blocking) },
         { status: 400 },
       );
     }

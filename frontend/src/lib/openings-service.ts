@@ -9,6 +9,13 @@ import {
 } from "@/lib/slot-conflicts";
 import { sliceOpening, SlotTime, ExistingSlot } from "@/lib/opening-slicer";
 import { filterActiveEnrollments } from "@/lib/enrollment";
+import {
+  blockedRangesOn,
+  blockingMessage,
+  findBlockingWindow,
+  type BlockingWindow,
+} from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 
 export interface OpeningRow {
   id: string;
@@ -36,6 +43,7 @@ export function sliceOpeningRow(
     break_end?: string | null;
   },
   epreuve: any,
+  blocked: Array<{ start: string; end: string }> = [],
 ): SlotTime[] {
   return sliceOpening(
     {
@@ -43,6 +51,7 @@ export function sliceOpeningRow(
       endTime: o.end_time,
       breakStart: o.break_start,
       breakEnd: o.break_end,
+      blocked,
     },
     sliceParamsFromEpreuve(epreuve),
   );
@@ -254,6 +263,8 @@ export async function createOpeningWithSlots(
     break_start: string | null;
     break_end: string | null;
   },
+  /** Fenêtres des épreuves sur table bloquantes (chargées si absentes). */
+  blockingWindows?: BlockingWindow[],
 ): Promise<CreateOpeningResult> {
   const overlapError = await checkOpeningOverlap(
     input.date,
@@ -265,6 +276,25 @@ export async function createOpeningWithSlots(
     return { ok: false, error: overlapError };
   }
 
+  // Épreuve sur table bloquante ce jour-là : ses horaires sont sautés comme
+  // une pause. Si plus rien ne tient, on refuse AVANT de poser l'ouverture.
+  const windows = blockingWindows ?? (await fetchBlockingWindows());
+  const target = sliceOpeningRow(
+    input,
+    epreuve,
+    blockedRangesOn(windows, input.date, epreuveId),
+  );
+  if (target.length === 0) {
+    const w = findBlockingWindow(
+      windows,
+      input.date,
+      timeToMinutes(input.start_time),
+      timeToMinutes(input.end_time),
+      epreuveId,
+    );
+    if (w) return { ok: false, error: blockingMessage(w) };
+  }
+
   const { data: opening, error: insertErr } = await supabaseAdmin
     .from("room_openings")
     .insert({ epreuve_id: epreuveId, ...input })
@@ -272,7 +302,6 @@ export async function createOpeningWithSlots(
     .single();
   if (insertErr) throw insertErr;
 
-  const target = sliceOpeningRow(input, epreuve);
   const rows = target.map((t) =>
     slotInsertRow(t, input.date, input.room, epreuve, opening.id),
   );

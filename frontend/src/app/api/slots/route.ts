@@ -5,6 +5,8 @@ import {
   findConflict,
   minutesToTime as m2t,
 } from "@/lib/slot-conflicts";
+import { blockingMessage, findBlockingWindow } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 // POST /api/slots — create a slot (admin)
@@ -109,6 +111,22 @@ export async function POST(req: NextRequest) {
           { status: 409 },
         );
       }
+    }
+
+    // Épreuve sur table bloquante : aucun autre entretien pendant qu'elle se
+    // tient, salle ou pas (cf. epreuve-bloquante.ts).
+    const blocking = findBlockingWindow(
+      await fetchBlockingWindows(),
+      date,
+      startMinVal,
+      endMinVal,
+      epreuveId,
+    );
+    if (blocking) {
+      return Response.json(
+        { error: blockingMessage(blocking) },
+        { status: 409 },
+      );
     }
 
     const { data: slot, error } = await supabaseAdmin

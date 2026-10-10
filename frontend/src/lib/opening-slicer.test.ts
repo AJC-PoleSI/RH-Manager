@@ -19,6 +19,25 @@ describe("sliceOpening", () => {
     ]);
   });
 
+  it("retire les créneaux sous une épreuve sur table bloquante, sans décaler les suivants", () => {
+    const r = sliceOpening(
+      {
+        startTime: "13:00",
+        endTime: "17:00",
+        blocked: [{ start: "14:00", end: "15:00" }],
+      },
+      P,
+    );
+    // grille sans blocage : 13:00 13:40 14:20 15:00 15:40 16:20
+    expect(r).toEqual([
+      { startTime: "13:00", endTime: "13:30" },
+      // 13:40–14:10 et 14:20–14:50 chevauchent 14:00–15:00 → retirés
+      { startTime: "15:00", endTime: "15:30" },
+      { startTime: "15:40", endTime: "16:10" },
+      { startTime: "16:20", endTime: "16:50" },
+    ]);
+  });
+
   it("saute la pause et reprend à sa fin", () => {
     const r = sliceOpening(
       {

@@ -7,6 +7,9 @@ import {
   parseSecondGrid,
 } from "@/lib/second-grid";
 import { staleTimingCount, timingChangeWarning } from "@/lib/openings-service";
+import { blockingWindowOf, parseBlocageMode } from "@/lib/epreuve-bloquante";
+import { purgeSlotsInWindow } from "@/lib/epreuve-bloquante-db";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 const isActiveEnrollment = (e: any) => !e.status || e.status === "active";
@@ -123,6 +126,11 @@ export async function PUT(
     if (body.salle !== undefined) updateData.salle = body.salle || null;
     if (body.presentedBy !== undefined)
       updateData.presented_by = body.presentedBy || null;
+    // Épreuve sur table bloquante (null = désactivé)
+    if (body.blocageAutresEpreuves !== undefined)
+      updateData.blocage_autres_epreuves = parseBlocageMode(
+        body.blocageAutresEpreuves,
+      );
     if (body.description !== undefined)
       updateData.description = body.description;
     if (body.color !== undefined)
@@ -284,12 +292,38 @@ export async function PUT(
       .eq("id", id)
       .maybeSingle();
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("epreuves")
       .update(updateData)
       .eq("id", id)
       .select()
       .single();
+
+    // Colonne du blocage pas encore migrée : si on ne l'active pas, on
+    // enregistre le reste sans elle ; si on l'active, on le dit.
+    if (
+      error &&
+      "blocage_autres_epreuves" in updateData &&
+      isMissingColumnError(error)
+    ) {
+      if (updateData.blocage_autres_epreuves) {
+        return Response.json(
+          {
+            error:
+              "Le blocage des autres entretiens n'est pas encore activé en base : appliquez la migration supabase-migration-epreuve-sur-table-bloquante.sql.",
+            code: "MIGRATION_PENDING",
+          },
+          { status: 400 },
+        );
+      }
+      delete updateData.blocage_autres_epreuves;
+      ({ data, error } = await supabaseAdmin
+        .from("epreuves")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error("Supabase UPDATE error:", error);
@@ -393,7 +427,19 @@ export async function PUT(
       });
     }
 
-    return Response.json({ ...data, cascade, timingWarning });
+    // ══════════════════════════════════════════════════════════════════
+    // Épreuve sur table bloquante → retirer les créneaux vides des autres
+    // épreuves sur ses horaires. Jamais ceux qui ont un inscrit : renvoyés
+    // pour que l'admin les déplace à la main (fermés aux inscriptions d'ici
+    // là). Relancé à chaque enregistrement : idempotent, et redit ce qui
+    // reste à déplacer.
+    // ══════════════════════════════════════════════════════════════════
+    const blockingWindow = blockingWindowOf(data);
+    const blocage = blockingWindow
+      ? await purgeSlotsInWindow(blockingWindow)
+      : null;
+
+    return Response.json({ ...data, cascade, timingWarning, blocage });
   } catch (error) {
     console.error("PUT /epreuves/:id catch error:", error);
     return Response.json(

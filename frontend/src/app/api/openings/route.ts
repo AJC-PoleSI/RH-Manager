@@ -9,6 +9,8 @@ import {
   validateOpeningInput,
   createOpeningWithSlots,
 } from "@/lib/openings-service";
+import { blockedRangesOn } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,10 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    // Créneaux occupés sous une épreuve sur table bloquante : ils sortent du
+    // découpage cible et remontent donc en conflit, à déplacer à la main.
+    const blockingWindows = await fetchBlockingWindows();
+
     const result = ((openings as any[]) || []).map((o) => {
       const slots = (o.slots || []).map((s: any) => ({
         id: s.id,
@@ -59,7 +65,11 @@ export async function GET(req: NextRequest) {
         occupied: isSlotOccupied(s),
         staffed: isSlotStaffed(s),
       }));
-      const target = sliceOpeningRow(o, epreuve);
+      const target = sliceOpeningRow(
+        o,
+        epreuve,
+        blockedRangesOn(blockingWindows, o.date, epreuveId),
+      );
       const diff = diffOpeningSlots(String(o.date).split("T")[0], target, slots);
       const conflictSet = new Set(diff.conflictIds);
       return {
@@ -175,6 +185,7 @@ export async function POST(req: NextRequest) {
     // distincts) : paralléliser au lieu d'enchaîner une par une raccourcit
     // nettement l'enregistrement quand plusieurs dates sont soumises d'un
     // coup.
+    const blockingWindows = await fetchBlockingWindows();
     const results = await Promise.all(
       (dates as string[]).map((date) =>
         createOpeningWithSlots(epreuveId, epreuve, {
@@ -184,7 +195,7 @@ export async function POST(req: NextRequest) {
           end_time: endTime,
           break_start: breakStartVal,
           break_end: breakEndVal,
-        }).then((result) => ({ date, result })),
+        }, blockingWindows).then((result) => ({ date, result })),
       ),
     );
     for (const { date, result } of results) {

@@ -13,6 +13,8 @@ import { getToursByNumber } from "@/lib/tour-status";
 import { getEliminationTour } from "@/lib/elimination-db";
 import { roomForCandidate } from "@/lib/rooms";
 import { fetchAllRows } from "@/lib/supabase-paging";
+import { slotBlockedBy } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 // GET /api/slots/available — créneaux que le candidat peut voir
@@ -140,6 +142,9 @@ export async function GET(req: NextRequest) {
     // profondeur, même si en pratique un créneau d'un tour "a_venir" n'est
     // pas encore publié.
 
+    // Épreuve sur table bloquante : ses horaires ne sont pas réservables.
+    const blockingWindows = isCandidate ? await fetchBlockingWindows() : [];
+
     // Pour les candidats: filtre supplémentaire (≥ 1 examinateur OU déjà inscrit).
     // Pour les admins/membres: aucun filtre, ils voient tout.
     const filtered = (slots || []).filter((slot: any) => {
@@ -160,6 +165,9 @@ export async function GET(req: NextRequest) {
       // Candidat inscrit: TOUJOURS visible (pour pouvoir se désinscrire),
       // quel que soit le statut du slot (open/closed/draft inclus).
       if (isEnrolled) return true;
+      // ÉPREUVE SUR TABLE BLOQUANTE : créneau posé avant l'activation de
+      // l'option, sur ses horaires → plus proposé (cf. epreuve-bloquante.ts).
+      if (slotBlockedBy(blockingWindows, slot)) return false;
       // TOUR 3 : toutes les épreuves de pôle sont visibles, vœux ou pas
       // (décision de Felix, 06/10/2026).
       // Sinon: ne montrer que les statuts PUBLIÉS dont le jury est AU COMPLET.

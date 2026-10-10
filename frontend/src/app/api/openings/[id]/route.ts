@@ -12,6 +12,14 @@ import {
   validateOpeningInput,
   activeEnrollmentsOf,
 } from "@/lib/openings-service";
+import {
+  blockedRangesOn,
+  blockingMessage,
+  findBlockingWindow,
+  slotBlockedBy,
+} from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
+import { timeToMinutes } from "@/lib/slot-conflicts";
 
 export const dynamic = "force-dynamic";
 
@@ -74,8 +82,25 @@ export async function PUT(
       return Response.json({ error: "Épreuve introuvable" }, { status: 404 });
     }
 
-    const target = sliceOpeningRow(next, epreuve);
+    // Épreuve sur table bloquante ce jour-là : ses horaires sont retirés du
+    // découpage (cf. epreuve-bloquante.ts).
+    const blockingWindows = await fetchBlockingWindows();
+    const target = sliceOpeningRow(
+      next,
+      epreuve,
+      blockedRangesOn(blockingWindows, next.date, current.epreuve_id),
+    );
     if (target.length === 0) {
+      const w = findBlockingWindow(
+        blockingWindows,
+        next.date,
+        timeToMinutes(next.start_time),
+        timeToMinutes(next.end_time),
+        current.epreuve_id,
+      );
+      if (w) {
+        return Response.json({ error: blockingMessage(w) }, { status: 400 });
+      }
       const dur = epreuve.duration_minutes || 30;
       const roul = epreuve.roulement_minutes ?? 10;
       return Response.json(
@@ -101,6 +126,26 @@ export async function PUT(
     }
 
     const diff = diffOpeningSlots(next.date, target, existing);
+
+    // Un créneau OCCUPÉ sous une épreuve sur table bloquante sort du
+    // découpage, mais ce n'est pas cette modification qui le met hors plage :
+    // on le garde tel quel (jamais désinscrire), sans bloquer l'édition.
+    // L'admin le déplace à la main ; d'ici là il est fermé aux inscriptions.
+    if (blockingWindows.length > 0 && diff.conflictIds.length > 0) {
+      const underBlocking = new Set(
+        existing
+          .filter(
+            (s) =>
+              slotBlockedBy(blockingWindows, {
+                ...s,
+                epreuve_id: current.epreuve_id,
+              }) !== null,
+          )
+          .map((s) => s.id),
+      );
+      diff.keptIds.push(...diff.conflictIds.filter((x) => underBlocking.has(x)));
+      diff.conflictIds = diff.conflictIds.filter((x) => !underBlocking.has(x));
+    }
 
     // 0. Créneaux qui sortiraient de la nouvelle plage :
     //   - avec un CANDIDAT inscrit → refusés par défaut (comme DELETE),

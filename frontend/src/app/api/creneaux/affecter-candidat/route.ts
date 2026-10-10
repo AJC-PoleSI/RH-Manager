@@ -17,6 +17,8 @@ import { isMissingColumnError, lockPatch } from "@/lib/slot-lock";
 import { isFunctionMissingError } from "@/lib/dispatch-io";
 import { sendDirectMessageEmail } from "@/lib/resend";
 import { sendSystemMessages } from "@/lib/system-messages";
+import { blockingMessage, slotBlockedBy } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +38,8 @@ export const dynamic = "force-dynamic";
 // Restent : la capacité de la salle, l'impossibilité d'être à deux endroits
 // en même temps (toutes deux forçables, cf. lib/candidate-move.ts) et le
 // refus absolu d'inscrire un candidat DÉJÀ ÉVALUÉ sur cette épreuve — celle-là
-// n'est pas forçable : elle fausserait la délibération.
+// n'est pas forçable : elle fausserait la délibération. Pas forçable non plus :
+// un créneau qui chevauche une épreuve sur table bloquante.
 //
 // Le chemin est en français (`creneaux`, pas `slots`) : un bloqueur de pub
 // coupe silencieusement certaines URL contenant « /slots » côté navigateur.
@@ -76,6 +79,17 @@ export async function POST(req: NextRequest) {
     if (targetErr) throw targetErr;
     if (!target) {
       return Response.json({ error: "Créneau introuvable" }, { status: 404 });
+    }
+
+    // ── Garde absolue : épreuve sur table bloquante ──
+    // Pas forçable, même par un admin : le candidat est convoqué à l'épreuve
+    // sur table à cette heure-là (cf. lib/epreuve-bloquante.ts).
+    const blocking = slotBlockedBy(await fetchBlockingWindows(), target);
+    if (blocking) {
+      return Response.json(
+        { error: blockingMessage(blocking), code: "EPREUVE_SUR_TABLE" },
+        { status: 409 },
+      );
     }
 
     // ── Candidat ──

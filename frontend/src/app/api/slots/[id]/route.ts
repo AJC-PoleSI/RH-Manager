@@ -11,6 +11,8 @@ import {
 import { lockReasonLabel, isMissingColumnError } from "@/lib/slot-lock";
 import { notifyMembers } from "@/lib/notifications";
 import { sendRoomChangeEmail } from "@/lib/resend";
+import { blockingMessage, findBlockingWindow } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 /**
@@ -225,6 +227,27 @@ export async function PUT(
         dayStr = String(before.date).split("T")[0];
         effStartMin = timeToMinutes(effectiveStart);
         effEndMin = timeToMinutes(effectiveEnd);
+
+        // Épreuve sur table bloquante : on ne déplace pas un entretien sur
+        // ses horaires (cf. epreuve-bloquante.ts).
+        const movesInTime =
+          effectiveStart !== String(before.start_time).slice(0, 5) ||
+          effectiveEnd !== String(before.end_time).slice(0, 5);
+        if (movesInTime) {
+          const blocking = findBlockingWindow(
+            await fetchBlockingWindows(),
+            dayStr,
+            effStartMin,
+            effEndMin,
+            before.epreuve_id,
+          );
+          if (blocking) {
+            return Response.json(
+              { error: blockingMessage(blocking) },
+              { status: 409 },
+            );
+          }
+        }
 
         if (effectiveRoom) {
           const intervals = await fetchDayIntervals(dayStr);

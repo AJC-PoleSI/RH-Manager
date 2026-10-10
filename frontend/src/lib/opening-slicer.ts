@@ -7,6 +7,11 @@ export interface OpeningTimes {
   endTime: string;
   breakStart?: string | null;
   breakEnd?: string | null;
+  /**
+   * Plages interdites en plus de la pause (épreuve sur table bloquante, cf.
+   * epreuve-bloquante.ts) : sautées exactement comme la pause.
+   */
+  blocked?: Array<{ start: string; end: string }>;
 }
 
 export interface SliceParams {
@@ -48,6 +53,11 @@ function m2t(min: number): string {
  * durée + roulement (début à début). Un créneau qui chevauche la pause
  * est décalé au premier horaire après la pause. Le dernier créneau
  * finit au plus tard à endTime. Déterministe.
+ *
+ * Les plages `blocked` (épreuve sur table bloquante), elles, ne décalent
+ * rien : les créneaux qui les chevauchent sont simplement retirés. La grille
+ * reste celle de l'ouverture, donc un créneau déjà réservé avant ou après
+ * l'épreuve sur table ne change jamais d'horaire.
  */
 export function sliceOpening(o: OpeningTimes, p: SliceParams): SlotTime[] {
   const dur = p.durationMinutes;
@@ -57,12 +67,19 @@ export function sliceOpening(o: OpeningTimes, p: SliceParams): SlotTime[] {
   const bs = o.breakStart ? t2m(o.breakStart) : null;
   const be = o.breakEnd ? t2m(o.breakEnd) : null;
   const hasBreak = bs !== null && be !== null && be > bs;
+  const blocked = (o.blocked ?? [])
+    .map((b) => [t2m(b.start), t2m(b.end)] as const)
+    .filter(([s, e]) => e > s);
 
   const out: SlotTime[] = [];
   let cur = t2m(o.startTime);
   while (cur + dur <= end) {
     if (hasBreak && cur < (be as number) && (bs as number) < cur + dur) {
       cur = be as number; // saute la pause
+      continue;
+    }
+    if (blocked.some(([s, e]) => cur < e && s < cur + dur)) {
+      cur += spacing; // retiré, sans décaler la suite
       continue;
     }
     out.push({ startTime: m2t(cur), endTime: m2t(cur + dur) });

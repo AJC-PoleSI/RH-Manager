@@ -15,6 +15,9 @@ import {
   isOnTableEpreuve,
 } from "@/lib/epreuve-candidate-view";
 import { candidateEnrolledEpreuves } from "@/lib/candidate-epreuves";
+import { blockingWindowOf, parseBlocageMode } from "@/lib/epreuve-bloquante";
+import { purgeSlotsInWindow } from "@/lib/epreuve-bloquante-db";
+import { isMissingColumnError } from "@/lib/slot-lock";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -72,6 +75,8 @@ export async function GET(req: NextRequest) {
       heureDebut: e.heure_debut ?? null,
       salle: e.salle ?? null,
       presentedBy: e.presented_by ?? null,
+      // Épreuve sur table bloquante (null = désactivé, ou colonne pas migrée).
+      blocageAutresEpreuves: parseBlocageMode(e.blocage_autres_epreuves),
       inscriptionDeadline: e.inscription_deadline ?? null,
       color: e.color || "#3B82F6",
       isVisible: true, // TODO: add is_visible to Supabase schema
@@ -223,6 +228,11 @@ export async function POST(req: NextRequest) {
       ...(body.presentedBy !== undefined
         ? { presented_by: body.presentedBy || null }
         : {}),
+      // Épreuve sur table bloquante : seulement si activée, pour que la
+      // création marche aussi tant que la migration n'est pas appliquée.
+      ...(body.type === "commune" && parseBlocageMode(body.blocageAutresEpreuves)
+        ? { blocage_autres_epreuves: parseBlocageMode(body.blocageAutresEpreuves) }
+        : {}),
       // Estimation du nombre de créneaux — colonnes ajoutées par migration
       // (supabase-migration-estimation-creneaux.sql), incluses seulement si
       // fournies pour ne pas casser avant application.
@@ -258,6 +268,16 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (error && insertData.blocage_autres_epreuves && isMissingColumnError(error)) {
+      return Response.json(
+        {
+          error:
+            "Le blocage des autres entretiens n'est pas encore activé en base : appliquez la migration supabase-migration-epreuve-sur-table-bloquante.sql.",
+          code: "MIGRATION_PENDING",
+        },
+        { status: 400 },
+      );
+    }
     if (error) {
       console.error("Supabase INSERT error:", error);
       return Response.json(
@@ -266,7 +286,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return Response.json(data, { status: 201 });
+    // Épreuve sur table bloquante : on retire tout de suite les créneaux
+    // vides des autres épreuves sur ses horaires (jamais ceux qui ont un
+    // inscrit — renvoyés pour être déplacés à la main).
+    const blockingWindow = blockingWindowOf(data);
+    const blocage = blockingWindow
+      ? await purgeSlotsInWindow(blockingWindow)
+      : null;
+
+    return Response.json({ ...data, blocage }, { status: 201 });
   } catch (error) {
     console.error("POST /epreuves catch error:", error);
     return Response.json(

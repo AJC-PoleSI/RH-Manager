@@ -7,6 +7,8 @@ import {
   timeToMinutes,
   minutesToTime,
 } from "@/lib/slot-conflicts";
+import { findBlockingWindow } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 import { NextRequest } from "next/server";
 
 // POST /api/slots/bulk-create — Admin only
@@ -104,6 +106,10 @@ export async function POST(req: NextRequest) {
     // noms de salle normalisés) + suivi des créneaux du batch en cours.
     // ────────────────────────────────────────────────────────────────
     const intervals = await fetchDayIntervals(dateStr);
+    // Horaires sous une épreuve sur table bloquante : retirés (comme pour les
+    // ouvertures, sans décaler les suivants).
+    const blockingWindows = await fetchBlockingWindows();
+    let skippedBlocked = 0;
 
     // rooms peut contenir des strings (noms) ou des numbers (indices → "Salle N")
     const roomLabels: string[] = rooms.map((room: string | number) =>
@@ -118,6 +124,18 @@ export async function POST(req: NextRequest) {
       const slotEndMin = slotStartMin + duration; // end = start + duration
       const slotStart = minutesToTime(slotStartMin);
       const slotEnd = minutesToTime(slotEndMin);
+      if (
+        findBlockingWindow(
+          blockingWindows,
+          dateStr,
+          slotStartMin,
+          slotEndMin,
+          epreuveId,
+        )
+      ) {
+        skippedBlocked += roomLabels.length;
+        continue;
+      }
 
       for (const roomLabel of roomLabels) {
         const overlap = findConflict(
@@ -158,6 +176,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (slotsToInsert.length === 0) {
+      return Response.json(
+        {
+          error:
+            "Aucun créneau possible : une épreuve sur table bloque tous les autres entretiens sur cette plage.",
+        },
+        { status: 409 },
+      );
+    }
+
     const { data: createdSlots, error: insertError } = await supabaseAdmin
       .from("evaluation_slots")
       .insert(slotsToInsert)
@@ -171,6 +199,7 @@ export async function POST(req: NextRequest) {
         count: createdSlots.length,
         per_day: nSlots,
         slots: createdSlots,
+        skipped_blocked: skippedBlocked,
       },
       { status: 201 },
     );

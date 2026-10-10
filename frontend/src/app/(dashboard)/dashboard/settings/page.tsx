@@ -42,6 +42,8 @@ interface Epreuve {
   dateDebut?: string;
   dateFin?: string;
   visibleCandidats: boolean;
+  /** Épreuve sur table bloquante (null = les autres entretiens continuent). */
+  blocageAutresEpreuves?: "pendant" | "journee" | null;
 }
 
 // `maxPoints` = nombre de points MAXIMUM du critère, pas un coefficient
@@ -76,6 +78,8 @@ interface NewEpreuveForm {
   time: string;
   salle: string;
   presentedBy: string;
+  /** "" = les autres entretiens continuent ; sinon bloqués (cf. lib/epreuve-bloquante.ts). */
+  blocage: "" | "pendant" | "journee";
   /* individuelle / groupe */
   dateDebut: string;
   dateFin: string;
@@ -121,6 +125,7 @@ const EMPTY_FORM: NewEpreuveForm = {
   time: "",
   salle: "",
   presentedBy: "",
+  blocage: "",
   dateDebut: "",
   dateFin: "",
   duree: "",
@@ -536,6 +541,7 @@ export default function CreationPage() {
       time: ep.heureDebut || "",
       salle: ep.salle || "",
       presentedBy: ep.presentedBy || "",
+      blocage: ep.blocageAutresEpreuves || "",
       dateDebut: ep.dateDebut || "",
       dateFin: ep.dateFin || "",
       duree: String(ep.durationMinutes || ""),
@@ -572,6 +578,33 @@ export default function CreationPage() {
 
   const handleFormChange = (field: keyof NewEpreuveForm, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Épreuve sur table bloquante : ce que l'enregistrement a retiré, et ce
+  // qui reste à déplacer à la main (créneaux avec inscrit, jamais touchés).
+  const toastBlocage = (b: {
+    deleted: number;
+    kept: Array<{ epreuve: string; start_time: string; end_time: string; room: string | null; enrolled: number }>;
+  }) => {
+    if (b.deleted > 0) {
+      toast(
+        `${b.deleted} créneau(x) vide(s) supprimé(s) pendant l'épreuve sur table.`,
+        "success",
+      );
+    }
+    if (b.kept.length > 0) {
+      const liste = b.kept
+        .slice(0, 5)
+        .map(
+          (k) =>
+            `${k.epreuve} ${k.start_time}–${k.end_time}${k.room ? ` (${k.room})` : ""}`,
+        )
+        .join(", ");
+      toast(
+        `${b.kept.length} créneau(x) gardé(s) (inscrit ou verrouillé) chevauchent l'épreuve sur table — à déplacer à la main : ${liste}${b.kept.length > 5 ? "…" : ""}`,
+        "error",
+      );
+    }
   };
 
   const handleCreateEpreuve = async () => {
@@ -622,6 +655,8 @@ export default function CreationPage() {
         heureDebut: isCommune ? form.time || null : null,
         salle: isCommune ? form.salle || null : null,
         presentedBy: isCommune ? form.presentedBy || null : null,
+        // Absent hors épreuve sur table : rien à enregistrer.
+        blocageAutresEpreuves: isCommune ? form.blocage || null : undefined,
         inscriptionDeadline: form.inscriptionDeadline
           ? datetimeLocalToISO(form.inscriptionDeadline)
           : null,
@@ -640,6 +675,7 @@ export default function CreationPage() {
           } else {
             toast("Épreuve modifiée", "success");
           }
+          if (res.data?.blocage) toastBlocage(res.data.blocage);
           // Durée / roulement changés : les créneaux déjà posés gardent leur
           // découpage. Sans ce message, l'écart passait totalement inaperçu.
           if (res.data?.timingWarning) {
@@ -668,6 +704,7 @@ export default function CreationPage() {
               `Épreuve modifiée — ${res.data?.cascade?.deletedSlots || 0} créneau(x) supprimé(s), ${res.data?.cascade?.notifiedCandidates || 0} candidat(s) notifié(s).`,
               "success",
             );
+            if (res.data?.blocage) toastBlocage(res.data.blocage);
           } else if (
             err.response?.status === 409 &&
             err.response?.data?.code === "EVALUATIONS_EXIST"
@@ -691,8 +728,9 @@ export default function CreationPage() {
           }
         }
       } else {
-        await api.post("/epreuves", payload);
+        const res = await api.post("/epreuves", payload);
         toast("Épreuve créée", "success");
+        if (res.data?.blocage) toastBlocage(res.data.blocage);
       }
       closeModal();
       setEditingEpreuveId(null);
@@ -1076,6 +1114,16 @@ export default function CreationPage() {
                   <td className="px-4 py-3 text-gray-600">{ep.tourName}</td>
                   <td className="px-4 py-3">
                     <TypeBadge type={ep.type} />
+                    {ep.type === "commune" && ep.blocageAutresEpreuves && (
+                      <span
+                        className="ml-1 inline-block text-xs font-medium px-2 py-[2px] rounded-full bg-red-100 text-red-700"
+                        title="Aucun autre entretien ne peut avoir lieu pendant cette épreuve"
+                      >
+                        {ep.blocageAutresEpreuves === "journee"
+                          ? "Bloque la journée"
+                          : "Bloque les entretiens"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     {ep.date
@@ -1240,6 +1288,51 @@ export default function CreationPage() {
                     placeholder="Nom du présentateur"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Durée (min)
+                  </label>
+                  <input
+                    type="number"
+                    value={form.duree}
+                    onChange={(e) => handleFormChange("duree", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Autres entretiens
+                  </label>
+                  <select
+                    value={form.blocage}
+                    onChange={(e) =>
+                      handleFormChange(
+                        "blocage",
+                        e.target.value as NewEpreuveForm["blocage"],
+                      )
+                    }
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">Continuent (par défaut)</option>
+                    <option value="pendant">Bloqués pendant l&apos;épreuve</option>
+                    <option value="journee">Bloqués toute la journée</option>
+                  </select>
+                </div>
+                {form.blocage && (
+                  <p className="sm:col-span-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    Aucun entretien, d&apos;aucune épreuve, ne pourra avoir
+                    lieu{" "}
+                    {form.blocage === "journee"
+                      ? "ce jour-là"
+                      : "de l'heure de convocation jusqu'à la fin de l'épreuve (heure + durée ; toute la journée si l'heure est vide)"}
+                    , sans exception : aucun créneau créé, réservé ni
+                    affecté sur ces horaires. À l&apos;enregistrement, les
+                    créneaux vides déjà posés sont supprimés ; ceux qui ont
+                    un inscrit (ou sont verrouillés) sont gardés et listés, à
+                    déplacer à la main.
+                  </p>
+                )}
               </div>
             )}
 

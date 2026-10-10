@@ -6,6 +6,8 @@ import {
   slotInsertRow,
   checkOpeningOverlap,
 } from "@/lib/openings-service";
+import { blockedRangesOn } from "@/lib/epreuve-bloquante";
+import { fetchBlockingWindows } from "@/lib/epreuve-bloquante-db";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,7 @@ export async function POST(req: NextRequest) {
     let createdOpenings = 0;
     let createdSlots = 0;
     const warnings: string[] = [];
+    const blockingWindows = await fetchBlockingWindows();
 
     for (const targetDate of targetDates) {
       if (targetDate === sourceDate) {
@@ -90,6 +93,16 @@ export async function POST(req: NextRequest) {
           break_start: src.break_start,
           break_end: src.break_end,
         };
+        // Épreuve sur table bloquante ce jour-là : ses horaires sont retirés.
+        const blocked = blockedRangesOn(blockingWindows, targetDate, epreuveId);
+        const target = sliceOpeningRow(openingInput, epreuve, blocked);
+        if (target.length === 0 && blocked.length > 0) {
+          warnings.push(
+            `${src.room} le ${targetDate} : ignorée (épreuve sur table bloquante)`,
+          );
+          continue;
+        }
+
         const { data: opening, error: insertErr } = await supabaseAdmin
           .from("room_openings")
           .insert(openingInput)
@@ -97,7 +110,6 @@ export async function POST(req: NextRequest) {
           .single();
         if (insertErr) throw insertErr;
 
-        const target = sliceOpeningRow(openingInput, epreuve);
         const rows = target.map((t) =>
           slotInsertRow(t, targetDate, src.room, epreuve, opening.id),
         );
