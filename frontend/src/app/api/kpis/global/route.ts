@@ -20,6 +20,16 @@ export async function GET(req: NextRequest) {
   if (!payload) return unauthorized();
   if (!payload.isAdmin) return forbidden();
 
+  // Filtre optionnel par tour (?tour=2). Absent = tous les tours, comme avant.
+  const tourParam = new URL(req.url).searchParams.get("tour");
+  let tour: number | null = null;
+  if (tourParam !== null && tourParam !== "") {
+    tour = Number(tourParam);
+    if (!Number.isInteger(tour) || tour < 1) {
+      return Response.json({ error: "Tour invalide" }, { status: 400 });
+    }
+  }
+
   try {
     const [
       candidatesRes,
@@ -42,9 +52,9 @@ export async function GET(req: NextRequest) {
       supabaseAdmin
         .from("candidate_evaluations")
         .select("id", { count: "exact", head: true }),
-      supabaseAdmin
-        .from("epreuves")
-        .select("id", { count: "exact", head: true }),
+      // Petite table : on lit les lignes (et non un simple compte) pour
+      // en tirer aussi la liste des tours qui ont des épreuves.
+      supabaseAdmin.from("epreuves").select("id, tour"),
       supabaseAdmin
         .from("members")
         .select("id", { count: "exact", head: true }),
@@ -56,7 +66,7 @@ export async function GET(req: NextRequest) {
       fetchAllRows<any>((from, to) =>
         supabaseAdmin
           .from("candidate_evaluations")
-          .select("id, member_id, is_group, epreuves(is_group_epreuve)")
+          .select("id, member_id, is_group, epreuves(is_group_epreuve, tour)")
           .order("id")
           .range(from, to),
       ),
@@ -91,6 +101,8 @@ export async function GET(req: NextRequest) {
     if (perMemberRes.data) {
       for (const row of perMemberRes.data) {
         if (isLegacyCollectiveNote(row)) continue;
+        // Filtre par tour : une évaluation appartient au tour de son épreuve.
+        if (tour !== null && row.epreuves?.tour !== tour) continue;
         individualEvaluations += 1;
         countableEvalIds.add(row.id);
         if (row.member_id) pairs.add(`${row.id}::${row.member_id}`);
@@ -152,6 +164,16 @@ export async function GET(req: NextRequest) {
 
     const toursCreated = toursRes.count ?? 0;
 
+    // Tours qui ont au moins une épreuve : alimente le sélecteur de la page.
+    const epreuveRows: any[] = epreuvesRes.data || [];
+    const availableTours = Array.from(
+      new Set(
+        epreuveRows
+          .map((e) => e.tour)
+          .filter((t): t is number => Number.isInteger(t)),
+      ),
+    ).sort((a, b) => a - b);
+
     // Colonne `email_verified` absente (migration pas appliquée) : on retombe
     // sur le décompte brut plutôt que de casser tout le tableau de bord.
     let totalCandidates = candidatesRes.count ?? 0;
@@ -186,11 +208,18 @@ export async function GET(req: NextRequest) {
       // Évaluations de candidats : le décompte brut (`evaluationsRes`) inclut
       // les anciennes notes collectives, écartées ici comme ailleurs. Repli
       // sur lui si la lecture paginée a échoué.
+      // Filtré par tour : le décompte brut ne sait pas lire le tour, on ne
+      // s'y replie donc pas.
       totalEvaluations:
-        perMemberRes.data && perMemberRes.data.length > 0
+        tour !== null ||
+        (perMemberRes.data && perMemberRes.data.length > 0)
           ? individualEvaluations
           : (evaluationsRes.count ?? 0),
-      totalEpreuves: epreuvesRes.count ?? 0,
+      totalEpreuves: epreuveRows.filter(
+        (e: any) => tour === null || e.tour === tour,
+      ).length,
+      availableTours,
+      tour,
       totalMembers: membersRes.count ?? 0,
       totalSlots: slotsRes.count ?? 0,
       totalAvailabilities: availabilitiesCountRes.count ?? 0,

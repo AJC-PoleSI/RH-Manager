@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       supabaseAdmin
         .from("evaluation_slots")
         .select(
-          "id, epreuve_id, status, epreuve:epreuves(id, name, tour), enrollments:slot_enrollments(id, status)",
+          "id, epreuve_id, status, epreuve:epreuves(id, name, tour), enrollments:slot_enrollments(id, status, candidate_id)",
         )
         .not("epreuve_id", "is", null)
         .order("id")
@@ -46,6 +46,11 @@ export async function GET(req: NextRequest) {
       }
     > = {};
 
+    // Candidats DISTINCTS : un candidat inscrit à deux épreuves ne compte
+    // qu'une fois (la somme des colonnes « inscrits » compte des inscriptions).
+    const distinctAll = new Set<string>();
+    const distinctByTour = new Map<number, Set<string>>();
+
     (slots || []).forEach((s: any) => {
       const key = s.epreuve_id;
       if (!byEpreuve[key]) {
@@ -62,9 +67,17 @@ export async function GET(req: NextRequest) {
       entry.totalSlots++;
       if (s.status === "ready") entry.readySlots++;
       // Une inscription annulée n'est pas un candidat inscrit.
-      entry.candidatsInscrits += (s.enrollments || []).filter(
-        filterActiveEnrollments,
-      ).length;
+      const active = (s.enrollments || []).filter(filterActiveEnrollments);
+      entry.candidatsInscrits += active.length;
+      for (const e of active) {
+        if (!e.candidate_id) continue;
+        distinctAll.add(e.candidate_id);
+        const t = s.epreuve?.tour;
+        if (Number.isInteger(t)) {
+          if (!distinctByTour.has(t)) distinctByTour.set(t, new Set());
+          distinctByTour.get(t)!.add(e.candidate_id);
+        }
+      }
     });
 
     const epreuves = Object.values(byEpreuve).sort(
@@ -80,7 +93,16 @@ export async function GET(req: NextRequest) {
       { totalSlots: 0, readySlots: 0, candidatsInscrits: 0 },
     );
 
-    return Response.json({ epreuves, totals });
+    const parTour: Record<string, { candidatsDistincts: number }> = {};
+    distinctByTour.forEach((ids, t) => {
+      parTour[String(t)] = { candidatsDistincts: ids.size };
+    });
+
+    return Response.json({
+      epreuves,
+      totals: { ...totals, candidatsDistincts: distinctAll.size },
+      parTour,
+    });
   } catch (error) {
     console.error("KPI slots error:", error);
     return Response.json(

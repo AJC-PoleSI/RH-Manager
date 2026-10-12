@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Users, ClipboardCheck, Award, UserCheck } from "lucide-react";
@@ -10,6 +10,8 @@ interface KPIData {
   totalEvaluations: number;
   totalEpreuves: number;
   totalMembers: number;
+  /** Tours qui ont au moins une épreuve : alimente le filtre de la page. */
+  availableTours?: number[];
   evaluationsPerMember: {
     memberId: string;
     _count: { id: number };
@@ -34,7 +36,14 @@ interface EpreuveSlotStats {
 
 interface SlotsKPIData {
   epreuves: EpreuveSlotStats[];
-  totals: { totalSlots: number; readySlots: number; candidatsInscrits: number };
+  totals: {
+    totalSlots: number;
+    readySlots: number;
+    candidatsInscrits: number;
+    /** Candidats distincts (un candidat inscrit à 2 épreuves compte une fois). */
+    candidatsDistincts?: number;
+  };
+  parTour?: Record<string, { candidatsDistincts: number }>;
 }
 
 export default function KPIsPage() {
@@ -43,6 +52,15 @@ export default function KPIsPage() {
   const [slotsError, setSlotsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
+  // Tour dont les chiffres sont à l'écran (null = tous). `pendingTour` est le
+  // choix en cours de chargement : le bouton réagit tout de suite, mais les
+  // chiffres ne changent d'étiquette qu'une fois ceux du nouveau tour reçus.
+  const [tour, setTour] = useState<number | null>(null);
+  const [pendingTour, setPendingTour] = useState<{ tour: number | null } | null>(
+    null,
+  );
+  const [tourError, setTourError] = useState(false);
+  const tourRequest = useRef(0);
 
   useEffect(() => {
     const fetchKPIs = async () => {
@@ -79,6 +97,32 @@ export default function KPIsPage() {
     fetchKPIs();
   }, []);
 
+  // Changement de tour : seules les statistiques « globales » dépendent du
+  // tour côté serveur ; les créneaux sont déjà là et se filtrent à l'écran.
+  // Si la requête échoue, on garde le tour précédent et ses chiffres plutôt
+  // que d'afficher ceux d'un autre tour sous la mauvaise étiquette.
+  const selectTour = async (next: number | null) => {
+    if (next === (pendingTour ? pendingTour.tour : tour)) return;
+    const id = ++tourRequest.current;
+    setPendingTour({ tour: next });
+    setTourError(false);
+    try {
+      const res = await api.get(
+        "/kpis/global",
+        next === null ? undefined : { params: { tour: next } },
+      );
+      if (id !== tourRequest.current) return;
+      setData(res.data);
+      setTour(next);
+    } catch (e) {
+      if (id !== tourRequest.current) return;
+      console.error(e);
+      setTourError(true);
+    } finally {
+      if (id === tourRequest.current) setPendingTour(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center p-12">
@@ -103,10 +147,48 @@ export default function KPIsPage() {
     );
   }
 
-  const stats = [
+  const tourOptions =
+    data.availableTours ??
+    Array.from(
+      new Set(
+        (slotsData?.epreuves ?? [])
+          .map((e) => e.tour)
+          .filter((t): t is number => t !== null),
+      ),
+    ).sort((a, b) => a - b);
+  const highlightedTour = pendingTour ? pendingTour.tour : tour;
+
+  // Créneaux & inscriptions : la liste complète est déjà chargée, le filtre
+  // se fait ici. Les candidats « distincts » viennent du serveur (un candidat
+  // inscrit à deux épreuves ne compte qu'une fois).
+  const slotRows = (slotsData?.epreuves ?? []).filter(
+    (ep) => tour === null || ep.tour === tour,
+  );
+  const slotTotals = slotRows.reduce(
+    (acc, ep) => ({
+      totalSlots: acc.totalSlots + ep.totalSlots,
+      readySlots: acc.readySlots + ep.readySlots,
+      inscriptions: acc.inscriptions + ep.candidatsInscrits,
+    }),
+    { totalSlots: 0, readySlots: 0, inscriptions: 0 },
+  );
+  const distinctCandidates =
+    tour === null
+      ? slotsData?.totals.candidatsDistincts
+      : slotsData
+        ? (slotsData.parTour?.[String(tour)]?.candidatsDistincts ?? 0)
+        : undefined;
+
+  const stats: {
+    label: string;
+    value: number | string;
+    icon: typeof Users;
+    color: string;
+  }[] = [
     {
-      label: "Candidats",
-      value: data.totalCandidates,
+      label: tour === null ? "Candidats" : "Candidats inscrits",
+      value:
+        tour === null ? data.totalCandidates : (distinctCandidates ?? "—"),
       icon: Users,
       color: "text-blue-600 bg-blue-100",
     },
@@ -152,12 +234,47 @@ export default function KPIsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Statistiques (KPIs)</h1>
-        <p className="text-gray-500">
-          Vue d&apos;ensemble des performances du recrutement.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Statistiques (KPIs)</h1>
+          <p className="text-gray-500">
+            Vue d&apos;ensemble des performances du recrutement.
+          </p>
+        </div>
+        {/* Filtre par tour : « Tous » ou un tour précis. */}
+        <div className="flex items-center gap-2">
+          {pendingTour && (
+            <Loader2 className="animate-spin text-gray-400" size={16} />
+          )}
+          <div
+            role="group"
+            aria-label="Filtrer par tour"
+            className="flex rounded-full bg-gray-100 p-0.5"
+          >
+            {[null, ...tourOptions].map((t) => (
+              <button
+                key={t ?? "all"}
+                type="button"
+                aria-pressed={highlightedTour === t}
+                onClick={() => selectTour(t)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  highlightedTour === t
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {t === null ? "Tous" : `Tour ${t}`}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+      {tourError && (
+        <p className="text-sm text-red-600">
+          Impossible de charger les chiffres de ce tour. Les statistiques
+          affichées sont celles du filtre précédent — réessaie.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
@@ -177,10 +294,20 @@ export default function KPIsPage() {
         ))}
       </div>
 
+      {tour !== null && evaluatorRows.length === 0 && (
+        <Card>
+          <CardContent className="p-4 text-sm text-gray-500">
+            Aucune évaluation saisie sur le tour {tour} pour le moment.
+          </CardContent>
+        </Card>
+      )}
+
       {evaluatorRows.length > 0 && (
         <Card>
           <CardHeader className="p-4 pb-1">
-            <CardTitle className="text-base">Évaluations par membre</CardTitle>
+            <CardTitle className="text-base">
+              Évaluations par membre{tour !== null ? ` — tour ${tour}` : ""}
+            </CardTitle>
             <p className="text-xs text-gray-500">
               {evaluatorRows.length} membre
               {evaluatorRows.length > 1 ? "s" : ""} ayant noté · une note
@@ -246,15 +373,21 @@ export default function KPIsPage() {
           <CardHeader>
             <CardTitle>Créneaux &amp; inscriptions par épreuve</CardTitle>
             <p className="text-sm text-gray-500">
-              {slotsData.totals.readySlots} créneaux prêts sur{" "}
-              {slotsData.totals.totalSlots} · {slotsData.totals.candidatsInscrits}{" "}
-              candidats inscrits au total.
+              {slotTotals.readySlots} créneaux prêts sur {slotTotals.totalSlots}{" "}
+              · {slotTotals.inscriptions} inscription
+              {slotTotals.inscriptions > 1 ? "s" : ""}
+              {distinctCandidates !== undefined
+                ? ` (${distinctCandidates} candidat${distinctCandidates > 1 ? "s" : ""})`
+                : ""}
+              {tour !== null ? ` · tour ${tour}` : ""}.
             </p>
           </CardHeader>
           <CardContent>
-            {slotsData.epreuves.length === 0 ? (
+            {slotRows.length === 0 ? (
               <p className="text-sm text-gray-500">
-                Aucun créneau rattaché à une épreuve pour le moment.
+                {tour === null
+                  ? "Aucun créneau rattaché à une épreuve pour le moment."
+                  : `Aucun créneau rattaché à une épreuve du tour ${tour}.`}
               </p>
             ) : (
               <div className="scroll-x">
@@ -268,7 +401,7 @@ export default function KPIsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {slotsData.epreuves.map((ep) => (
+                    {slotRows.map((ep) => (
                       <tr key={ep.epreuveId} className="border-b last:border-0">
                         <td className="py-2 pr-4">{ep.name}</td>
                         <td className="py-2 pr-4">{ep.tour ?? "—"}</td>

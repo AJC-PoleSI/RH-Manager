@@ -8,8 +8,8 @@ import { useToast } from "@/components/ui/toast";
 import MemberAvailabilityGrid from "@/app/(dashboard)/dashboard/availability/page";
 import RoomOpeningsGrid from "@/components/planning/RoomOpeningsGrid";
 import TourOpeningsPanel from "@/components/planning/TourOpeningsPanel";
-import EnrollmentsTable from "@/components/planning/EnrollmentsTable";
-import EpreuveSlotsSummary from "@/components/planning/EpreuveSlotsSummary";
+import EpreuveSlotsInfo from "@/components/planning/EpreuveSlotsInfo";
+import GlobalEventModal from "@/components/planning/GlobalEventModal";
 import DistancielRegistrationsPanel from "@/components/planning/DistancielRegistrationsPanel";
 import UnderstaffedBanner from "@/components/planning/UnderstaffedBanner";
 import QuotaEditor from "@/components/planning/QuotaEditor";
@@ -265,6 +265,13 @@ export default function PlanningPage() {
   const [globalEvents, setGlobalEvents] = useState<any[]>([]); // NEW STATE for global admin calendar
   // Modal détail créneau cliqué dans la vue calendrier globale
   const [globalDetailSlot, setGlobalDetailSlot] = useState<any | null>(null);
+  // Fenêtre de création / modification d'un événement global, ouverte depuis
+  // le calendrier : `event` = événement à modifier (null = nouvel événement),
+  // `day` = jour prérempli à la création (AAAA-MM-JJ).
+  const [eventEditor, setEventEditor] = useState<{
+    event: any | null;
+    day: string;
+  } | null>(null);
   // Créneau dont le verrou est en cours de bascule (évite le double-clic).
   const [lockBusyId, setLockBusyId] = useState<string | null>(null);
   // Sélecteur « + examinateur » de la modale de détail.
@@ -307,10 +314,6 @@ export default function PlanningPage() {
   const [roomEditNotify, setRoomEditNotify] = useState(true);
   const [roomEditSaving, setRoomEditSaving] = useState(false);
 
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [swapAKey, setSwapAKey] = useState("");
-  const [swapBKey, setSwapBKey] = useState("");
-  const [swapLoading, setSwapLoading] = useState(false);
   // Tous les membres (pour le sélecteur dans la modale)
   const [allMembers, setAllMembers] = useState<
     { id: string; email: string; firstName?: string; lastName?: string }[]
@@ -1705,81 +1708,6 @@ export default function PlanningPage() {
     }
   };
 
-  // ══════════════════════════════════════════════════════════════════
-  // Échange de deux examinateurs entre deux créneaux (salles)
-  // ══════════════════════════════════════════════════════════════════
-  const swapAssignments = useMemo(() => {
-    const list: {
-      key: string;
-      slotId: string;
-      memberId: string;
-      epreuveId: string;
-      name: string;
-      label: string;
-    }[] = [];
-    allSlotsGlobal.forEach((s: any) => {
-      (s.members || []).forEach((m: any) => {
-        const mem = m.member || {};
-        const memberId = m.member_id || mem.id;
-        if (!memberId) return;
-        const name =
-          `${mem.first_name || ""} ${mem.last_name || ""}`.trim() ||
-          mem.email?.split("@")[0] ||
-          "Examinateur";
-        const day = new Date(s.date).toLocaleDateString("fr-FR", {
-          day: "numeric",
-          month: "short",
-        });
-        const hours = `${String(s.start_time || "").substring(0, 5)}–${String(s.end_time || "").substring(0, 5)}`;
-        list.push({
-          key: `${s.id}:${memberId}`,
-          slotId: s.id,
-          memberId,
-          epreuveId: s.epreuve_id,
-          name,
-          label: `${name} — ${s.room || "sans salle"} · ${s.epreuve?.name || "Épreuve"} · ${day} ${hours}`,
-        });
-      });
-    });
-    return list.sort((a, b) => a.label.localeCompare(b.label));
-  }, [allSlotsGlobal]);
-
-  const swapA = swapAssignments.find((a) => a.key === swapAKey) || null;
-  // Même épreuve obligatoire (règle appliquée aussi côté serveur) : on ne
-  // propose que des échanges que l'API acceptera.
-  const swapBOptions = swapA
-    ? swapAssignments.filter(
-        (a) =>
-          a.epreuveId === swapA.epreuveId &&
-          a.slotId !== swapA.slotId &&
-          a.memberId !== swapA.memberId,
-      )
-    : [];
-
-  const handleSwapMembers = async () => {
-    const b = swapAssignments.find((a) => a.key === swapBKey);
-    if (!swapA || !b) return;
-    setSwapLoading(true);
-    try {
-      await api.post("/slots/swap-members", {
-        slotAId: swapA.slotId,
-        memberAId: swapA.memberId,
-        slotBId: b.slotId,
-        memberBId: b.memberId,
-      });
-      toast(`${swapA.name} et ${b.name} ont été échangés`, "success");
-      setSwapOpen(false);
-      setSwapAKey("");
-      setSwapBKey("");
-      fetchAllSlotsGlobal();
-      fetchSlotData();
-    } catch (e: any) {
-      toast(e?.response?.data?.error || "Échange impossible", "error");
-    } finally {
-      setSwapLoading(false);
-    }
-  };
-
   const handleRepartir = async () => {
     if (!selectedEpreuveId) {
       toast("Selectionnez une epreuve", "error");
@@ -1989,8 +1917,21 @@ export default function PlanningPage() {
               const mm=s.min_members||s.minMembers||2, mx=s.max_candidates||s.maxCandidates||1;
               setGlobalDetailSlot({ kind:"slot", raw:s, memberCount:mc, candCount:cc, minMembers:mm, maxCands:mx, event:{ start: new Date(`${ev.date}T${ev.startTime||"09:00"}`) } });
             } else {
-              setGlobalDetailSlot({ kind:"global", raw:ev.raw, event:{ start: new Date(`${ev.date}T${ev.startTime||"09:00"}`) } });
+              // Un événement global se modifie directement : clic = édition.
+              setEventEditor({ event: ev.raw, day: ev.date });
             }
+          };
+
+          // Clic sur un jour vide du calendrier → nouvel événement ce jour-là.
+          const openCreateEvent = (ds: string) => setEventEditor({ event: null, day: ds });
+
+          // Jour proposé par le bouton « + » : aujourd'hui s'il est dans la
+          // période affichée, sinon le premier jour de cette période.
+          const defaultNewEventDay = () => {
+            const first = adminCalView === "month" ? new Date(acYear, acMonth, 1) : weekDates[0];
+            const last = adminCalView === "month" ? new Date(acYear, acMonth + 1, 0) : weekDates[6];
+            const t = dateStr(today);
+            return t >= dateStr(first) && t <= dateStr(last) ? t : dateStr(first);
           };
 
           return (
@@ -1999,15 +1940,18 @@ export default function PlanningPage() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                   <span className="text-xl">🗺️</span> Vue Globale du Recrutement
-                  <span className="text-xs font-normal text-gray-400 ml-1">— clic pour détails</span>
+                  <EpreuveSlotsInfo slots={allSlotsGlobal} />
+                  <span className="hidden sm:inline text-xs font-normal text-gray-400 ml-1">— clic sur un créneau pour le détail, sur un jour vide pour ajouter un événement</span>
                 </h3>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => setSwapOpen(true)}
-                    className="px-3 py-1.5 min-h-[36px] text-sm font-medium rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-                    title="Échanger deux examinateurs de salle"
+                    type="button"
+                    onClick={() => openCreateEvent(defaultNewEventDay())}
+                    className="w-9 h-9 shrink-0 flex items-center justify-center rounded-full bg-blue-600 text-white text-xl leading-none hover:bg-blue-700 transition-colors"
+                    title="Ajouter un événement"
+                    aria-label="Ajouter un événement"
                   >
-                    ⇄ Échanger
+                    +
                   </button>
                   <div className="flex bg-gray-100 rounded-full p-0.5">
                     {(["month","week"] as const).map(m => (
@@ -2039,12 +1983,7 @@ export default function PlanningPage() {
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Événement global</span>
               </div>
 
-              {allSlotsGlobal.length === 0 && globalEvents.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
-                  <p className="text-sm">Aucun créneau ou événement généré.</p>
-                </div>
-              ) : (
-                <>
+              <>
                   {/* VUE MOIS */}
                   {adminCalView === "month" && (
                     <div className="bg-white border border-gray-200 rounded-xl scroll-x sm:overflow-x-auto">
@@ -2064,13 +2003,16 @@ export default function PlanningPage() {
                           const dayEvs = day ? getEventsForDay(ds) : [];
                           const todayDay = day && today.getFullYear()===acYear && today.getMonth()===acMonth && today.getDate()===day;
                           return (
-                            <div key={i} className={`min-h-[72px] sm:min-h-[90px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 ${day===null?"bg-gray-50/50":"bg-white"} ${i%7===6?"border-r-0":""}`}>
+                            <div key={i}
+                              onClick={day !== null ? () => openCreateEvent(ds) : undefined}
+                              title={day !== null ? "Cliquer pour ajouter un événement" : undefined}
+                              className={`min-h-[72px] sm:min-h-[90px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 ${day===null?"bg-gray-50/50":"bg-white cursor-pointer hover:bg-blue-50/40 transition-colors"} ${i%7===6?"border-r-0":""}`}>
                               {day !== null && (
                                 <>
                                   <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full ${todayDay?"bg-blue-600 text-white":"text-gray-700"}`}>{day}</div>
                                   <div className="space-y-0.5">
                                     {dayEvs.slice(0,3).map(ev => (
-                                      <button key={ev.id} onClick={() => handleEvClick(ev)}
+                                      <button key={ev.id} onClick={(e) => { e.stopPropagation(); handleEvClick(ev); }}
                                         className="w-full text-left text-[9px] sm:text-[10px] leading-tight px-1 sm:px-1.5 py-0.5 rounded sm:rounded-md truncate font-medium transition-opacity hover:opacity-80"
                                         style={{ backgroundColor: ev.bg, color: ev.textColor }}
                                         title={ev.title}
@@ -2081,7 +2023,11 @@ export default function PlanningPage() {
                                       </button>
                                     ))}
                                     {dayEvs.length > 3 && (
-                                      <p className="text-[9px] sm:text-[10px] text-gray-400 px-1">+{dayEvs.length-3}<span className="hidden sm:inline"> autres</span></p>
+                                      <button type="button"
+                                        onClick={(e) => { e.stopPropagation(); setAdminCalDate(new Date(acYear, acMonth, day)); setAdminCalView("week"); }}
+                                        className="text-[9px] sm:text-[10px] text-gray-400 hover:text-gray-700 px-1"
+                                        title="Voir la semaine"
+                                      >+{dayEvs.length-3}<span className="hidden sm:inline"> autres</span></button>
                                     )}
                                   </div>
                                 </>
@@ -2110,10 +2056,14 @@ export default function PlanningPage() {
                                 <p className={`text-lg sm:text-xl font-bold sm:mt-0.5 ${todayWd?"text-blue-600":"text-gray-900"}`}>{wd.getDate()}</p>
                                 <p className="text-xs text-gray-400">{wd.toLocaleDateString("fr-FR",{month:"short"})}</p>
                               </div>
-                              <div className="p-2 min-h-[64px] sm:min-h-[180px] space-y-1.5">
+                              <div
+                                onClick={() => openCreateEvent(ds)}
+                                title="Cliquer pour ajouter un événement"
+                                className="p-2 min-h-[64px] sm:min-h-[180px] space-y-1.5 cursor-pointer hover:bg-blue-50/40 transition-colors"
+                              >
                                 {dayEvs.length === 0 && <p className="text-xs text-gray-300 text-center mt-4">—</p>}
                                 {dayEvs.map(ev => (
-                                  <button key={ev.id} onClick={() => handleEvClick(ev)}
+                                  <button key={ev.id} onClick={(e) => { e.stopPropagation(); handleEvClick(ev); }}
                                     className="w-full text-left p-2 rounded-lg text-xs transition-all hover:shadow-sm border border-transparent"
                                     style={{ backgroundColor: ev.bg, color: ev.textColor }}
                                   >
@@ -2128,108 +2078,21 @@ export default function PlanningPage() {
                       </div>
                     </div>
                   )}
-                </>
-              )}
+              </>
             </div>
           );
         })()}
 
-        {/* Modal échange de deux examinateurs entre salles */}
-        {swapOpen && (
-          <div
-            className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-            onClick={() => setSwapOpen(false)}
-          >
-            <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-900">
-                  ⇄ Échanger deux examinateurs
-                </h2>
-                <button
-                  onClick={() => setSwapOpen(false)}
-                  className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="p-5 space-y-4 text-sm">
-                <p className="text-xs text-gray-500">
-                  Les deux examinateurs permutent de créneau. Les candidats,
-                  les horaires et les autres examinateurs ne bougent pas.
-                </p>
-
-                <div>
-                  <label className="block text-xs uppercase text-gray-400 mb-1.5">
-                    Examinateur 1
-                  </label>
-                  <select
-                    value={swapAKey}
-                    onChange={(e) => {
-                      setSwapAKey(e.target.value);
-                      setSwapBKey("");
-                    }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="">Sélectionner…</option>
-                    {swapAssignments.map((a) => (
-                      <option key={a.key} value={a.key}>
-                        {a.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase text-gray-400 mb-1.5">
-                    Examinateur 2
-                  </label>
-                  <select
-                    value={swapBKey}
-                    onChange={(e) => setSwapBKey(e.target.value)}
-                    disabled={!swapA}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
-                  >
-                    <option value="">
-                      {swapA
-                        ? "Sélectionner…"
-                        : "Choisissez d'abord l'examinateur 1"}
-                    </option>
-                    {swapBOptions.map((a) => (
-                      <option key={a.key} value={a.key}>
-                        {a.label}
-                      </option>
-                    ))}
-                  </select>
-                  {swapA && swapBOptions.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1.5">
-                      Aucun autre créneau de la même épreuve n&apos;a
-                      d&apos;examinateur à échanger.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  onClick={() => setSwapOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleSwapMembers}
-                  disabled={!swapAKey || !swapBKey || swapLoading}
-                  className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {swapLoading ? "Échange…" : "Échanger"}
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Événement global : création (clic sur un jour vide ou « + ») et
+            modification (clic sur l'événement). */}
+        {eventEditor && (
+          <GlobalEventModal
+            event={eventEditor.event}
+            initialDay={eventEditor.day}
+            toast={toast}
+            onClose={() => setEventEditor(null)}
+            onSaved={fetchGlobalCalendarEvents}
+          />
         )}
 
         {/* Modal détail créneau (vue globale admin) */}
@@ -2242,50 +2105,7 @@ export default function PlanningPage() {
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              {globalDetailSlot.kind === "global" ? (() => {
-                const raw = globalDetailSlot.raw;
-                const isVisible = raw.visible_to_candidates !== false;
-                const hasEndDay = !!raw.day_end;
-                return (
-                  <div className="p-5 border-b border-gray-100 bg-blue-50">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">📌 Événement global</h2>
-                      <button onClick={() => { setGlobalDetailSlot(null); setMemberPickerOpen(false); setRoomEditOpen(false); setLinkEditOpen(false); }} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
-                    </div>
-                    <p className="text-sm font-semibold text-gray-800 mt-3">{raw.title}</p>
-                    {raw.description && (
-                      <p className="text-xs text-gray-600 mt-2">{raw.description}</p>
-                    )}
-                    {/* Date range */}
-                    <p className="text-xs text-blue-700 mt-3">
-                      {hasEndDay ? (
-                        <>
-                          {new Date(raw.day).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
-                          {" → "}
-                          {new Date(raw.day_end).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
-                        </>
-                      ) : (
-                        globalDetailSlot.event.start?.toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
-                      )}
-                    </p>
-                    {hasEndDay && (raw.start_time || raw.startTime) && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        Horaire quotidien : {(raw.start_time || raw.startTime || "").slice(0, 5)} - {(raw.end_time || raw.endTime || "").slice(0, 5)}
-                      </p>
-                    )}
-                    {/* Visibility badge */}
-                    <div className="mt-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        isVisible
-                          ? "bg-green-100 text-green-700 border border-green-200"
-                          : "bg-red-100 text-red-700 border border-red-200"
-                      }`}>
-                        {isVisible ? "👁️ Visible par les candidats" : "🙈 Masqué pour les candidats"}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })() : (() => {
+              {(() => {
                 const s = globalDetailSlot.raw;
                 const memberCount = globalDetailSlot.memberCount;
                 const candCount = globalDetailSlot.candCount;
@@ -3012,18 +2832,6 @@ export default function PlanningPage() {
 
         <hr className="my-2 border-gray-200" />
 
-        {/* Combien de créneaux sont réellement staffés (≥ min examinateurs),
-            par épreuve — réponse directe à « combien j'en ai vraiment ? »
-            sans avoir à compter salle par salle dans le calendrier. */}
-        <EpreuveSlotsSummary />
-
-        {/* Vue globale des inscrits (examinateurs + candidats), filtrable —
-            complète le clic-sur-créneau du calendrier de contrôle, qui ne
-            montre qu'UN créneau à la fois. */}
-        <EnrollmentsTable
-          epreuves={epreuves.map((e) => ({ id: e.id, name: e.name, tour: e.tour }))}
-        />
-
         {/* Epreuve selector pour le paramétrage */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -3506,10 +3314,6 @@ export default function PlanningPage() {
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════════════
-                    RÈGLE 5 : Événements globaux (visibles par tous les candidats)
-                    ══════════════════════════════════════════════════════════════════ */}
-        <GlobalEventsAdmin toast={toast} onUpdate={fetchGlobalCalendarEvents} />
       </div>
     );
   }
@@ -4126,483 +3930,3 @@ export default function PlanningPage() {
     </div>
   );
 }
-
-/* ══════════════════════════════════════════════════════════════════════
-   COMPOSANT : Événements globaux Admin (RÈGLE 5)
-   Permet de créer / modifier / supprimer des événements visibles par TOUS les candidats
-   ══════════════════════════════════════════════════════════════════════ */
-function GlobalEventsAdmin({
-  toast,
-  onUpdate,
-}: {
-  toast: (msg: string, type?: any) => void;
-  onUpdate?: () => void;
-}) {
-  const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  // Form state (shared for create & edit)
-  const [editingId, setEditingId] = useState<string | null>(null); // null = create mode
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [day, setDay] = useState("");
-  const [dayEnd, setDayEnd] = useState(""); // Multi-day: end date
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("10:00");
-  const [visibleToCandidates, setVisibleToCandidates] = useState(true);
-  const [color, setColor] = useState("#3B82F6");
-
-  const EVENT_COLORS = [
-    { value: "#3B82F6", label: "Bleu" },
-    { value: "#10B981", label: "Vert" },
-    { value: "#F59E0B", label: "Jaune" },
-    { value: "#EF4444", label: "Rouge" },
-    { value: "#8B5CF6", label: "Violet" },
-    { value: "#EC4899", label: "Rose" },
-    { value: "#64748B", label: "Gris" },
-  ];
-
-  const fetchEvents = useCallback(async () => {
-    try {
-      const res = await api.get("/calendar");
-      const globals = (res.data || []).filter(
-        (ev: any) => ev.is_global === true,
-      );
-      setEvents(globals);
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setTitle("");
-    setDescription("");
-    setDay("");
-    setDayEnd("");
-    setStartTime("09:00");
-    setEndTime("10:00");
-    setVisibleToCandidates(true);
-    setColor("#3B82F6");
-  };
-
-  const openCreateForm = () => {
-    resetForm();
-    setShowForm(true);
-  };
-
-  const openEditForm = (ev: any) => {
-    setEditingId(ev.id);
-    setTitle(ev.title || "");
-    setDescription(ev.description || "");
-    // Parse day
-    const dayStr = ev.day ? new Date(ev.day).toISOString().split("T")[0] : "";
-    setDay(dayStr);
-    // Parse day_end
-    const dayEndStr = ev.day_end ? new Date(ev.day_end).toISOString().split("T")[0] : "";
-    setDayEnd(dayEndStr);
-    setStartTime((ev.start_time || ev.startTime || "09:00").slice(0, 5));
-    setEndTime((ev.end_time || ev.endTime || "10:00").slice(0, 5));
-    setVisibleToCandidates(ev.visible_to_candidates !== false);
-    setColor(ev.color || "#3B82F6");
-    setShowForm(true);
-  };
-
-  const handleCreateOrUpdate = async () => {
-    if (!title.trim() || !day) {
-      toast("Titre et date de début requis", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingId) {
-        // UPDATE
-        await api.put(`/calendar/${editingId}`, {
-          title: title.trim(),
-          description: description.trim() || null,
-          day,
-          day_end: dayEnd || null,
-          start_time: startTime,
-          end_time: endTime,
-          visible_to_candidates: visibleToCandidates,
-          color,
-        });
-        toast("Événement mis à jour", "success");
-      } else {
-        // CREATE
-        await api.post("/calendar", {
-          title: title.trim(),
-          description: description.trim() || null,
-          day,
-          day_end: dayEnd || null,
-          start_time: startTime,
-          end_time: endTime,
-          is_global: true,
-          visible_to_candidates: visibleToCandidates,
-          color,
-        });
-        toast(
-          "Événement global créé" +
-            (visibleToCandidates
-              ? " et visible par tous les candidats"
-              : " (masqué pour les candidats)"),
-          "success",
-        );
-      }
-      resetForm();
-      setShowForm(false);
-      fetchEvents();
-      onUpdate?.();
-    } catch (err: any) {
-      toast(err?.response?.data?.error || "Erreur sauvegarde événement", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setDeleting(id);
-    try {
-      await api.delete(`/calendar/${id}`);
-      toast("Événement supprimé", "success");
-      fetchEvents();
-      onUpdate?.();
-    } catch {
-      toast("Erreur suppression", "error");
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const handleToggleVisibility = async (ev: any) => {
-    const newVal = ev.visible_to_candidates === false ? true : false;
-    try {
-      await api.put(`/calendar/${ev.id}`, {
-        visible_to_candidates: newVal,
-      });
-      toast(
-        newVal
-          ? "Événement visible pour les candidats"
-          : "Événement masqué pour les candidats",
-        "success",
-      );
-      fetchEvents();
-      onUpdate?.();
-    } catch {
-      toast("Erreur changement visibilité", "error");
-    }
-  };
-
-  const formatDateFr = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("fr-FR", {
-        weekday: "short",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatDateRange = (ev: any) => {
-    const start = formatDateFr(ev.day);
-    if (ev.day_end) {
-      const end = formatDateFr(ev.day_end);
-      if (start === end) return start;
-      return `${start} → ${end}`;
-    }
-    return start;
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">
-            📢 Événements globaux
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Publiés automatiquement dans le calendrier de tous les candidats
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            if (showForm) {
-              setShowForm(false);
-              resetForm();
-            } else {
-              openCreateForm();
-            }
-          }}
-          className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          {showForm ? "Annuler" : "+ Nouvel événement"}
-        </button>
-      </div>
-
-      <div className="p-5">
-        {/* Formulaire création / modification */}
-        {showForm && (
-          <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-semibold text-blue-900">
-                {editingId ? "✏️ Modifier l'événement" : "➕ Nouvel événement"}
-              </span>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Titre *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ex: Réunion d'information, Date limite de rendu..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={2}
-                placeholder="Détails de l'événement (optionnel)"
-              />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date début *
-                </label>
-                <input
-                  type="date"
-                  value={day}
-                  onChange={(e) => setDay(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date fin
-                </label>
-                <input
-                  type="date"
-                  value={dayEnd}
-                  onChange={(e) => setDayEnd(e.target.value)}
-                  min={day || undefined}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Laisser vide = 1 jour"
-                />
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  Vide = événement sur une journée
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Heure début
-                </label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Heure fin
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Couleur de l'événement */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Couleur de l&apos;événement
-              </label>
-              <div className="flex gap-2 items-center flex-wrap">
-                {EVENT_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    onClick={() => setColor(c.value)}
-                    title={c.label}
-                    className={`w-8 h-8 rounded-full border-2 transition-transform ${
-                      color === c.value ? "border-gray-900 scale-110 shadow-sm" : "border-transparent hover:scale-105"
-                    }`}
-                    style={{ backgroundColor: c.value }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Visibility toggle for candidates */}
-            <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleToCandidates}
-                  onChange={(e) => setVisibleToCandidates(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-              </label>
-              <div>
-                <p className="text-sm font-medium text-gray-800">
-                  {visibleToCandidates ? "👁️ Visible" : "🙈 Masqué"} pour les candidats
-                </p>
-                <p className="text-xs text-gray-500">
-                  {visibleToCandidates
-                    ? "Les candidats verront cet événement dans leur calendrier"
-                    : "Cet événement ne sera pas visible par les candidats"}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {editingId && (
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setShowForm(false);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-              )}
-              <button
-                onClick={handleCreateOrUpdate}
-                disabled={saving}
-                className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving
-                  ? "Sauvegarde..."
-                  : editingId
-                    ? "Mettre à jour"
-                    : "Publier l'événement"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Liste des événements globaux */}
-        {loading ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            Chargement...
-          </div>
-        ) : events.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            Aucun événement global créé
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {events.map((ev: any) => {
-              const isVisible = ev.visible_to_candidates !== false;
-              const isMultiDay = !!ev.day_end;
-              return (
-                <div
-                  key={ev.id}
-                  className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
-                    isVisible
-                      ? "bg-gray-50 border-gray-200"
-                      : "bg-gray-100/60 border-gray-300 opacity-75"
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: ev.color || "#3B82F6" }}
-                      />
-                      <span className="text-sm font-semibold text-gray-900 truncate">
-                        {ev.title}
-                      </span>
-                      {/* Visibility badge */}
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                          isVisible
-                            ? "bg-green-100 text-green-700 border border-green-200"
-                            : "bg-red-100 text-red-700 border border-red-200"
-                        }`}
-                      >
-                        {isVisible ? "👁️ Visible" : "🙈 Masqué"}
-                      </span>
-                      {/* Multi-day badge */}
-                      {isMultiDay && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0">
-                          📅 Multi-jours
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5 ml-5">
-                      {formatDateRange(ev)}
-                      {ev.start_time && ` — ${ev.start_time.slice(0, 5)}`}
-                      {ev.end_time && ` - ${ev.end_time.slice(0, 5)}`}
-                    </p>
-                    {ev.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 ml-5 truncate">
-                        {ev.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 ml-3 flex-shrink-0">
-                    {/* Visibility toggle */}
-                    <button
-                      onClick={() => handleToggleVisibility(ev)}
-                      title={isVisible ? "Masquer pour les candidats" : "Rendre visible aux candidats"}
-                      className={`text-xs px-2 py-1 rounded transition-colors ${
-                        isVisible
-                          ? "text-amber-600 hover:text-amber-800 hover:bg-amber-50"
-                          : "text-green-600 hover:text-green-800 hover:bg-green-50"
-                      }`}
-                    >
-                      {isVisible ? "🙈 Masquer" : "👁️ Afficher"}
-                    </button>
-                    {/* Edit */}
-                    <button
-                      onClick={() => openEditForm(ev)}
-                      className="text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                    >
-                      ✏️ Modifier
-                    </button>
-                    {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(ev.id)}
-                      disabled={deleting === ev.id}
-                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50"
-                    >
-                      {deleting === ev.id ? "..." : "🗑️ Supprimer"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
