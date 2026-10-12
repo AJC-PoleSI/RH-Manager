@@ -170,6 +170,8 @@ export async function POST(req: NextRequest) {
   // — un seul note, la note est attribuée au binôme. Les épreuves de groupe
   // n'en produisent plus depuis le 15/09/2026 (cf. plus bas).
   let effectiveIsGroup = false;
+  // Avis individuel rouvert par un admin que cette soumission remplace.
+  let reopenTarget: { id: string; member_id: string | null } | null = null;
 
   try {
     const body = await req.json();
@@ -268,23 +270,43 @@ export async function POST(req: NextRequest) {
       // lib/evaluation-closure — même règle que la file d'attente et le
       // formulaire). Sur une épreuve individuelle, seul MON doublon est
       // refusé.
-      let existingQuery = supabaseAdmin
-        .from("candidate_evaluations")
-        .select(
-          "id, member_id, scores, comment, members!member_id(email, first_name, last_name)",
-        )
-        .eq("candidate_id", candidateId)
-        .eq("epreuve_id", epreuveId)
-        .eq("is_group", false);
-      if (!epreuveIsGroupType) {
-        existingQuery = existingQuery.eq("member_id", memberId);
+      const buildExistingQuery = (cols: string) => {
+        let q = supabaseAdmin
+          .from("candidate_evaluations")
+          .select(cols)
+          .eq("candidate_id", candidateId!)
+          .eq("epreuve_id", epreuveId!)
+          .eq("is_group", false);
+        if (!epreuveIsGroupType) q = q.eq("member_id", memberId);
+        return q;
+      };
+      const baseCols =
+        "id, member_id, scores, comment, members!member_id(email, first_name, last_name)";
+      let { data: existingRows, error: existingError } =
+        await buildExistingQuery(`${baseCols}, closed_at, reopened_at`);
+      // Repli : colonnes de verrouillage pas encore migrées en prod.
+      if (existingError && isMissingColumnError(existingError)) {
+        ({ data: existingRows } = await buildExistingQuery(baseCols));
       }
-      const { data: existingRows } = await existingQuery;
+
+      // Note ROUVERTE par un admin (closed_at vidé, reopened_at posé) : son
+      // auteur — ou un admin — la re-saisit, on met la ligne à jour au lieu
+      // de répondre « déjà évalué ».
+      reopenTarget =
+        ((existingRows as any[]) || []).find(
+          (r) =>
+            !r.closed_at &&
+            r.reopened_at &&
+            isFinalizedEvaluation(r) &&
+            (r.member_id === memberId || user.isAdmin),
+        ) ?? null;
 
       // Une ligne vide ne bloque rien (« ghost lock » de l'audit #4). Ma
       // propre note prime sur celle d'un pair : « vous avez déjà évalué »
       // est plus parlant que « un tel a déjà évalué ».
-      const finalized = (existingRows || []).filter(isFinalizedEvaluation);
+      const finalized = ((existingRows as any[]) || []).filter(
+        (r) => isFinalizedEvaluation(r) && r.id !== reopenTarget?.id,
+      );
       const existingEval =
         finalized.find((r: any) => r.member_id === memberId) || finalized[0];
 
@@ -335,6 +357,26 @@ export async function POST(req: NextRequest) {
       scores,
       questions.length ? questions : null,
     );
+
+    // ── Re-saisie d'une note rouverte : mise à jour + nouvelle clôture ──
+    if (reopenTarget) {
+      const now = new Date().toISOString();
+      const { data: updated, error: updError } = await supabaseAdmin
+        .from("candidate_evaluations")
+        .update({
+          scores: JSON.stringify(normalizedScores),
+          comment,
+          last_edited_by: memberId,
+          updated_at: now,
+          closed_at: now,
+          closed_by: memberId,
+        })
+        .eq("id", reopenTarget.id)
+        .select()
+        .single();
+      if (updError) throw updError;
+      return Response.json(updated, { status: 200 });
+    }
 
     // ── Création de l'évaluation ──
     // Une évaluation à auteur unique (is_group=false, qu'il s'agisse d'un

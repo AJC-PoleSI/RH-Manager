@@ -37,6 +37,8 @@ export interface ClosureEvaluationRow {
   is_group?: boolean | null;
   scores?: unknown;
   comment?: unknown;
+  closed_at?: string | null;
+  reopened_at?: string | null;
 }
 
 /** Ce que l'on sait d'un couple (candidat, épreuve). */
@@ -45,6 +47,16 @@ export interface ClosureEntry {
   authorIds: string[];
   /** Auteur de la note partagée (binôme) aboutie, s'il y en a une. */
   sharedAuthorId: string | null;
+  /** Id de la ligne de chaque auteur individuel (pour la rouvrir). */
+  evalIdByAuthor: Record<string, string>;
+  /** Id de la note partagée (binôme) aboutie. */
+  sharedEvalId: string | null;
+  /**
+   * Avis individuels ROUVERTS par un admin (closed_at vidé, reopened_at
+   * posé) : ils comptent encore pour les pairs, mais leur auteur — et un
+   * admin — peut de nouveau les saisir (cf. POST /api/evaluations).
+   */
+  reopenedByAuthor: Record<string, string>;
 }
 
 /**
@@ -60,7 +72,14 @@ export interface ClosureVerdict {
   reason: ClosureReason | null;
   /** Membre à l'origine de la clôture (pour l'afficher). */
   byMemberId: string | null;
+  /** Ligne à l'origine de la clôture (pour que l'admin puisse la rouvrir). */
+  evaluationId?: string | null;
+  /** Ligne rouverte que l'on peut de nouveau saisir (verdict ouvert). */
+  reopenedEvaluationId?: string | null;
 }
+
+/** `evaluationId` n'apparaît dans le verdict que si la ligne a un id. */
+const withId = (id: string | null | undefined) => (id ? { evaluationId: id } : {});
 
 const OPEN: ClosureVerdict = { closed: false, reason: null, byMemberId: null };
 
@@ -97,14 +116,27 @@ export function buildClosureIndex(
     const key = closureKey(candidateId, epreuveId);
     let entry = index.get(key);
     if (!entry) {
-      entry = { authorIds: [], sharedAuthorId: null };
+      entry = {
+        authorIds: [],
+        sharedAuthorId: null,
+        evalIdByAuthor: {},
+        sharedEvalId: null,
+        reopenedByAuthor: {},
+      };
       index.set(key, entry);
     }
 
     if (shared) {
-      entry.sharedAuthorId = entry.sharedAuthorId ?? row.member_id ?? null;
+      if (!entry.sharedAuthorId) {
+        entry.sharedAuthorId = row.member_id ?? null;
+        entry.sharedEvalId = row.id ?? null;
+      }
     } else if (row.member_id && !entry.authorIds.includes(row.member_id)) {
       entry.authorIds.push(row.member_id);
+      if (row.id) entry.evalIdByAuthor[row.member_id] = row.id;
+      if (row.id && !row.closed_at && row.reopened_at) {
+        entry.reopenedByAuthor[row.member_id] = row.id;
+      }
     }
   }
 
@@ -122,15 +154,30 @@ export function evaluationClosure(
     epreuveId: string;
     memberId: string;
     isGroupEpreuve: boolean;
+    /** Un admin peut re-saisir n'importe quel avis individuel rouvert. */
+    isAdmin?: boolean;
   },
 ): ClosureVerdict {
   const entry = index.get(closureKey(params.candidateId, params.epreuveId));
   if (!entry) return OPEN;
 
+  // Avis rouvert par un admin : son auteur (ou un admin) peut le re-saisir.
+  // Sans ça, « Rouvrir » vidait closed_at mais le formulaire restait fermé
+  // (la clôture se déduit de l'existence d'une note, pas de closed_at).
+  const reopenedId =
+    entry.reopenedByAuthor[params.memberId] ??
+    (params.isAdmin ? Object.values(entry.reopenedByAuthor)[0] : undefined);
+  if (reopenedId) return { ...OPEN, reopenedEvaluationId: reopenedId };
+
   // Ma propre saisie d'abord : c'est le motif le plus parlant pour moi,
   // même si une note partagée existe par ailleurs.
   if (entry.authorIds.includes(params.memberId)) {
-    return { closed: true, reason: "mine", byMemberId: params.memberId };
+    return {
+      closed: true,
+      reason: "mine",
+      byMemberId: params.memberId,
+      ...withId(entry.evalIdByAuthor[params.memberId]),
+    };
   }
 
   if (entry.sharedAuthorId) {
@@ -139,11 +186,17 @@ export function evaluationClosure(
       closed: true,
       reason: mine ? "mine" : "shared",
       byMemberId: entry.sharedAuthorId,
+      ...withId(entry.sharedEvalId),
     };
   }
 
   if (params.isGroupEpreuve && entry.authorIds.length > 0) {
-    return { closed: true, reason: "peer", byMemberId: entry.authorIds[0] };
+    return {
+      closed: true,
+      reason: "peer",
+      byMemberId: entry.authorIds[0],
+      ...withId(entry.evalIdByAuthor[entry.authorIds[0]]),
+    };
   }
 
   return OPEN;

@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
           supabaseAdmin
             .from("candidate_evaluations")
             .select(
-              "id, candidate_id, epreuve_id, member_id, is_group, scores, comment, member:members!member_id(id, first_name, last_name, email)",
+              "id, candidate_id, epreuve_id, member_id, is_group, scores, comment, closed_at, reopened_at, member:members!member_id(id, first_name, last_name, email)",
             )
             .in("candidate_id", candidateIds)
             .in("epreuve_id", epreuveIds)

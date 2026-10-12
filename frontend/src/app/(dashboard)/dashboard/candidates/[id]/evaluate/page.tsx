@@ -136,6 +136,11 @@ function EvaluateCandidateForm({ id }: { id: string }) {
     ? selectedEpreuve.closure.reason
     : null;
   const indivClosed = closureReason !== null;
+  // Avis rouvert par un admin : le formulaire s'ouvre pré-rempli et
+  // l'enregistrement met la note à jour (puis la reclôt).
+  const reopenedEval: { id: string; scores: any; comment: string } | null =
+    selectedEpreuve?.closure?.reopened ?? null;
+  const reopenedEvalId = reopenedEval?.id ?? null;
   const closureAuthor =
     `${selectedEpreuve?.closure?.by?.firstName || ""} ${selectedEpreuve?.closure?.by?.lastName || ""}`.trim() ||
     selectedEpreuve?.closure?.by?.email ||
@@ -593,6 +598,48 @@ function EvaluateCandidateForm({ id }: { id: string }) {
       );
     } finally {
       setPostingComment(false);
+    }
+  };
+
+  // Pré-remplit le formulaire avec la saisie d'un avis rouvert.
+  useEffect(() => {
+    if (!reopenedEval) return;
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed =
+        typeof reopenedEval.scores === "string"
+          ? JSON.parse(reopenedEval.scores)
+          : reopenedEval.scores || {};
+    } catch {
+      parsed = {};
+    }
+    const next: Record<number, string> = {};
+    Object.entries(parsed).forEach(([k, v]) => {
+      if (v !== null && v !== undefined && v !== "") next[Number(k)] = String(v);
+    });
+    setIndivScores(next);
+    setIndivComment(reopenedEval.comment || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reopenedEvalId]);
+
+  // Réouverture (admin) de l'avis individuel clos qui bloque ce candidat.
+  const [reopeningIndiv, setReopeningIndiv] = useState(false);
+  const handleReopenIndiv = async (evaluationId: string) => {
+    setReopeningIndiv(true);
+    try {
+      await api.post(`/evaluations/${evaluationId}/reopen`);
+      toast("Évaluation rouverte : vous pouvez la corriger ci-dessous.", "success");
+      const epRes = await api.get(
+        `/evaluations/allowed-epreuves?candidateId=${id}`,
+      );
+      setEpreuves(epRes.data?.epreuves || []);
+    } catch (e: any) {
+      toast(
+        e?.response?.data?.error || "Erreur lors de la réouverture",
+        "error",
+      );
+    } finally {
+      setReopeningIndiv(false);
     }
   };
 
@@ -1079,6 +1126,19 @@ function EvaluateCandidateForm({ id }: { id: string }) {
                 : "Une seule note par candidat et par épreuve."}{" "}
               Contactez un responsable recrutement s&apos;il faut la corriger.
             </p>
+            {isAdmin && selectedEpreuve?.closure?.evaluationId && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 mr-4"
+                disabled={reopeningIndiv}
+                onClick={() =>
+                  handleReopenIndiv(selectedEpreuve.closure.evaluationId)
+                }
+              >
+                {reopeningIndiv ? "Réouverture…" : "Rouvrir l'évaluation (admin)"}
+              </Button>
+            )}
             <a
               href={`/dashboard/candidates/${id}`}
               className="inline-flex items-center mt-4 text-sm font-medium text-blue-600 hover:underline"
@@ -1095,7 +1155,11 @@ function EvaluateCandidateForm({ id }: { id: string }) {
         <Card>
           <CardHeader>
             <CardTitle>
-              {isGroupEpreuve ? "Mon évaluation individuelle" : "Nouvelle Évaluation"}
+              {reopenedEval
+                ? "Évaluation rouverte — correction"
+                : isGroupEpreuve
+                  ? "Mon évaluation individuelle"
+                  : "Nouvelle Évaluation"}
             </CardTitle>
             {isGroupEpreuve && (
               <p className="text-xs text-gray-500 mt-1">

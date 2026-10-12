@@ -110,6 +110,57 @@ describe("evaluationClosure", () => {
   });
 });
 
+describe("avis rouvert par un admin", () => {
+  const rouvert = row({
+    id: "eval-1",
+    closed_at: null,
+    reopened_at: "2026-10-12T08:00:00Z",
+  });
+  const verdict = (rows: any[], memberId: string, isAdmin = false) =>
+    evaluationClosure(buildClosureIndex(rows, isGroupEpreuve), {
+      candidateId: CAND,
+      epreuveId: ENTRETIEN,
+      memberId,
+      isGroupEpreuve: false,
+      isAdmin,
+    });
+
+  it("rouvre le formulaire pour son auteur", () => {
+    const v = verdict([rouvert], MOI);
+    expect(v.closed).toBe(false);
+    expect(v.reopenedEvaluationId).toBe("eval-1");
+  });
+
+  it("le rouvre aussi pour un admin, pas pour un autre examinateur", () => {
+    expect(verdict([rouvert], AUTRE, true).reopenedEvaluationId).toBe("eval-1");
+    expect(verdict([rouvert], AUTRE).reopenedEvaluationId).toBeUndefined();
+  });
+
+  it("reste clos tant que closed_at est posé, et expose l'id à rouvrir", () => {
+    const clos = row({ id: "eval-2", closed_at: "2026-10-12T07:00:00Z" });
+    const v = verdict([clos], MOI);
+    expect(v.closed).toBe(true);
+    expect(v.evaluationId).toBe("eval-2");
+  });
+
+  it("sur un business game, un pair reste bloqué par l'avis rouvert", () => {
+    const bg = row({
+      id: "eval-3",
+      epreuve_id: BG,
+      closed_at: null,
+      reopened_at: "2026-10-12T08:00:00Z",
+    });
+    const v = evaluationClosure(buildClosureIndex([bg], isGroupEpreuve), {
+      candidateId: CAND,
+      epreuveId: BG,
+      memberId: AUTRE,
+      isGroupEpreuve: true,
+    });
+    expect(v.closed).toBe(true);
+    expect(v.reason).toBe("peer");
+  });
+});
+
 describe("hasAnyEvaluation", () => {
   it("voit la note d'un pair même si elle ne me concerne pas", () => {
     const index = buildClosureIndex([row({ member_id: AUTRE })], isGroupEpreuve);

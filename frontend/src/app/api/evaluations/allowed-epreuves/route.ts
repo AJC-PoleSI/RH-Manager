@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     const { data: existingEvals } = await supabaseAdmin
       .from("candidate_evaluations")
       .select(
-        "candidate_id, epreuve_id, member_id, is_group, scores, comment, member:members!member_id(id, first_name, last_name, email)",
+        "id, candidate_id, epreuve_id, member_id, is_group, scores, comment, closed_at, reopened_at, member:members!member_id(id, first_name, last_name, email)",
       )
       .eq("candidate_id", candidateId)
       .in(
@@ -110,14 +110,37 @@ export async function GET(req: NextRequest) {
           epreuveId: e.id,
           memberId: user.id,
           isGroupEpreuve: e.is_group_epreuve === true,
+          isAdmin: !!user.isAdmin,
         });
-        if (!verdict.closed) return { closed: false, reason: null, by: null };
+        if (!verdict.closed) {
+          // Avis rouvert par un admin : on renvoie sa saisie pour que le
+          // formulaire s'ouvre pré-rempli (POST /api/evaluations la met à jour).
+          const reopened = verdict.reopenedEvaluationId
+            ? (existingEvals as any[]).find(
+                (r) => r.id === verdict.reopenedEvaluationId,
+              )
+            : null;
+          return {
+            closed: false,
+            reason: null,
+            by: null,
+            reopened: reopened
+              ? {
+                  id: reopened.id,
+                  scores: reopened.scores,
+                  comment: reopened.comment || "",
+                }
+              : null,
+          };
+        }
         const author = verdict.byMemberId
           ? authorById.get(verdict.byMemberId)
           : null;
         return {
           closed: true,
           reason: verdict.reason,
+          // Seul l'admin reçoit l'id : il sert au bouton « Rouvrir ».
+          evaluationId: user.isAdmin ? verdict.evaluationId ?? null : null,
           by: author
             ? {
                 firstName: author.first_name || "",
