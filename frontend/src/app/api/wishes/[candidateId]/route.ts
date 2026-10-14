@@ -127,6 +127,23 @@ export async function PUT(
         { status: 403 },
       );
     }
+
+    // CLÔTURE HORAIRE (réglage `voeux_cloture_le`) : passé l'échéance, plus
+    // aucune écriture côté candidat, même sans verrou posé. Membres/admin
+    // non concernés. Cf. lib/wishes-deadline.ts.
+    const deadline = await readWishesDeadline((key) =>
+      supabaseAdmin
+        .from("system_settings")
+        .select("value")
+        .eq("key", key)
+        .maybeSingle(),
+    );
+    if (isWishesClosed(deadline)) {
+      return Response.json(
+        { error: WISHES_CLOSED_MESSAGE, locked: true, closed: true },
+        { status: 403 },
+      );
+    }
   }
 
   try {
