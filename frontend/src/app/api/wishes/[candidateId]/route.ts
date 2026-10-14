@@ -3,6 +3,11 @@ import { getTokenFromRequest, unauthorized } from "@/lib/auth";
 import { isCandidateAdmittedTour1 } from "@/lib/admission";
 import { getEliminationTour } from "@/lib/elimination-db";
 import { getToursByNumber } from "@/lib/tour-status";
+import {
+  isWishesClosed,
+  readWishesDeadline,
+  WISHES_CLOSED_MESSAGE,
+} from "@/lib/wishes-deadline";
 import { NextRequest } from "next/server";
 
 /** Numéro du tour actuellement "en_cours" (0 si aucun). */
