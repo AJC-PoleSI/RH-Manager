@@ -163,6 +163,10 @@ export default function CandidateWishesPage() {
   const [admitted, setAdmitted] = useState<boolean | null>(null);
   // true = vœux confirmés définitivement au tour 3 → plus modifiables.
   const [locked, setLocked] = useState(false);
+  // true = échéance horaire passée (réglage voeux_cloture_le) → saisie close,
+  // même si le candidat n'a rien confirmé.
+  const [closed, setClosed] = useState(false);
+  const [closesAt, setClosesAt] = useState<string | null>(null);
 
   // Le classement des vœux n'est débloqué que pour les candidats admis
   // au tour 2 (délibération tour 1 acceptée).
@@ -172,6 +176,10 @@ export default function CandidateWishesPage() {
         const res = await api.get("/wishes/access");
         setAdmitted(res.data?.admitted === true);
         setLocked(res.data?.locked === true);
+        setClosed(res.data?.closed === true);
+        setClosesAt(
+          typeof res.data?.closesAt === "string" ? res.data.closesAt : null,
+        );
       } catch {
         setAdmitted(false);
       }
@@ -219,6 +227,15 @@ export default function CandidateWishesPage() {
       dispatch({ type: "SET_LOADING", payload: false });
       return;
     }
+    // Tour actif pas encore connu (0) : sans `?tour=`, l'API rend TOUS les
+    // vœux (tour 2 + tour 3 mélangés, triés par rang). Les trois premiers
+    // s'affichaient alors comme « vos choix » — un mélange de l'ancien et du
+    // nouveau classement — jusqu'à ce que la seconde requête les remplace. On
+    // attend donc de savoir de quel tour il s'agit.
+    if (state.activeTourNumber === 0) return;
+    // Garde contre une réponse tardive : si le tour change pendant la requête,
+    // seule la dernière réponse a le droit d'écrire dans le formulaire.
+    let cancelled = false;
     const fetchWishes = async () => {
       try {
         // Charge les vœux du tour actif (le serveur retombe sur le tour 2
@@ -226,6 +243,7 @@ export default function CandidateWishesPage() {
         const tourQuery =
           state.activeTourNumber >= 2 ? `?tour=${state.activeTourNumber}` : "";
         const res = await api.get(`/wishes/${user.id}${tourQuery}`);
+        if (cancelled) return;
         if (res.data && res.data.length > 0) {
           const sorted = res.data.sort((a: any, b: any) => a.rank - b.rank);
           const ordered = sorted.map((w: any) => w.pole);
@@ -253,7 +271,7 @@ export default function CandidateWishesPage() {
   const isTourTermine = state.activeTourStatus === "termine";
   // Lecture seule : soit le tour est terminé, soit les vœux ont été confirmés
   // définitivement au tour 3 (verrou candidat).
-  const readOnly = isTourTermine || locked;
+  const readOnly = isTourTermine || locked || closed;
 
   const addPole = (pole: string) => {
     dispatch({ type: "ADD_POLE", payload: pole });
@@ -754,6 +772,42 @@ export default function CandidateWishesPage() {
           <p className="text-sm text-green-800">
             <strong>Choix confirmés.</strong> Votre classement de pôles est
             désormais définitif et ne peut plus être modifié.
+          </p>
+        </div>
+      )}
+
+      {/* Saisie close à l'échéance horaire, sans confirmation du candidat */}
+      {closed && !locked && !isTourTermine && (
+        <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#6B7280"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-shrink-0 mt-0.5"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <p className="text-sm text-gray-600">
+            <strong>Choix clos.</strong> La saisie des choix de pôles est
+            terminée
+            {closesAt
+              ? ` depuis le ${new Date(closesAt).toLocaleString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "Europe/Paris",
+                })}`
+              : ""}
+            . Le classement affiché est celui retenu ; il ne peut plus être
+            modifié.
           </p>
         </div>
       )}
