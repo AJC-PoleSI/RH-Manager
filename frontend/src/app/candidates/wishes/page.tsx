@@ -264,6 +264,9 @@ export default function CandidateWishesPage() {
       }
     };
     fetchWishes();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id, state.activeTourNumber]);
 
   const isDefinitif = state.activeTourNumber >= 3;
