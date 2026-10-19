@@ -85,3 +85,33 @@ export function wishDetailLabel(w: WishDetail): string | null {
   if (w.wantsBureau) return poste ? `+ Bureau (${poste})` : "+ Bureau";
   return poste || null;
 }
+
+/**
+ * Choix de pôles d'UN tour, dans l'ordre de préférence, un par ligne :
+ * « 1. Pôle + Bureau (VP) ». Pour les exports : les vœux du tour 2
+ * (provisoires) et du tour 3 (définitifs) sont donnés séparément, sans la
+ * règle « tour le plus avancé » des écrans.
+ */
+export function wishesTextForTour(
+  wishes: Array<{
+    pole?: string | null;
+    rank?: number | null;
+    tour?: number | null;
+    wants_bureau?: boolean | null;
+    poste_detail?: string | null;
+  }> | null | undefined,
+  tour: number,
+): string {
+  return (wishes ?? [])
+    .filter((w) => Number(w.tour ?? 2) === tour)
+    .sort((a, b) => Number(a.rank ?? 0) - Number(b.rank ?? 0))
+    .map((w) => {
+      const detail = wishDetailLabel({
+        pole: w.pole,
+        wantsBureau: w.wants_bureau,
+        posteDetail: w.poste_detail,
+      });
+      return `${w.rank}. ${w.pole}${detail ? ` ${detail}` : ""}`;
+    })
+    .join("\n");
+}

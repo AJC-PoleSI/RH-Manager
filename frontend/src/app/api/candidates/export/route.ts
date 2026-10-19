@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         email_verified,
         comments,
         deliberation:deliberations(pros_comment, cons_comment, global_comments, tour1_status, tour2_status, tour3_status),
+        candidate_wishes(pole, rank, tour, wants_bureau, poste_detail),
         candidate_evaluations(
           id,
           scores,

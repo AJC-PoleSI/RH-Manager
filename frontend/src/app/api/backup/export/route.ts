@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
           id, first_name, last_name, email, email_verified, phone,
           formation, etablissement, annee_integration, comments, created_at,
           deliberation:deliberations(pros_comment, cons_comment, global_comments, tour1_status, tour2_status, tour3_status),
+          candidate_wishes(pole, rank, tour, wants_bureau, poste_detail),
           candidate_evaluations(
             id, scores, comment, created_at,
             members!member_id(id, email, first_name, last_name),

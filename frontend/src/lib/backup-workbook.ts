@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { sanitizeSpreadsheetValue } from "./spreadsheet-safety";
+import { wishesTextForTour } from "./wishes";
 
 export interface BackupData {
   candidates: any[];
@@ -119,6 +120,8 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
     { header: "Statut T2", width: 12 },
     { header: "Statut T3", width: 12 },
     { header: "Note globale", width: 12 },
+    { header: "Choix de pôles Tour 2", width: 32 },
+    { header: "Choix de pôles Tour 3", width: 32 },
     { header: "Points forts", width: 42 },
     { header: "Points faibles", width: 42 },
     { header: "Commentaire général", width: 42 },
@@ -153,13 +156,21 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
       delib?.tour2_status || "",
       delib?.tour3_status || "",
       avgOf(allScores),
+      wishesTextForTour(c.candidate_wishes, 2),
+      wishesTextForTour(c.candidate_wishes, 3),
       delib?.pros_comment || "",
       delib?.cons_comment || "",
       delib?.global_comments || c.comments || "",
     ]);
 
     row.height = rowHeightFor(
-      [delib?.pros_comment, delib?.cons_comment, delib?.global_comments || c.comments],
+      [
+        delib?.pros_comment,
+        delib?.cons_comment,
+        delib?.global_comments || c.comments,
+        wishesTextForTour(c.candidate_wishes, 2),
+        wishesTextForTour(c.candidate_wishes, 3),
+      ],
       45,
     );
     row.eachCell((cell) => {

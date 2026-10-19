@@ -8,6 +8,7 @@ import {
     toTwenty,
 } from '@/lib/evaluation-criteria';
 import { isLegacyCollectiveNote } from '@/lib/group-evaluation-criteria';
+import { wishesTextForTour } from '@/lib/wishes';
 
 /**
  * Export Excel des candidats (synthèse + détail des évaluations), réservé aux
@@ -102,8 +103,10 @@ export async function exportCandidatesXlsx(): Promise<number> {
             'Commentaires Tour 1': tourComments(1),
             'Note Tour 2 (/20)': tourAverage(2),
             'Commentaires Tour 2': tourComments(2),
+            'Choix de pôles Tour 2': wishesTextForTour(c.candidate_wishes, 2),
             'Note Tour 3 (/20)': tourAverage(3),
             'Commentaires Tour 3': tourComments(3),
+            'Choix de pôles Tour 3': wishesTextForTour(c.candidate_wishes, 3),
             'Note Globale (/20)': globalAvg,
             'Points forts (délibération)': delib?.pros_comment || '',
             'Points faibles (délibération)': delib?.cons_comment || '',
@@ -150,8 +153,8 @@ export async function exportCandidatesXlsx(): Promise<number> {
     ws1['!cols'] = [
         { wch: 14 }, { wch: 16 }, { wch: 28 },
         { wch: 11 }, { wch: 40 },
-        { wch: 11 }, { wch: 40 },
-        { wch: 11 }, { wch: 40 },
+        { wch: 11 }, { wch: 40 }, { wch: 32 },
+        { wch: 11 }, { wch: 40 }, { wch: 32 },
         { wch: 13 },
         { wch: 40 }, { wch: 40 }, { wch: 40 },
         { wch: 13 }, { wch: 13 }, { wch: 13 },
