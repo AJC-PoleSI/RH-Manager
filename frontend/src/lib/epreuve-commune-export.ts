@@ -1,5 +1,4 @@
 import {
-  averageOn20ByEpreuve,
   getTotalMaxPoints,
   hasAnyScore,
   sumScores,
@@ -11,9 +10,9 @@ import {
  *
  * Ces épreuves n'ont pas de créneau : leurs notes n'apparaissaient que
  * fondues dans la moyenne du tour (Synthèse) ou en lignes de détail, si bien
- * qu'on ne les retrouvait pas. Un candidat peut en avoir plusieurs (ex. CL
- * corrigé le 05/10 puis une seconde série le 15/10) : on les liste toutes,
- * avec correcteur et date, plus leur moyenne /20.
+ * qu'on ne les retrouvait pas. Chaque épreuve commune (CL, CL 2…) a ses deux
+ * colonnes ; si un candidat a plusieurs notes sur la même, on les liste
+ * toutes, avec correcteur et date, plus leur moyenne /20.
  */
 
 export interface CommuneEpreuve {
@@ -74,13 +73,17 @@ export function communeCells(
     })
     .join("\n");
 
-  const average = averageOn20ByEpreuve(
-    evals.map((e: any) => ({
-      epreuveKey: ep.id,
-      obtained: sumScores(e.scores),
-      maxTotal: getTotalMaxPoints(e.epreuves?.evaluation_questions),
-    })),
-  );
+  // Moyenne /20 au centième : averageOn20ByEpreuve arrondit au dixième,
+  // ce qui affichait 17,3 pour une note unique de 17,25.
+  const on20 = evals
+    .map((e: any) => {
+      const max = getTotalMaxPoints(e.epreuves?.evaluation_questions);
+      return max > 0 ? (Math.min(sumScores(e.scores), max) / max) * 20 : null;
+    })
+    .filter((n: number | null): n is number => n !== null);
+  const average = on20.length
+    ? Math.round((on20.reduce((a: number, b: number) => a + b, 0) / on20.length) * 100) / 100
+    : null;
 
   return { notes, average };
 }
