@@ -9,6 +9,12 @@ import {
 } from '@/lib/evaluation-criteria';
 import { isLegacyCollectiveNote } from '@/lib/group-evaluation-criteria';
 import { wishesTextForTour } from '@/lib/wishes';
+import {
+    collectCommuneEpreuves,
+    communeAverageHeader,
+    communeCells,
+    communeNotesHeader,
+} from '@/lib/epreuve-commune-export';
 
 /**
  * Export Excel des candidats (synthèse + détail des évaluations), réservé aux
@@ -52,6 +58,21 @@ export async function exportCandidatesXlsx(): Promise<number> {
         } catch { return {}; }
     };
 
+
+    // Épreuves communes (CL…) : colonnes dédiées, insérées après le bloc
+    // de leur tour — sinon leurs notes restent noyées dans la moyenne.
+    const communeEpreuves = collectCommuneEpreuves(data);
+    const communeColumns = (c: any, tour: number) => {
+        const out: Record<string, string | number | null> = {};
+        communeEpreuves
+            .filter((ep) => ep.tour === tour)
+            .forEach((ep) => {
+                const { notes, average } = communeCells(c, ep, examinerNames);
+                out[communeNotesHeader(ep)] = notes;
+                out[communeAverageHeader(ep)] = average;
+            });
+        return out;
+    };
 
     // ───────── Sheet 1: Synthèse (one row per candidate) ─────────
     const synthRows = data.map((c: any) => {
@@ -101,12 +122,15 @@ export async function exportCandidatesXlsx(): Promise<number> {
             Email: c.email,
             'Note Tour 1 (/20)': tourAverage(1),
             'Commentaires Tour 1': tourComments(1),
+            ...communeColumns(c, 1),
             'Note Tour 2 (/20)': tourAverage(2),
             'Commentaires Tour 2': tourComments(2),
             'Choix de pôles Tour 2': wishesTextForTour(c.candidate_wishes, 2),
+            ...communeColumns(c, 2),
             'Note Tour 3 (/20)': tourAverage(3),
             'Commentaires Tour 3': tourComments(3),
             'Choix de pôles Tour 3': wishesTextForTour(c.candidate_wishes, 3),
+            ...communeColumns(c, 3),
             'Note Globale (/20)': globalAvg,
             'Points forts (délibération)': delib?.pros_comment || '',
             'Points faibles (délibération)': delib?.cons_comment || '',
@@ -150,15 +174,19 @@ export async function exportCandidatesXlsx(): Promise<number> {
     // `=HYPERLINK(...)` fait exécuter une formule à l'ouverture du
     // fichier par le staff (audit sécurité du 07/09/2026).
     const ws1 = XLSX.utils.json_to_sheet(synthRows.map(sanitizeSpreadsheetRow));
-    ws1['!cols'] = [
-        { wch: 14 }, { wch: 16 }, { wch: 28 },
-        { wch: 11 }, { wch: 40 },
-        { wch: 11 }, { wch: 40 }, { wch: 32 },
-        { wch: 11 }, { wch: 40 }, { wch: 32 },
-        { wch: 13 },
-        { wch: 40 }, { wch: 40 }, { wch: 40 },
-        { wch: 13 }, { wch: 13 }, { wch: 13 },
-    ];
+    // Largeurs par en-tête : les colonnes d'épreuves communes sont
+    // dynamiques, un tableau positionnel se décalerait.
+    const synthWidth = (h: string) =>
+        h.startsWith('Notes ') ? 34
+        : h.startsWith('Moyenne ') ? 13
+        : h.startsWith('Choix de pôles') ? 32
+        : h.startsWith('Commentaire') || h.startsWith('Points') ? 40
+        : h.startsWith('Note ') ? 11
+        : h.startsWith('Statut') ? 13
+        : h === 'Email' ? 28
+        : h === 'Nom' ? 16
+        : 14;
+    ws1['!cols'] = Object.keys(synthRows[0] || {}).map((h) => ({ wch: synthWidth(h) }));
     XLSX.utils.book_append_sheet(wb, ws1, 'Synthèse');
 
     const ws2 = XLSX.utils.json_to_sheet(detailRows.map(sanitizeSpreadsheetRow));

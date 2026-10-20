@@ -1,6 +1,12 @@
 import ExcelJS from "exceljs";
 import { sanitizeSpreadsheetValue } from "./spreadsheet-safety";
 import { wishesTextForTour } from "./wishes";
+import {
+  collectCommuneEpreuves,
+  communeAverageHeader,
+  communeCells,
+  communeNotesHeader,
+} from "./epreuve-commune-export";
 
 export interface BackupData {
   candidates: any[];
@@ -103,6 +109,7 @@ const rowHeightFor = (texts: (string | null | undefined)[], charsPerLine: number
 /* ------------------------------------------------------------------ */
 
 function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
+  const communeEpreuves = collectCommuneEpreuves(data.candidates);
   const ws = wb.addWorksheet(sheetName(wb, "Candidats"), {
     views: [{ state: "frozen", ySplit: 1 }],
   });
@@ -122,6 +129,12 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
     { header: "Note globale", width: 12 },
     { header: "Choix de pôles Tour 2", width: 32 },
     { header: "Choix de pôles Tour 3", width: 32 },
+    // Épreuves communes (CL…) : sans créneau, leurs notes doivent être
+    // visibles ici et pas seulement dans l'onglet du tour.
+    ...communeEpreuves.flatMap((ep) => [
+      { header: communeNotesHeader(ep), width: 34 },
+      { header: communeAverageHeader(ep), width: 13 },
+    ]),
     { header: "Points forts", width: 42 },
     { header: "Points faibles", width: 42 },
     { header: "Commentaire général", width: 42 },
@@ -142,6 +155,9 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
       Object.values(parseScores(e.scores)),
     ) as number[];
     const delib = Array.isArray(c.deliberation) ? c.deliberation[0] : c.deliberation;
+    const commune = communeEpreuves.map((ep) =>
+      communeCells(c, ep, (e) => personName(e.members)),
+    );
 
     const row = ws.addRow([
       c.first_name || "",
@@ -158,6 +174,7 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
       avgOf(allScores),
       wishesTextForTour(c.candidate_wishes, 2),
       wishesTextForTour(c.candidate_wishes, 3),
+      ...commune.flatMap((cc) => [cc.notes, cc.average]),
       delib?.pros_comment || "",
       delib?.cons_comment || "",
       delib?.global_comments || c.comments || "",
@@ -170,6 +187,7 @@ function buildCandidatesSheet(wb: ExcelJS.Workbook, data: BackupData) {
         delib?.global_comments || c.comments,
         wishesTextForTour(c.candidate_wishes, 2),
         wishesTextForTour(c.candidate_wishes, 3),
+        ...commune.map((cc) => cc.notes),
       ],
       45,
     );

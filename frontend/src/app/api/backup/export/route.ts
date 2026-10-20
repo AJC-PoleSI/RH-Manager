@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
           candidate_evaluations(
             id, scores, comment, created_at,
             members!member_id(id, email, first_name, last_name),
-            epreuves(id, name, tour, type)
+            epreuves(id, name, tour, type, evaluation_questions)
           )
         `,
             )
